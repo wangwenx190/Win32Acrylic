@@ -55,7 +55,8 @@ INT APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
 
     RegisterClassExW(&wndcls);
 
-    CONST HWND mainWindowHwnd = CreateWindow(
+    CONST HWND mainWindowHwnd = CreateWindowExW(
+        0L,
         szWindowClassName,
         szWindowTitle,
         WS_OVERLAPPEDWINDOW | WS_VISIBLE, // "WS_VISIBLE" is needed because ShowWindow() is not called.

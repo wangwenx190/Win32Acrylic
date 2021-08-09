@@ -32,10 +32,10 @@
 
 #include <Unknwn.h> // This header file must be placed before any other header files.
 #include <Windows.h>
-#include <ShellAPI.h>
+#include <ShellApi.h>
 #include <VersionHelpers.h>
 #include <UxTheme.h>
-#include <DWMAPI.h>
+#include <DwmApi.h>
 #include <WinRT/Windows.UI.Xaml.Hosting.h>
 #include <WinRT/Windows.UI.Xaml.Controls.h>
 #include <WinRT/Windows.UI.Xaml.Media.h>

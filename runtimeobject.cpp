@@ -35,13 +35,13 @@
 #endif
 
 #include <Windows.h>
-#include <DWMAPI.h>
-#include <roapi.h>
-#include <roerrorapi.h>
-#include <roregistrationapi.h>
-#include <roparameterizediid.h>
-#include <rometadataapi.h>
-#include <rometadataresolution.h>
+#include <DwmApi.h>
+#include <RoApi.h>
+#include <RoErrorApi.h>
+#include <RoRegistrationApi.h>
+#include <RoParameterizedIid.h>
+#include <RoMetadataApi.h>
+#include <RoMetadataResolution.h>
 
 #ifndef RUNTIMEOBJECT_TRY_EXECUTE_RETURN_FUNCTION
 #define RUNTIMEOBJECT_TRY_EXECUTE_RETURN_FUNCTION(funcName, libName, defVal, ...) \

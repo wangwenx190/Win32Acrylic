@@ -106,8 +106,16 @@ static inline void DisplayErrorMessage(LPCWSTR text)
     if (!hWnd) {
         return false;
     }
-    // todo
-    return false;
+    MONITORINFO mi;
+    SecureZeroMemory(&mi, sizeof(mi));
+    mi.cbSize = sizeof(mi);
+    GetMonitorInfoW(MonitorFromWindow(hWnd, MONITOR_DEFAULTTOPRIMARY), &mi);
+    RECT rect = {};
+    GetWindowRect(hWnd, &rect);
+    return ((rect.left == mi.rcMonitor.left)
+            && (rect.right == mi.rcMonitor.right)
+            && (rect.top == mi.rcMonitor.top)
+            && (rect.bottom == mi.rcMonitor.bottom));
 }
 
 static inline void TriggerFrameChange(const HWND hWnd)
@@ -119,7 +127,7 @@ static inline void TriggerFrameChange(const HWND hWnd)
                  SWP_FRAMECHANGED | SWP_NOACTIVATE | SWP_NOSIZE | SWP_NOMOVE | SWP_NOZORDER | SWP_NOOWNERZORDER);
 }
 
-[[nodiscard]] static inline bool IsWindowNormaled(const HWND hWnd)
+[[nodiscard]] static inline bool IsNormaled(const HWND hWnd)
 {
     if (!hWnd) {
         return false;
@@ -167,14 +175,12 @@ static inline LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, L
             APPBARDATA abd;
             SecureZeroMemory(&abd, sizeof(abd));
             abd.cbSize = sizeof(abd);
-            const UINT state = SHAppBarMessage(ABM_GETSTATE, &abd);
             // First, check if we have an auto-hide taskbar at all:
-            if (state & ABS_AUTOHIDE) {
+            if (SHAppBarMessage(ABM_GETSTATE, &abd) & ABS_AUTOHIDE) {
                 MONITORINFO mi;
                 SecureZeroMemory(&mi, sizeof(mi));
                 mi.cbSize = sizeof(mi);
-                const HMONITOR mon = MonitorFromWindow(hWnd, MONITOR_DEFAULTTONEAREST);
-                GetMonitorInfoW(mon, &mi);
+                GetMonitorInfoW(MonitorFromWindow(hWnd, MONITOR_DEFAULTTONEAREST), &mi);
                 // This helper can be used to determine if there's a
                 // auto-hide taskbar on the given edge of the monitor
                 // we're currently on.
@@ -184,8 +190,7 @@ static inline LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, L
                     abd2.cbSize = sizeof(abd2);
                     abd2.uEdge = edge;
                     abd2.rc = mi.rcMonitor;
-                    const auto hTaskbar = reinterpret_cast<HWND>(SHAppBarMessage(ABM_GETAUTOHIDEBAREX, &abd2));
-                    return (hTaskbar != nullptr);
+                    return (reinterpret_cast<HWND>(SHAppBarMessage(ABM_GETAUTOHIDEBAREX, &abd2)) != nullptr);
                 };
                 // If there's a taskbar on any side of the monitor, reduce
                 // our size a little bit on that edge.
@@ -267,7 +272,7 @@ static inline LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, L
         //  bug and it's what a lot of Win32 apps that customize the title bar do
         //  so it should work fine.
         LONG topBorderHeight = 0;
-        if (IsWindowNormaled(hWnd)) {
+        if (IsNormaled(hWnd)) {
             topBorderHeight = 1;
         }
         if (ps.rcPaint.top < topBorderHeight) {
@@ -355,8 +360,7 @@ EXTERN_C int APIENTRY wWinMain(
     }
 
     const DWORD style = WS_OVERLAPPEDWINDOW | WS_CLIPSIBLINGS | WS_CLIPCHILDREN;
-    // todo: check WS_EX_TRANSPARENT removed
-    const DWORD exStyle = WS_EX_OVERLAPPEDWINDOW | WS_EX_NOREDIRECTIONBITMAP | WS_EX_TRANSPARENT | WS_EX_LAYERED;
+    const DWORD exStyle = WS_EX_OVERLAPPEDWINDOW /*| WS_EX_NOREDIRECTIONBITMAP | WS_EX_TRANSPARENT*/ | WS_EX_LAYERED;
     const HWND mainWindowHandle = CreateWindowExW(
         exStyle,
         g_windowClassName, g_windowTitle,

@@ -81,6 +81,10 @@
 #define RECT_HEIGHT(rect) std::abs((rect).bottom - (rect).top)
 #endif
 
+#ifndef BKG_BRUSH
+#define BKG_BRUSH reinterpret_cast<HBRUSH>(GetStockObject(BLACK_BRUSH))
+#endif
+
 static LPCWSTR g_windowClassName = L"Win32AcrylicApplicationWindowClass";
 static LPCWSTR g_windowTitle = L"Win32 C++ Acrylic Application";
 
@@ -189,7 +193,7 @@ static inline void UpdateFrameMargins(const HWND hWnd)
     DwmExtendFrameIntoClientArea(hWnd, &margins);
 }
 
-static inline LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
+static inline LRESULT CALLBACK BackgroundWindowProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
     switch (message)
     {
@@ -339,7 +343,7 @@ static inline LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, L
             // recommends to paint the area in black using the stock
             // BLACK_BRUSH to do this:
             // https://docs.microsoft.com/en-us/windows/win32/dwm/customframe#extending-the-client-frame
-            FillRect(hdc, &rcTopBorder, reinterpret_cast<HBRUSH>(GetStockObject(BLACK_BRUSH)));
+            FillRect(hdc, &rcTopBorder, BKG_BRUSH);
         }
         if (ps.rcPaint.bottom > topBorderHeight) {
             RECT rcRest = ps.rcPaint;
@@ -410,10 +414,10 @@ EXTERN_C int APIENTRY wWinMain(
     SecureZeroMemory(&wcex, sizeof(wcex));
     wcex.cbSize = sizeof(wcex);
     wcex.style = CS_HREDRAW | CS_VREDRAW;
-    wcex.lpfnWndProc = WndProc;
+    wcex.lpfnWndProc = BackgroundWindowProc;
     wcex.hInstance = hInstance;
     wcex.hCursor = LoadCursorW(nullptr, IDC_ARROW);
-    wcex.hbrBackground = reinterpret_cast<HBRUSH>(GetStockObject(BLACK_BRUSH));
+    wcex.hbrBackground = BKG_BRUSH;
     wcex.lpszClassName = g_windowClassName;
 
     if (!RegisterClassExW(&wcex)) {
@@ -470,6 +474,9 @@ EXTERN_C int APIENTRY wWinMain(
     //xamlGrid.UpdateLayout();
     desktopWindowXamlSource.Content(xamlGrid);
     // End XAML Island section.
+
+    UpdateFrameMargins(mainWindowHandle);
+    TriggerFrameChange(mainWindowHandle);
 
     ShowWindow(xamlIslandHandle, nCmdShow);
     UpdateWindow(xamlIslandHandle);

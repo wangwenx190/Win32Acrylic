@@ -40,10 +40,11 @@
 #include <roerrorapi.h>
 #include <roregistrationapi.h>
 #include <roparameterizediid.h>
+#include <rometadataapi.h>
 #include <rometadataresolution.h>
 
-#ifndef RUNTIMEOBJECT_TRY_EXECUTE_FUNCTION
-#define RUNTIMEOBJECT_TRY_EXECUTE_FUNCTION(funcName, libName, defVal, ...) \
+#ifndef RUNTIMEOBJECT_TRY_EXECUTE_RETURN_FUNCTION
+#define RUNTIMEOBJECT_TRY_EXECUTE_RETURN_FUNCTION(funcName, libName, defVal, ...) \
 using sig = decltype(&::funcName); \
 static bool tried = false; \
 static sig func = nullptr; \
@@ -68,24 +69,62 @@ if (!func) { \
 return func(__VA_ARGS__);
 #endif
 
+#ifndef RUNTIMEOBJECT_TRY_EXECUTE_VOID_FUNCTION
+#define RUNTIMEOBJECT_TRY_EXECUTE_VOID_FUNCTION(funcName, libName, ...) \
+using sig = decltype(&::funcName); \
+static bool tried = false; \
+static sig func = nullptr; \
+if (!func) { \
+    if (tried) { \
+        return; \
+    } else { \
+        tried = true; \
+        const HMODULE dll = LoadLibraryExW(L#libName ".dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32); \
+        if (!dll) { \
+            OutputDebugStringW(L"Failed to load " #libName ".dll."); \
+            return; \
+        } \
+        func = reinterpret_cast<sig>(GetProcAddress(dll, #funcName)); \
+        FreeLibrary(dll); \
+        if (!func) { \
+            OutputDebugStringW(L"Failed to resolve " #funcName "()."); \
+            return; \
+        } \
+    } \
+} \
+func(__VA_ARGS__);
+#endif
+
 #ifndef RUNTIMEOBJECT_TRY_EXECUTE_USER_FUNCTION
-#define RUNTIMEOBJECT_TRY_EXECUTE_USER_FUNCTION(funcName, defVal, ...) RUNTIMEOBJECT_TRY_EXECUTE_FUNCTION(funcName, User32, defVal, ##__VA_ARGS__)
+#define RUNTIMEOBJECT_TRY_EXECUTE_USER_FUNCTION(funcName, ...) RUNTIMEOBJECT_TRY_EXECUTE_RETURN_FUNCTION(funcName, User32, FALSE, ##__VA_ARGS__)
+#endif
+
+#ifndef RUNTIMEOBJECT_TRY_EXECUTE_USER_INT_FUNCTION
+#define RUNTIMEOBJECT_TRY_EXECUTE_USER_INT_FUNCTION(funcName, ...) RUNTIMEOBJECT_TRY_EXECUTE_RETURN_FUNCTION(funcName, User32, 0, ##__VA_ARGS__)
 #endif
 
 #ifndef RUNTIMEOBJECT_TRY_EXECUTE_DWM_FUNCTION
-#define RUNTIMEOBJECT_TRY_EXECUTE_DWM_FUNCTION(funcName, defVal, ...) RUNTIMEOBJECT_TRY_EXECUTE_FUNCTION(funcName, DWMAPI, defVal, ##__VA_ARGS__)
+#define RUNTIMEOBJECT_TRY_EXECUTE_DWM_FUNCTION(funcName, ...) RUNTIMEOBJECT_TRY_EXECUTE_RETURN_FUNCTION(funcName, DWMAPI, E_NOTIMPL, ##__VA_ARGS__)
 #endif
 
 #ifndef RUNTIMEOBJECT_TRY_EXECUTE_WINRT_FUNCTION
-#define RUNTIMEOBJECT_TRY_EXECUTE_WINRT_FUNCTION(funcName, ...) RUNTIMEOBJECT_TRY_EXECUTE_FUNCTION(funcName, ComBase, E_NOTIMPL, ##__VA_ARGS__)
+#define RUNTIMEOBJECT_TRY_EXECUTE_WINRT_FUNCTION(funcName, ...) RUNTIMEOBJECT_TRY_EXECUTE_RETURN_FUNCTION(funcName, ComBase, E_NOTIMPL, ##__VA_ARGS__)
 #endif
 
 #ifndef RUNTIMEOBJECT_TRY_EXECUTE_WINRT_VOID_FUNCTION
-#define RUNTIMEOBJECT_TRY_EXECUTE_WINRT_VOID_FUNCTION(funcName, ...) RUNTIMEOBJECT_TRY_EXECUTE_FUNCTION(funcName, ComBase, void, ##__VA_ARGS__)
+#define RUNTIMEOBJECT_TRY_EXECUTE_WINRT_VOID_FUNCTION(funcName, ...) RUNTIMEOBJECT_TRY_EXECUTE_VOID_FUNCTION(funcName, ComBase, ##__VA_ARGS__)
+#endif
+
+#ifndef RUNTIMEOBJECT_TRY_EXECUTE_WINRT_INT_FUNCTION
+#define RUNTIMEOBJECT_TRY_EXECUTE_WINRT_INT_FUNCTION(funcName, ...) RUNTIMEOBJECT_TRY_EXECUTE_RETURN_FUNCTION(funcName, ComBase, 0, ##__VA_ARGS__)
 #endif
 
 #ifndef RUNTIMEOBJECT_TRY_EXECUTE_WINRT_BOOL_FUNCTION
-#define RUNTIMEOBJECT_TRY_EXECUTE_WINRT_BOOL_FUNCTION(funcName, ...) RUNTIMEOBJECT_TRY_EXECUTE_FUNCTION(funcName, ComBase, FALSE, ##__VA_ARGS__)
+#define RUNTIMEOBJECT_TRY_EXECUTE_WINRT_BOOL_FUNCTION(funcName, ...) RUNTIMEOBJECT_TRY_EXECUTE_RETURN_FUNCTION(funcName, ComBase, FALSE, ##__VA_ARGS__)
+#endif
+
+#ifndef RUNTIMEOBJECT_TRY_EXECUTE_WINRT_PTR_FUNCTION
+#define RUNTIMEOBJECT_TRY_EXECUTE_WINRT_PTR_FUNCTION(funcName, ...) RUNTIMEOBJECT_TRY_EXECUTE_RETURN_FUNCTION(funcName, ComBase, nullptr, ##__VA_ARGS__)
 #endif
 
 #ifdef __cplusplus
@@ -98,7 +137,7 @@ GetSystemMetricsForDpi(
     UINT dpi
 )
 {
-    RUNTIMEOBJECT_TRY_EXECUTE_USER_FUNCTION(GetSystemMetricsForDpi, 0, nIndex, dpi)
+    RUNTIMEOBJECT_TRY_EXECUTE_USER_INT_FUNCTION(GetSystemMetricsForDpi, nIndex, dpi)
 }
 
 BOOL WINAPI
@@ -110,7 +149,7 @@ AdjustWindowRectExForDpi(
     UINT   dpi
 )
 {
-    RUNTIMEOBJECT_TRY_EXECUTE_USER_FUNCTION(AdjustWindowRectExForDpi, FALSE, lpRect, dwStyle, bMenu, dwExStyle, dpi)
+    RUNTIMEOBJECT_TRY_EXECUTE_USER_FUNCTION(AdjustWindowRectExForDpi, lpRect, dwStyle, bMenu, dwExStyle, dpi)
 }
 
 HRESULT WINAPI
@@ -119,7 +158,7 @@ DwmExtendFrameIntoClientArea(
     const MARGINS *pMarInset
 )
 {
-    RUNTIMEOBJECT_TRY_EXECUTE_DWM_FUNCTION(DwmExtendFrameIntoClientArea, E_NOTIMPL, hWnd, pMarInset)
+    RUNTIMEOBJECT_TRY_EXECUTE_DWM_FUNCTION(DwmExtendFrameIntoClientArea, hWnd, pMarInset)
 }
 
 HRESULT WINAPI
@@ -379,210 +418,350 @@ RoGetActivatableClassRegistration(
     RUNTIMEOBJECT_TRY_EXECUTE_WINRT_FUNCTION(RoGetActivatableClassRegistration, activatableClassId, activatableClassRegistration)
 }
 
-HRESULT WINAPI RoGetServerActivatableClasses(
-  HSTRING serverName,
-  HSTRING **activatableClassIds,
-  DWORD   *count
-);
+HRESULT WINAPI
+RoGetServerActivatableClasses(
+    HSTRING serverName,
+    HSTRING **activatableClassIds,
+    DWORD   *count
+)
+{
+    RUNTIMEOBJECT_TRY_EXECUTE_WINRT_FUNCTION(RoGetServerActivatableClasses, serverName, activatableClassIds, count)
+}
 
-void WINAPI HSTRING_UserFree(
-  ULONG   *pFlags,
-  HSTRING *ppidl
-);
+void WINAPI
+HSTRING_UserFree(
+    ULONG   *pFlags,
+    HSTRING *ppidl
+)
+{
+    RUNTIMEOBJECT_TRY_EXECUTE_WINRT_VOID_FUNCTION(HSTRING_UserFree, pFlags, ppidl)
+}
 
-void WINAPI HSTRING_UserFree64(
-  unsigned long *,
-  HSTRING       *
-);
+void WINAPI
+HSTRING_UserFree64(
+    ULONG   *unnamedParam1,
+    HSTRING *unnamedParam2
+)
+{
+    RUNTIMEOBJECT_TRY_EXECUTE_WINRT_VOID_FUNCTION(HSTRING_UserFree64, unnamedParam1, unnamedParam2)
+}
 
-UCHAR * WINAPI HSTRING_UserMarshal(
-  ULONG   *pFlags,
-  UCHAR   *pBuffer,
-  HSTRING *ppidl
-);
+UCHAR * WINAPI
+HSTRING_UserMarshal(
+    ULONG   *pFlags,
+    UCHAR   *pBuffer,
+    HSTRING *ppidl
+)
+{
+    RUNTIMEOBJECT_TRY_EXECUTE_WINRT_PTR_FUNCTION(HSTRING_UserMarshal, pFlags, pBuffer, ppidl)
+}
 
-unsigned char * WINAPI HSTRING_UserMarshal64(
-  unsigned long *,
-  unsigned char *,
-  HSTRING       *
-);
+UCHAR * WINAPI
+HSTRING_UserMarshal64(
+    ULONG   *unnamedParam1,
+    UCHAR   *unnamedParam2,
+    HSTRING *unnamedParam3
+)
+{
+    RUNTIMEOBJECT_TRY_EXECUTE_WINRT_PTR_FUNCTION(HSTRING_UserMarshal64, unnamedParam1, unnamedParam2, unnamedParam3)
+}
 
-unsigned long WINAPI HSTRING_UserSize(
-  unsigned long *,
-  unsigned long ,
-  HSTRING       *
-);
+ULONG WINAPI
+HSTRING_UserSize(
+    ULONG   *unnamedParam1,
+    ULONG   unnamedParam2,
+    HSTRING *unnamedParam3
+)
+{
+    RUNTIMEOBJECT_TRY_EXECUTE_WINRT_INT_FUNCTION(HSTRING_UserSize, unnamedParam1, unnamedParam2, unnamedParam3)
+}
 
-unsigned long WINAPI HSTRING_UserSize64(
-  unsigned long *,
-  unsigned long ,
-  HSTRING       *
-);
+ULONG WINAPI
+HSTRING_UserSize64(
+    ULONG   *unnamedParam1,
+    ULONG   unnamedParam2,
+    HSTRING *unnamedParam3
+)
+{
+    RUNTIMEOBJECT_TRY_EXECUTE_WINRT_INT_FUNCTION(HSTRING_UserSize64, unnamedParam1, unnamedParam2, unnamedParam3)
+}
 
-unsigned char * WINAPI HSTRING_UserUnmarshal(
-  unsigned long *,
-  unsigned char *,
-  HSTRING       *
-);
+UCHAR * WINAPI
+HSTRING_UserUnmarshal(
+    ULONG   *unnamedParam1,
+    UCHAR   *unnamedParam2,
+    HSTRING *unnamedParam3
+)
+{
+    RUNTIMEOBJECT_TRY_EXECUTE_WINRT_PTR_FUNCTION(HSTRING_UserUnmarshal, unnamedParam1, unnamedParam2, unnamedParam3)
+}
 
-unsigned char * WINAPI HSTRING_UserUnmarshal64(
-  unsigned long *,
-  unsigned char *,
-  HSTRING       *
-);
+UCHAR * WINAPI
+HSTRING_UserUnmarshal64(
+    ULONG   *unnamedParam1,
+    UCHAR   *unnamedParam2,
+    HSTRING *unnamedParam3
+)
+{
+    RUNTIMEOBJECT_TRY_EXECUTE_WINRT_PTR_FUNCTION(HSTRING_UserUnmarshal64, unnamedParam1, unnamedParam2, unnamedParam3)
+}
 
-HRESULT WINAPI WindowsCompareStringOrdinal(
-  HSTRING string1,
-  HSTRING string2,
-  INT32   *result
-);
+HRESULT WINAPI
+WindowsCompareStringOrdinal(
+    HSTRING string1,
+    HSTRING string2,
+    INT32   *result
+)
+{
+    RUNTIMEOBJECT_TRY_EXECUTE_WINRT_FUNCTION(WindowsCompareStringOrdinal, string1, string2, result)
+}
 
-HRESULT WINAPI WindowsConcatString(
-  HSTRING string1,
-  HSTRING string2,
-  HSTRING *newString
-);
+HRESULT WINAPI
+WindowsConcatString(
+    HSTRING string1,
+    HSTRING string2,
+    HSTRING *newString
+)
+{
+    RUNTIMEOBJECT_TRY_EXECUTE_WINRT_FUNCTION(WindowsConcatString, string1, string2, newString)
+}
 
-HRESULT WINAPI WindowsCreateString(
-  PCNZWCH sourceString,
-  UINT32  length,
-  HSTRING *string
-);
+HRESULT WINAPI
+WindowsCreateString(
+    PCNZWCH sourceString,
+    UINT32  length,
+    HSTRING *string
+)
+{
+    RUNTIMEOBJECT_TRY_EXECUTE_WINRT_FUNCTION(WindowsCreateString, sourceString, length, string)
+}
 
-HRESULT WINAPI WindowsCreateStringReference(
-  PCWSTR         sourceString,
-  UINT32         length,
-  HSTRING_HEADER *hstringHeader,
-  HSTRING        *string
-);
+HRESULT WINAPI
+WindowsCreateStringReference(
+    PCWSTR         sourceString,
+    UINT32         length,
+    HSTRING_HEADER *hstringHeader,
+    HSTRING        *string
+)
+{
+    RUNTIMEOBJECT_TRY_EXECUTE_WINRT_FUNCTION(WindowsCreateStringReference, sourceString, length, hstringHeader, string)
+}
 
-HRESULT WINAPI WindowsDeleteString(
-  HSTRING string
-);
+HRESULT WINAPI
+WindowsDeleteString(
+    HSTRING string
+)
+{
+    RUNTIMEOBJECT_TRY_EXECUTE_WINRT_FUNCTION(WindowsDeleteString, string)
+}
 
-HRESULT WINAPI WindowsDeleteStringBuffer(
-  HSTRING_BUFFER bufferHandle
-);
+HRESULT WINAPI
+WindowsDeleteStringBuffer(
+    HSTRING_BUFFER bufferHandle
+)
+{
+    RUNTIMEOBJECT_TRY_EXECUTE_WINRT_FUNCTION(WindowsDeleteStringBuffer, bufferHandle)
+}
 
-HRESULT WINAPI WindowsDuplicateString(
-  HSTRING string,
-  HSTRING *newString
-);
+HRESULT WINAPI
+WindowsDuplicateString(
+    HSTRING string,
+    HSTRING *newString
+)
+{
+    RUNTIMEOBJECT_TRY_EXECUTE_WINRT_FUNCTION(WindowsDuplicateString, string, newString)
+}
 
-UINT32 WINAPI WindowsGetStringLen(
-  HSTRING string
-);
+UINT32 WINAPI
+WindowsGetStringLen(
+    HSTRING string
+)
+{
+    RUNTIMEOBJECT_TRY_EXECUTE_WINRT_INT_FUNCTION(WindowsGetStringLen, string)
+}
 
-PCWSTR WINAPI WindowsGetStringRawBuffer(
-  HSTRING string,
-  UINT32  *length
-);
+PCWSTR WINAPI
+WindowsGetStringRawBuffer(
+    HSTRING string,
+    UINT32  *length
+)
+{
+    RUNTIMEOBJECT_TRY_EXECUTE_WINRT_PTR_FUNCTION(WindowsGetStringRawBuffer, string, length)
+}
 
-HRESULT WINAPI WindowsInspectString(
-  UINT_PTR                  targetHString,
-  USHORT                    machine,
-  PINSPECT_HSTRING_CALLBACK callback,
-  void                      *context,
-  UINT32                    *length,
-  UINT_PTR                  *targetStringAddress
-);
+HRESULT WINAPI
+WindowsInspectString(
+    UINT_PTR                  targetHString,
+    USHORT                    machine,
+    PINSPECT_HSTRING_CALLBACK callback,
+    void                      *context,
+    UINT32                    *length,
+    UINT_PTR                  *targetStringAddress
+)
+{
+    RUNTIMEOBJECT_TRY_EXECUTE_WINRT_FUNCTION(WindowsInspectString, targetHString, machine, callback, context, length, targetStringAddress)
+}
 
-BOOL WINAPI WindowsIsStringEmpty(
-  HSTRING string
-);
+BOOL WINAPI
+WindowsIsStringEmpty(
+    HSTRING string
+)
+{
+    RUNTIMEOBJECT_TRY_EXECUTE_WINRT_BOOL_FUNCTION(WindowsIsStringEmpty, string)
+}
 
-HRESULT WINAPI WindowsPreallocateStringBuffer(
-  UINT32         length,
-  WCHAR          **charBuffer,
-  HSTRING_BUFFER *bufferHandle
-);
+HRESULT WINAPI
+WindowsPreallocateStringBuffer(
+    UINT32         length,
+    WCHAR          **charBuffer,
+    HSTRING_BUFFER *bufferHandle
+)
+{
+    RUNTIMEOBJECT_TRY_EXECUTE_WINRT_FUNCTION(WindowsPreallocateStringBuffer, length, charBuffer, bufferHandle)
+}
 
-HRESULT WINAPI WindowsPromoteStringBuffer(
-  HSTRING_BUFFER bufferHandle,
-  HSTRING        *string
-);
+HRESULT WINAPI
+WindowsPromoteStringBuffer(
+    HSTRING_BUFFER bufferHandle,
+    HSTRING        *string
+)
+{
+    RUNTIMEOBJECT_TRY_EXECUTE_WINRT_FUNCTION(WindowsPromoteStringBuffer, bufferHandle, string)
+}
 
-HRESULT WINAPI WindowsReplaceString(
-  HSTRING string,
-  HSTRING stringReplaced,
-  HSTRING stringReplaceWith,
-  HSTRING *newString
-);
+HRESULT WINAPI
+WindowsReplaceString(
+    HSTRING string,
+    HSTRING stringReplaced,
+    HSTRING stringReplaceWith,
+    HSTRING *newString
+)
+{
+    RUNTIMEOBJECT_TRY_EXECUTE_WINRT_FUNCTION(WindowsReplaceString, string, stringReplaced, stringReplaceWith, newString)
+}
 
-HRESULT WINAPI WindowsStringHasEmbeddedNull(
-  HSTRING string,
-  BOOL    *hasEmbedNull
-);
+HRESULT WINAPI
+WindowsStringHasEmbeddedNull(
+    HSTRING string,
+    BOOL    *hasEmbedNull
+)
+{
+    RUNTIMEOBJECT_TRY_EXECUTE_WINRT_FUNCTION(WindowsStringHasEmbeddedNull, string, hasEmbedNull)
+}
 
-HRESULT WINAPI WindowsSubstring(
-  HSTRING string,
-  UINT32  startIndex,
-  HSTRING *newString
-);
+HRESULT WINAPI
+WindowsSubstring(
+    HSTRING string,
+    UINT32  startIndex,
+    HSTRING *newString
+)
+{
+    RUNTIMEOBJECT_TRY_EXECUTE_WINRT_FUNCTION(WindowsSubstring, string, startIndex, newString)
+}
 
-HRESULT WINAPI WindowsSubstringWithSpecifiedLength(
-  HSTRING string,
-  UINT32  startIndex,
-  UINT32  length,
-  HSTRING *newString
-);
+HRESULT WINAPI
+WindowsSubstringWithSpecifiedLength(
+    HSTRING string,
+    UINT32  startIndex,
+    UINT32  length,
+    HSTRING *newString
+)
+{
+    RUNTIMEOBJECT_TRY_EXECUTE_WINRT_FUNCTION(WindowsSubstringWithSpecifiedLength, string, startIndex, length, newString)
+}
 
-HRESULT WINAPI WindowsTrimStringEnd(
-  HSTRING string,
-  HSTRING trimString,
-  HSTRING *newString
-);
+HRESULT WINAPI
+WindowsTrimStringEnd(
+    HSTRING string,
+    HSTRING trimString,
+    HSTRING *newString
+)
+{
+    RUNTIMEOBJECT_TRY_EXECUTE_WINRT_FUNCTION(WindowsTrimStringEnd, string, trimString, newString)
+}
 
-HRESULT WINAPI WindowsTrimStringStart(
-  HSTRING string,
-  HSTRING trimString,
-  HSTRING *newString
-);
+HRESULT WINAPI
+WindowsTrimStringStart(
+    HSTRING string,
+    HSTRING trimString,
+    HSTRING *newString
+)
+{
+    RUNTIMEOBJECT_TRY_EXECUTE_WINRT_FUNCTION(WindowsTrimStringStart, string, trimString, newString)
+}
 
-HRESULT WINAPI RoGetBufferMarshaler(
-  IMarshal **bufferMarshaler
-);
+HRESULT WINAPI
+RoGetBufferMarshaler(
+    IMarshal **bufferMarshaler
+)
+{
+    RUNTIMEOBJECT_TRY_EXECUTE_WINRT_FUNCTION(RoGetBufferMarshaler, bufferMarshaler)
+}
 
-void WINAPI RoFreeParameterizedTypeExtra(
-  ROPARAMIIDHANDLE extra
-);
+void WINAPI
+RoFreeParameterizedTypeExtra(
+    ROPARAMIIDHANDLE extra
+)
+{
+    RUNTIMEOBJECT_TRY_EXECUTE_WINRT_VOID_FUNCTION(RoFreeParameterizedTypeExtra, extra)
+}
 
-HRESULT WINAPI RoGetParameterizedTypeInstanceIID(
-  UINT32                     nameElementCount,
-  PCWSTR                     *nameElements,
-  const IRoMetaDataLocator & metaDataLocator,
-  GUID                       *iid,
-  ROPARAMIIDHANDLE           *pExtra
-);
+HRESULT WINAPI
+RoGetParameterizedTypeInstanceIID(
+    UINT32                     nameElementCount,
+    PCWSTR                     *nameElements,
+    const IRoMetaDataLocator   &metaDataLocator,
+    GUID                       *iid,
+    ROPARAMIIDHANDLE           *pExtra
+)
+{
+    RUNTIMEOBJECT_TRY_EXECUTE_WINRT_FUNCTION(RoGetParameterizedTypeInstanceIID, nameElementCount, nameElements, metaDataLocator, iid, pExtra)
+}
 
-PCSTR WINAPI RoParameterizedTypeExtraGetTypeSignature(
-  ROPARAMIIDHANDLE extra
-);
+PCSTR WINAPI
+RoParameterizedTypeExtraGetTypeSignature(
+    ROPARAMIIDHANDLE extra
+)
+{
+    RUNTIMEOBJECT_TRY_EXECUTE_WINRT_PTR_FUNCTION(RoParameterizedTypeExtraGetTypeSignature, extra)
+}
 
-HRESULT WINAPI RoGetMetaDataFile(
-  const HSTRING        name,
-  IMetaDataDispenserEx *metaDataDispenser,
-  HSTRING              *metaDataFilePath,
-  IMetaDataImport2     **metaDataImport,
-  mdTypeDef            *typeDefToken
-);
+HRESULT WINAPI
+RoGetMetaDataFile(
+    const HSTRING        name,
+    IMetaDataDispenserEx *metaDataDispenser,
+    HSTRING              *metaDataFilePath,
+    IMetaDataImport2     **metaDataImport,
+    mdTypeDef            *typeDefToken
+)
+{
+    RUNTIMEOBJECT_TRY_EXECUTE_WINRT_FUNCTION(RoGetMetaDataFile, name, metaDataDispenser, metaDataFilePath, metaDataImport, typeDefToken)
+}
 
-HRESULT WINAPI RoParseTypeName(
-  HSTRING typeName,
-  DWORD   *partsCount,
-  HSTRING **typeNameParts
-);
+HRESULT WINAPI
+RoParseTypeName(
+    HSTRING typeName,
+    DWORD   *partsCount,
+    HSTRING **typeNameParts
+)
+{
+    RUNTIMEOBJECT_TRY_EXECUTE_WINRT_FUNCTION(RoParseTypeName, typeName, partsCount, typeNameParts)
+}
 
-HRESULT WINAPI RoResolveNamespace(
-  const HSTRING name,
-  const HSTRING windowsMetaDataDir,
-  const DWORD   packageGraphDirsCount,
-  const HSTRING *packageGraphDirs,
-  DWORD         *metaDataFilePathsCount,
-  HSTRING       **metaDataFilePaths,
-  DWORD         *subNamespacesCount,
-  HSTRING       **subNamespaces
-);
+HRESULT WINAPI
+RoResolveNamespace(
+    const HSTRING name,
+    const HSTRING windowsMetaDataDir,
+    const DWORD   packageGraphDirsCount,
+    const HSTRING *packageGraphDirs,
+    DWORD         *metaDataFilePathsCount,
+    HSTRING       **metaDataFilePaths,
+    DWORD         *subNamespacesCount,
+    HSTRING       **subNamespaces
+)
+{
+    RUNTIMEOBJECT_TRY_EXECUTE_WINRT_FUNCTION(RoResolveNamespace, name, windowsMetaDataDir, packageGraphDirsCount, packageGraphDirs, metaDataFilePathsCount, metaDataFilePaths, subNamespacesCount, subNamespaces)
+}
 
 #ifdef __cplusplus
 }

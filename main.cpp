@@ -22,15 +22,24 @@
  * SOFTWARE.
  */
 
+#ifndef _DWMAPI_
+#define _DWMAPI_
+#endif
+
 #include <Unknwn.h> // This header file must be placed before any other header files.
 #include <Windows.h>
-#include <ShellApi.h>
+#include <ShellAPI.h>
 #include <VersionHelpers.h>
 #include <UxTheme.h>
+#include <DWMAPI.h>
 #include <WinRT/Windows.UI.Xaml.Hosting.h>
 #include <WinRT/Windows.UI.Xaml.Controls.h>
 #include <WinRT/Windows.UI.Xaml.Media.h>
 #include <Windows.UI.Xaml.Hosting.DesktopWindowXamlSource.h>
+
+#ifndef USER_DEFAULT_SCREEN_DPI
+#define USER_DEFAULT_SCREEN_DPI 96
+#endif
 
 #ifndef SM_CXPADDEDBORDER
 #define SM_CXPADDEDBORDER 92
@@ -71,9 +80,10 @@
 static LPCWSTR g_windowClassName = L"Win32AcrylicApplicationWindowClass";
 static LPCWSTR g_windowTitle = L"Win32 C++ Acrylic Application";
 
+static HINSTANCE g_instance = nullptr;
 static HWND g_mainWindowHandle = nullptr;
 static HWND g_xamlIslandHandle = nullptr;
-static HINSTANCE g_instance = nullptr;
+static UINT g_currentDPI = USER_DEFAULT_SCREEN_DPI;
 
 // The thickness of an auto-hide taskbar in pixels.
 static const int kAutoHideTaskbarThicknessPx = 2;
@@ -91,14 +101,17 @@ static inline void DisplayErrorMessage(LPCWSTR text)
 [[nodiscard]] static inline int GetResizeBorderThickness(const bool x = true)
 {
     // There is no "SM_CYPADDEDBORDER".
-    const int result = GetSystemMetrics(SM_CXPADDEDBORDER) + GetSystemMetrics(x ? SM_CXSIZEFRAME : SM_CYSIZEFRAME);
-    return ((result > 0) ? result : 8);
+    const int result = GetSystemMetricsForDpi(SM_CXPADDEDBORDER, g_currentDPI)
+            + GetSystemMetricsForDpi((x ? SM_CXSIZEFRAME : SM_CYSIZEFRAME), g_currentDPI);
+    const int preset = std::round(8.0 * static_cast<double>(g_currentDPI) / static_cast<double>(USER_DEFAULT_SCREEN_DPI));
+    return ((result > 0) ? result : preset);
 }
 
 [[nodiscard]] static inline int GetCaptionHeight()
 {
-    const int result = GetSystemMetrics(SM_CYCAPTION);
-    return ((result > 0) ? result : 23);
+    const int result = GetSystemMetricsForDpi(SM_CYCAPTION, g_currentDPI);
+    const int preset = std::round(23.0 * static_cast<double>(g_currentDPI) / static_cast<double>(USER_DEFAULT_SCREEN_DPI));
+    return ((result > 0) ? result : preset);
 }
 
 [[nodiscard]] static inline bool IsFullScreened(const HWND hWnd)
@@ -118,15 +131,6 @@ static inline void DisplayErrorMessage(LPCWSTR text)
             && (rect.bottom == mi.rcMonitor.bottom));
 }
 
-static inline void TriggerFrameChange(const HWND hWnd)
-{
-    if (!hWnd) {
-        return;
-    }
-    SetWindowPos(hWnd, nullptr, 0, 0, 0, 0,
-                 SWP_FRAMECHANGED | SWP_NOACTIVATE | SWP_NOSIZE | SWP_NOMOVE | SWP_NOZORDER | SWP_NOOWNERZORDER);
-}
-
 [[nodiscard]] static inline bool IsNormaled(const HWND hWnd)
 {
     if (!hWnd) {
@@ -137,6 +141,48 @@ static inline void TriggerFrameChange(const HWND hWnd)
     wp.length = sizeof(wp);
     GetWindowPlacement(hWnd, &wp);
     return (wp.showCmd == SW_NORMAL);
+}
+
+static inline void TriggerFrameChange(const HWND hWnd)
+{
+    if (!hWnd) {
+        return;
+    }
+    SetWindowPos(hWnd, nullptr, 0, 0, 0, 0,
+                 SWP_FRAMECHANGED | SWP_NOACTIVATE | SWP_NOSIZE | SWP_NOMOVE | SWP_NOZORDER | SWP_NOOWNERZORDER);
+}
+
+static inline void UpdateFrameMargins(const HWND hWnd)
+{
+    if (!hWnd) {
+        return;
+    }
+    MARGINS margins = {0, 0, 0, 0};
+    if (IsNormaled(hWnd)) {
+        RECT frame = {0, 0, 0, 0};
+        AdjustWindowRectExForDpi(&frame,
+                                 (static_cast<DWORD>(GetWindowLongPtrW(hWnd, GWL_STYLE)) & ~WS_OVERLAPPED),
+                                 FALSE,
+                                 static_cast<DWORD>(GetWindowLongPtrW(hWnd, GWL_EXSTYLE)),
+                                 g_currentDPI);
+        // We removed the whole top part of the frame (see handling of
+        // WM_NCCALCSIZE) so the top border is missing now. We add it back here.
+        // Note #1: You might wonder why we don't remove just the title bar instead
+        //  of removing the whole top part of the frame and then adding the little
+        //  top border back. I tried to do this but it didn't work: DWM drew the
+        //  whole title bar anyways on top of the window. It seems that DWM only
+        //  wants to draw either nothing or the whole top part of the frame.
+        // Note #2: For some reason if you try to set the top margin to just the
+        //  top border height (what we want to do), then there is a transparency
+        //  bug when the window is inactive, so I've decided to add the whole top
+        //  part of the frame instead and then we will hide everything that we
+        //  don't need (that is, the whole thing but the little 1 pixel wide border
+        //  at the top) in the WM_PAINT handler. This eliminates the transparency
+        //  bug and it's what a lot of Win32 apps that customize the title bar do
+        //  so it should work fine.
+        margins.cyTopHeight = std::abs(frame.top);
+    }
+    DwmExtendFrameIntoClientArea(hWnd, &margins);
 }
 
 static inline LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
@@ -162,6 +208,12 @@ static inline LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, L
         // have the WS_POPUP size, so we don't have to worry about
         // borders, and the default frame will be fine.
         if (IsMaximized(hWnd) && !IsFullScreened(hWnd)) {
+            // When a window is maximized, its size is actually a little bit more
+            // than the monitor's work area. The window is positioned and sized in
+            // such a way that the resize handles are outside of the monitor and
+            // then the window is clipped to the monitor so that the resize handle
+            // do not appear because you don't need them (because you can't resize
+            // a window when it's maximized unless you restore it).
             clientRect->top += GetResizeBorderThickness(false);
             nonClientAreaExists = true;
         }
@@ -171,7 +223,7 @@ static inline LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, L
         // Make sure to use MONITOR_DEFAULTTONEAREST, so that this will
         // still find the right monitor even when we're restoring from
         // minimized.
-        if (IsMaximized(hWnd)) {
+        if (IsMaximized(hWnd) || IsFullScreened(hWnd)) {
             APPBARDATA abd;
             SecureZeroMemory(&abd, sizeof(abd));
             abd.cbSize = sizeof(abd);
@@ -305,9 +357,14 @@ static inline LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, L
         EndPaint(hWnd, &ps);
         return 0;
     }
+#if 0
     case WM_ERASEBKGND:
         return 1;
+#endif
     case WM_DPICHANGED: {
+        const double x = LOWORD(wParam);
+        const double y = HIWORD(wParam);
+        g_currentDPI = std::round((x + y) / 2.0);
         const auto prcNewWindow = reinterpret_cast<LPRECT>(lParam);
         SetWindowPos(hWnd, nullptr, prcNewWindow->left, prcNewWindow->top,
                      RECT_WIDTH(*prcNewWindow), RECT_HEIGHT(*prcNewWindow),
@@ -352,6 +409,7 @@ EXTERN_C int APIENTRY wWinMain(
     wcex.lpfnWndProc = WndProc;
     wcex.hInstance = hInstance;
     wcex.hCursor = LoadCursorW(nullptr, IDC_ARROW);
+    wcex.hbrBackground = reinterpret_cast<HBRUSH>(GetStockObject(BLACK_BRUSH));
     wcex.lpszClassName = g_windowClassName;
 
     if (!RegisterClassExW(&wcex)) {
@@ -359,12 +417,9 @@ EXTERN_C int APIENTRY wWinMain(
         return -1;
     }
 
-    const DWORD style = WS_OVERLAPPEDWINDOW | WS_CLIPSIBLINGS | WS_CLIPCHILDREN;
-    const DWORD exStyle = WS_EX_OVERLAPPEDWINDOW /*| WS_EX_NOREDIRECTIONBITMAP | WS_EX_TRANSPARENT*/ | WS_EX_LAYERED;
     const HWND mainWindowHandle = CreateWindowExW(
-        exStyle,
-        g_windowClassName, g_windowTitle,
-        style,
+        0L, g_windowClassName, g_windowTitle,
+        WS_OVERLAPPEDWINDOW | WS_CLIPSIBLINGS | WS_CLIPCHILDREN,
         CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
         nullptr, nullptr, hInstance, nullptr
     );

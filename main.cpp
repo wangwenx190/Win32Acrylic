@@ -384,9 +384,14 @@ static inline LRESULT CALLBACK BackgroundWindowProc(HWND hWnd, UINT message, WPA
             RECT rect = {0, 0, 0, 0};
             GetClientRect(hWnd, &rect);
             SetWindowPos(g_xamlIslandHandle, nullptr, 0, 0, rect.right, rect.bottom,
-                         SWP_NOACTIVATE | SWP_NOMOVE | SWP_NOZORDER | SWP_NOOWNERZORDER);
+                         SWP_NOACTIVATE | SWP_NOZORDER | SWP_NOOWNERZORDER);
         }
     } break;
+    case WM_CLOSE: {
+        DestroyWindow(hWnd);
+        UnregisterClassW(g_windowClassName, g_instance);
+        return 0;
+    }
     case WM_DESTROY:
         PostQuitMessage(0);
         return 0;
@@ -426,8 +431,8 @@ EXTERN_C int APIENTRY wWinMain(
     }
 
     const HWND mainWindowHandle = CreateWindowExW(
-        0L, g_windowClassName, g_windowTitle,
-        WS_OVERLAPPEDWINDOW | WS_CLIPSIBLINGS | WS_CLIPCHILDREN,
+        WS_EX_OVERLAPPEDWINDOW, g_windowClassName, g_windowTitle,
+        WS_OVERLAPPEDWINDOW | WS_CLIPSIBLINGS | WS_CLIPCHILDREN | WS_VISIBLE,
         CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
         nullptr, nullptr, hInstance, nullptr
     );
@@ -470,6 +475,7 @@ EXTERN_C int APIENTRY wWinMain(
     winrt::Windows::UI::Xaml::Media::AcrylicBrush acrylicBrush = {};
     acrylicBrush.BackgroundSource(winrt::Windows::UI::Xaml::Media::AcrylicBackgroundSource::HostBackdrop);
     xamlGrid.Background(acrylicBrush);
+    //xamlGrid.Children().Clear();
     //xamlGrid.Children().Append(/* some UWP control */);
     //xamlGrid.UpdateLayout();
     desktopWindowXamlSource.Content(xamlGrid);

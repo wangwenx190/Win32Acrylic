@@ -58,3 +58,21 @@ target_compile_definitions(${PROJECT_NAME} PRIVATE
     _WIN32_WINNT=${NTDDI_WIN10_19H1}
 )
 unset(NTDDI_WIN10_19H1)
+
+target_link_libraries(${PROJECT_NAME} PRIVATE
+    #kernel32
+    #user32
+    #shell32
+    #gdi32 # todo: remove
+    uxtheme # todo: remove
+)
+
+if(MSVC)
+    target_compile_options(${PROJECT_NAME} PRIVATE /utf-8 /await)
+    if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+        target_compile_options(${PROJECT_NAME} PRIVATE /JMC)
+    else()
+        target_compile_options(${PROJECT_NAME} PRIVATE /guard:cf)
+        target_link_options(${PROJECT_NAME} PRIVATE /GUARD:CF)
+    endif()
+endif()

@@ -110,7 +110,7 @@ static inline void DisplayErrorMessage(LPCWSTR text)
     SecureZeroMemory(&mi, sizeof(mi));
     mi.cbSize = sizeof(mi);
     GetMonitorInfoW(MonitorFromWindow(hWnd, MONITOR_DEFAULTTOPRIMARY), &mi);
-    RECT rect = {};
+    RECT rect = {0, 0, 0, 0};
     GetWindowRect(hWnd, &rect);
     return ((rect.left == mi.rcMonitor.left)
             && (rect.right == mi.rcMonitor.right)
@@ -394,7 +394,7 @@ EXTERN_C int APIENTRY wWinMain(
     HWND xamlIslandHandle = nullptr;
     interop->get_WindowHandle(&xamlIslandHandle);
     if (!xamlIslandHandle) {
-        DisplayErrorMessage(L"Failed to retrieve XAML Island window handle.");
+        DisplayErrorMessage(L"Failed to retrieve the XAML Island window handle.");
         return -1;
     }
     g_xamlIslandHandle = xamlIslandHandle;

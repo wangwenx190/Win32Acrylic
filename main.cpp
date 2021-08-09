@@ -22,6 +22,10 @@
  * SOFTWARE.
  */
 
+#ifndef _USER32_
+#define _USER32_
+#endif
+
 #ifndef _DWMAPI_
 #define _DWMAPI_
 #endif

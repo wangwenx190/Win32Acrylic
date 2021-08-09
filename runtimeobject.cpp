@@ -22,6 +22,10 @@
  * SOFTWARE.
  */
 
+#ifndef _USER32_
+#define _USER32_
+#endif
+
 #ifndef _DWMAPI_
 #define _DWMAPI_
 #endif
@@ -30,44 +34,92 @@
 #define _ROAPI_
 #endif
 
-#include <dwmapi.h>
+#include <Windows.h>
+#include <DWMAPI.h>
 #include <roapi.h>
 #include <roerrorapi.h>
 #include <roregistrationapi.h>
 #include <roparameterizediid.h>
 #include <rometadataresolution.h>
 
+#ifndef RUNTIMEOBJECT_TRY_EXECUTE_FUNCTION
+#define RUNTIMEOBJECT_TRY_EXECUTE_FUNCTION(funcName, libName, defVal, ...) \
+using sig = decltype(&::funcName); \
+static bool tried = false; \
+static sig func = nullptr; \
+if (!func) { \
+    if (tried) { \
+        return defVal; \
+    } else { \
+        tried = true; \
+        const HMODULE dll = LoadLibraryExW(L#libName ".dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32); \
+        if (!dll) { \
+            OutputDebugStringW(L"Failed to load " #libName ".dll."); \
+            return defVal; \
+        } \
+        func = reinterpret_cast<sig>(GetProcAddress(dll, #funcName)); \
+        FreeLibrary(dll); \
+        if (!func) { \
+            OutputDebugStringW(L"Failed to resolve " #funcName "()."); \
+            return defVal; \
+        } \
+    } \
+} \
+return func(__VA_ARGS__);
+#endif
+
+#ifndef RUNTIMEOBJECT_TRY_EXECUTE_USER_FUNCTION
+#define RUNTIMEOBJECT_TRY_EXECUTE_USER_FUNCTION(funcName, defVal, ...) RUNTIMEOBJECT_TRY_EXECUTE_FUNCTION(funcName, User32, defVal, ##__VA_ARGS__)
+#endif
+
+#ifndef RUNTIMEOBJECT_TRY_EXECUTE_DWM_FUNCTION
+#define RUNTIMEOBJECT_TRY_EXECUTE_DWM_FUNCTION(funcName, defVal, ...) RUNTIMEOBJECT_TRY_EXECUTE_FUNCTION(funcName, DWMAPI, defVal, ##__VA_ARGS__)
+#endif
+
+#ifndef RUNTIMEOBJECT_TRY_EXECUTE_WINRT_FUNCTION
+#define RUNTIMEOBJECT_TRY_EXECUTE_WINRT_FUNCTION(funcName, ...) RUNTIMEOBJECT_TRY_EXECUTE_FUNCTION(funcName, ComBase, E_NOTIMPL, ##__VA_ARGS__)
+#endif
+
+#ifndef RUNTIMEOBJECT_TRY_EXECUTE_WINRT_VOID_FUNCTION
+#define RUNTIMEOBJECT_TRY_EXECUTE_WINRT_VOID_FUNCTION(funcName, ...) RUNTIMEOBJECT_TRY_EXECUTE_FUNCTION(funcName, ComBase, void, ##__VA_ARGS__)
+#endif
+
+#ifndef RUNTIMEOBJECT_TRY_EXECUTE_WINRT_BOOL_FUNCTION
+#define RUNTIMEOBJECT_TRY_EXECUTE_WINRT_BOOL_FUNCTION(funcName, ...) RUNTIMEOBJECT_TRY_EXECUTE_FUNCTION(funcName, ComBase, FALSE, ##__VA_ARGS__)
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif
 
+int WINAPI
+GetSystemMetricsForDpi(
+    int  nIndex,
+    UINT dpi
+)
+{
+    RUNTIMEOBJECT_TRY_EXECUTE_USER_FUNCTION(GetSystemMetricsForDpi, 0, nIndex, dpi)
+}
+
+BOOL WINAPI
+AdjustWindowRectExForDpi(
+    LPRECT lpRect,
+    DWORD  dwStyle,
+    BOOL   bMenu,
+    DWORD  dwExStyle,
+    UINT   dpi
+)
+{
+    RUNTIMEOBJECT_TRY_EXECUTE_USER_FUNCTION(AdjustWindowRectExForDpi, FALSE, lpRect, dwStyle, bMenu, dwExStyle, dpi)
+}
+
 HRESULT WINAPI
 DwmExtendFrameIntoClientArea(
-    HWND hWnd,
+    HWND          hWnd,
     const MARGINS *pMarInset
 )
 {
-    using DwmExtendFrameIntoClientAreaPrototype = HRESULT(WINAPI *)(HWND, const MARGINS *);
-    static bool tried = false;
-    static DwmExtendFrameIntoClientAreaPrototype DwmExtendFrameIntoClientAreaPfn = nullptr;
-    if (!DwmExtendFrameIntoClientAreaPfn) {
-        if (tried) {
-            return E_NOTIMPL;
-        } else {
-            tried = true;
-            const HMODULE dll = LoadLibraryExW(L"dwmapi.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
-            if (dll) {
-                DwmExtendFrameIntoClientAreaPfn = reinterpret_cast<DwmExtendFrameIntoClientAreaPrototype>(GetProcAddress(dll, "DwmExtendFrameIntoClientArea"));
-                FreeLibrary(dll);
-                if (!DwmExtendFrameIntoClientAreaPfn) {
-                    return E_NOTIMPL;
-                }
-            } else {
-                return E_NOTIMPL;
-            }
-        }
-    }
-    return DwmExtendFrameIntoClientAreaPfn(hWnd, pMarInset);
+    RUNTIMEOBJECT_TRY_EXECUTE_DWM_FUNCTION(DwmExtendFrameIntoClientArea, E_NOTIMPL, hWnd, pMarInset)
 }
 
 HRESULT WINAPI
@@ -76,27 +128,7 @@ RoActivateInstance(
     IInspectable **instance
 )
 {
-    using RoActivateInstancePrototype = HRESULT(WINAPI *)(HSTRING, IInspectable **);
-    static bool tried = false;
-    static RoActivateInstancePrototype RoActivateInstancePfn = nullptr;
-    if (!RoActivateInstancePfn) {
-        if (tried) {
-            return E_NOTIMPL;
-        } else {
-            tried = true;
-            const HMODULE dll = LoadLibraryExW(L"", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
-            if (dll) {
-                RoActivateInstancePfn = reinterpret_cast<RoActivateInstancePrototype>(GetProcAddress(dll, "RoActivateInstance"));
-                FreeLibrary(dll);
-                if (!RoActivateInstancePfn) {
-                    return E_NOTIMPL;
-                }
-            } else {
-                return E_NOTIMPL;
-            }
-        }
-    }
-    return RoActivateInstancePfn(activatableClassId, instance);
+    RUNTIMEOBJECT_TRY_EXECUTE_WINRT_FUNCTION(RoActivateInstance, activatableClassId, instance)
 }
 
 HRESULT WINAPI
@@ -106,27 +138,7 @@ RoGetActivationFactory(
     void    **factory
 )
 {
-    using RoGetActivationFactoryPrototype = HRESULT(WINAPI *)(HSTRING, REFIID, void **);
-    static bool tried = false;
-    static RoGetActivationFactoryPrototype RoGetActivationFactoryPfn = nullptr;
-    if (!RoGetActivationFactoryPfn) {
-        if (tried) {
-            return E_NOTIMPL;
-        } else {
-            tried = true;
-            const HMODULE dll = LoadLibraryExW(L"", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
-            if (dll) {
-                RoGetActivationFactoryPfn = reinterpret_cast<RoGetActivationFactoryPrototype>(GetProcAddress(dll, "RoGetActivationFactory"));
-                FreeLibrary(dll);
-                if (!RoGetActivationFactoryPfn) {
-                    return E_NOTIMPL;
-                }
-            } else {
-                return E_NOTIMPL;
-            }
-        }
-    }
-    return RoGetActivationFactoryPfn(activatableClassId, iid, factory);
+    RUNTIMEOBJECT_TRY_EXECUTE_WINRT_FUNCTION(RoGetActivationFactory, activatableClassId, iid, factory)
 }
 
 HRESULT WINAPI
@@ -134,27 +146,7 @@ RoGetApartmentIdentifier(
     UINT64 *apartmentIdentifier
 )
 {
-    using RoGetApartmentIdentifierPrototype = HRESULT(WINAPI *)(UINT64 *);
-    static bool tried = false;
-    static RoGetApartmentIdentifierPrototype RoGetApartmentIdentifierPfn = nullptr;
-    if (!RoGetApartmentIdentifierPfn) {
-        if (tried) {
-            return E_NOTIMPL;
-        } else {
-            tried = true;
-            const HMODULE dll = LoadLibraryExW(L"", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
-            if (dll) {
-                RoGetApartmentIdentifierPfn = reinterpret_cast<RoGetApartmentIdentifierPrototype>(GetProcAddress(dll, "RoGetApartmentIdentifier"));
-                FreeLibrary(dll);
-                if (!RoGetApartmentIdentifierPfn) {
-                    return E_NOTIMPL;
-                }
-            } else {
-                return E_NOTIMPL;
-            }
-        }
-    }
-    return RoGetApartmentIdentifierPfn(apartmentIdentifier);
+    RUNTIMEOBJECT_TRY_EXECUTE_WINRT_FUNCTION(RoGetApartmentIdentifier, apartmentIdentifier)
 }
 
 HRESULT WINAPI
@@ -162,150 +154,230 @@ RoInitialize(
     RO_INIT_TYPE initType
 )
 {
-    using RoInitializePrototype = HRESULT(WINAPI *)(RO_INIT_TYPE);
-    static bool tried = false;
-    static RoInitializePrototype RoInitializePfn = nullptr;
-    if (!RoInitializePfn) {
-        if (tried) {
-            return E_NOTIMPL;
-        } else {
-            tried = true;
-            const HMODULE dll = LoadLibraryExW(L"", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
-            if (dll) {
-                RoInitializePfn = reinterpret_cast<RoInitializePrototype>(GetProcAddress(dll, "RoInitialize"));
-                FreeLibrary(dll);
-                if (!RoInitializePfn) {
-                    return E_NOTIMPL;
-                }
-            } else {
-                return E_NOTIMPL;
-            }
-        }
-    }
-    return RoInitializePfn(initType);
+    RUNTIMEOBJECT_TRY_EXECUTE_WINRT_FUNCTION(RoInitialize, initType)
 }
 
-HRESULT WINAPI RoRegisterActivationFactories(
-  HSTRING                 *activatableClassIds,
-  PFNGETACTIVATIONFACTORY *activationFactoryCallbacks,
-  UINT32                  count,
-  RO_REGISTRATION_COOKIE  *cookie
-);
+HRESULT WINAPI
+RoRegisterActivationFactories(
+    HSTRING                 *activatableClassIds,
+    PFNGETACTIVATIONFACTORY *activationFactoryCallbacks,
+    UINT32                  count,
+    RO_REGISTRATION_COOKIE  *cookie
+)
+{
+    RUNTIMEOBJECT_TRY_EXECUTE_WINRT_FUNCTION(RoRegisterActivationFactories, activatableClassIds, activationFactoryCallbacks, count, cookie)
+}
 
-HRESULT WINAPI RoRegisterForApartmentShutdown(
-  IApartmentShutdown                     *callbackObject,
-  UINT64                                 *apartmentIdentifier,
-  APARTMENT_SHUTDOWN_REGISTRATION_COOKIE *regCookie
-);
+HRESULT WINAPI
+RoRegisterForApartmentShutdown(
+    IApartmentShutdown                     *callbackObject,
+    UINT64                                 *apartmentIdentifier,
+    APARTMENT_SHUTDOWN_REGISTRATION_COOKIE *regCookie
+)
+{
+    RUNTIMEOBJECT_TRY_EXECUTE_WINRT_FUNCTION(RoRegisterForApartmentShutdown, callbackObject, apartmentIdentifier, regCookie)
+}
 
-void WINAPI RoRevokeActivationFactories(
-  RO_REGISTRATION_COOKIE cookie
-);
+void WINAPI
+RoRevokeActivationFactories(
+    RO_REGISTRATION_COOKIE cookie
+)
+{
+    RUNTIMEOBJECT_TRY_EXECUTE_WINRT_VOID_FUNCTION(RoRevokeActivationFactories, cookie)
+}
 
-void WINAPI RoUninitialize();
+void WINAPI
+RoUninitialize()
+{
+    RUNTIMEOBJECT_TRY_EXECUTE_WINRT_VOID_FUNCTION(RoUninitialize)
+}
 
-HRESULT WINAPI RoUnregisterForApartmentShutdown(
-  APARTMENT_SHUTDOWN_REGISTRATION_COOKIE regCookie
-);
+HRESULT WINAPI
+RoUnregisterForApartmentShutdown(
+    APARTMENT_SHUTDOWN_REGISTRATION_COOKIE regCookie
+)
+{
+    RUNTIMEOBJECT_TRY_EXECUTE_WINRT_FUNCTION(RoUnregisterForApartmentShutdown, regCookie)
+}
 
-HRESULT WINAPI GetRestrictedErrorInfo(
-  IRestrictedErrorInfo **ppRestrictedErrorInfo
-);
+HRESULT WINAPI
+GetRestrictedErrorInfo(
+    IRestrictedErrorInfo **ppRestrictedErrorInfo
+)
+{
+    RUNTIMEOBJECT_TRY_EXECUTE_WINRT_FUNCTION(GetRestrictedErrorInfo, ppRestrictedErrorInfo)
+}
 
-HRESULT WINAPI RoCaptureErrorContext(
-  HRESULT hr
-);
+HRESULT WINAPI
+RoCaptureErrorContext(
+    HRESULT hr
+)
+{
+    RUNTIMEOBJECT_TRY_EXECUTE_WINRT_FUNCTION(RoCaptureErrorContext, hr)
+}
 
-void WINAPI RoFailFastWithErrorContext(
-  HRESULT hrError
-);
+void WINAPI
+RoFailFastWithErrorContext(
+    HRESULT hrError
+)
+{
+    RUNTIMEOBJECT_TRY_EXECUTE_WINRT_VOID_FUNCTION(RoFailFastWithErrorContext, hrError)
+}
 
-HRESULT WINAPI RoGetErrorReportingFlags(
-  UINT32 *pflags
-);
+HRESULT WINAPI
+RoGetErrorReportingFlags(
+    UINT32 *pFlags
+)
+{
+    RUNTIMEOBJECT_TRY_EXECUTE_WINRT_FUNCTION(RoGetErrorReportingFlags, pFlags)
+}
 
-BOOL WINAPI RoOriginateError(
-  HRESULT error,
-  HSTRING message
-);
+BOOL WINAPI
+RoOriginateError(
+    HRESULT error,
+    HSTRING message
+)
+{
+    RUNTIMEOBJECT_TRY_EXECUTE_WINRT_BOOL_FUNCTION(RoOriginateError, error, message)
+}
 
-BOOL WINAPI RoOriginateErrorW(
-  HRESULT error,
-  UINT    cchMax,
-  PCWSTR  message
-);
+BOOL WINAPI
+RoOriginateErrorW(
+    HRESULT error,
+    UINT    cchMax,
+    PCWSTR  message
+)
+{
+    RUNTIMEOBJECT_TRY_EXECUTE_WINRT_BOOL_FUNCTION(RoOriginateErrorW, error, cchMax, message)
+}
 
-HRESULT WINAPI RoResolveRestrictedErrorInfoReference(
-  PCWSTR               reference,
-  IRestrictedErrorInfo **ppRestrictedErrorInfo
-);
+HRESULT WINAPI
+RoResolveRestrictedErrorInfoReference(
+    PCWSTR               reference,
+    IRestrictedErrorInfo **ppRestrictedErrorInfo
+)
+{
+    RUNTIMEOBJECT_TRY_EXECUTE_WINRT_FUNCTION(RoResolveRestrictedErrorInfoReference, reference, ppRestrictedErrorInfo)
+}
 
-HRESULT WINAPI RoSetErrorReportingFlags(
-  UINT32 flags
-);
+HRESULT WINAPI
+RoSetErrorReportingFlags(
+    UINT32 flags
+)
+{
+    RUNTIMEOBJECT_TRY_EXECUTE_WINRT_FUNCTION(RoSetErrorReportingFlags, flags)
+}
 
-BOOL WINAPI RoTransformError(
-  HRESULT oldError,
-  HRESULT newError,
-  HSTRING message
-);
+BOOL WINAPI
+RoTransformError(
+    HRESULT oldError,
+    HRESULT newError,
+    HSTRING message
+)
+{
+    RUNTIMEOBJECT_TRY_EXECUTE_WINRT_BOOL_FUNCTION(RoTransformError, oldError, newError, message)
+}
 
-BOOL WINAPI RoTransformErrorW(
-  HRESULT oldError,
-  HRESULT newError,
-  UINT    cchMax,
-  PCWSTR  message
-);
+BOOL WINAPI
+RoTransformErrorW(
+    HRESULT oldError,
+    HRESULT newError,
+    UINT    cchMax,
+    PCWSTR  message
+)
+{
+    RUNTIMEOBJECT_TRY_EXECUTE_WINRT_BOOL_FUNCTION(RoTransformErrorW, oldError, newError, cchMax, message)
+}
 
-HRESULT WINAPI SetRestrictedErrorInfo(
-  IRestrictedErrorInfo *pRestrictedErrorInfo
-);
+HRESULT WINAPI
+SetRestrictedErrorInfo(
+    IRestrictedErrorInfo *pRestrictedErrorInfo
+)
+{
+    RUNTIMEOBJECT_TRY_EXECUTE_WINRT_FUNCTION(SetRestrictedErrorInfo, pRestrictedErrorInfo)
+}
 
-BOOL WINAPI IsErrorPropagationEnabled();
+BOOL WINAPI
+IsErrorPropagationEnabled()
+{
+    RUNTIMEOBJECT_TRY_EXECUTE_WINRT_BOOL_FUNCTION(IsErrorPropagationEnabled)
+}
 
-void WINAPI RoClearError();
+void WINAPI
+RoClearError()
+{
+    RUNTIMEOBJECT_TRY_EXECUTE_WINRT_VOID_FUNCTION(RoClearError)
+}
 
-HRESULT WINAPI RoGetMatchingRestrictedErrorInfo(
-    HRESULT hrIn,
-    IRestrictedErrorInfo** ppRestrictedErrorInfo
-);
+HRESULT WINAPI
+RoGetMatchingRestrictedErrorInfo(
+    HRESULT              hrIn,
+    IRestrictedErrorInfo **ppRestrictedErrorInfo
+)
+{
+    RUNTIMEOBJECT_TRY_EXECUTE_WINRT_FUNCTION(RoGetMatchingRestrictedErrorInfo, hrIn, ppRestrictedErrorInfo)
+}
 
-HRESULT WINAPI RoInspectCapturedStackBackTrace(
-  UINT_PTR                 targetErrorInfoAddress,
-  USHORT                   machine,
-  PINSPECT_MEMORY_CALLBACK readMemoryCallback,
-  PVOID                    context,
-  UINT32                   *frameCount,
-  UINT_PTR                 *targetBackTraceAddress
-);
+HRESULT WINAPI
+RoInspectCapturedStackBackTrace(
+    UINT_PTR                 targetErrorInfoAddress,
+    USHORT                   machine,
+    PINSPECT_MEMORY_CALLBACK readMemoryCallback,
+    PVOID                    context,
+    UINT32                   *frameCount,
+    UINT_PTR                 *targetBackTraceAddress
+)
+{
+    RUNTIMEOBJECT_TRY_EXECUTE_WINRT_FUNCTION(RoInspectCapturedStackBackTrace, targetErrorInfoAddress, machine, readMemoryCallback, context, frameCount, targetBackTraceAddress)
+}
 
-HRESULT WINAPI RoInspectThreadErrorInfo(
-  UINT_PTR                 targetTebAddress,
-  USHORT                   machine,
-  PINSPECT_MEMORY_CALLBACK readMemoryCallback,
-  PVOID                    context,
-  UINT_PTR                 *targetErrorInfoAddress
-);
+HRESULT WINAPI
+RoInspectThreadErrorInfo(
+    UINT_PTR                 targetTebAddress,
+    USHORT                   machine,
+    PINSPECT_MEMORY_CALLBACK readMemoryCallback,
+    PVOID                    context,
+    UINT_PTR                 *targetErrorInfoAddress
+)
+{
+    RUNTIMEOBJECT_TRY_EXECUTE_WINRT_FUNCTION(RoInspectThreadErrorInfo, targetTebAddress, machine, readMemoryCallback, context, targetErrorInfoAddress)
+}
 
-BOOL WINAPI RoOriginateLanguageException(
-  HRESULT  error,
-  HSTRING  message,
-  IUnknown *languageException
-);
+BOOL WINAPI
+RoOriginateLanguageException(
+    HRESULT  error,
+    HSTRING  message,
+    IUnknown *languageException
+)
+{
+    RUNTIMEOBJECT_TRY_EXECUTE_WINRT_BOOL_FUNCTION(RoOriginateLanguageException, error, message, languageException)
+}
 
-HRESULT WINAPI RoReportFailedDelegate(
-  IUnknown             *punkDelegate,
-  IRestrictedErrorInfo *pRestrictedErrorInfo
-);
+HRESULT WINAPI
+RoReportFailedDelegate(
+    IUnknown             *punkDelegate,
+    IRestrictedErrorInfo *pRestrictedErrorInfo
+)
+{
+    RUNTIMEOBJECT_TRY_EXECUTE_WINRT_FUNCTION(RoReportFailedDelegate, punkDelegate, pRestrictedErrorInfo)
+}
 
-HRESULT WINAPI RoReportUnhandledError(
-  IRestrictedErrorInfo *pRestrictedErrorInfo
-);
+HRESULT WINAPI
+RoReportUnhandledError(
+    IRestrictedErrorInfo *pRestrictedErrorInfo
+)
+{
+    RUNTIMEOBJECT_TRY_EXECUTE_WINRT_FUNCTION(RoReportUnhandledError, pRestrictedErrorInfo)
+}
 
-HRESULT WINAPI RoGetActivatableClassRegistration(
-  HSTRING                       activatableClassId,
-  PActivatableClassRegistration *activatableClassRegistration
-);
+HRESULT WINAPI
+RoGetActivatableClassRegistration(
+    HSTRING                       activatableClassId,
+    PActivatableClassRegistration *activatableClassRegistration
+)
+{
+    RUNTIMEOBJECT_TRY_EXECUTE_WINRT_FUNCTION(RoGetActivatableClassRegistration, activatableClassId, activatableClassRegistration)
+}
 
 HRESULT WINAPI RoGetServerActivatableClasses(
   HSTRING serverName,

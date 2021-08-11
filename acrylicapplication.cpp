@@ -39,6 +39,7 @@
 #include <ShellApi.h>
 #include <UxTheme.h>
 #include <DwmApi.h>
+#include <VersionHelpers.h>
 #include <WinRT/Windows.UI.Xaml.Hosting.h>
 #include <WinRT/Windows.UI.Xaml.Controls.h>
 #include <WinRT/Windows.UI.Xaml.Media.h>
@@ -125,6 +126,7 @@ bool AcrylicApplicationPrivate::mainWindowZoomed = false;
 AcrylicApplicationPrivate::AcrylicApplicationPrivate(const std::vector<std::wstring> &argv, AcrylicApplication *q_ptr)
 {
     q = q_ptr;
+    initialize();
 }
 
 AcrylicApplicationPrivate::~AcrylicApplicationPrivate()
@@ -137,11 +139,13 @@ int AcrylicApplicationPrivate::exec()
     if (!mainWindowHandle) {
         return -1;
     }
+
     MSG msg = {};
     while (GetMessageW(&msg, nullptr, 0, 0)) {
         TranslateMessage(&msg);
         DispatchMessageW(&msg);
     }
+
     return static_cast<int>(msg.wParam);
 }
 
@@ -476,7 +480,7 @@ LRESULT CALLBACK AcrylicApplicationPrivate::mainWindowProc(HWND hWnd, UINT uMsg,
     return DefWindowProcW(hWnd, uMsg, wParam, lParam);
 }
 
-bool AcrylicApplicationPrivate::registerMainWindowClass() const
+bool AcrylicApplicationPrivate::registerMainWindowClass()
 {
     WNDCLASSEXW wcex;
     SecureZeroMemory(&wcex, sizeof(wcex));
@@ -487,12 +491,18 @@ bool AcrylicApplicationPrivate::registerMainWindowClass() const
     wcex.hCursor = LoadCursorW(nullptr, IDC_ARROW);
     wcex.hbrBackground = BACKGROUND_BRUSH;
     wcex.lpszClassName = mainWindowClassName.c_str();
-    return (RegisterClassExW(&wcex) != 0);
+    mainWindowAtom = RegisterClassExW(&wcex);
+
+    return (mainWindowAtom != static_cast<ATOM>(0));
 }
 
 bool AcrylicApplicationPrivate::createMainWindow() const
 {
-    const DWORD style = WS_OVERLAPPEDWINDOW | WS_CLIPSIBLINGS | WS_CLIPCHILDREN | WS_VISIBLE;
+    if (mainWindowAtom == static_cast<ATOM>(0)) {
+        return false;
+    }
+
+    const DWORD style = WS_OVERLAPPEDWINDOW | WS_CLIPSIBLINGS | WS_CLIPCHILDREN;
     const DWORD exStyle = WS_EX_OVERLAPPEDWINDOW;
     const int x = CW_USEDEFAULT;
     const int y = CW_USEDEFAULT;
@@ -500,12 +510,23 @@ bool AcrylicApplicationPrivate::createMainWindow() const
     const int height = CW_USEDEFAULT;
     mainWindowHandle = CreateWindowExW(exStyle, mainWindowClassName.c_str(), mainWindowTitle.c_str(),
                              style, x, y, width, height, nullptr, nullptr, HINST_THISCOMPONENT, nullptr);
-    return (mainWindowHandle != nullptr);
+
+    if (!mainWindowHandle) {
+        return false;
+    }
+
+    ShowWindow(mainWindowHandle, SW_SHOW);
+    UpdateWindow(mainWindowHandle);
+
+    updateFrameMargins(mainWindowHandle);
+    triggerFrameChange(mainWindowHandle);
+
+    return true;
 }
 
-bool AcrylicApplicationPrivate::createXAMLIslandContents() const
+bool AcrylicApplicationPrivate::createXAMLIslandElements() const
 {
-    if (!isWindows10_19H1OrGreater()) {
+    if (!mainWindowHandle) {
         return false;
     }
 
@@ -524,13 +545,11 @@ bool AcrylicApplicationPrivate::createXAMLIslandContents() const
     // Parent the DesktopWindowXamlSource object to the current window.
     winrt::check_hresult(interop->AttachToWindow(mainWindowHandle));
     // Get the new child window's HWND.
-    HWND xamlIslandHandle = nullptr;
     interop->get_WindowHandle(&xamlIslandHandle);
     if (!xamlIslandHandle) {
-        DisplayErrorMessage(L"Failed to retrieve the XAML Island window handle.");
-        return -1;
+        print(MessageType::Error, L"Error", L"Failed to retrieve XAML Island window handle.");
+        return false;
     }
-    g_xamlIslandHandle = xamlIslandHandle;
     // Update the XAML Island window size because initially it is 0x0.
     RECT rect = {0, 0, 0, 0};
     GetClientRect(mainWindowHandle, &rect);
@@ -546,12 +565,33 @@ bool AcrylicApplicationPrivate::createXAMLIslandContents() const
     desktopWindowXamlSource.Content(xamlGrid);
     // End XAML Island section.
 
+    ShowWindow(xamlIslandHandle, SW_SHOW);
+    UpdateWindow(xamlIslandHandle);
+
     return true;
 }
 
-void AcrylicApplicationPrivate::initialize() const
+void AcrylicApplicationPrivate::initialize()
 {
-
+    if (!registerMainWindowClass()) {
+        print(MessageType::Error, L"Error", L"Failed to register main window class.");
+        return;
+    }
+    if (!createMainWindow()) {
+        print(MessageType::Error, L"Error", L"Failed to create main window.");
+        return;
+    }
+    if (IsWindows10OrGreater()) {
+        if (isWindows10_19H1OrGreater()) {
+            if (!createXAMLIslandElements()) {
+                print(MessageType::Error, L"Error", L"Failed to create XAML Island elements.");
+            }
+        } else {
+            print(MessageType::Error, L"Error", L"XAML Island applications are only supported from Windows 10 19H1.");
+        }
+    } else {
+        print(MessageType::Warning, L"Warning", L"This application only supports Windows 10 and onwards.");
+    }
 }
 
 AcrylicApplication::AcrylicApplication(const int argc, const wchar_t *argv[])
@@ -563,10 +603,7 @@ AcrylicApplication::AcrylicApplication(const int argc, const wchar_t *argv[])
     d = std::make_unique<AcrylicApplicationPrivate>(args, this);
 }
 
-AcrylicApplication::~AcrylicApplication()
-{
-
-}
+AcrylicApplication::~AcrylicApplication() = default;
 
 int AcrylicApplication::exec()
 {

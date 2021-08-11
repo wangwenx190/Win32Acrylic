@@ -38,12 +38,6 @@ wWinMain(
     UNREFERENCED_PARAMETER(lpCmdLine);
     UNREFERENCED_PARAMETER(nCmdShow);
 
-    UpdateFrameMargins(mainWindowHandle);
-    TriggerFrameChange(mainWindowHandle);
-
-    ShowWindow(xamlIslandHandle, nCmdShow);
-    UpdateWindow(xamlIslandHandle);
-
     AcrylicApplication application(0, nullptr);
     return AcrylicApplication::exec();
 }

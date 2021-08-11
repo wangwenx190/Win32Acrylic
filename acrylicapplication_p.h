@@ -65,10 +65,10 @@ private:
     static void triggerFrameChange(const HWND hWnd);
     static LRESULT CALLBACK mainWindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 
-    [[nodiscard]] bool registerMainWindowClass() const;
+    [[nodiscard]] bool registerMainWindowClass();
     [[nodiscard]] bool createMainWindow() const;
-    [[nodiscard]] bool createXAMLIslandContents() const;
-    void initialize() const;
+    [[nodiscard]] bool createXAMLIslandElements() const;
+    void initialize();
 
 private:
     AcrylicApplication *q = nullptr;
@@ -78,4 +78,5 @@ private:
     static HWND mainWindowHandle;
     static HWND xamlIslandHandle;
     static bool mainWindowZoomed;
+    ATOM mainWindowAtom = 0;
 };

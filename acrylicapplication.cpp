@@ -46,6 +46,11 @@
 #include "acrylicapplication.h"
 #include "acrylicapplication_p.h"
 
+#ifndef HINST_THISCOMPONENT
+extern "C" IMAGE_DOS_HEADER __ImageBase;
+#define HINST_THISCOMPONENT (reinterpret_cast<HINSTANCE>(&__ImageBase))
+#endif
+
 #ifndef USER_DEFAULT_SCREEN_DPI
 #define USER_DEFAULT_SCREEN_DPI (96)
 #endif
@@ -101,15 +106,6 @@ HWND AcrylicApplicationPrivate::mainWindowHandle = nullptr;
 HWND AcrylicApplicationPrivate::xamlIslandHandle = nullptr;
 bool AcrylicApplicationPrivate::mainWindowZoomed = false;
 
-static inline void DisplayErrorMessage(LPCWSTR text)
-{
-    if (!text) {
-        return;
-    }
-    OutputDebugStringW(text);
-    MessageBoxW(nullptr, text, L"Error", MB_OK | MB_ICONERROR);
-}
-
 [[nodiscard]] static inline bool isWindows10_19H1OrGreater()
 {
     OSVERSIONINFOEXW osvi;
@@ -124,6 +120,64 @@ static inline void DisplayErrorMessage(LPCWSTR text)
     VER_SET_CONDITION(dwlConditionMask, VER_MINORVERSION, op);
     VER_SET_CONDITION(dwlConditionMask, VER_BUILDNUMBER, op);
     return (VerifyVersionInfoW(&osvi, VER_MAJORVERSION | VER_MINORVERSION | VER_BUILDNUMBER, dwlConditionMask) != FALSE);
+}
+
+AcrylicApplicationPrivate::AcrylicApplicationPrivate(const std::vector<std::wstring> &argv, AcrylicApplication *q_ptr)
+{
+    q = q_ptr;
+}
+
+AcrylicApplicationPrivate::~AcrylicApplicationPrivate()
+{
+
+}
+
+int AcrylicApplicationPrivate::exec()
+{
+    if (!mainWindowHandle) {
+        return -1;
+    }
+    MSG msg = {};
+    while (GetMessageW(&msg, nullptr, 0, 0)) {
+        TranslateMessage(&msg);
+        DispatchMessageW(&msg);
+    }
+    return static_cast<int>(msg.wParam);
+}
+
+void AcrylicApplicationPrivate::print(const MessageType type, const std::wstring &title, const std::wstring &text)
+{
+    UINT icon = 0;
+    std::wstring str = {};
+    switch (type) {
+    case MessageType::Information: {
+        icon = MB_ICONINFORMATION;
+        str += L"[INFORMATION] ";
+    } break;
+    case MessageType::Question: {
+        icon = MB_ICONQUESTION;
+        str += L"[QUESTION] ";
+    } break;
+    case MessageType::Warning: {
+        icon = MB_ICONWARNING;
+        str += L"[WARNING] ";
+    } break;
+    case MessageType::Error: {
+        icon = MB_ICONERROR;
+        str += L"[ERROR] ";
+    } break;
+    }
+    str += title + L": " + text;
+    //std::wcerr << str << std::endl;
+    OutputDebugStringW(str.c_str());
+    MessageBoxW(nullptr, text.c_str(), title.c_str(), MB_OK | icon);
+}
+
+UINT AcrylicApplicationPrivate::getWindowDpi(const HWND hWnd)
+{
+    if (!hWnd) {
+        return USER_DEFAULT_SCREEN_DPI;
+    }
 }
 
 double AcrylicApplicationPrivate::getDevicePixelRatio(const UINT dpi)
@@ -422,17 +476,99 @@ LRESULT CALLBACK AcrylicApplicationPrivate::mainWindowProc(HWND hWnd, UINT uMsg,
     return DefWindowProcW(hWnd, uMsg, wParam, lParam);
 }
 
-AcrylicApplicationPrivate::AcrylicApplicationPrivate(const std::vector<std::wstring> &argv, AcrylicApplication *q_ptr)
+bool AcrylicApplicationPrivate::registerMainWindowClass() const
+{
+    WNDCLASSEXW wcex;
+    SecureZeroMemory(&wcex, sizeof(wcex));
+    wcex.cbSize = sizeof(wcex);
+    wcex.style = CS_HREDRAW | CS_VREDRAW;
+    wcex.lpfnWndProc = mainWindowProc;
+    wcex.hInstance = HINST_THISCOMPONENT;
+    wcex.hCursor = LoadCursorW(nullptr, IDC_ARROW);
+    wcex.hbrBackground = BACKGROUND_BRUSH;
+    wcex.lpszClassName = mainWindowClassName.c_str();
+    return (RegisterClassExW(&wcex) != 0);
+}
+
+bool AcrylicApplicationPrivate::createMainWindow() const
+{
+    const DWORD style = WS_OVERLAPPEDWINDOW | WS_CLIPSIBLINGS | WS_CLIPCHILDREN | WS_VISIBLE;
+    const DWORD exStyle = WS_EX_OVERLAPPEDWINDOW;
+    const int x = CW_USEDEFAULT;
+    const int y = CW_USEDEFAULT;
+    const int width = CW_USEDEFAULT;
+    const int height = CW_USEDEFAULT;
+    mainWindowHandle = CreateWindowExW(exStyle, mainWindowClassName.c_str(), mainWindowTitle.c_str(),
+                             style, x, y, width, height, nullptr, nullptr, HINST_THISCOMPONENT, nullptr);
+    return (mainWindowHandle != nullptr);
+}
+
+bool AcrylicApplicationPrivate::createXAMLIslandContents() const
+{
+    if (!isWindows10_19H1OrGreater()) {
+        return false;
+    }
+
+    // XAML Island section:
+    // The call to winrt::init_apartment initializes COM; by default, in a multithreaded apartment.
+    winrt::init_apartment(winrt::apartment_type::single_threaded);
+    // Initialize the XAML framework's core window for the current thread.
+    // We need this "windowsXamlManager" live through out the whole application's life-cycle,
+    // don't remove it, otherwise the application will crash.
+    const auto windowsXamlManager = winrt::Windows::UI::Xaml::Hosting::WindowsXamlManager::InitializeForCurrentThread();
+    // This DesktopWindowXamlSource is the object that enables a non-UWP desktop application
+    // to host WinRT XAML controls in any UI element that is associated with a window handle (HWND).
+    winrt::Windows::UI::Xaml::Hosting::DesktopWindowXamlSource desktopWindowXamlSource = {};
+    // Get handle to the core window.
+    const auto interop = desktopWindowXamlSource.as<IDesktopWindowXamlSourceNative>();
+    // Parent the DesktopWindowXamlSource object to the current window.
+    winrt::check_hresult(interop->AttachToWindow(mainWindowHandle));
+    // Get the new child window's HWND.
+    HWND xamlIslandHandle = nullptr;
+    interop->get_WindowHandle(&xamlIslandHandle);
+    if (!xamlIslandHandle) {
+        DisplayErrorMessage(L"Failed to retrieve the XAML Island window handle.");
+        return -1;
+    }
+    g_xamlIslandHandle = xamlIslandHandle;
+    // Update the XAML Island window size because initially it is 0x0.
+    RECT rect = {0, 0, 0, 0};
+    GetClientRect(mainWindowHandle, &rect);
+    SetWindowPos(xamlIslandHandle, nullptr, 0, 0, rect.right, rect.bottom, SWP_NOACTIVATE | SWP_NOZORDER | SWP_NOOWNERZORDER);
+    // Create the XAML content.
+    winrt::Windows::UI::Xaml::Controls::Grid xamlGrid = {};
+    winrt::Windows::UI::Xaml::Media::AcrylicBrush acrylicBrush = {};
+    acrylicBrush.BackgroundSource(winrt::Windows::UI::Xaml::Media::AcrylicBackgroundSource::HostBackdrop);
+    xamlGrid.Background(acrylicBrush);
+    //xamlGrid.Children().Clear();
+    //xamlGrid.Children().Append(/* some UWP control */);
+    //xamlGrid.UpdateLayout();
+    desktopWindowXamlSource.Content(xamlGrid);
+    // End XAML Island section.
+
+    return true;
+}
+
+void AcrylicApplicationPrivate::initialize() const
 {
 
 }
 
-AcrylicApplicationPrivate::~AcrylicApplicationPrivate()
+AcrylicApplication::AcrylicApplication(const int argc, const wchar_t *argv[])
+{
+    std::vector<std::wstring> args = {};
+    for (int i = 0; i != argc; ++i) {
+        args.push_back(argv[i]);
+    }
+    d = std::make_unique<AcrylicApplicationPrivate>(args, this);
+}
+
+AcrylicApplication::~AcrylicApplication()
 {
 
 }
 
-int AcrylicApplicationPrivate::exec()
+int AcrylicApplication::exec()
 {
-
+    return AcrylicApplicationPrivate::exec();
 }

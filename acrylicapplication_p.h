@@ -30,7 +30,7 @@
 
 class AcrylicApplication;
 
-enum class MessageBoxType : int
+enum class MessageType : int
 {
     Information = 0,
     Question,
@@ -44,7 +44,7 @@ public:
     explicit AcrylicApplicationPrivate(const std::vector<std::wstring> &argv, AcrylicApplication *q_ptr);
     ~AcrylicApplicationPrivate();
 
-    static void displayMessage(const MessageBoxType type, const std::wstring &title, const std::wstring &text);
+    static void print(const MessageType type, const std::wstring &title, const std::wstring &text);
 
     static int exec();
 
@@ -55,6 +55,7 @@ private:
     AcrylicApplicationPrivate &operator=(AcrylicApplicationPrivate &&) = delete;
 
 private:
+    [[nodiscard]] static UINT getWindowDpi(const HWND hWnd);
     [[nodiscard]] static bool isWindowFullScreened(const HWND hWnd);
     [[nodiscard]] static bool isWindowNoState(const HWND hWnd);
     [[nodiscard]] static double getDevicePixelRatio(const UINT dpi);
@@ -63,6 +64,11 @@ private:
     static void updateFrameMargins(const HWND hWnd);
     static void triggerFrameChange(const HWND hWnd);
     static LRESULT CALLBACK mainWindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
+
+    [[nodiscard]] bool registerMainWindowClass() const;
+    [[nodiscard]] bool createMainWindow() const;
+    [[nodiscard]] bool createXAMLIslandContents() const;
+    void initialize() const;
 
 private:
     AcrylicApplication *q = nullptr;

@@ -28,6 +28,14 @@
 
 class AcrylicApplicationPrivate;
 
+enum class AcrylicParameter : int
+{
+    TintColor = 0,
+    TintOpacity,
+    TintLuminosityOpacity,
+    FallbackColor
+};
+
 class AcrylicApplication
 {
 public:

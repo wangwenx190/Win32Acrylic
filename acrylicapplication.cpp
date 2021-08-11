@@ -427,10 +427,16 @@ LRESULT CALLBACK AcrylicApplicationPrivate::mainWindowProc(HWND hWnd, UINT uMsg,
         // title bar or the drag bar. Apparently, it must be the drag bar or
         // the little border at the top which the user can use to move or
         // resize the window.
-        if (!IsMaximized(hWnd) && (pos.y <= rbtY)) {
+        if (isWindowNoState(hWnd) && (pos.y <= rbtY)) {
             return HTTOP;
         }
-        if ((pos.y > rbtY) && (pos.y <= (rbtY + getCaptionHeight(mainWindowDpi)))) {
+        const int cth = getCaptionHeight(mainWindowDpi);
+        if (IsMaximized(hWnd)) {
+            if ((pos.y >= 0) && (pos.y <= cth)) {
+                return HTCAPTION;
+            }
+        }
+        if (isWindowNoState(hWnd) && (pos.y > rbtY) && (pos.y <= (rbtY + cth))) {
             return HTCAPTION;
         }
         return HTCLIENT;

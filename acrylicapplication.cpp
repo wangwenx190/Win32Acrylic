@@ -498,6 +498,18 @@ LRESULT CALLBACK AcrylicApplicationPrivate::mainWindowProc(HWND hWnd, UINT uMsg,
         return 0;
     }
     case WM_SIZE: {
+        bool shouldUpdateFrameMargins = false;
+        if (IsMaximized(hWnd) || isWindowFullScreened(hWnd)) {
+            mainWindowZoomed = true;
+            shouldUpdateFrameMargins = true;
+        }
+        if (mainWindowZoomed && isWindowNoState(hWnd)) {
+            mainWindowZoomed = false;
+            shouldUpdateFrameMargins = true;
+        }
+        if (shouldUpdateFrameMargins) {
+            updateFrameMargins(hWnd);
+        }
         if (xamlIslandHandle) {
             RECT rect = {0, 0, 0, 0};
             GetClientRect(hWnd, &rect);

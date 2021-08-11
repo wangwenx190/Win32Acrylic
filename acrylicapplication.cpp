@@ -37,6 +37,7 @@
 #include <Unknwn.h> // This header file must be placed before any other header files.
 #include <Windows.h>
 #include <ShellApi.h>
+#include <ShellScalingApi.h>
 #include <UxTheme.h>
 #include <DwmApi.h>
 #include <VersionHelpers.h>
@@ -123,15 +124,18 @@ bool AcrylicApplicationPrivate::mainWindowZoomed = false;
     return (VerifyVersionInfoW(&osvi, VER_MAJORVERSION | VER_MINORVERSION | VER_BUILDNUMBER, dwlConditionMask) != FALSE);
 }
 
-AcrylicApplicationPrivate::AcrylicApplicationPrivate(const std::vector<std::wstring> &argv, AcrylicApplication *q_ptr)
+AcrylicApplicationPrivate::AcrylicApplicationPrivate(const std::vector<std::wstring> &args, AcrylicApplication *q_ptr)
 {
     q = q_ptr;
+    arguments = args;
     initialize();
 }
 
 AcrylicApplicationPrivate::~AcrylicApplicationPrivate()
 {
-
+    if (mainWindowAtom != static_cast<ATOM>(0)) {
+        UnregisterClassW(mainWindowClassName.c_str(), HINST_THISCOMPONENT);
+    }
 }
 
 int AcrylicApplicationPrivate::exec()
@@ -182,6 +186,41 @@ UINT AcrylicApplicationPrivate::getWindowDpi(const HWND hWnd)
     if (!hWnd) {
         return USER_DEFAULT_SCREEN_DPI;
     }
+    {
+        const UINT dpi = GetDpiForWindow(hWnd);
+        if (dpi > 0) {
+            return dpi;
+        }
+    }
+    {
+        const UINT dpi = GetSystemDpiForProcess(GetCurrentProcess());
+        if (dpi > 0) {
+            return dpi;
+        }
+    }
+    {
+        const UINT dpi = GetDpiForSystem();
+        if (dpi > 0) {
+            return dpi;
+        }
+    }
+    {
+        UINT dpiX = 0, dpiY = 0;
+        GetDpiForMonitor(MonitorFromWindow(hWnd, MONITOR_DEFAULTTONEAREST), MDT_EFFECTIVE_DPI, &dpiX, &dpiY);
+        if ((dpiX > 0) && (dpiY > 0)) {
+            return std::round(static_cast<double>(dpiX + dpiY) / 2.0);
+        }
+    }
+    {
+        const HDC hScreenDc = GetDC(nullptr);
+        const int dpiX = GetDeviceCaps(hScreenDc, LOGPIXELSX);
+        const int dpiY = GetDeviceCaps(hScreenDc, LOGPIXELSY);
+        ReleaseDC(nullptr, hScreenDc);
+        if ((dpiX > 0) && (dpiY > 0)) {
+            return std::round(static_cast<double>(dpiX + dpiY) / 2.0);
+        }
+    }
+    return USER_DEFAULT_SCREEN_DPI;
 }
 
 double AcrylicApplicationPrivate::getDevicePixelRatio(const UINT dpi)
@@ -468,7 +507,6 @@ LRESULT CALLBACK AcrylicApplicationPrivate::mainWindowProc(HWND hWnd, UINT uMsg,
     } break;
     case WM_CLOSE: {
         DestroyWindow(hWnd);
-        UnregisterClassW(mainWindowClassName.c_str(), reinterpret_cast<HINSTANCE>(GetWindowLongPtrW(hWnd, GWLP_HINSTANCE)));
         return 0;
     }
     case WM_DESTROY:
@@ -581,6 +619,7 @@ void AcrylicApplicationPrivate::initialize()
         print(MessageType::Error, L"Error", L"Failed to create main window.");
         return;
     }
+    mainWindowDpi = getWindowDpi(mainWindowHandle);
     if (IsWindows10OrGreater()) {
         if (isWindows10_19H1OrGreater()) {
             if (!createXAMLIslandElements()) {
@@ -594,7 +633,7 @@ void AcrylicApplicationPrivate::initialize()
     }
 }
 
-AcrylicApplication::AcrylicApplication(const int argc, const wchar_t *argv[])
+AcrylicApplication::AcrylicApplication(const int argc, wchar_t *argv[])
 {
     std::vector<std::wstring> args = {};
     for (int i = 0; i != argc; ++i) {

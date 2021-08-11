@@ -31,7 +31,7 @@ class AcrylicApplicationPrivate;
 class AcrylicApplication
 {
 public:
-    explicit AcrylicApplication(const int argc, const wchar_t *argv[]);
+    explicit AcrylicApplication(const int argc, wchar_t *argv[]);
     ~AcrylicApplication();
 
     static int exec();

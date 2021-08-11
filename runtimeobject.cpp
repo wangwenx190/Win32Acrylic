@@ -47,6 +47,7 @@
 #endif
 
 #include <Windows.h>
+#include <ShellScalingApi.h>
 #include <UxTheme.h>
 #include <DwmApi.h>
 #include <RoApi.h>
@@ -137,6 +138,10 @@ RUNTIMEOBJECT_TRY_EXECUTE_FUNCTION_CALL_FUNC_RETURN(__VA_ARGS__)
 #define RUNTIMEOBJECT_TRY_EXECUTE_USER_INT_FUNCTION(funcName, ...) RUNTIMEOBJECT_TRY_EXECUTE_RETURN_FUNCTION(funcName, User32, 0, ##__VA_ARGS__)
 #endif
 
+#ifndef RUNTIMEOBJECT_TRY_EXECUTE_SHCORE_FUNCTION
+#define RUNTIMEOBJECT_TRY_EXECUTE_SHCORE_FUNCTION(funcName, ...) RUNTIMEOBJECT_TRY_EXECUTE_RETURN_FUNCTION(funcName, SHCore, E_NOTIMPL, ##__VA_ARGS__)
+#endif
+
 #ifndef RUNTIMEOBJECT_TRY_EXECUTE_THEME_FUNCTION
 #define RUNTIMEOBJECT_TRY_EXECUTE_THEME_FUNCTION(funcName, ...) RUNTIMEOBJECT_TRY_EXECUTE_RETURN_FUNCTION(funcName, UxTheme, E_NOTIMPL, ##__VA_ARGS__)
 #endif
@@ -181,6 +186,28 @@ EXTERN_C_START
 /////     User32
 /////////////////////////////////
 
+UINT WINAPI
+GetDpiForWindow(
+    HWND hWnd
+)
+{
+    RUNTIMEOBJECT_TRY_EXECUTE_USER_INT_FUNCTION(GetDpiForWindow, hWnd)
+}
+
+UINT WINAPI
+GetDpiForSystem()
+{
+    RUNTIMEOBJECT_TRY_EXECUTE_USER_INT_FUNCTION(GetDpiForSystem)
+}
+
+UINT WINAPI
+GetSystemDpiForProcess(
+    HANDLE hProcess
+)
+{
+    RUNTIMEOBJECT_TRY_EXECUTE_USER_INT_FUNCTION(GetSystemDpiForProcess, hProcess)
+}
+
 int WINAPI
 GetSystemMetricsForDpi(
     int  nIndex,
@@ -200,6 +227,21 @@ AdjustWindowRectExForDpi(
 )
 {
     RUNTIMEOBJECT_TRY_EXECUTE_USER_FUNCTION(AdjustWindowRectExForDpi, lpRect, dwStyle, bMenu, dwExStyle, dpi)
+}
+
+/////////////////////////////////
+/////     SHCore
+/////////////////////////////////
+
+HRESULT WINAPI
+GetDpiForMonitor(
+    HMONITOR         hMonitor,
+    MONITOR_DPI_TYPE dpiType,
+    UINT             *dpiX,
+    UINT             *dpiY
+)
+{
+    RUNTIMEOBJECT_TRY_EXECUTE_SHCORE_FUNCTION(GetDpiForMonitor, hMonitor, dpiType, dpiX, dpiY)
 }
 
 /////////////////////////////////

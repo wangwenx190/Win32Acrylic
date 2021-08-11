@@ -41,7 +41,7 @@ enum class MessageType : int
 class AcrylicApplicationPrivate
 {
 public:
-    explicit AcrylicApplicationPrivate(const std::vector<std::wstring> &argv, AcrylicApplication *q_ptr);
+    explicit AcrylicApplicationPrivate(const std::vector<std::wstring> &args, AcrylicApplication *q_ptr);
     ~AcrylicApplicationPrivate();
 
     static void print(const MessageType type, const std::wstring &title, const std::wstring &text);
@@ -78,5 +78,6 @@ private:
     static HWND mainWindowHandle;
     static HWND xamlIslandHandle;
     static bool mainWindowZoomed;
+    std::vector<std::wstring> arguments = {};
     ATOM mainWindowAtom = 0;
 };

@@ -23,6 +23,7 @@
  */
 
 #include <Windows.h>
+#include <ShellApi.h>
 #include "acrylicapplication.h"
 
 EXTERN_C int APIENTRY
@@ -38,6 +39,16 @@ wWinMain(
     UNREFERENCED_PARAMETER(lpCmdLine);
     UNREFERENCED_PARAMETER(nCmdShow);
 
-    AcrylicApplication application(0, nullptr);
-    return AcrylicApplication::exec();
+    int argc = 0;
+    LPWSTR *argv = CommandLineToArgvW(GetCommandLineW(), &argc);
+    if (!argv || (argc <= 0)) {
+        return -1;
+    }
+
+    AcrylicApplication application(argc, argv);
+    const int result = AcrylicApplication::exec();
+
+    LocalFree(argv);
+
+    return result;
 }

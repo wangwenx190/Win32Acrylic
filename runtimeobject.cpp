@@ -34,6 +34,14 @@
 #define _DWMAPI_
 #endif
 
+#ifndef _OLE32_
+#define _OLE32_
+#endif
+
+#ifndef _COMBASEAPI_
+#define _COMBASEAPI_
+#endif
+
 #ifndef _ROAPI_
 #define _ROAPI_
 #endif
@@ -159,6 +167,10 @@ RUNTIMEOBJECT_TRY_EXECUTE_FUNCTION_CALL_FUNC_RETURN(__VA_ARGS__)
 
 #ifndef RUNTIMEOBJECT_TRY_EXECUTE_WINRT_PTR_FUNCTION
 #define RUNTIMEOBJECT_TRY_EXECUTE_WINRT_PTR_FUNCTION(funcName, ...) RUNTIMEOBJECT_TRY_EXECUTE_RETURN_FUNCTION(funcName, ComBase, nullptr, ##__VA_ARGS__)
+#endif
+
+#ifndef RUNTIMEOBJECT_TRY_EXECUTE_OLE_FUNCTION
+#define RUNTIMEOBJECT_TRY_EXECUTE_OLE_FUNCTION(funcName, ...) RUNTIMEOBJECT_TRY_EXECUTE_RETURN_FUNCTION(funcName, Ole32, E_NOTIMPL, ##__VA_ARGS__)
 #endif
 
 #ifdef __cplusplus
@@ -842,6 +854,18 @@ RoResolveNamespace(
 )
 {
     RUNTIMEOBJECT_TRY_EXECUTE_WINRT_FUNCTION(RoResolveNamespace, name, windowsMetaDataDir, packageGraphDirsCount, packageGraphDirs, metaDataFilePathsCount, metaDataFilePaths, subNamespacesCount, subNamespaces)
+}
+
+/////////////////////////////////
+/////     Ole32 / ComBaseApi
+/////////////////////////////////
+
+HRESULT WINAPI
+CoIncrementMTAUsage(
+    CO_MTA_USAGE_COOKIE *pCookie
+)
+{
+    RUNTIMEOBJECT_TRY_EXECUTE_OLE_FUNCTION(CoIncrementMTAUsage, pCookie)
 }
 
 #ifdef __cplusplus

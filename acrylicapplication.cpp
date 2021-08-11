@@ -34,8 +34,9 @@
 #define _DWMAPI_
 #endif
 
-#include <Unknwn.h> // This header file must be placed before any other header files.
-#include <Windows.h>
+#include "acrylicapplication.h"
+#include "acrylicapplication_p.h"
+#include <Unknwn.h>
 #include <ShellApi.h>
 #include <ShellScalingApi.h>
 #include <UxTheme.h>
@@ -45,8 +46,6 @@
 #include <WinRT/Windows.UI.Xaml.Controls.h>
 #include <WinRT/Windows.UI.Xaml.Media.h>
 #include <Windows.UI.Xaml.Hosting.DesktopWindowXamlSource.h>
-#include "acrylicapplication.h"
-#include "acrylicapplication_p.h"
 
 #ifndef HINST_THISCOMPONENT
 EXTERN_C IMAGE_DOS_HEADER __ImageBase;
@@ -176,7 +175,6 @@ void AcrylicApplicationPrivate::print(const MessageType type, const std::wstring
     } break;
     }
     str += title + L": " + text;
-    //std::wcerr << str << std::endl;
     OutputDebugStringW(str.c_str());
     MessageBoxW(nullptr, text.c_str(), title.c_str(), MB_OK | icon);
 }
@@ -580,7 +578,7 @@ bool AcrylicApplicationPrivate::createMainWindow() const
     return true;
 }
 
-bool AcrylicApplicationPrivate::createXAMLIslandElements() const
+bool AcrylicApplicationPrivate::createXAMLIsland() const
 {
     if (!mainWindowHandle) {
         return false;
@@ -590,14 +588,14 @@ bool AcrylicApplicationPrivate::createXAMLIslandElements() const
     // The call to winrt::init_apartment initializes COM; by default, in a multithreaded apartment.
     winrt::init_apartment(winrt::apartment_type::single_threaded);
     // Initialize the XAML framework's core window for the current thread.
-    // We need this "windowsXamlManager" live through out the whole application's life-cycle,
+    // We need this manager live through out the whole application's life-cycle,
     // don't remove it, otherwise the application will crash.
-    const auto windowsXamlManager = winrt::Windows::UI::Xaml::Hosting::WindowsXamlManager::InitializeForCurrentThread();
+    static const auto manager = winrt::Windows::UI::Xaml::Hosting::WindowsXamlManager::InitializeForCurrentThread();
     // This DesktopWindowXamlSource is the object that enables a non-UWP desktop application
     // to host WinRT XAML controls in any UI element that is associated with a window handle (HWND).
-    winrt::Windows::UI::Xaml::Hosting::DesktopWindowXamlSource desktopWindowXamlSource = {};
+    static winrt::Windows::UI::Xaml::Hosting::DesktopWindowXamlSource source = {};
     // Get handle to the core window.
-    const auto interop = desktopWindowXamlSource.as<IDesktopWindowXamlSourceNative>();
+    const auto interop = source.as<IDesktopWindowXamlSourceNative>();
     // Parent the DesktopWindowXamlSource object to the current window.
     winrt::check_hresult(interop->AttachToWindow(mainWindowHandle));
     // Get the new child window's HWND.
@@ -611,14 +609,14 @@ bool AcrylicApplicationPrivate::createXAMLIslandElements() const
     GetClientRect(mainWindowHandle, &rect);
     SetWindowPos(xamlIslandHandle, nullptr, 0, 0, rect.right, rect.bottom, SWP_NOACTIVATE | SWP_NOZORDER | SWP_NOOWNERZORDER);
     // Create the XAML content.
-    winrt::Windows::UI::Xaml::Controls::Grid xamlGrid = {};
-    winrt::Windows::UI::Xaml::Media::AcrylicBrush acrylicBrush = {};
-    acrylicBrush.BackgroundSource(winrt::Windows::UI::Xaml::Media::AcrylicBackgroundSource::HostBackdrop);
-    xamlGrid.Background(acrylicBrush);
-    //xamlGrid.Children().Clear();
-    //xamlGrid.Children().Append(/* some UWP control */);
-    //xamlGrid.UpdateLayout();
-    desktopWindowXamlSource.Content(xamlGrid);
+    static winrt::Windows::UI::Xaml::Controls::Grid grid = {};
+    static winrt::Windows::UI::Xaml::Media::AcrylicBrush brush = {};
+    brush.BackgroundSource(winrt::Windows::UI::Xaml::Media::AcrylicBackgroundSource::HostBackdrop);
+    grid.Background(brush);
+    //grid.Children().Clear();
+    //grid.Children().Append(/* some UWP control */);
+    //grid.UpdateLayout();
+    source.Content(grid);
     // End XAML Island section.
 
     ShowWindow(xamlIslandHandle, SW_SHOW);
@@ -629,6 +627,12 @@ bool AcrylicApplicationPrivate::createXAMLIslandElements() const
 
 void AcrylicApplicationPrivate::initialize()
 {
+    static bool inited = false;
+    if (inited) {
+        return;
+    }
+    inited = true;
+
     if (!registerMainWindowClass()) {
         print(MessageType::Error, L"Error", L"Failed to register main window class.");
         return;
@@ -640,8 +644,8 @@ void AcrylicApplicationPrivate::initialize()
     mainWindowDpi = getWindowDpi(mainWindowHandle);
     if (IsWindows10OrGreater()) {
         if (isWindows10_19H1OrGreater()) {
-            if (!createXAMLIslandElements()) {
-                print(MessageType::Error, L"Error", L"Failed to create XAML Island elements.");
+            if (!createXAMLIsland()) {
+                print(MessageType::Error, L"Error", L"Failed to create XAML Island.");
             }
         } else {
             print(MessageType::Error, L"Error", L"XAML Island applications are only supported from Windows 10 19H1.");

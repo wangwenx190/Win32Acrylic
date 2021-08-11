@@ -22,9 +22,9 @@
  * SOFTWARE.
  */
 
+#include "acrylicapplication.h"
 #include <Windows.h>
 #include <ShellApi.h>
-#include "acrylicapplication.h"
 
 EXTERN_C int APIENTRY
 wWinMain(

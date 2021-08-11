@@ -67,7 +67,7 @@ private:
 
     [[nodiscard]] bool registerMainWindowClass();
     [[nodiscard]] bool createMainWindow() const;
-    [[nodiscard]] bool createXAMLIslandElements() const;
+    [[nodiscard]] bool createXAMLIsland() const;
     void initialize();
 
 private:

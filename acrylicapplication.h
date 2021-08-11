@@ -23,3 +23,25 @@
  */
 
 #pragma once
+
+#include <memory>
+
+class AcrylicApplicationPrivate;
+
+class AcrylicApplication
+{
+public:
+    explicit AcrylicApplication(const int argc, const wchar_t *argv[]);
+    ~AcrylicApplication();
+
+    static int exec();
+
+private:
+    AcrylicApplication(const AcrylicApplication &) = delete;
+    AcrylicApplication &operator=(const AcrylicApplication &) = delete;
+    AcrylicApplication(AcrylicApplication &&) = delete;
+    AcrylicApplication &operator=(AcrylicApplication &&) = delete;
+
+private:
+    std::unique_ptr<AcrylicApplicationPrivate> d;
+};

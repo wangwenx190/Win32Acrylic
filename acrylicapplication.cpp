@@ -49,7 +49,7 @@
 #include "acrylicapplication_p.h"
 
 #ifndef HINST_THISCOMPONENT
-extern "C" IMAGE_DOS_HEADER __ImageBase;
+EXTERN_C IMAGE_DOS_HEADER __ImageBase;
 #define HINST_THISCOMPONENT (reinterpret_cast<HINSTANCE>(&__ImageBase))
 #endif
 

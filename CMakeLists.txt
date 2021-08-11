@@ -6,7 +6,7 @@ project(Win32Acrylic VERSION 1.0.0.0 LANGUAGES CXX RC)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_C_EXTENSIONS OFF)]]
 
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 17) # TODO: find out how to support C++20
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
@@ -42,6 +42,9 @@ set(SOURCES
     win32acrylic.manifest
     win32acrylic.rc
     runtimeobject.cpp
+    acrylicapplication.h
+    acrylicapplication_p.h
+    acrylicapplication.cpp
     main.cpp
 )
 
@@ -56,6 +59,7 @@ target_compile_definitions(${PROJECT_NAME} PRIVATE
     _UNICODE
     WINVER=${NTDDI_WIN10_19H1}
     _WIN32_WINNT=${NTDDI_WIN10_19H1}
+    _ENABLE_EXTENDED_ALIGNED_STORAGE
 )
 unset(NTDDI_WIN10_19H1)
 

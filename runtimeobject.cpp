@@ -26,6 +26,10 @@
 #define _USER32_
 #endif
 
+#ifndef _UXTHEME_
+#define _UXTHEME_
+#endif
+
 #ifndef _DWMAPI_
 #define _DWMAPI_
 #endif
@@ -35,64 +39,86 @@
 #endif
 
 #include <Windows.h>
+#include <UxTheme.h>
 #include <DwmApi.h>
 #include <RoApi.h>
 #include <RoErrorApi.h>
 #include <RoRegistrationApi.h>
 #include <RoParameterizedIid.h>
-#include <RoMetadataApi.h>
 #include <RoMetadataResolution.h>
 
-#ifndef RUNTIMEOBJECT_TRY_EXECUTE_RETURN_FUNCTION
-#define RUNTIMEOBJECT_TRY_EXECUTE_RETURN_FUNCTION(funcName, libName, defVal, ...) \
+#ifndef RUNTIMEOBJECT_TRY_EXECUTE_FUNCTION_PART1
+#define RUNTIMEOBJECT_TRY_EXECUTE_FUNCTION_PART1(funcName) \
 using sig = decltype(&::funcName); \
 static bool tried = false; \
 static sig func = nullptr; \
 if (!func) { \
-    if (tried) { \
-        return defVal; \
+    if (tried) {
+#endif
+
+#ifndef RUNTIMEOBJECT_TRY_EXECUTE_FUNCTION_PART2
+#define RUNTIMEOBJECT_TRY_EXECUTE_FUNCTION_PART2(libName) \
     } else { \
         tried = true; \
         const HMODULE dll = LoadLibraryExW(L#libName ".dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32); \
         if (!dll) { \
-            OutputDebugStringW(L"Failed to load " #libName ".dll."); \
-            return defVal; \
+            OutputDebugStringW(L"Failed to load " #libName ".dll.");
+#endif
+
+#ifndef RUNTIMEOBJECT_TRY_EXECUTE_FUNCTION_PART3
+#define RUNTIMEOBJECT_TRY_EXECUTE_FUNCTION_PART3(funcName) \
         } \
         func = reinterpret_cast<sig>(GetProcAddress(dll, #funcName)); \
         FreeLibrary(dll); \
         if (!func) { \
-            OutputDebugStringW(L"Failed to resolve " #funcName "()."); \
-            return defVal; \
+            OutputDebugStringW(L"Failed to resolve " #funcName "().");
+#endif
+
+#ifndef RUNTIMEOBJECT_TRY_EXECUTE_FUNCTION_PART4
+#define RUNTIMEOBJECT_TRY_EXECUTE_FUNCTION_PART4 \
         } \
     } \
-} \
-return func(__VA_ARGS__);
+}
+#endif
+
+#ifndef RUNTIMEOBJECT_TRY_EXECUTE_FUNCTION_RETURN_VOID
+#define RUNTIMEOBJECT_TRY_EXECUTE_FUNCTION_RETURN_VOID return;
+#endif
+
+#ifndef RUNTIMEOBJECT_TRY_EXECUTE_FUNCTION_RETURN_VALUE
+#define RUNTIMEOBJECT_TRY_EXECUTE_FUNCTION_RETURN_VALUE(value) return (value);
+#endif
+
+#ifndef RUNTIMEOBJECT_TRY_EXECUTE_FUNCTION_CALL_FUNC
+#define RUNTIMEOBJECT_TRY_EXECUTE_FUNCTION_CALL_FUNC(...) func(__VA_ARGS__);
+#endif
+
+#ifndef RUNTIMEOBJECT_TRY_EXECUTE_FUNCTION_CALL_FUNC_RETURN
+#define RUNTIMEOBJECT_TRY_EXECUTE_FUNCTION_CALL_FUNC_RETURN(...) return func(__VA_ARGS__);
 #endif
 
 #ifndef RUNTIMEOBJECT_TRY_EXECUTE_VOID_FUNCTION
 #define RUNTIMEOBJECT_TRY_EXECUTE_VOID_FUNCTION(funcName, libName, ...) \
-using sig = decltype(&::funcName); \
-static bool tried = false; \
-static sig func = nullptr; \
-if (!func) { \
-    if (tried) { \
-        return; \
-    } else { \
-        tried = true; \
-        const HMODULE dll = LoadLibraryExW(L#libName ".dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32); \
-        if (!dll) { \
-            OutputDebugStringW(L"Failed to load " #libName ".dll."); \
-            return; \
-        } \
-        func = reinterpret_cast<sig>(GetProcAddress(dll, #funcName)); \
-        FreeLibrary(dll); \
-        if (!func) { \
-            OutputDebugStringW(L"Failed to resolve " #funcName "()."); \
-            return; \
-        } \
-    } \
-} \
-func(__VA_ARGS__);
+RUNTIMEOBJECT_TRY_EXECUTE_FUNCTION_PART1(funcName) \
+RUNTIMEOBJECT_TRY_EXECUTE_FUNCTION_RETURN_VOID \
+RUNTIMEOBJECT_TRY_EXECUTE_FUNCTION_PART2(libName) \
+RUNTIMEOBJECT_TRY_EXECUTE_FUNCTION_RETURN_VOID \
+RUNTIMEOBJECT_TRY_EXECUTE_FUNCTION_PART3(funcName) \
+RUNTIMEOBJECT_TRY_EXECUTE_FUNCTION_RETURN_VOID \
+RUNTIMEOBJECT_TRY_EXECUTE_FUNCTION_PART4 \
+RUNTIMEOBJECT_TRY_EXECUTE_FUNCTION_CALL_FUNC(__VA_ARGS__)
+#endif
+
+#ifndef RUNTIMEOBJECT_TRY_EXECUTE_RETURN_FUNCTION
+#define RUNTIMEOBJECT_TRY_EXECUTE_RETURN_FUNCTION(funcName, libName, defVal, ...) \
+RUNTIMEOBJECT_TRY_EXECUTE_FUNCTION_PART1(funcName) \
+RUNTIMEOBJECT_TRY_EXECUTE_FUNCTION_RETURN_VALUE(defVal) \
+RUNTIMEOBJECT_TRY_EXECUTE_FUNCTION_PART2(libName) \
+RUNTIMEOBJECT_TRY_EXECUTE_FUNCTION_RETURN_VALUE(defVal) \
+RUNTIMEOBJECT_TRY_EXECUTE_FUNCTION_PART3(funcName) \
+RUNTIMEOBJECT_TRY_EXECUTE_FUNCTION_RETURN_VALUE(defVal) \
+RUNTIMEOBJECT_TRY_EXECUTE_FUNCTION_PART4 \
+RUNTIMEOBJECT_TRY_EXECUTE_FUNCTION_CALL_FUNC_RETURN(__VA_ARGS__)
 #endif
 
 #ifndef RUNTIMEOBJECT_TRY_EXECUTE_USER_FUNCTION
@@ -103,8 +129,16 @@ func(__VA_ARGS__);
 #define RUNTIMEOBJECT_TRY_EXECUTE_USER_INT_FUNCTION(funcName, ...) RUNTIMEOBJECT_TRY_EXECUTE_RETURN_FUNCTION(funcName, User32, 0, ##__VA_ARGS__)
 #endif
 
+#ifndef RUNTIMEOBJECT_TRY_EXECUTE_THEME_FUNCTION
+#define RUNTIMEOBJECT_TRY_EXECUTE_THEME_FUNCTION(funcName, ...) RUNTIMEOBJECT_TRY_EXECUTE_RETURN_FUNCTION(funcName, UxTheme, E_NOTIMPL, ##__VA_ARGS__)
+#endif
+
+#ifndef RUNTIMEOBJECT_TRY_EXECUTE_THEME_PTR_FUNCTION
+#define RUNTIMEOBJECT_TRY_EXECUTE_THEME_PTR_FUNCTION(funcName, ...) RUNTIMEOBJECT_TRY_EXECUTE_RETURN_FUNCTION(funcName, UxTheme, nullptr, ##__VA_ARGS__)
+#endif
+
 #ifndef RUNTIMEOBJECT_TRY_EXECUTE_DWM_FUNCTION
-#define RUNTIMEOBJECT_TRY_EXECUTE_DWM_FUNCTION(funcName, ...) RUNTIMEOBJECT_TRY_EXECUTE_RETURN_FUNCTION(funcName, DWMAPI, E_NOTIMPL, ##__VA_ARGS__)
+#define RUNTIMEOBJECT_TRY_EXECUTE_DWM_FUNCTION(funcName, ...) RUNTIMEOBJECT_TRY_EXECUTE_RETURN_FUNCTION(funcName, DwmApi, E_NOTIMPL, ##__VA_ARGS__)
 #endif
 
 #ifndef RUNTIMEOBJECT_TRY_EXECUTE_WINRT_FUNCTION
@@ -128,8 +162,12 @@ func(__VA_ARGS__);
 #endif
 
 #ifdef __cplusplus
-extern "C" {
+EXTERN_C_START
 #endif
+
+/////////////////////////////////
+/////     User32
+/////////////////////////////////
 
 int WINAPI
 GetSystemMetricsForDpi(
@@ -152,6 +190,45 @@ AdjustWindowRectExForDpi(
     RUNTIMEOBJECT_TRY_EXECUTE_USER_FUNCTION(AdjustWindowRectExForDpi, lpRect, dwStyle, bMenu, dwExStyle, dpi)
 }
 
+/////////////////////////////////
+/////     UxTheme
+/////////////////////////////////
+
+HPAINTBUFFER WINAPI
+BeginBufferedPaint(
+    HDC             hdcTarget,
+    const RECT      *prcTarget,
+    BP_BUFFERFORMAT dwFormat,
+    BP_PAINTPARAMS  *pPaintParams,
+    HDC             *phdc
+)
+{
+    RUNTIMEOBJECT_TRY_EXECUTE_THEME_PTR_FUNCTION(BeginBufferedPaint, hdcTarget, prcTarget, dwFormat, pPaintParams, phdc)
+}
+
+HRESULT WINAPI
+EndBufferedPaint(
+    HPAINTBUFFER hBufferedPaint,
+    BOOL         fUpdateTarget
+)
+{
+    RUNTIMEOBJECT_TRY_EXECUTE_THEME_FUNCTION(EndBufferedPaint, hBufferedPaint, fUpdateTarget)
+}
+
+HRESULT WINAPI
+BufferedPaintSetAlpha(
+    HPAINTBUFFER hBufferedPaint,
+    const RECT   *prc,
+    BYTE         alpha
+)
+{
+    RUNTIMEOBJECT_TRY_EXECUTE_THEME_FUNCTION(BufferedPaintSetAlpha, hBufferedPaint, prc, alpha)
+}
+
+/////////////////////////////////
+/////     DwmApi
+/////////////////////////////////
+
 HRESULT WINAPI
 DwmExtendFrameIntoClientArea(
     HWND          hWnd,
@@ -160,6 +237,10 @@ DwmExtendFrameIntoClientArea(
 {
     RUNTIMEOBJECT_TRY_EXECUTE_DWM_FUNCTION(DwmExtendFrameIntoClientArea, hWnd, pMarInset)
 }
+
+/////////////////////////////////
+/////     Windows Runtime
+/////////////////////////////////
 
 HRESULT WINAPI
 RoActivateInstance(
@@ -764,5 +845,5 @@ RoResolveNamespace(
 }
 
 #ifdef __cplusplus
-}
+EXTERN_C_END
 #endif

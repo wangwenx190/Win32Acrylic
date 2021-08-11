@@ -59,14 +59,6 @@ target_compile_definitions(${PROJECT_NAME} PRIVATE
 )
 unset(NTDDI_WIN10_19H1)
 
-target_link_libraries(${PROJECT_NAME} PRIVATE
-    #kernel32
-    #user32
-    #shell32
-    #gdi32 # todo: remove
-    uxtheme # todo: remove
-)
-
 if(MSVC)
     target_compile_options(${PROJECT_NAME} PRIVATE /utf-8 /await)
     if(CMAKE_BUILD_TYPE STREQUAL "Debug")

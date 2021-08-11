@@ -26,6 +26,10 @@
 #define _USER32_
 #endif
 
+#ifndef _UXTHEME_
+#define _UXTHEME_
+#endif
+
 #ifndef _DWMAPI_
 #define _DWMAPI_
 #endif
@@ -33,7 +37,6 @@
 #include <Unknwn.h> // This header file must be placed before any other header files.
 #include <Windows.h>
 #include <ShellApi.h>
-#include <VersionHelpers.h>
 #include <UxTheme.h>
 #include <DwmApi.h>
 #include <WinRT/Windows.UI.Xaml.Hosting.h>
@@ -81,8 +84,8 @@
 #define RECT_HEIGHT(rect) std::abs((rect).bottom - (rect).top)
 #endif
 
-#ifndef BKG_BRUSH
-#define BKG_BRUSH reinterpret_cast<HBRUSH>(GetStockObject(BLACK_BRUSH))
+#ifndef BACKGROUND_BRUSH
+#define BACKGROUND_BRUSH reinterpret_cast<HBRUSH>(GetStockObject(BLACK_BRUSH))
 #endif
 
 static LPCWSTR g_windowClassName = L"Win32AcrylicApplicationWindowClass";
@@ -191,6 +194,22 @@ static inline void UpdateFrameMargins(const HWND hWnd)
         margins.cyTopHeight = std::abs(frame.top);
     }
     DwmExtendFrameIntoClientArea(hWnd, &margins);
+}
+
+[[nodiscard]] static inline bool Is19H1OrGreater()
+{
+    OSVERSIONINFOEXW osvi;
+    SecureZeroMemory(&osvi, sizeof(osvi));
+    osvi.dwOSVersionInfoSize = sizeof(osvi);
+    osvi.dwMajorVersion = 10;
+    osvi.dwMinorVersion = 0;
+    osvi.dwBuildNumber = 18362;
+    DWORDLONG dwlConditionMask = 0;
+    const BYTE op = VER_GREATER_EQUAL;
+    VER_SET_CONDITION(dwlConditionMask, VER_MAJORVERSION, op);
+    VER_SET_CONDITION(dwlConditionMask, VER_MINORVERSION, op);
+    VER_SET_CONDITION(dwlConditionMask, VER_BUILDNUMBER, op);
+    return (VerifyVersionInfoW(&osvi, VER_MAJORVERSION | VER_MINORVERSION | VER_BUILDNUMBER, dwlConditionMask) != FALSE);
 }
 
 static inline LRESULT CALLBACK BackgroundWindowProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
@@ -343,7 +362,7 @@ static inline LRESULT CALLBACK BackgroundWindowProc(HWND hWnd, UINT message, WPA
             // recommends to paint the area in black using the stock
             // BLACK_BRUSH to do this:
             // https://docs.microsoft.com/en-us/windows/win32/dwm/customframe#extending-the-client-frame
-            FillRect(hdc, &rcTopBorder, BKG_BRUSH);
+            FillRect(hdc, &rcTopBorder, BACKGROUND_BRUSH);
         }
         if (ps.rcPaint.bottom > topBorderHeight) {
             RECT rcRest = ps.rcPaint;
@@ -365,10 +384,6 @@ static inline LRESULT CALLBACK BackgroundWindowProc(HWND hWnd, UINT message, WPA
         EndPaint(hWnd, &ps);
         return 0;
     }
-#if 0
-    case WM_ERASEBKGND:
-        return 1;
-#endif
     case WM_DPICHANGED: {
         const double x = LOWORD(wParam);
         const double y = HIWORD(wParam);
@@ -410,8 +425,8 @@ EXTERN_C int APIENTRY wWinMain(
     UNREFERENCED_PARAMETER(hPrevInstance);
     UNREFERENCED_PARAMETER(lpCmdLine);
 
-    if (!IsWindows10OrGreater()) {
-        DisplayErrorMessage(L"This application only supports Windows 10 and onwards.");
+    if (!Is19H1OrGreater()) {
+        DisplayErrorMessage(L"This application only supports Windows 10 19H1 and onwards.");
         return -1;
     }
 
@@ -422,7 +437,7 @@ EXTERN_C int APIENTRY wWinMain(
     wcex.lpfnWndProc = BackgroundWindowProc;
     wcex.hInstance = hInstance;
     wcex.hCursor = LoadCursorW(nullptr, IDC_ARROW);
-    wcex.hbrBackground = BKG_BRUSH;
+    wcex.hbrBackground = BACKGROUND_BRUSH;
     wcex.lpszClassName = g_windowClassName;
 
     if (!RegisterClassExW(&wcex)) {

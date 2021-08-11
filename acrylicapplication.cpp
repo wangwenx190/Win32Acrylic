@@ -30,8 +30,10 @@
 #define _UXTHEME_
 #endif
 
+#if 0
 #ifndef _DWMAPI_
 #define _DWMAPI_
+#endif
 #endif
 
 #include "acrylicapplication.h"
@@ -100,6 +102,8 @@ EXTERN_C IMAGE_DOS_HEADER __ImageBase;
 static const int kAutoHideTaskbarThicknessPx = 2;
 static const int kAutoHideTaskbarThicknessPy = kAutoHideTaskbarThicknessPx;
 
+// Initialize global variables.
+AcrylicApplicationPrivate *AcrylicApplicationPrivate::instance = nullptr;
 const std::wstring AcrylicApplicationPrivate::mainWindowClassName = L"Win32AcrylicApplicationMainWindowClass";
 const std::wstring AcrylicApplicationPrivate::mainWindowTitle = L"Win32 Native C++ Acrylic Application Main Window";
 UINT AcrylicApplicationPrivate::mainWindowDpi = USER_DEFAULT_SCREEN_DPI;
@@ -125,6 +129,12 @@ bool AcrylicApplicationPrivate::mainWindowZoomed = false;
 
 AcrylicApplicationPrivate::AcrylicApplicationPrivate(const std::vector<std::wstring> &args, AcrylicApplication *q_ptr)
 {
+    if (instance) {
+        print(MessageType::Error, L"Error", L"There could only be one AcrylicApplication instance.");
+        std::exit(-1);
+    } else {
+        instance = this;
+    }
     q = q_ptr;
     arguments = args;
     initialize();
@@ -293,6 +303,14 @@ void AcrylicApplicationPrivate::updateFrameMargins(const HWND hWnd)
                                  FALSE,
                                  static_cast<DWORD>(GetWindowLongPtrW(hWnd, GWL_EXSTYLE)),
                                  mainWindowDpi);
+        int topFrameMargin = std::abs(frame.top);
+        if (topFrameMargin == 0) {
+            topFrameMargin = getResizeBorderThickness(false, mainWindowDpi)
+                             + getCaptionHeight(mainWindowDpi);
+        }
+        if (topFrameMargin <= 0) {
+            topFrameMargin = std::round(31.0 * getDevicePixelRatio(mainWindowDpi));
+        }
         // We removed the whole top part of the frame (see handling of
         // WM_NCCALCSIZE) so the top border is missing now. We add it back here.
         // Note #1: You might wonder why we don't remove just the title bar instead
@@ -308,7 +326,7 @@ void AcrylicApplicationPrivate::updateFrameMargins(const HWND hWnd)
         //  at the top) in the WM_PAINT handler. This eliminates the transparency
         //  bug and it's what a lot of Win32 apps that customize the title bar do
         //  so it should work fine.
-        margins.cyTopHeight = std::abs(frame.top);
+        margins.cyTopHeight = topFrameMargin;
     }
     DwmExtendFrameIntoClientArea(hWnd, &margins);
 }
@@ -457,10 +475,7 @@ LRESULT CALLBACK AcrylicApplicationPrivate::mainWindowProc(HWND hWnd, UINT uMsg,
         //  at the top) in the WM_PAINT handler. This eliminates the transparency
         //  bug and it's what a lot of Win32 apps that customize the title bar do
         //  so it should work fine.
-        LONG topBorderHeight = 0;
-        if (isWindowNoState(hWnd)) {
-            topBorderHeight = 1;
-        }
+        const LONG topBorderHeight = isWindowNoState(hWnd) ? 1 : 0;
         if (ps.rcPaint.top < topBorderHeight) {
             RECT rcTopBorder = ps.rcPaint;
             rcTopBorder.bottom = topBorderHeight;
@@ -517,7 +532,9 @@ LRESULT CALLBACK AcrylicApplicationPrivate::mainWindowProc(HWND hWnd, UINT uMsg,
         if (xamlIslandHandle) {
             RECT rect = {0, 0, 0, 0};
             GetClientRect(hWnd, &rect);
-            SetWindowPos(xamlIslandHandle, nullptr, 0, 0, rect.right, rect.bottom,
+            // Give space to our homemade one pixel height top border.
+            const int topFrameMargin = isWindowNoState(hWnd) ? 1 : 0;
+            SetWindowPos(xamlIslandHandle, nullptr, 0, topFrameMargin, rect.right, rect.bottom,
                          SWP_NOACTIVATE | SWP_NOZORDER | SWP_NOOWNERZORDER);
         }
     } break;
@@ -526,8 +543,12 @@ LRESULT CALLBACK AcrylicApplicationPrivate::mainWindowProc(HWND hWnd, UINT uMsg,
         return 0;
     }
     case WM_DESTROY:
+#if 0
         PostQuitMessage(0);
         return 0;
+#else
+        std::exit(0);
+#endif
     default:
         break;
     }
@@ -569,11 +590,11 @@ bool AcrylicApplicationPrivate::createMainWindow() const
         return false;
     }
 
-    ShowWindow(mainWindowHandle, SW_SHOW);
-    UpdateWindow(mainWindowHandle);
-
     updateFrameMargins(mainWindowHandle);
     triggerFrameChange(mainWindowHandle);
+
+    ShowWindow(mainWindowHandle, SW_SHOW);
+    UpdateWindow(mainWindowHandle);
 
     return true;
 }
@@ -589,10 +610,11 @@ bool AcrylicApplicationPrivate::createXAMLIsland() const
     winrt::init_apartment(winrt::apartment_type::single_threaded);
     // Initialize the XAML framework's core window for the current thread.
     // We need this manager live through out the whole application's life-cycle,
-    // don't remove it, otherwise the application will crash.
+    // so make it static, otherwise the application will crash.
     static const auto manager = winrt::Windows::UI::Xaml::Hosting::WindowsXamlManager::InitializeForCurrentThread();
     // This DesktopWindowXamlSource is the object that enables a non-UWP desktop application
     // to host WinRT XAML controls in any UI element that is associated with a window handle (HWND).
+    // It has to live with the application so make it static as well.
     static winrt::Windows::UI::Xaml::Hosting::DesktopWindowXamlSource source = {};
     // Get handle to the core window.
     const auto interop = source.as<IDesktopWindowXamlSourceNative>();
@@ -607,7 +629,9 @@ bool AcrylicApplicationPrivate::createXAMLIsland() const
     // Update the XAML Island window size because initially it is 0x0.
     RECT rect = {0, 0, 0, 0};
     GetClientRect(mainWindowHandle, &rect);
-    SetWindowPos(xamlIslandHandle, nullptr, 0, 0, rect.right, rect.bottom, SWP_NOACTIVATE | SWP_NOZORDER | SWP_NOOWNERZORDER);
+    // Give space to our homemade one pixel height top border.
+    SetWindowPos(xamlIslandHandle, nullptr, 0, 1, rect.right, rect.bottom,
+                               SWP_NOACTIVATE | SWP_NOZORDER | SWP_NOOWNERZORDER);
     // Create the XAML content.
     static winrt::Windows::UI::Xaml::Controls::Grid grid = {};
     static winrt::Windows::UI::Xaml::Media::AcrylicBrush brush = {};

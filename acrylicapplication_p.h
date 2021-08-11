@@ -72,6 +72,7 @@ private:
 
 private:
     AcrylicApplication *q = nullptr;
+    static AcrylicApplicationPrivate *instance;
     static const std::wstring mainWindowClassName;
     static const std::wstring mainWindowTitle;
     static UINT mainWindowDpi;

@@ -30,8 +30,10 @@
 #define _UXTHEME_
 #endif
 
+#if 0
 #ifndef _DWMAPI_
 #define _DWMAPI_
+#endif
 #endif
 
 #ifndef _OLE32_
@@ -49,7 +51,7 @@
 #include <Windows.h>
 #include <ShellScalingApi.h>
 #include <UxTheme.h>
-#include <DwmApi.h>
+//#include <DwmApi.h>
 #include <RoApi.h>
 #include <RoErrorApi.h>
 #include <RoRegistrationApi.h>
@@ -283,6 +285,7 @@ BufferedPaintSetAlpha(
 /////     DwmApi
 /////////////////////////////////
 
+#if 0
 HRESULT WINAPI
 DwmExtendFrameIntoClientArea(
     HWND          hWnd,
@@ -291,6 +294,7 @@ DwmExtendFrameIntoClientArea(
 {
     RUNTIMEOBJECT_TRY_EXECUTE_DWM_FUNCTION(DwmExtendFrameIntoClientArea, hWnd, pMarInset)
 }
+#endif
 
 /////////////////////////////////
 /////     Windows Runtime

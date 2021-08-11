@@ -50,6 +50,10 @@ set(SOURCES
 
 add_executable(${PROJECT_NAME} WIN32 ${SOURCES})
 
+target_link_libraries(${PROJECT_NAME} PRIVATE
+    dwmapi # TODO: remove
+)
+
 set(NTDDI_WIN10_19H1 0x0A000007)
 target_compile_definitions(${PROJECT_NAME} PRIVATE
     WIN32_LEAN_AND_MEAN
@@ -64,7 +68,7 @@ target_compile_definitions(${PROJECT_NAME} PRIVATE
 unset(NTDDI_WIN10_19H1)
 
 if(MSVC)
-    target_compile_options(${PROJECT_NAME} PRIVATE /utf-8 /await)
+    target_compile_options(${PROJECT_NAME} PRIVATE /utf-8 /await) # TODO: /permissive-
     if(CMAKE_BUILD_TYPE STREQUAL "Debug")
         target_compile_options(${PROJECT_NAME} PRIVATE /JMC)
     else()

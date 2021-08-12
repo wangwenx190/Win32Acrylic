@@ -739,6 +739,9 @@ bool AcrylicApplicationPrivate::registerMainWindowClass() const
 
 bool AcrylicApplicationPrivate::registerDragBarWindowClass() const
 {
+    if (!IsWindows8OrGreater()) {
+        return false;
+    }
     if (!mainWindowHandle) {
         return false;
     }

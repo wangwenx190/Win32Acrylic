@@ -61,6 +61,7 @@ public:
     [[nodiscard]] static bool updateFrameMargins(const HWND hWnd, const UINT dpi);
     [[nodiscard]] static bool triggerFrameChange(const HWND hWnd);
     [[nodiscard]] static bool enableWindowTransitions(const HWND hWnd);
+    [[nodiscard]] static bool openSystemMenu(const HWND hWnd, const POINT pos);
     static void print(const MessageType type, const std::wstring &title, const std::wstring &text);
 
 private:

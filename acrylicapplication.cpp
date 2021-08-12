@@ -351,6 +351,45 @@ bool AcrylicApplicationPrivate::enableWindowTransitions(const HWND hWnd)
     return SUCCEEDED(DwmSetWindowAttribute(hWnd, DWMWA_TRANSITIONS_FORCEDISABLED, &disabled, sizeof(disabled)));
 }
 
+bool AcrylicApplicationPrivate::openSystemMenu(const HWND hWnd, const POINT pos)
+{
+    if (!hWnd) {
+        return false;
+    }
+    const HMENU hMenu = GetSystemMenu(hWnd, FALSE);
+    if (!hMenu) {
+        return false;
+    }
+    // Update the options based on window state.
+    MENUITEMINFOW mii;
+    SecureZeroMemory(&mii, sizeof(mii));
+    mii.cbSize = sizeof(mii);
+    mii.fMask = MIIM_STATE;
+    mii.fType = MFT_STRING;
+    const auto setState = [&mii, hMenu](const UINT item, const bool enabled) {
+        mii.fState = enabled ? MF_ENABLED : MF_DISABLED;
+        SetMenuItemInfoW(hMenu, item, FALSE, &mii);
+    };
+    const bool isMaximized = (IsMaximized(hWnd) != FALSE);
+    setState(SC_RESTORE, isMaximized);
+    setState(SC_MOVE, !isMaximized);
+    setState(SC_SIZE, !isMaximized);
+    setState(SC_MINIMIZE, true);
+    setState(SC_MAXIMIZE, !isMaximized);
+    setState(SC_CLOSE, true);
+    SetMenuDefaultItem(hMenu, UINT_MAX, FALSE);
+
+    // ### TODO: support LTR layout.
+    const auto ret = TrackPopupMenu(hMenu, TPM_RETURNCMD, pos.x, pos.y, 0, hWnd, nullptr);
+    if (ret != 0) {
+        if (PostMessageW(hWnd, WM_SYSCOMMAND, ret, 0) == FALSE) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
 LRESULT CALLBACK AcrylicApplicationPrivate::mainWindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
     switch (uMsg)
@@ -551,11 +590,47 @@ LRESULT CALLBACK AcrylicApplicationPrivate::mainWindowProc(HWND hWnd, UINT uMsg,
                          getTitleBarHeight(hWnd, mainWindowDpi), flags);
         }
     } break;
+#if 0
     case WM_SETFOCUS: {
         if (xamlIslandHandle) {
             // Send focus to the XAML Island child window.
             SetFocus(xamlIslandHandle);
             return 0;
+        }
+    } break;
+#endif
+    case WM_SETCURSOR: {
+        if (LOWORD(lParam) == HTCLIENT) {
+            // Get the cursor position from the _last message_ and not from
+            // `GetCursorPos` (which returns the cursor position _at the
+            // moment_) because if we're lagging behind the cursor's position,
+            // we still want to get the cursor position that was associated
+            // with that message at the time it was sent to handle the message
+            // correctly.
+            const LRESULT hitTestResult = SendMessageW(hWnd, WM_NCHITTEST, 0, GetMessagePos());
+            if (hitTestResult == HTTOP) {
+                // We have to set the vertical resize cursor manually on
+                // the top resize handle because Windows thinks that the
+                // cursor is on the client area because it asked the asked
+                // the drag window with `WM_NCHITTEST` and it returned
+                // `HTCLIENT`.
+                // We don't want to modify the drag window's `WM_NCHITTEST`
+                // handling to return `HTTOP` because otherwise, the system
+                // would resize the drag window instead of the top level
+                // window!
+                SetCursor(LoadCursorW(nullptr, IDC_SIZENS));
+            } else {
+                // Reset cursor
+                SetCursor(LoadCursorW(nullptr, IDC_ARROW));
+            }
+            return TRUE;
+        }
+    } break;
+    case WM_NCRBUTTONUP: {
+        // The `DefWindowProc` function doesn't open the system menu for some
+        // reason so we have to do it ourselves.
+        if (wParam == HTCAPTION) {
+            openSystemMenu(hWnd, {GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)});
         }
     } break;
     case WM_CLOSE: {
@@ -642,7 +717,7 @@ LRESULT CALLBACK AcrylicApplicationPrivate::dragBarWindowProc(HWND hWnd, UINT uM
         const LPARAM newLParam = MAKELPARAM(pos.x, pos.y);
         // Hit test the parent window at the screen coordinates the user clicked in the drag input sink window,
         // then pass that click through as an NC click in that location.
-        const LRESULT hitTestResult = SendMessageW(mainWindowHandle, WM_NCHITTEST, wParam, newLParam);
+        const LRESULT hitTestResult = SendMessageW(mainWindowHandle, WM_NCHITTEST, 0, newLParam);
         SendMessageW(mainWindowHandle, nonClientMessage.value(), hitTestResult, newLParam);
         return 0;
     }
@@ -697,8 +772,9 @@ bool AcrylicApplicationPrivate::createMainWindow(const int x, const int y, const
         return false;
     }
 
-    mainWindowHandle = CreateWindowExW(0L, mainWindowClassName.c_str(), mainWindowTitle.c_str(),
-                                       WS_OVERLAPPEDWINDOW | WS_CLIPSIBLINGS | WS_CLIPCHILDREN,
+    mainWindowHandle = CreateWindowExW(0L,
+                                       mainWindowClassName.c_str(), mainWindowTitle.c_str(),
+                                       WS_OVERLAPPEDWINDOW,
                                        ((x > 0) ? x : CW_USEDEFAULT),
                                        ((y > 0) ? y : CW_USEDEFAULT),
                                        ((w > 0) ? w : CW_USEDEFAULT),
@@ -741,7 +817,7 @@ bool AcrylicApplicationPrivate::createDragBarWindow() const
     // right on top of the drag bar. The XAML island window "steals" our mouse
     // messages which makes it hard to implement a custom drag area. By putting
     // a window on top of it, we prevent it from "stealing" the mouse messages.
-    dragBarWindowHandle = CreateWindowExW(WS_EX_LAYERED | WS_EX_NOREDIRECTIONBITMAP,
+    dragBarWindowHandle = CreateWindowExW(0L,
                                           dragBarWindowClassName.c_str(), dragBarWindowTitle.c_str(),
                                           WS_CHILD,
                                           CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
@@ -751,7 +827,8 @@ bool AcrylicApplicationPrivate::createDragBarWindow() const
         return false;
     }
 
-    SetLayeredWindowAttributes(dragBarWindowHandle, RGB(0, 0, 0), 255, LWA_ALPHA);
+    SetWindowLongPtrW(dragBarWindowHandle, GWL_EXSTYLE, WS_EX_LAYERED | WS_EX_NOREDIRECTIONBITMAP);
+    SetLayeredWindowAttributes(dragBarWindowHandle, 0, 255, LWA_ALPHA);
 
     RECT rect = {0, 0, 0, 0};
     GetClientRect(mainWindowHandle, &rect);

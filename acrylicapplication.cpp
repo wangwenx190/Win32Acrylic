@@ -152,7 +152,7 @@ int AcrylicApplicationPrivate::exec()
     }
 
     MSG msg = {};
-    while (GetMessageW(&msg, mainWindowHandle, 0, 0) != FALSE) {
+    while (GetMessageW(&msg, nullptr, 0, 0) != FALSE) {
         TranslateMessage(&msg);
         DispatchMessageW(&msg);
     }
@@ -255,6 +255,16 @@ int AcrylicApplicationPrivate::getTopFrameMargin()
     return ((mainWindowHandle && isWindowNoState()) ? std::round(1.0 * getDevicePixelRatio()) : 0);
 }
 
+bool AcrylicApplicationPrivate::isCompositionEnabled()
+{
+    // DWM composition is always enabled and can't be disabled since Windows 8.
+    if (IsWindows8OrGreater()) {
+        return true;
+    }
+    BOOL enabled = FALSE;
+    return (SUCCEEDED(DwmIsCompositionEnabled(&enabled)) && (enabled != FALSE));
+}
+
 bool AcrylicApplicationPrivate::isWindowFullScreened()
 {
     if (!mainWindowHandle) {
@@ -330,8 +340,6 @@ void AcrylicApplicationPrivate::updateFrameMargins()
         //  so it should work fine.
         margins.cyTopHeight = topFrameMargin;
     }
-    // Ensure DWM still draws the top frame by extending the top frame.
-    // This also ensures our window still has frame shadow drawn by DWM.
     DwmExtendFrameIntoClientArea(mainWindowHandle, &margins);
 }
 
@@ -341,7 +349,6 @@ void AcrylicApplicationPrivate::enableWindowTransitions()
         return;
     }
     const BOOL disabled = FALSE;
-    // Ensure our window still has window transitions.
     DwmSetWindowAttribute(mainWindowHandle, DWMWA_TRANSITIONS_FORCEDISABLED, &disabled, sizeof(disabled));
 }
 
@@ -605,8 +612,12 @@ bool AcrylicApplicationPrivate::createMainWindow() const
 
     mainWindowDpi = getWindowDpi();
 
+    // Ensure DWM still draws the top frame by extending the top frame.
+    // This also ensures our window still has the frame shadow drawn by DWM.
     updateFrameMargins();
+    // Force a WM_NCCALCSIZE processing to make the window become frameless immediately.
     triggerFrameChange();
+    // Ensure our window still has window transitions.
     enableWindowTransitions();
 
     ShowWindow(mainWindowHandle, SW_SHOW);
@@ -672,6 +683,11 @@ void AcrylicApplicationPrivate::initialize()
         return;
     }
     inited = true;
+
+    if (!isCompositionEnabled()) {
+        print(MessageType::Error, L"Error", L"This application will behave incorrectly when DWM composition is disabled.");
+        std::exit(-1);
+    }
 
     if (!registerMainWindowClass()) {
         print(MessageType::Error, L"Error", L"Failed to register main window class.");

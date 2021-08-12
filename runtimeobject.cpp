@@ -354,6 +354,39 @@ DwmSetWindowAttribute(
 #endif
 }
 
+HRESULT WINAPI
+DwmIsCompositionEnabled(
+    BOOL *pfEnabled
+)
+{
+#if 0
+    RUNTIMEOBJECT_TRY_EXECUTE_DWM_FUNCTION(DwmIsCompositionEnabled, pfEnabled)
+#else
+    using sig = HRESULT(WINAPI *)(BOOL *);
+    static bool tried = false;
+    static sig func = nullptr;
+    if (!func) {
+        if (tried) {
+            return E_NOTIMPL;
+        } else {
+            tried = true;
+            const HMODULE dll = LoadLibraryExW(L"DwmApi.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
+            if (!dll) {
+                OutputDebugStringW(L"Failed to load DwmApi.dll.");
+                return E_NOTIMPL;
+            }
+            func = reinterpret_cast<sig>(GetProcAddress(dll, "DwmIsCompositionEnabled"));
+            FreeLibrary(dll); // ### FIXME: Is this line cause the crash?
+            if (!func) {
+                OutputDebugStringW(L"Failed to resolve DwmIsCompositionEnabled().");
+                return E_NOTIMPL;
+            }
+        }
+    }
+    return func(pfEnabled);
+#endif
+}
+
 /////////////////////////////////
 /////     Windows Runtime
 /////////////////////////////////

@@ -62,6 +62,7 @@ private:
     [[nodiscard]] static int getResizeBorderThickness(const bool x);
     [[nodiscard]] static int getCaptionHeight();
     [[nodiscard]] static int getTopFrameMargin();
+    [[nodiscard]] static bool isCompositionEnabled();
     static void updateFrameMargins();
     static void triggerFrameChange();
     static void enableWindowTransitions();

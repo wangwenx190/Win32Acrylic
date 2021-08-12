@@ -36,6 +36,14 @@ enum class AcrylicParameter : int
     FallbackColor
 };
 
+enum class AcrylicTheme : int
+{
+    Auto = 0,
+    Light,
+    Dark,
+    Default = Dark
+};
+
 class AcrylicApplication
 {
 public:

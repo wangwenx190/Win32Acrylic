@@ -30,12 +30,11 @@
 #define _UXTHEME_
 #endif
 
-#if 0
 #ifndef _DWMAPI_
 #define _DWMAPI_
 #endif
-#endif
 
+// Compat name for ComBaseApi, remove it once MS renamed it
 #ifndef _OLE32_
 #define _OLE32_
 #endif
@@ -51,7 +50,7 @@
 #include <Windows.h>
 #include <ShellScalingApi.h>
 #include <UxTheme.h>
-//#include <DwmApi.h>
+#include <DwmApi.h>
 #include <RoApi.h>
 #include <RoErrorApi.h>
 #include <RoRegistrationApi.h>
@@ -285,16 +284,75 @@ BufferedPaintSetAlpha(
 /////     DwmApi
 /////////////////////////////////
 
-#if 0
 HRESULT WINAPI
 DwmExtendFrameIntoClientArea(
     HWND          hWnd,
     const MARGINS *pMarInset
 )
 {
+#if 0
     RUNTIMEOBJECT_TRY_EXECUTE_DWM_FUNCTION(DwmExtendFrameIntoClientArea, hWnd, pMarInset)
-}
+#else
+    using sig = HRESULT(WINAPI *)(HWND, const MARGINS *);
+    static bool tried = false;
+    static sig func = nullptr;
+    if (!func) {
+        if (tried) {
+            return E_NOTIMPL;
+        } else {
+            tried = true;
+            const HMODULE dll = LoadLibraryExW(L"DwmApi.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
+            if (!dll) {
+                OutputDebugStringW(L"Failed to load DwmApi.dll.");
+                return E_NOTIMPL;
+            }
+            func = reinterpret_cast<sig>(GetProcAddress(dll, "DwmExtendFrameIntoClientArea"));
+            FreeLibrary(dll); // ### FIXME: Is this line cause the crash?
+            if (!func) {
+                OutputDebugStringW(L"Failed to resolve DwmExtendFrameIntoClientArea().");
+                return E_NOTIMPL;
+            }
+        }
+    }
+    return func(hWnd, pMarInset);
 #endif
+}
+
+HRESULT WINAPI
+DwmSetWindowAttribute(
+    HWND    hWnd,
+    DWORD   dwAttribute,
+    LPCVOID pvAttribute,
+    DWORD   cbAttribute
+)
+{
+#if 0
+    RUNTIMEOBJECT_TRY_EXECUTE_DWM_FUNCTION(DwmSetWindowAttribute, hWnd, dwAttribute, pvAttribute, cbAttribute)
+#else
+    using sig = HRESULT(WINAPI *)(HWND, DWORD, LPCVOID, DWORD);
+    static bool tried = false;
+    static sig func = nullptr;
+    if (!func) {
+        if (tried) {
+            return E_NOTIMPL;
+        } else {
+            tried = true;
+            const HMODULE dll = LoadLibraryExW(L"DwmApi.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
+            if (!dll) {
+                OutputDebugStringW(L"Failed to load DwmApi.dll.");
+                return E_NOTIMPL;
+            }
+            func = reinterpret_cast<sig>(GetProcAddress(dll, "DwmSetWindowAttribute"));
+            FreeLibrary(dll); // ### FIXME: Is this line cause the crash?
+            if (!func) {
+                OutputDebugStringW(L"Failed to resolve DwmSetWindowAttribute().");
+                return E_NOTIMPL;
+            }
+        }
+    }
+    return func(hWnd, dwAttribute, pvAttribute, cbAttribute);
+#endif
+}
 
 /////////////////////////////////
 /////     Windows Runtime
@@ -903,7 +961,7 @@ RoResolveNamespace(
 }
 
 /////////////////////////////////
-/////     Ole32 / ComBaseApi
+/////     ComBaseApi
 /////////////////////////////////
 
 HRESULT WINAPI

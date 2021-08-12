@@ -55,14 +55,16 @@ private:
     AcrylicApplicationPrivate &operator=(AcrylicApplicationPrivate &&) = delete;
 
 private:
-    [[nodiscard]] static UINT getWindowDpi(const HWND hWnd);
-    [[nodiscard]] static bool isWindowFullScreened(const HWND hWnd);
-    [[nodiscard]] static bool isWindowNoState(const HWND hWnd);
-    [[nodiscard]] static double getDevicePixelRatio(const UINT dpi);
-    [[nodiscard]] static int getResizeBorderThickness(const bool x, const UINT dpi);
-    [[nodiscard]] static int getCaptionHeight(const UINT dpi);
-    static void updateFrameMargins(const HWND hWnd);
-    static void triggerFrameChange(const HWND hWnd);
+    [[nodiscard]] static UINT getWindowDpi();
+    [[nodiscard]] static bool isWindowFullScreened();
+    [[nodiscard]] static bool isWindowNoState();
+    [[nodiscard]] static double getDevicePixelRatio();
+    [[nodiscard]] static int getResizeBorderThickness(const bool x);
+    [[nodiscard]] static int getCaptionHeight();
+    [[nodiscard]] static int getTopFrameMargin();
+    static void updateFrameMargins();
+    static void triggerFrameChange();
+    static void enableWindowTransitions();
     static LRESULT CALLBACK mainWindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 
     [[nodiscard]] bool registerMainWindowClass();

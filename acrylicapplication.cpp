@@ -36,6 +36,7 @@
 
 #include "acrylicapplication.h"
 #include "acrylicapplication_p.h"
+#include "resource.h"
 #include <Unknwn.h>
 #include <ShellApi.h>
 #include <ShellScalingApi.h>
@@ -107,7 +108,6 @@ const std::wstring AcrylicApplicationPrivate::mainWindowTitle = L"Win32 Native C
 UINT AcrylicApplicationPrivate::mainWindowDpi = USER_DEFAULT_SCREEN_DPI;
 HWND AcrylicApplicationPrivate::mainWindowHandle = nullptr;
 HWND AcrylicApplicationPrivate::xamlIslandHandle = nullptr;
-bool AcrylicApplicationPrivate::mainWindowZoomed = false;
 
 [[nodiscard]] static inline bool isWindows10_19H1OrGreater()
 {
@@ -510,7 +510,7 @@ LRESULT CALLBACK AcrylicApplicationPrivate::mainWindowProc(HWND hWnd, UINT uMsg,
             rcRest.top = topBorderHeight;
             // To hide the original title bar, we have to paint on top
             // of it with the alpha component set to 255. This is a hack
-            // to do it with GDI. See UpdateFrameMarginsForWindow for
+            // to do it with GDI. See UpdateFrameMargins() for
             // more information.
             HDC opaqueDc = nullptr;
             BP_PAINTPARAMS params;
@@ -532,30 +532,23 @@ LRESULT CALLBACK AcrylicApplicationPrivate::mainWindowProc(HWND hWnd, UINT uMsg,
         const double y = HIWORD(wParam);
         mainWindowDpi = std::round((x + y) / 2.0);
         const auto prcNewWindow = reinterpret_cast<LPRECT>(lParam);
-        SetWindowPos(hWnd, nullptr, prcNewWindow->left, prcNewWindow->top,
-                     RECT_WIDTH(*prcNewWindow), RECT_HEIGHT(*prcNewWindow),
-                     SWP_NOACTIVATE | SWP_NOZORDER | SWP_NOOWNERZORDER);
+        MoveWindow(hWnd, prcNewWindow->left, prcNewWindow->top, RECT_WIDTH(*prcNewWindow), RECT_HEIGHT(*prcNewWindow), TRUE);
         return 0;
     }
     case WM_SIZE: {
-        bool shouldUpdateFrameMargins = false;
-        if (IsMaximized(hWnd) || isWindowFullScreened()) {
-            mainWindowZoomed = true;
-            shouldUpdateFrameMargins = true;
-        }
-        if (mainWindowZoomed && isWindowNoState()) {
-            mainWindowZoomed = false;
-            shouldUpdateFrameMargins = true;
-        }
-        if (shouldUpdateFrameMargins) {
+        if ((wParam == SIZE_MAXIMIZED) || (wParam == SIZE_RESTORED)) {
             updateFrameMargins();
         }
         if (xamlIslandHandle) {
-            RECT rect = {0, 0, 0, 0};
-            GetClientRect(hWnd, &rect);
             // Give enough space to our homemade thin top border.
-            SetWindowPos(xamlIslandHandle, nullptr, 0, getTopFrameMargin(), rect.right, rect.bottom,
-                         SWP_NOACTIVATE | SWP_NOZORDER | SWP_NOOWNERZORDER);
+            MoveWindow(xamlIslandHandle, 0, getTopFrameMargin(), LOWORD(lParam), HIWORD(lParam), TRUE);
+        }
+    } break;
+    case WM_SETFOCUS: {
+        if (xamlIslandHandle) {
+            // Send focus to the child window.
+            SetFocus(xamlIslandHandle);
+            return 0;
         }
     } break;
     case WM_CLOSE: {
@@ -580,12 +573,15 @@ bool AcrylicApplicationPrivate::registerMainWindowClass()
     WNDCLASSEXW wcex;
     SecureZeroMemory(&wcex, sizeof(wcex));
     wcex.cbSize = sizeof(wcex);
+
     wcex.style = CS_HREDRAW | CS_VREDRAW;
     wcex.lpfnWndProc = mainWindowProc;
     wcex.hInstance = HINST_THISCOMPONENT;
     wcex.hCursor = LoadCursorW(nullptr, IDC_ARROW);
     wcex.hbrBackground = BACKGROUND_BRUSH;
     wcex.lpszClassName = mainWindowClassName.c_str();
+    wcex.hIcon = LoadIconW(HINST_THISCOMPONENT, MAKEINTRESOURCEW(IDI_ICON1));
+
     mainWindowAtom = RegisterClassExW(&wcex);
 
     return (mainWindowAtom != static_cast<ATOM>(0));
@@ -648,7 +644,7 @@ bool AcrylicApplicationPrivate::createXAMLIsland() const
     // Parent the DesktopWindowXamlSource object to the current window.
     winrt::check_hresult(interop->AttachToWindow(mainWindowHandle));
     // Get the new child window's HWND.
-    interop->get_WindowHandle(&xamlIslandHandle);
+    winrt::check_hresult(interop->get_WindowHandle(&xamlIslandHandle));
     if (!xamlIslandHandle) {
         print(MessageType::Error, L"Error", L"Failed to retrieve XAML Island window handle.");
         return false;
@@ -657,8 +653,7 @@ bool AcrylicApplicationPrivate::createXAMLIsland() const
     RECT rect = {0, 0, 0, 0};
     GetClientRect(mainWindowHandle, &rect);
     // Give enough space to our homemade thin top border.
-    SetWindowPos(xamlIslandHandle, nullptr, 0, getTopFrameMargin(), rect.right, rect.bottom,
-                               SWP_NOACTIVATE | SWP_NOZORDER | SWP_NOOWNERZORDER);
+    MoveWindow(xamlIslandHandle, 0, getTopFrameMargin(), rect.right, rect.bottom, TRUE);
     // Create the XAML content.
     static winrt::Windows::UI::Xaml::Controls::Grid grid = {};
     static winrt::Windows::UI::Xaml::Media::AcrylicBrush brush = {};

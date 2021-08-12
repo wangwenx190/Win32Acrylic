@@ -79,7 +79,6 @@ if (!func) { \
 #define RUNTIMEOBJECT_TRY_EXECUTE_FUNCTION_PART3(funcName) \
         } \
         func = reinterpret_cast<sig>(GetProcAddress(dll, #funcName)); \
-        FreeLibrary(dll); \
         if (!func) { \
             OutputDebugStringW(L"Failed to resolve " #funcName "().");
 #endif
@@ -290,32 +289,7 @@ DwmExtendFrameIntoClientArea(
     const MARGINS *pMarInset
 )
 {
-#if 0
     RUNTIMEOBJECT_TRY_EXECUTE_DWM_FUNCTION(DwmExtendFrameIntoClientArea, hWnd, pMarInset)
-#else
-    using sig = HRESULT(WINAPI *)(HWND, const MARGINS *);
-    static bool tried = false;
-    static sig func = nullptr;
-    if (!func) {
-        if (tried) {
-            return E_NOTIMPL;
-        } else {
-            tried = true;
-            const HMODULE dll = LoadLibraryExW(L"DwmApi.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
-            if (!dll) {
-                OutputDebugStringW(L"Failed to load DwmApi.dll.");
-                return E_NOTIMPL;
-            }
-            func = reinterpret_cast<sig>(GetProcAddress(dll, "DwmExtendFrameIntoClientArea"));
-            FreeLibrary(dll); // ### FIXME: Is this line cause the crash?
-            if (!func) {
-                OutputDebugStringW(L"Failed to resolve DwmExtendFrameIntoClientArea().");
-                return E_NOTIMPL;
-            }
-        }
-    }
-    return func(hWnd, pMarInset);
-#endif
 }
 
 HRESULT WINAPI
@@ -326,32 +300,7 @@ DwmSetWindowAttribute(
     DWORD   cbAttribute
 )
 {
-#if 0
     RUNTIMEOBJECT_TRY_EXECUTE_DWM_FUNCTION(DwmSetWindowAttribute, hWnd, dwAttribute, pvAttribute, cbAttribute)
-#else
-    using sig = HRESULT(WINAPI *)(HWND, DWORD, LPCVOID, DWORD);
-    static bool tried = false;
-    static sig func = nullptr;
-    if (!func) {
-        if (tried) {
-            return E_NOTIMPL;
-        } else {
-            tried = true;
-            const HMODULE dll = LoadLibraryExW(L"DwmApi.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
-            if (!dll) {
-                OutputDebugStringW(L"Failed to load DwmApi.dll.");
-                return E_NOTIMPL;
-            }
-            func = reinterpret_cast<sig>(GetProcAddress(dll, "DwmSetWindowAttribute"));
-            FreeLibrary(dll); // ### FIXME: Is this line cause the crash?
-            if (!func) {
-                OutputDebugStringW(L"Failed to resolve DwmSetWindowAttribute().");
-                return E_NOTIMPL;
-            }
-        }
-    }
-    return func(hWnd, dwAttribute, pvAttribute, cbAttribute);
-#endif
 }
 
 HRESULT WINAPI
@@ -359,32 +308,7 @@ DwmIsCompositionEnabled(
     BOOL *pfEnabled
 )
 {
-#if 0
     RUNTIMEOBJECT_TRY_EXECUTE_DWM_FUNCTION(DwmIsCompositionEnabled, pfEnabled)
-#else
-    using sig = HRESULT(WINAPI *)(BOOL *);
-    static bool tried = false;
-    static sig func = nullptr;
-    if (!func) {
-        if (tried) {
-            return E_NOTIMPL;
-        } else {
-            tried = true;
-            const HMODULE dll = LoadLibraryExW(L"DwmApi.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
-            if (!dll) {
-                OutputDebugStringW(L"Failed to load DwmApi.dll.");
-                return E_NOTIMPL;
-            }
-            func = reinterpret_cast<sig>(GetProcAddress(dll, "DwmIsCompositionEnabled"));
-            FreeLibrary(dll); // ### FIXME: Is this line cause the crash?
-            if (!func) {
-                OutputDebugStringW(L"Failed to resolve DwmIsCompositionEnabled().");
-                return E_NOTIMPL;
-            }
-        }
-    }
-    return func(pfEnabled);
-#endif
 }
 
 /////////////////////////////////

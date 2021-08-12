@@ -41,6 +41,7 @@ endif()
 set(SOURCES
     win32acrylic.manifest
     win32acrylic.rc
+    resource.h
     runtimeobject.cpp
     acrylicapplication.h
     acrylicapplication_p.h

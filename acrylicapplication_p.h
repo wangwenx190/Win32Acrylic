@@ -81,7 +81,6 @@ private:
     static UINT mainWindowDpi;
     static HWND mainWindowHandle;
     static HWND xamlIslandHandle;
-    static bool mainWindowZoomed;
     std::vector<std::wstring> arguments = {};
     ATOM mainWindowAtom = 0;
 };

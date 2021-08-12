@@ -22,7 +22,8 @@
  * SOFTWARE.
  */
 
-#include <windows.h>
+#include <Windows.h>
+#include "resource.h"
 
 IDI_ICON1 ICON "win32acrylic.ico"
 

@@ -61,26 +61,41 @@ private:
     [[nodiscard]] static double getDevicePixelRatio();
     [[nodiscard]] static int getResizeBorderThickness(const bool x);
     [[nodiscard]] static int getCaptionHeight();
+    [[nodiscard]] static int getTitleBarHeight();
     [[nodiscard]] static int getTopFrameMargin();
     [[nodiscard]] static bool isCompositionEnabled();
     static void updateFrameMargins();
     static void triggerFrameChange();
     static void enableWindowTransitions();
     static LRESULT CALLBACK mainWindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
+    static LRESULT CALLBACK dragBarWindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 
-    [[nodiscard]] bool registerMainWindowClass();
+    [[nodiscard]] bool registerMainWindowClass() const;
+    [[nodiscard]] bool registerDragBarWindowClass() const;
     [[nodiscard]] bool createMainWindow() const;
+    [[nodiscard]] bool createDragBarWindow() const;
     [[nodiscard]] bool createXAMLIsland() const;
-    void initialize();
+    void initialize() const;
 
 private:
     AcrylicApplication *q = nullptr;
+
     static AcrylicApplicationPrivate *instance;
+
     static const std::wstring mainWindowClassName;
+    static const std::wstring dragBarWindowClassName;
+
     static const std::wstring mainWindowTitle;
+    static const std::wstring dragBarWindowTitle;
+
     static UINT mainWindowDpi;
+
     static HWND mainWindowHandle;
+    static HWND dragBarWindowHandle;
     static HWND xamlIslandHandle;
+
+    static ATOM mainWindowAtom;
+    static ATOM dragBarWindowAtom;
+
     std::vector<std::wstring> arguments = {};
-    ATOM mainWindowAtom = 0;
 };

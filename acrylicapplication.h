@@ -50,7 +50,10 @@ public:
     explicit AcrylicApplication(const int argc, wchar_t *argv[]);
     ~AcrylicApplication();
 
-    static int exec();
+    [[nodiscard]] bool createAcrylicWindow(const int x = -1, const int y = -1,
+                                           const int w = -1, const int h = -1) const;
+
+    [[nodiscard]] static int exec();
 
 private:
     AcrylicApplication(const AcrylicApplication &) = delete;
@@ -59,5 +62,7 @@ private:
     AcrylicApplication &operator=(AcrylicApplication &&) = delete;
 
 private:
+    static AcrylicApplication *instance;
+
     std::unique_ptr<AcrylicApplicationPrivate> d;
 };

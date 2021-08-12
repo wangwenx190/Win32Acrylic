@@ -45,8 +45,12 @@ wWinMain(
         return -1;
     }
 
+    int result = -1;
+
     AcrylicApplication application(argc, argv);
-    const int result = AcrylicApplication::exec();
+    if (application.createAcrylicWindow()) {
+        result = AcrylicApplication::exec();
+    }
 
     LocalFree(argv);
 

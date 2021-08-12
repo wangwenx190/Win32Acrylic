@@ -44,9 +44,24 @@ public:
     explicit AcrylicApplicationPrivate(const std::vector<std::wstring> &args, AcrylicApplication *q_ptr);
     ~AcrylicApplicationPrivate();
 
-    static void print(const MessageType type, const std::wstring &title, const std::wstring &text);
+    [[nodiscard]] bool createAcrylicWindow(const int x, const int y,
+                                           const int w, const int h) const;
 
-    static int exec();
+    [[nodiscard]] static int exec();
+
+    [[nodiscard]] static UINT getWindowDpi(const HWND hWnd);
+    [[nodiscard]] static bool isWindowFullScreened(const HWND hWnd);
+    [[nodiscard]] static bool isWindowNoState(const HWND hWnd);
+    [[nodiscard]] static double getDevicePixelRatio(const UINT dpi);
+    [[nodiscard]] static int getResizeBorderThickness(const bool x, const UINT dpi);
+    [[nodiscard]] static int getCaptionHeight(const UINT dpi);
+    [[nodiscard]] static int getTitleBarHeight(const HWND hWnd, const UINT dpi);
+    [[nodiscard]] static int getTopFrameMargin(const HWND hWnd, const UINT dpi);
+    [[nodiscard]] static bool isCompositionEnabled();
+    [[nodiscard]] static bool updateFrameMargins(const HWND hWnd, const UINT dpi);
+    [[nodiscard]] static bool triggerFrameChange(const HWND hWnd);
+    [[nodiscard]] static bool enableWindowTransitions(const HWND hWnd);
+    static void print(const MessageType type, const std::wstring &title, const std::wstring &text);
 
 private:
     AcrylicApplicationPrivate(const AcrylicApplicationPrivate &) = delete;
@@ -55,32 +70,17 @@ private:
     AcrylicApplicationPrivate &operator=(AcrylicApplicationPrivate &&) = delete;
 
 private:
-    [[nodiscard]] static UINT getWindowDpi();
-    [[nodiscard]] static bool isWindowFullScreened();
-    [[nodiscard]] static bool isWindowNoState();
-    [[nodiscard]] static double getDevicePixelRatio();
-    [[nodiscard]] static int getResizeBorderThickness(const bool x);
-    [[nodiscard]] static int getCaptionHeight();
-    [[nodiscard]] static int getTitleBarHeight();
-    [[nodiscard]] static int getTopFrameMargin();
-    [[nodiscard]] static bool isCompositionEnabled();
-    static void updateFrameMargins();
-    static void triggerFrameChange();
-    static void enableWindowTransitions();
     static LRESULT CALLBACK mainWindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
     static LRESULT CALLBACK dragBarWindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 
     [[nodiscard]] bool registerMainWindowClass() const;
     [[nodiscard]] bool registerDragBarWindowClass() const;
-    [[nodiscard]] bool createMainWindow() const;
+    [[nodiscard]] bool createMainWindow(const int x, const int y, const int w, const int h) const;
     [[nodiscard]] bool createDragBarWindow() const;
     [[nodiscard]] bool createXAMLIsland() const;
-    void initialize() const;
 
 private:
     AcrylicApplication *q = nullptr;
-
-    static AcrylicApplicationPrivate *instance;
 
     static const std::wstring mainWindowClassName;
     static const std::wstring dragBarWindowClassName;

@@ -34,7 +34,6 @@
 #define _DWMAPI_
 #endif
 
-#include "acrylicapplication.h"
 #include "acrylicapplication_p.h"
 #include "resource.h"
 #include <Unknwn.h>
@@ -153,30 +152,29 @@ int AcrylicApplicationPrivate::exec()
     return static_cast<int>(msg.wParam);
 }
 
-void AcrylicApplicationPrivate::print(const MessageType type, const std::wstring &title, const std::wstring &text)
+void AcrylicApplicationPrivate::print(const MessageType type, const std::wstring &text)
 {
     UINT icon = 0;
-    std::wstring str = {};
+    std::wstring title = {};
     switch (type) {
     case MessageType::Information: {
         icon = MB_ICONINFORMATION;
-        str += L"[INFORMATION] ";
+        title = L"Information";
     } break;
     case MessageType::Question: {
         icon = MB_ICONQUESTION;
-        str += L"[QUESTION] ";
+        title = L"Question";
     } break;
     case MessageType::Warning: {
         icon = MB_ICONWARNING;
-        str += L"[WARNING] ";
+        title = L"Warning";
     } break;
     case MessageType::Error: {
         icon = MB_ICONERROR;
-        str += L"[ERROR] ";
+        title = L"Error";
     } break;
     }
-    str += title + L": " + text;
-    OutputDebugStringW(str.c_str());
+    OutputDebugStringW(text.c_str());
     MessageBoxW(nullptr, text.c_str(), title.c_str(), MB_OK | icon);
 }
 
@@ -342,12 +340,12 @@ bool AcrylicApplicationPrivate::updateFrameMargins(const HWND hWnd, const UINT d
     return SUCCEEDED(DwmExtendFrameIntoClientArea(hWnd, &margins));
 }
 
-bool AcrylicApplicationPrivate::enableWindowTransitions(const HWND hWnd)
+bool AcrylicApplicationPrivate::setWindowTransitionsEnabled(const HWND hWnd, const bool enable)
 {
     if (!hWnd) {
         return false;
     }
-    const BOOL disabled = FALSE;
+    const BOOL disabled = enable ? FALSE : TRUE;
     return SUCCEEDED(DwmSetWindowAttribute(hWnd, DWMWA_TRANSITIONS_FORCEDISABLED, &disabled, sizeof(disabled)));
 }
 
@@ -562,9 +560,6 @@ LRESULT CALLBACK AcrylicApplicationPrivate::mainWindowProc(HWND hWnd, UINT uMsg,
         EndPaint(hWnd, &ps);
         return 0;
     }
-    case WM_ERASEBKGND:
-        // Prevent system from repainting the window background to avoid flickering while resizing.
-        return 1;
     case WM_DPICHANGED: {
         const double x = LOWORD(wParam);
         const double y = HIWORD(wParam);
@@ -590,7 +585,6 @@ LRESULT CALLBACK AcrylicApplicationPrivate::mainWindowProc(HWND hWnd, UINT uMsg,
                          getTitleBarHeight(hWnd, mainWindowDpi), flags);
         }
     } break;
-#if 0
     case WM_SETFOCUS: {
         if (xamlIslandHandle) {
             // Send focus to the XAML Island child window.
@@ -598,7 +592,6 @@ LRESULT CALLBACK AcrylicApplicationPrivate::mainWindowProc(HWND hWnd, UINT uMsg,
             return 0;
         }
     } break;
-#endif
     case WM_SETCURSOR: {
         if (LOWORD(lParam) == HTCLIENT) {
             // Get the cursor position from the _last message_ and not from
@@ -772,9 +765,9 @@ bool AcrylicApplicationPrivate::createMainWindow(const int x, const int y, const
         return false;
     }
 
-    mainWindowHandle = CreateWindowExW(0L,
+    mainWindowHandle = CreateWindowExW(WS_EX_OVERLAPPEDWINDOW,
                                        mainWindowClassName.c_str(), mainWindowTitle.c_str(),
-                                       WS_OVERLAPPEDWINDOW,
+                                       WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN | WS_CLIPSIBLINGS,
                                        ((x > 0) ? x : CW_USEDEFAULT),
                                        ((y > 0) ? y : CW_USEDEFAULT),
                                        ((w > 0) ? w : CW_USEDEFAULT),
@@ -796,7 +789,7 @@ bool AcrylicApplicationPrivate::createMainWindow(const int x, const int y, const
     // Force a WM_NCCALCSIZE processing to make the window become frameless immediately.
     triggerFrameChange(mainWindowHandle);
     // Ensure our window still has window transitions.
-    enableWindowTransitions(mainWindowHandle);
+    setWindowTransitionsEnabled(mainWindowHandle, true);
 
     RedrawWindow(mainWindowHandle, nullptr, nullptr,
                  RDW_ERASE | RDW_FRAME | RDW_INVALIDATE | RDW_UPDATENOW);
@@ -806,6 +799,10 @@ bool AcrylicApplicationPrivate::createMainWindow(const int x, const int y, const
 
 bool AcrylicApplicationPrivate::createDragBarWindow() const
 {
+    // Please refer to the "IMPORTANT NOTE" section below.
+    if (!IsWindows8OrGreater()) {
+        return false;
+    }
     if (dragBarWindowAtom == static_cast<ATOM>(0)) {
         return false;
     }
@@ -817,7 +814,11 @@ bool AcrylicApplicationPrivate::createDragBarWindow() const
     // right on top of the drag bar. The XAML island window "steals" our mouse
     // messages which makes it hard to implement a custom drag area. By putting
     // a window on top of it, we prevent it from "stealing" the mouse messages.
-    dragBarWindowHandle = CreateWindowExW(0L,
+    //
+    // IMPORTANT NOTE: The WS_EX_LAYERED style is supported for both top-level
+    // windows and child windows since Windows 8. Previous Windows versions support
+    // WS_EX_LAYERED only for top-level windows.
+    dragBarWindowHandle = CreateWindowExW(WS_EX_LAYERED | WS_EX_NOREDIRECTIONBITMAP,
                                           dragBarWindowClassName.c_str(), dragBarWindowTitle.c_str(),
                                           WS_CHILD,
                                           CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
@@ -827,8 +828,9 @@ bool AcrylicApplicationPrivate::createDragBarWindow() const
         return false;
     }
 
-    SetWindowLongPtrW(dragBarWindowHandle, GWL_EXSTYLE, WS_EX_LAYERED | WS_EX_NOREDIRECTIONBITMAP);
-    SetLayeredWindowAttributes(dragBarWindowHandle, 0, 255, LWA_ALPHA);
+    // Layered window won't be visible until we call SetLayeredWindowAttributes()
+    // or UpdateLayeredWindow().
+    SetLayeredWindowAttributes(dragBarWindowHandle, RGB(0, 0, 0), 255, LWA_ALPHA);
 
     RECT rect = {0, 0, 0, 0};
     GetClientRect(mainWindowHandle, &rect);
@@ -844,6 +846,10 @@ bool AcrylicApplicationPrivate::createDragBarWindow() const
 
 bool AcrylicApplicationPrivate::createXAMLIsland() const
 {
+    // XAML Island is only supported on Windows 10 19H1 and onwards.
+    if (!isWindows10_19H1OrGreater()) {
+        return false;
+    }
     if (!mainWindowHandle) {
         return false;
     }
@@ -866,7 +872,7 @@ bool AcrylicApplicationPrivate::createXAMLIsland() const
     // Get the new XAML Island child window's HWND.
     winrt::check_hresult(interop->get_WindowHandle(&xamlIslandHandle));
     if (!xamlIslandHandle) {
-        print(MessageType::Error, L"Error", L"Failed to retrieve XAML Island window handle.");
+        print(MessageType::Error, L"Failed to retrieve XAML Island window handle.");
         return false;
     }
     // Update the XAML Island window size because initially it is 0x0.
@@ -893,7 +899,7 @@ bool AcrylicApplicationPrivate::createXAMLIsland() const
     return true;
 }
 
-bool AcrylicApplicationPrivate::createAcrylicWindow(const int x, const int y, const int w, const int h) const
+bool AcrylicApplicationPrivate::createWindow(const int x, const int y, const int w, const int h) const
 {
     static bool tried = false;
     if (tried) {
@@ -902,49 +908,190 @@ bool AcrylicApplicationPrivate::createAcrylicWindow(const int x, const int y, co
     tried = true;
 
     if (!isCompositionEnabled()) {
-        print(MessageType::Error, L"Error", L"This application will behave incorrectly when DWM composition is disabled.");
+        print(MessageType::Error, L"This application will behave incorrectly when DWM composition is disabled.");
         return false;
     }
 
     if (!registerMainWindowClass()) {
-        print(MessageType::Error, L"Error", L"Failed to register main window class.");
+        print(MessageType::Error, L"Failed to register main window class.");
         return false;
     }
     if (!createMainWindow(x, y, w, h)) {
-        print(MessageType::Error, L"Error", L"Failed to create main window.");
+        print(MessageType::Error, L"Failed to create main window.");
         return false;
     }
     if (IsWindows10OrGreater()) {
         if (isWindows10_19H1OrGreater()) {
-            if (!createXAMLIsland()) {
-                print(MessageType::Error, L"Error", L"Failed to create XAML Island.");
+            if (createXAMLIsland()) {
+                if (registerDragBarWindowClass()) {
+                    if (!createDragBarWindow()) {
+                        print(MessageType::Error, L"Failed to create drag bar window.");
+                        return false;
+                    }
+                } else {
+                    print(MessageType::Error, L"Failed to register drag bar window class.");
+                    return false;
+                }
+            } else {
+                print(MessageType::Error, L"Failed to create XAML Island.");
                 return false;
             }
         } else {
-            print(MessageType::Error, L"Error", L"XAML Island applications are only supported from Windows 10 19H1.");
+            print(MessageType::Warning, L"XAML Island applications are only supported from Windows 10 19H1.");
             //return false;
         }
     } else {
-        print(MessageType::Warning, L"Warning", L"This application only supports Windows 10 and onwards.");
+        print(MessageType::Warning, L"This application only supports Windows 10 and onwards.");
         //return false;
-    }
-    if (registerDragBarWindowClass()) {
-        if (!createDragBarWindow()) {
-            print(MessageType::Warning, L"Warning", L"Failed to create drag bar window."
-                  " You won't be able to drag the window from top.");
-        }
-    } else {
-        print(MessageType::Warning, L"Warning", L"Failed to register drag bar window class."
-              " You won't be able to drag the window from top.");
     }
 
     return true;
 }
 
+RECT AcrylicApplicationPrivate::getWindowGeometry() const
+{
+    if (!mainWindowHandle) {
+        return {};
+    }
+    RECT geo = {0, 0, 0, 0};
+    if (GetWindowRect(mainWindowHandle, &geo) == FALSE) {
+        return {};
+    }
+    return geo;
+}
+
+bool AcrylicApplicationPrivate::moveWindow(const int x, const int y) const
+{
+    if (!mainWindowHandle) {
+        return false;
+    }
+    const SIZE s = getWindowSize();
+    return (MoveWindow(mainWindowHandle, x, y, s.cx, s.cy, TRUE) != FALSE);
+}
+
+SIZE AcrylicApplicationPrivate::getWindowSize() const
+{
+    if (!mainWindowHandle) {
+        return {};
+    }
+    const RECT geo = getWindowGeometry();
+    return {RECT_WIDTH(geo), RECT_HEIGHT(geo)};
+}
+
+bool AcrylicApplicationPrivate::resizeWindow(const int w, const int h) const
+{
+    if (!mainWindowHandle) {
+        return false;
+    }
+    if ((w <= 0) || (h <= 0)) {
+        return false;
+    }
+    const RECT geo = getWindowGeometry();
+    return (MoveWindow(mainWindowHandle, geo.left, geo.top,
+                       RECT_WIDTH(geo), RECT_HEIGHT(geo), TRUE) != FALSE);
+}
+
+bool AcrylicApplicationPrivate::centerWindow() const
+{
+    // todo
+    return false;
+}
+
+WindowState AcrylicApplicationPrivate::getWindowState() const
+{
+    if (!mainWindowHandle) {
+        return WindowState::Invalid;
+    }
+    if (isWindowFullScreened(mainWindowHandle)) {
+        return WindowState::FullScreened;
+    } else if (IsMaximized(mainWindowHandle)) {
+        return WindowState::Maximized;
+    } else if (IsMinimized(mainWindowHandle)) {
+        return WindowState::Minimized;
+    } else if (isWindowNoState(mainWindowHandle)) {
+        return WindowState::Normal;
+    }
+    // todo: hidden, shown
+    return WindowState::Invalid;
+}
+
+bool AcrylicApplicationPrivate::setWindowState(const WindowState state) const
+{
+    if (!mainWindowHandle) {
+        return false;
+    }
+    switch (state) {
+    case WindowState::Normal:
+        ShowWindow(mainWindowHandle, SW_NORMAL);
+    case WindowState::Maximized:
+        ShowWindow(mainWindowHandle, SW_MAXIMIZE);
+    case WindowState::Minimized:
+        ShowWindow(mainWindowHandle, SW_MINIMIZE);
+    case WindowState::FullScreened:
+        // todo
+        break;
+    case WindowState::Hidden:
+        ShowWindow(mainWindowHandle, SW_HIDE);
+    case WindowState::Shown:
+        ShowWindow(mainWindowHandle, SW_SHOW);
+    case WindowState::Invalid:
+        return false;
+    }
+    return true;
+}
+
+bool AcrylicApplicationPrivate::destroyWindow() const
+{
+    // TODO: destroy drag bar window.
+    if (!mainWindowHandle) {
+        return false;
+    }
+    if (DestroyWindow(mainWindowHandle) == FALSE) {
+        return false;
+    }
+    if (mainWindowAtom == static_cast<ATOM>(0)) {
+        return false;
+    }
+    if (UnregisterClassW(mainWindowClassName.c_str(), HINST_THISCOMPONENT) == FALSE) {
+        return false;
+    }
+    return true;
+}
+
+HWND AcrylicApplicationPrivate::getHandle() const
+{
+    return mainWindowHandle;
+}
+
+AcrylicTheme AcrylicApplicationPrivate::getTheme() const
+{
+    // todo
+    return AcrylicTheme::Auto;
+}
+
+bool AcrylicApplicationPrivate::setTheme(const AcrylicTheme theme) const
+{
+    // todo
+    return false;
+}
+
+AcrylicVariant AcrylicApplicationPrivate::getParameter(const AcrylicParameter param) const
+{
+    // todo
+    return {};
+}
+
+bool AcrylicApplicationPrivate::setParameter(const AcrylicParameter param,
+                                             const AcrylicVariant value) const
+{
+    // todo
+    return false;
+}
+
 AcrylicApplication::AcrylicApplication(const int argc, wchar_t *argv[])
 {
     if (instance) {
-        AcrylicApplicationPrivate::print(MessageType::Error, L"Error",
+        AcrylicApplicationPrivate::print(MessageType::Error,
                                          L"There could only be one AcrylicApplication instance.");
         std::exit(-1);
     } else {
@@ -958,7 +1105,7 @@ AcrylicApplication::AcrylicApplication(const int argc, wchar_t *argv[])
 
     d = std::make_unique<AcrylicApplicationPrivate>(args, this);
     if (!d) {
-        AcrylicApplicationPrivate::print(MessageType::Error, L"Error",
+        AcrylicApplicationPrivate::print(MessageType::Error,
                                          L"Failed to create AcrylicApplicationPrivate.");
         std::exit(-1);
     }
@@ -966,9 +1113,75 @@ AcrylicApplication::AcrylicApplication(const int argc, wchar_t *argv[])
 
 AcrylicApplication::~AcrylicApplication() = default;
 
-bool AcrylicApplication::createAcrylicWindow(const int x, const int y, const int w, const int h) const
+bool AcrylicApplication::createWindow(const int x, const int y, const int w, const int h) const
 {
-    return (d ? d->createAcrylicWindow(x, y, w, h) : false);
+    return (d ? d->createWindow(x, y, w, h) : false);
+}
+
+RECT AcrylicApplication::getWindowGeometry() const
+{
+    return (d ? d->getWindowGeometry() : RECT{});
+}
+
+bool AcrylicApplication::moveWindow(const int x, const int y) const
+{
+    return (d ? d->moveWindow(x, y) : false);
+}
+
+SIZE AcrylicApplication::getWindowSize() const
+{
+    return (d ? d->getWindowSize() : SIZE{});
+}
+
+bool AcrylicApplication::resizeWindow(const int w, const int h) const
+{
+    return (d ? d->resizeWindow(w, h) : false);
+}
+
+bool AcrylicApplication::centerWindow() const
+{
+    return (d ? d->centerWindow() : false);
+}
+
+WindowState AcrylicApplication::getWindowState() const
+{
+    return (d ? d->getWindowState() : WindowState::Normal);
+}
+
+bool AcrylicApplication::setWindowState(const WindowState state) const
+{
+    return (d ? d->setWindowState(state) : false);
+}
+
+bool AcrylicApplication::destroyWindow() const
+{
+    return (d ? d->destroyWindow() : false);
+}
+
+HWND AcrylicApplication::getHandle() const
+{
+    return (d ? d->getHandle() : nullptr);
+}
+
+AcrylicTheme AcrylicApplication::getTheme() const
+{
+    return (d ? d->getTheme() : AcrylicTheme::Auto);
+}
+
+bool AcrylicApplication::setTheme(const AcrylicTheme theme) const
+{
+    return (d ? d->setTheme(theme) : false);
+}
+
+AcrylicVariant AcrylicApplication::getParameter(const AcrylicParameter param) const
+{
+    return (d ? d->getParameter(param) : AcrylicVariant{});
+}
+
+bool AcrylicApplication::setParameter(const AcrylicParameter param,
+                                      const AcrylicVariant value) const
+{
+    return (d ? d->setParameter(param, value) : false);
 }
 
 int AcrylicApplication::exec()

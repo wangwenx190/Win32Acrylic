@@ -23,7 +23,6 @@
  */
 
 #include "acrylicapplication.h"
-#include <Windows.h>
 #include <ShellApi.h>
 
 EXTERN_C int APIENTRY
@@ -48,7 +47,8 @@ wWinMain(
     int result = -1;
 
     AcrylicApplication application(argc, argv);
-    if (application.createAcrylicWindow()) {
+    if (application.createWindow()) {
+        application.centerWindow();
         result = AcrylicApplication::exec();
     }
 

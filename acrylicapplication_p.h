@@ -24,7 +24,7 @@
 
 #pragma once
 
-#include <Windows.h>
+#include "acrylicapplication.h"
 #include <vector>
 #include <string>
 
@@ -44,8 +44,21 @@ public:
     explicit AcrylicApplicationPrivate(const std::vector<std::wstring> &args, AcrylicApplication *q_ptr);
     ~AcrylicApplicationPrivate();
 
-    [[nodiscard]] bool createAcrylicWindow(const int x, const int y,
-                                           const int w, const int h) const;
+    [[nodiscard]] bool createWindow(const int x, const int y,
+                                    const int w, const int h) const;
+    [[nodiscard]] RECT getWindowGeometry() const;
+    [[nodiscard]] bool moveWindow(const int x, const int y) const;
+    [[nodiscard]] SIZE getWindowSize() const;
+    [[nodiscard]] bool resizeWindow(const int w, const int h) const;
+    [[nodiscard]] bool centerWindow() const;
+    [[nodiscard]] WindowState getWindowState() const;
+    [[nodiscard]] bool setWindowState(const WindowState state) const;
+    [[nodiscard]] bool destroyWindow() const;
+    [[nodiscard]] HWND getHandle() const;
+    [[nodiscard]] AcrylicTheme getTheme() const;
+    [[nodiscard]] bool setTheme(const AcrylicTheme theme) const;
+    [[nodiscard]] AcrylicVariant getParameter(const AcrylicParameter param) const;
+    [[nodiscard]] bool setParameter(const AcrylicParameter param, const AcrylicVariant value) const;
 
     [[nodiscard]] static int exec();
 
@@ -56,13 +69,12 @@ public:
     [[nodiscard]] static int getResizeBorderThickness(const bool x, const UINT dpi);
     [[nodiscard]] static int getCaptionHeight(const UINT dpi);
     [[nodiscard]] static int getTitleBarHeight(const HWND hWnd, const UINT dpi);
-    [[nodiscard]] static int getTopFrameMargin(const HWND hWnd, const UINT dpi);
     [[nodiscard]] static bool isCompositionEnabled();
-    [[nodiscard]] static bool updateFrameMargins(const HWND hWnd, const UINT dpi);
     [[nodiscard]] static bool triggerFrameChange(const HWND hWnd);
-    [[nodiscard]] static bool enableWindowTransitions(const HWND hWnd);
+    [[nodiscard]] static bool setWindowTransitionsEnabled(const HWND hWnd, const bool enable);
     [[nodiscard]] static bool openSystemMenu(const HWND hWnd, const POINT pos);
-    static void print(const MessageType type, const std::wstring &title, const std::wstring &text);
+
+    static void print(const MessageType type, const std::wstring &text);
 
 private:
     AcrylicApplicationPrivate(const AcrylicApplicationPrivate &) = delete;
@@ -71,6 +83,9 @@ private:
     AcrylicApplicationPrivate &operator=(AcrylicApplicationPrivate &&) = delete;
 
 private:
+    [[nodiscard]] static int getTopFrameMargin(const HWND hWnd, const UINT dpi);
+    [[nodiscard]] static bool updateFrameMargins(const HWND hWnd, const UINT dpi);
+
     static LRESULT CALLBACK mainWindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
     static LRESULT CALLBACK dragBarWindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 

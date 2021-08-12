@@ -24,6 +24,7 @@
 
 #pragma once
 
+#include <Windows.h>
 #include <memory>
 
 class AcrylicApplicationPrivate;
@@ -44,14 +45,43 @@ enum class AcrylicTheme : int
     Default = Dark
 };
 
+enum class WindowState : int
+{
+    Invalid = -1,
+    Normal,
+    Maximized,
+    Minimized,
+    FullScreened,
+    Hidden,
+    Shown
+};
+
+struct AcrylicVariant
+{
+    // todo
+};
+
 class AcrylicApplication
 {
 public:
     explicit AcrylicApplication(const int argc, wchar_t *argv[]);
     ~AcrylicApplication();
 
-    [[nodiscard]] bool createAcrylicWindow(const int x = -1, const int y = -1,
-                                           const int w = -1, const int h = -1) const;
+    [[nodiscard]] bool createWindow(const int x = -1, const int y = -1,
+                                    const int w = -1, const int h = -1) const;
+    [[nodiscard]] RECT getWindowGeometry() const;
+    [[nodiscard]] bool moveWindow(const int x, const int y) const;
+    [[nodiscard]] SIZE getWindowSize() const;
+    [[nodiscard]] bool resizeWindow(const int w, const int h) const;
+    [[nodiscard]] bool centerWindow() const;
+    [[nodiscard]] WindowState getWindowState() const;
+    [[nodiscard]] bool setWindowState(const WindowState state) const;
+    [[nodiscard]] bool destroyWindow() const;
+    [[nodiscard]] HWND getHandle() const;
+    [[nodiscard]] AcrylicTheme getTheme() const;
+    [[nodiscard]] bool setTheme(const AcrylicTheme theme) const;
+    [[nodiscard]] AcrylicVariant getParameter(const AcrylicParameter param) const;
+    [[nodiscard]] bool setParameter(const AcrylicParameter param, const AcrylicVariant value) const;
 
     [[nodiscard]] static int exec();
 
@@ -64,5 +94,5 @@ private:
 private:
     static AcrylicApplication *instance;
 
-    std::unique_ptr<AcrylicApplicationPrivate> d;
+    std::unique_ptr<const AcrylicApplicationPrivate> d;
 };

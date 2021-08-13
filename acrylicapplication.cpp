@@ -129,9 +129,8 @@ ATOM AcrylicApplicationPrivate::dragBarWindowAtom = 0;
     return (VerifyVersionInfoW(&osvi, VER_MAJORVERSION | VER_MINORVERSION | VER_BUILDNUMBER, dwlConditionMask) != FALSE);
 }
 
-AcrylicApplicationPrivate::AcrylicApplicationPrivate(const std::vector<std::wstring> &args, AcrylicApplication *q_ptr)
+AcrylicApplicationPrivate::AcrylicApplicationPrivate(const std::vector<std::wstring> &args)
 {
-    q = q_ptr;
     arguments = args;
 }
 
@@ -1106,85 +1105,80 @@ AcrylicApplication::AcrylicApplication(const int argc, wchar_t *argv[])
         args.push_back(argv[i]);
     }
 
-    d = std::make_unique<AcrylicApplicationPrivate>(args, this);
-    if (!d) {
-        AcrylicApplicationPrivate::print(MessageType::Error,
-                                         L"Failed to create AcrylicApplicationPrivate.");
-        std::exit(-1);
-    }
+    d = std::make_unique<const AcrylicApplicationPrivate>(args);
 }
 
 AcrylicApplication::~AcrylicApplication() = default;
 
 bool AcrylicApplication::createWindow(const int x, const int y, const int w, const int h) const
 {
-    return (d ? d->createWindow(x, y, w, h) : false);
+    return d->createWindow(x, y, w, h);
 }
 
 RECT AcrylicApplication::getWindowGeometry() const
 {
-    return (d ? d->getWindowGeometry() : RECT{});
+    return d->getWindowGeometry();
 }
 
 bool AcrylicApplication::moveWindow(const int x, const int y) const
 {
-    return (d ? d->moveWindow(x, y) : false);
+    return d->moveWindow(x, y);
 }
 
 SIZE AcrylicApplication::getWindowSize() const
 {
-    return (d ? d->getWindowSize() : SIZE{});
+    return d->getWindowSize();
 }
 
 bool AcrylicApplication::resizeWindow(const int w, const int h) const
 {
-    return (d ? d->resizeWindow(w, h) : false);
+    return d->resizeWindow(w, h);
 }
 
 bool AcrylicApplication::centerWindow() const
 {
-    return (d ? d->centerWindow() : false);
+    return d->centerWindow();
 }
 
 WindowState AcrylicApplication::getWindowState() const
 {
-    return (d ? d->getWindowState() : WindowState::Normal);
+    return d->getWindowState();
 }
 
 bool AcrylicApplication::setWindowState(const WindowState state) const
 {
-    return (d ? d->setWindowState(state) : false);
+    return d->setWindowState(state);
 }
 
 bool AcrylicApplication::destroyWindow() const
 {
-    return (d ? d->destroyWindow() : false);
+    return d->destroyWindow();
 }
 
 HWND AcrylicApplication::getHandle() const
 {
-    return (d ? d->getHandle() : nullptr);
+    return d->getHandle();
 }
 
 AcrylicTheme AcrylicApplication::getTheme() const
 {
-    return (d ? d->getTheme() : AcrylicTheme::Auto);
+    return d->getTheme();
 }
 
 bool AcrylicApplication::setTheme(const AcrylicTheme theme) const
 {
-    return (d ? d->setTheme(theme) : false);
+    return d->setTheme(theme);
 }
 
 AcrylicVariant AcrylicApplication::getParameter(const AcrylicParameter param) const
 {
-    return (d ? d->getParameter(param) : AcrylicVariant{});
+    return d->getParameter(param);
 }
 
 bool AcrylicApplication::setParameter(const AcrylicParameter param,
                                       const AcrylicVariant value) const
 {
-    return (d ? d->setParameter(param, value) : false);
+    return d->setParameter(param, value);
 }
 
 int AcrylicApplication::exec()

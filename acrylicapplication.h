@@ -39,10 +39,12 @@ enum class AcrylicParameter : int
 
 enum class AcrylicTheme : int
 {
-    Auto = 0,
+    Invalid = -1,
+    Auto,
     Light,
     Dark,
-    Default = Dark
+    Default = Dark,
+    HighContrast = Invalid
 };
 
 enum class WindowState : int

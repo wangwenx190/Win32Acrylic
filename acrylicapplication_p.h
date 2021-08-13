@@ -28,8 +28,6 @@
 #include <vector>
 #include <string>
 
-class AcrylicApplication;
-
 enum class MessageType : int
 {
     Information = 0,
@@ -41,7 +39,7 @@ enum class MessageType : int
 class AcrylicApplicationPrivate
 {
 public:
-    explicit AcrylicApplicationPrivate(const std::vector<std::wstring> &args, AcrylicApplication *q_ptr);
+    explicit AcrylicApplicationPrivate(const std::vector<std::wstring> &args);
     ~AcrylicApplicationPrivate();
 
     [[nodiscard]] bool createWindow(const int x, const int y,
@@ -96,8 +94,6 @@ private:
     [[nodiscard]] bool createXAMLIsland() const;
 
 private:
-    AcrylicApplication *q = nullptr;
-
     static const std::wstring mainWindowClassName;
     static const std::wstring dragBarWindowClassName;
 
@@ -113,5 +109,7 @@ private:
     static ATOM mainWindowAtom;
     static ATOM dragBarWindowAtom;
 
-    std::vector<std::wstring> arguments = {};
+    static bool mainWindowFullScreened;
+
+    static std::vector<std::wstring> arguments;
 };

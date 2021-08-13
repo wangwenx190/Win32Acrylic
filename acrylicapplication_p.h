@@ -24,17 +24,7 @@
 
 #pragma once
 
-#include "acrylicapplication.h"
-#include <vector>
-#include <string>
-
-enum class MessageType : int
-{
-    Information = 0,
-    Question,
-    Warning,
-    Error
-};
+#include "Windows.h"
 
 enum class WindowsVersion : int
 {
@@ -79,89 +69,26 @@ enum class VersionCompare : int
     GreaterOrEqual
 };
 
-class AcrylicApplicationPrivate
+namespace Private
 {
-public:
-    explicit AcrylicApplicationPrivate(const std::vector<std::wstring> &args);
-    ~AcrylicApplicationPrivate();
 
-    [[nodiscard]] bool createWindow(const int x, const int y,
-                                    const int w, const int h) const;
-    [[nodiscard]] RECT getWindowGeometry() const;
-    [[nodiscard]] bool moveWindow(const int x, const int y) const;
-    [[nodiscard]] SIZE getWindowSize() const;
-    [[nodiscard]] bool resizeWindow(const int w, const int h) const;
-    [[nodiscard]] bool centerWindow() const;
-    [[nodiscard]] WindowState getWindowState() const;
-    [[nodiscard]] bool setWindowState(const WindowState state) const;
-    [[nodiscard]] bool destroyWindow() const;
-    [[nodiscard]] HWND getHandle() const;
-    [[nodiscard]] SystemTheme getTheme() const;
-    [[nodiscard]] bool setTheme(const SystemTheme theme) const;
+[[nodiscard]] UINT getWindowDpi(const HWND hWnd);
+[[nodiscard]] bool isWindowMinimized(const HWND hWnd);
+[[nodiscard]] bool isWindowMaximized(const HWND hWnd);
+[[nodiscard]] bool isWindowFullScreened(const HWND hWnd);
+[[nodiscard]] bool isWindowNoState(const HWND hWnd);
+[[nodiscard]] bool isWindowVisible(const HWND hWnd);
+[[nodiscard]] bool isWindowHidden(const HWND hWnd);
+[[nodiscard]] double getDevicePixelRatio(const UINT dpi);
+[[nodiscard]] int getResizeBorderThickness(const bool x, const UINT dpi);
+[[nodiscard]] int getCaptionHeight(const UINT dpi);
+[[nodiscard]] int getTitleBarHeight(const HWND hWnd, const UINT dpi);
+[[nodiscard]] RECT getScreenGeometry(const HWND hWnd);
+[[nodiscard]] RECT getScreenAvailableGeometry(const HWND hWnd);
+[[nodiscard]] bool isCompositionEnabled();
+[[nodiscard]] bool triggerFrameChange(const HWND hWnd);
+[[nodiscard]] bool setWindowTransitionsEnabled(const HWND hWnd, const bool enable);
+[[nodiscard]] bool openSystemMenu(const HWND hWnd, const POINT pos);
+[[nodiscard]] bool compareSystemVersion(const WindowsVersion ver, const VersionCompare comp);
 
-    [[nodiscard]] static UINT getWindowDpi(const HWND hWnd);
-    [[nodiscard]] static bool isWindowMinimized(const HWND hWnd);
-    [[nodiscard]] static bool isWindowMaximized(const HWND hWnd);
-    [[nodiscard]] static bool isWindowFullScreened(const HWND hWnd);
-    [[nodiscard]] static bool isWindowNoState(const HWND hWnd);
-    [[nodiscard]] static bool isWindowVisible(const HWND hWnd);
-    [[nodiscard]] static bool isWindowHidden(const HWND hWnd);
-    [[nodiscard]] static double getDevicePixelRatio(const UINT dpi);
-    [[nodiscard]] static int getResizeBorderThickness(const bool x, const UINT dpi);
-    [[nodiscard]] static int getCaptionHeight(const UINT dpi);
-    [[nodiscard]] static int getTitleBarHeight(const HWND hWnd, const UINT dpi);
-    [[nodiscard]] static RECT getScreenGeometry(const HWND hWnd);
-    [[nodiscard]] static RECT getScreenAvailableGeometry(const HWND hWnd);
-    [[nodiscard]] static bool isCompositionEnabled();
-    [[nodiscard]] static bool triggerFrameChange(const HWND hWnd);
-    [[nodiscard]] static bool setWindowTransitionsEnabled(const HWND hWnd, const bool enable);
-    [[nodiscard]] static bool openSystemMenu(const HWND hWnd, const POINT pos);
-    [[nodiscard]] static SystemTheme getSystemTheme();
-    [[nodiscard]] static bool compareSystemVersion(const WindowsVersion ver,
-                                                   const VersionCompare comp);
-
-    [[nodiscard]] static int exec();
-    static void print(const MessageType type, const std::wstring &text);
-
-private:
-    AcrylicApplicationPrivate(const AcrylicApplicationPrivate &) = delete;
-    AcrylicApplicationPrivate &operator=(const AcrylicApplicationPrivate &) = delete;
-    AcrylicApplicationPrivate(AcrylicApplicationPrivate &&) = delete;
-    AcrylicApplicationPrivate &operator=(AcrylicApplicationPrivate &&) = delete;
-
-private:
-    [[nodiscard]] static int getTopFrameMargin(const HWND hWnd, const UINT dpi);
-    [[nodiscard]] static bool updateFrameMargins(const HWND hWnd, const UINT dpi);
-    [[nodiscard]] static MONITORINFO getMonitorInfo(const HWND hWnd);
-    [[nodiscard]] static bool showWindowFullScreen(const HWND hWnd);
-
-    static LRESULT CALLBACK mainWindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
-    static LRESULT CALLBACK dragBarWindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
-
-    [[nodiscard]] bool registerMainWindowClass() const;
-    [[nodiscard]] bool registerDragBarWindowClass() const;
-    [[nodiscard]] bool createMainWindow(const int x, const int y,
-                                        const int w, const int h) const;
-    [[nodiscard]] bool createDragBarWindow() const;
-    [[nodiscard]] bool createXAMLIsland() const;
-
-private:
-    static const std::wstring mainWindowClassName;
-    static const std::wstring dragBarWindowClassName;
-
-    static const std::wstring mainWindowTitle;
-    static const std::wstring dragBarWindowTitle;
-
-    static UINT mainWindowDpi;
-
-    static HWND mainWindowHandle;
-    static HWND dragBarWindowHandle;
-    static HWND xamlIslandHandle;
-
-    static ATOM mainWindowAtom;
-    static ATOM dragBarWindowAtom;
-
-    static std::vector<std::wstring> arguments;
-
-    static SystemTheme acrylicTheme;
-};
+}

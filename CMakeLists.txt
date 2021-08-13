@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.21.1 FATAL_ERROR)
 
-project(Win32Acrylic VERSION 1.0.0.0 LANGUAGES CXX RC)
+project(AcrylicApplication VERSION 1.0.0.0 LANGUAGES CXX RC)
 
 #[[set(CMAKE_C_STANDARD 11 CACHE STRING "")
 set(CMAKE_C_STANDARD_REQUIRED ON CACHE BOOL "")
@@ -39,10 +39,11 @@ if(NOT DEFINED CMAKE_ARCHIVE_OUTPUT_DIRECTORY)
 endif()
 
 set(SOURCES
-    win32acrylic.manifest
-    win32acrylic.rc
-    resource.h
+    acrylicapplication.manifest
+    acrylicapplication.rc
+    acrylicapplication_global.h
     runtimeobject.cpp
+    resource.h
     acrylicapplication.h
     acrylicapplication_p.h
     acrylicapplication.cpp

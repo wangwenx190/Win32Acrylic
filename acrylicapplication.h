@@ -25,9 +25,6 @@
 #pragma once
 
 #include <Windows.h>
-#include <memory>
-
-class AcrylicApplicationPrivate;
 
 enum class SystemTheme : int
 {
@@ -77,9 +74,4 @@ private:
     AcrylicApplication &operator=(const AcrylicApplication &) = delete;
     AcrylicApplication(AcrylicApplication &&) = delete;
     AcrylicApplication &operator=(AcrylicApplication &&) = delete;
-
-private:
-    static AcrylicApplication *instance;
-
-    std::unique_ptr<const AcrylicApplicationPrivate> d;
 };

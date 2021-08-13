@@ -99,10 +99,6 @@ EXTERN_C IMAGE_DOS_HEADER __ImageBase;
 #define CURRENT_SCREEN(window) (MonitorFromWindow(window, MONITOR_DEFAULTTONEAREST))
 #endif
 
-// The thickness of an auto-hide taskbar in pixels.
-static const int kAutoHideTaskbarThicknessPx = 2;
-static const int kAutoHideTaskbarThicknessPy = kAutoHideTaskbarThicknessPx;
-
 namespace Private
 {
 
@@ -174,9 +170,19 @@ public:
         }
         return func();
     }
+
+private:
+    DynamicAPIs(const DynamicAPIs &) = delete;
+    DynamicAPIs &operator=(const DynamicAPIs &) = delete;
+    DynamicAPIs(DynamicAPIs &&) = delete;
+    DynamicAPIs &operator=(DynamicAPIs &&) = delete;
 };
 
 }
+
+// The thickness of an auto-hide taskbar in pixels.
+static const int kAutoHideTaskbarThicknessPx = 2;
+static const int kAutoHideTaskbarThicknessPy = kAutoHideTaskbarThicknessPx;
 
 // Initialize global variables.
 AcrylicApplication *AcrylicApplication::instance = nullptr;
@@ -192,6 +198,12 @@ ATOM AcrylicApplicationPrivate::mainWindowAtom = 0;
 ATOM AcrylicApplicationPrivate::dragBarWindowAtom = 0;
 std::vector<std::wstring> AcrylicApplicationPrivate::arguments = {};
 SystemTheme AcrylicApplicationPrivate::acrylicTheme = SystemTheme::Invalid;
+
+// XAML
+static winrt::Windows::UI::Xaml::Hosting::WindowsXamlManager xamlManager = nullptr;
+static winrt::Windows::UI::Xaml::Hosting::DesktopWindowXamlSource xamlSource = nullptr;
+static winrt::Windows::UI::Xaml::Controls::Grid rootGrid = nullptr;
+static winrt::Windows::UI::Xaml::Media::AcrylicBrush acrylicBrush = nullptr;
 
 AcrylicApplicationPrivate::AcrylicApplicationPrivate(const std::vector<std::wstring> &args)
 {
@@ -1291,57 +1303,68 @@ bool AcrylicApplicationPrivate::createXAMLIsland() const
     if (!mainWindowHandle) {
         return false;
     }
-    if (acrylicTheme == SystemTheme::Invalid) {
+    const SystemTheme systemTheme = getSystemTheme();
+    if (systemTheme == SystemTheme::Invalid) {
         return false;
     }
 
-    // XAML Island section:
-    // The call to winrt::init_apartment initializes COM; by default, in a multithreaded apartment.
+    const auto cleanup = []() {
+        if (rootGrid) {
+            rootGrid.Background(nullptr);
+        }
+        if (xamlSource) {
+            xamlSource.Content(nullptr);
+        }
+        acrylicBrush = nullptr;
+        rootGrid = nullptr;
+        xamlSource = nullptr;
+        xamlManager = nullptr;
+    };
+
     winrt::init_apartment(winrt::apartment_type::single_threaded);
-    // Initialize the XAML framework's core window for the current thread.
-    // We need this manager live through out the whole application's life-cycle,
-    // so make it static, otherwise the application will crash.
-    static const auto manager = winrt::Windows::UI::Xaml::Hosting::WindowsXamlManager::InitializeForCurrentThread();
-    // This DesktopWindowXamlSource is the object that enables a non-UWP desktop application
-    // to host WinRT XAML controls in any UI element that is associated with a window handle (HWND).
-    // It has to live with the application so make it static as well.
-    static winrt::Windows::UI::Xaml::Hosting::DesktopWindowXamlSource source = {};
-    // Get handle to the core window.
-    const auto interop = source.as<IDesktopWindowXamlSourceNative>();
-    if (!interop) {
+    xamlManager = winrt::Windows::UI::Xaml::Hosting::WindowsXamlManager::InitializeForCurrentThread();
+    if (!xamlManager) {
+        cleanup();
         return false;
     }
-    // Parent the DesktopWindowXamlSource object to the current window.
+    const auto interop = xamlSource.as<IDesktopWindowXamlSourceNative>();
+    if (!interop) {
+        cleanup();
+        return false;
+    }
     winrt::check_hresult(interop->AttachToWindow(mainWindowHandle));
-    // Get the new XAML Island child window's HWND.
     winrt::check_hresult(interop->get_WindowHandle(&xamlIslandHandle));
     if (!xamlIslandHandle) {
+        cleanup();
         return false;
     }
     // Update the XAML Island window size because initially it is 0x0.
     RECT rect = {0, 0, 0, 0};
     if (GetClientRect(mainWindowHandle, &rect) == FALSE) {
+        cleanup();
         return false;
     }
     // Give enough space to our thin homemade top border.
     if (SetWindowPos(xamlIslandHandle, HWND_BOTTOM, 0,
                  getTopFrameMargin(mainWindowHandle, mainWindowDpi), rect.right, rect.bottom,
                      SWP_NOACTIVATE | SWP_SHOWWINDOW | SWP_NOOWNERZORDER) == FALSE) {
+        cleanup();
         return false;
     }
-    // Create the XAML content.
-    static winrt::Windows::UI::Xaml::Controls::Grid grid = {};
-    static winrt::Windows::UI::Xaml::Media::AcrylicBrush brush = {};
-    brush.BackgroundSource(winrt::Windows::UI::Xaml::Media::AcrylicBackgroundSource::HostBackdrop);
-    grid.Background(brush);
-    //grid.Children().Clear();
-    //grid.Children().Append(/* some UWP control */);
-    //grid.UpdateLayout();
-    source.Content(grid);
-    // End XAML Island section.
+    acrylicBrush.BackgroundSource(winrt::Windows::UI::Xaml::Media::AcrylicBackgroundSource::HostBackdrop);
+    if (!setTheme(systemTheme)) {
+        cleanup();
+        return false;
+    }
+    rootGrid.Background(acrylicBrush);
+    //rootGrid.Children().Clear();
+    //rootGrid.Children().Append(/* some UWP control */);
+    //rootGrid.UpdateLayout();
+    xamlSource.Content(rootGrid);
 
     ShowWindow(xamlIslandHandle, SW_SHOW);
     if (UpdateWindow(xamlIslandHandle) == FALSE) {
+        cleanup();
         return false;
     }
 
@@ -1534,14 +1557,31 @@ HWND AcrylicApplicationPrivate::getHandle() const
 
 SystemTheme AcrylicApplicationPrivate::getTheme() const
 {
-    // todo
-    return SystemTheme::Default;
+    return acrylicTheme;
 }
 
 bool AcrylicApplicationPrivate::setTheme(const SystemTheme theme) const
 {
-    // todo
-    return false;
+    if (!acrylicBrush) {
+        return false;
+    }
+    if (theme == SystemTheme::Invalid) {
+        return false;
+    }
+    if (theme == SystemTheme::Light) {
+        acrylicBrush.TintColor(L"#FCFCFC");
+        acrylicBrush.TintOpacity(0.0);
+        acrylicBrush.TintLuminosityOpacity(0.85);
+        acrylicBrush.FallbackColor(L"#F9F9F9");
+        acrylicTheme = SystemTheme::Light;
+    } else {
+        acrylicBrush.TintColor(L"#2C2C2C");
+        acrylicBrush.TintOpacity(0.15);
+        acrylicBrush.TintLuminosityOpacity(0.96);
+        acrylicBrush.FallbackColor(L"#2C2C2C");
+        acrylicTheme = SystemTheme::Dark;
+    }
+    return true;
 }
 
 AcrylicApplication::AcrylicApplication(const int argc, wchar_t *argv[])

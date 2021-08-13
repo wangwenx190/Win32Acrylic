@@ -48,8 +48,9 @@ wWinMain(
 
     AcrylicApplication application(argc, argv);
     if (application.createWindow()) {
-        application.centerWindow();
-        result = AcrylicApplication::exec();
+        if (application.centerWindow()) {
+            result = AcrylicApplication::exec();
+        }
     }
 
     LocalFree(argv);

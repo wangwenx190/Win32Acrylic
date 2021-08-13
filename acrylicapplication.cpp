@@ -96,6 +96,10 @@ EXTERN_C IMAGE_DOS_HEADER __ImageBase;
 #define BACKGROUND_BRUSH (reinterpret_cast<HBRUSH>(GetStockObject(BLACK_BRUSH)))
 #endif
 
+#ifndef CURRENT_SCREEN
+#define CURRENT_SCREEN(window) (MonitorFromWindow(window, MONITOR_DEFAULTTONEAREST))
+#endif
+
 // The thickness of an auto-hide taskbar in pixels.
 static const int kAutoHideTaskbarThicknessPx = 2;
 static const int kAutoHideTaskbarThicknessPy = kAutoHideTaskbarThicknessPx;
@@ -112,6 +116,7 @@ HWND AcrylicApplicationPrivate::dragBarWindowHandle = nullptr;
 HWND AcrylicApplicationPrivate::xamlIslandHandle = nullptr;
 ATOM AcrylicApplicationPrivate::mainWindowAtom = 0;
 ATOM AcrylicApplicationPrivate::dragBarWindowAtom = 0;
+std::vector<std::wstring> AcrylicApplicationPrivate::arguments = {};
 
 [[nodiscard]] static inline bool isWindows10_19H1OrGreater()
 {
@@ -144,7 +149,9 @@ int AcrylicApplicationPrivate::exec()
 
     MSG msg = {};
     while (GetMessageW(&msg, nullptr, 0, 0) != FALSE) {
-        TranslateMessage(&msg);
+        if (TranslateMessage(&msg) == FALSE) {
+            return -1;
+        }
         DispatchMessageW(&msg);
     }
 
@@ -202,10 +209,12 @@ UINT AcrylicApplicationPrivate::getWindowDpi(const HWND hWnd)
     }
     {
         UINT dpiX = 0, dpiY = 0;
-        GetDpiForMonitor(MonitorFromWindow(hWnd, MONITOR_DEFAULTTONEAREST), MDT_EFFECTIVE_DPI, &dpiX, &dpiY);
-        if ((dpiX > 0) && (dpiY > 0)) {
-            return std::round(static_cast<double>(dpiX + dpiY) / 2.0);
+        if (SUCCEEDED(GetDpiForMonitor(CURRENT_SCREEN(hWnd), MDT_EFFECTIVE_DPI, &dpiX, &dpiY))) {
+            if ((dpiX > 0) && (dpiY > 0)) {
+                return std::round(static_cast<double>(dpiX + dpiY) / 2.0);
+            }
         }
+
     }
     {
         const HDC hScreenDc = GetDC(nullptr);
@@ -219,29 +228,51 @@ UINT AcrylicApplicationPrivate::getWindowDpi(const HWND hWnd)
     return USER_DEFAULT_SCREEN_DPI;
 }
 
+bool AcrylicApplicationPrivate::isWindowMinimized(const HWND hWnd)
+{
+    if (!hWnd) {
+        return false;
+    }
+    return (IsMinimized(hWnd) != FALSE);
+}
+
+bool AcrylicApplicationPrivate::isWindowMaximized(const HWND hWnd)
+{
+    if (!hWnd) {
+        return false;
+    }
+    return (IsMaximized(hWnd) != FALSE);
+}
+
 double AcrylicApplicationPrivate::getDevicePixelRatio(const UINT dpi)
 {
+    if (dpi == 0) {
+        return 1.0;
+    }
     return (static_cast<double>(dpi) / static_cast<double>(USER_DEFAULT_SCREEN_DPI));
 }
 
 int AcrylicApplicationPrivate::getResizeBorderThickness(const bool x, const UINT dpi)
 {
+    const UINT _dpi = (dpi == 0) ? USER_DEFAULT_SCREEN_DPI : dpi;
     // There is no "SM_CYPADDEDBORDER".
-    const int result = GetSystemMetricsForDpi(SM_CXPADDEDBORDER, dpi)
-            + GetSystemMetricsForDpi((x ? SM_CXSIZEFRAME : SM_CYSIZEFRAME), dpi);
-    const int preset = std::round(8.0 * getDevicePixelRatio(dpi));
+    const int result = GetSystemMetricsForDpi(SM_CXPADDEDBORDER, _dpi)
+            + GetSystemMetricsForDpi((x ? SM_CXSIZEFRAME : SM_CYSIZEFRAME), _dpi);
+    const int preset = std::round(8.0 * getDevicePixelRatio(_dpi));
     return ((result > 0) ? result : preset);
 }
 
 int AcrylicApplicationPrivate::getCaptionHeight(const UINT dpi)
 {
-    const int result = GetSystemMetricsForDpi(SM_CYCAPTION, dpi);
-    const int preset = std::round(23.0 * getDevicePixelRatio(dpi));
+    const UINT _dpi = (dpi == 0) ? USER_DEFAULT_SCREEN_DPI : dpi;
+    const int result = GetSystemMetricsForDpi(SM_CYCAPTION, _dpi);
+    const int preset = std::round(23.0 * getDevicePixelRatio(_dpi));
     return ((result > 0) ? result : preset);
 }
 
 int AcrylicApplicationPrivate::getTitleBarHeight(const HWND hWnd, const UINT dpi)
 {
+    const UINT _dpi = (dpi == 0) ? USER_DEFAULT_SCREEN_DPI : dpi;
     int titleBarHeight = 0;
     if (hWnd) {
         RECT frame = {0, 0, 0, 0};
@@ -249,21 +280,38 @@ int AcrylicApplicationPrivate::getTitleBarHeight(const HWND hWnd, const UINT dpi
                                  (static_cast<DWORD>(GetWindowLongPtrW(hWnd, GWL_STYLE)) & ~WS_OVERLAPPED),
                                  FALSE,
                                  static_cast<DWORD>(GetWindowLongPtrW(hWnd, GWL_EXSTYLE)),
-                                 dpi);
+                                 _dpi);
         titleBarHeight = std::abs(frame.top);
     }
     if (titleBarHeight <= 0) {
-        titleBarHeight = getResizeBorderThickness(false, dpi) + getCaptionHeight(dpi);
+        titleBarHeight = getResizeBorderThickness(false, _dpi) + getCaptionHeight(_dpi);
         if (titleBarHeight <= 0) {
-            titleBarHeight = std::round(31.0 * getDevicePixelRatio(dpi));
+            titleBarHeight = std::round(31.0 * getDevicePixelRatio(_dpi));
         }
     }
     return titleBarHeight;
 }
 
+RECT AcrylicApplicationPrivate::getScreenGeometry(const HWND hWnd)
+{
+    if (!hWnd) {
+        return {};
+    }
+    return getMonitorInfo(hWnd).rcMonitor;
+}
+
+RECT AcrylicApplicationPrivate::getScreenAvailableGeometry(const HWND hWnd)
+{
+    if (!hWnd) {
+        return {};
+    }
+    return getMonitorInfo(hWnd).rcWork;
+}
+
 int AcrylicApplicationPrivate::getTopFrameMargin(const HWND hWnd, const UINT dpi)
 {
-    return ((hWnd && isWindowNoState(hWnd)) ? std::round(1.0 * getDevicePixelRatio(dpi)) : 0);
+    const UINT _dpi = (dpi == 0) ? USER_DEFAULT_SCREEN_DPI : dpi;
+    return ((hWnd && isWindowNoState(hWnd)) ? std::round(1.0 * getDevicePixelRatio(_dpi)) : 0);
 }
 
 bool AcrylicApplicationPrivate::isCompositionEnabled()
@@ -281,16 +329,15 @@ bool AcrylicApplicationPrivate::isWindowFullScreened(const HWND hWnd)
     if (!hWnd) {
         return false;
     }
-    MONITORINFO mi;
-    SecureZeroMemory(&mi, sizeof(mi));
-    mi.cbSize = sizeof(mi);
-    GetMonitorInfoW(MonitorFromWindow(hWnd, MONITOR_DEFAULTTOPRIMARY), &mi);
-    RECT rect = {0, 0, 0, 0};
-    GetWindowRect(hWnd, &rect);
-    return ((rect.left == mi.rcMonitor.left)
-            && (rect.right == mi.rcMonitor.right)
-            && (rect.top == mi.rcMonitor.top)
-            && (rect.bottom == mi.rcMonitor.bottom));
+    RECT windowRect = {0, 0, 0, 0};
+    if (GetWindowRect(hWnd, &windowRect) == FALSE) {
+        return false;
+    }
+    const RECT screenRect = getScreenGeometry(hWnd);
+    return ((windowRect.left == screenRect.left)
+            && (windowRect.right == screenRect.right)
+            && (windowRect.top == screenRect.top)
+            && (windowRect.bottom == screenRect.bottom));
 }
 
 bool AcrylicApplicationPrivate::isWindowNoState(const HWND hWnd)
@@ -301,8 +348,26 @@ bool AcrylicApplicationPrivate::isWindowNoState(const HWND hWnd)
     WINDOWPLACEMENT wp;
     SecureZeroMemory(&wp, sizeof(wp));
     wp.length = sizeof(wp);
-    GetWindowPlacement(hWnd, &wp);
+    if (GetWindowPlacement(hWnd, &wp) == FALSE) {
+        return false;
+    }
     return (wp.showCmd == SW_NORMAL);
+}
+
+bool AcrylicApplicationPrivate::isWindowVisible(const HWND hWnd)
+{
+    if (!hWnd) {
+        return false;
+    }
+    return (IsWindowVisible(hWnd) != FALSE);
+}
+
+bool AcrylicApplicationPrivate::isWindowHidden(const HWND hWnd)
+{
+    if (!hWnd) {
+        return false;
+    }
+    return !isWindowVisible(hWnd);
 }
 
 bool AcrylicApplicationPrivate::triggerFrameChange(const HWND hWnd)
@@ -320,6 +385,7 @@ bool AcrylicApplicationPrivate::updateFrameMargins(const HWND hWnd, const UINT d
     if (!hWnd) {
         return false;
     }
+    const UINT _dpi = (dpi == 0) ? USER_DEFAULT_SCREEN_DPI : dpi;
     // We removed the whole top part of the frame (see handling of
     // WM_NCCALCSIZE) so the top border is missing now. We add it back here.
     // Note #1: You might wonder why we don't remove just the title bar instead
@@ -335,8 +401,40 @@ bool AcrylicApplicationPrivate::updateFrameMargins(const HWND hWnd, const UINT d
     //  at the top) in the WM_PAINT handler. This eliminates the transparency
     //  bug and it's what a lot of Win32 apps that customize the title bar do
     //  so it should work fine.
-    const MARGINS margins = {0, 0, (isWindowNoState(hWnd) ? getTitleBarHeight(hWnd, dpi) : 0), 0};
+    const MARGINS margins = {0, 0, (isWindowNoState(hWnd) ? getTitleBarHeight(hWnd, _dpi) : 0), 0};
     return SUCCEEDED(DwmExtendFrameIntoClientArea(hWnd, &margins));
+}
+
+MONITORINFO AcrylicApplicationPrivate::getMonitorInfo(const HWND hWnd)
+{
+    if (!hWnd) {
+        return {};
+    }
+    const HMONITOR mon = CURRENT_SCREEN(hWnd);
+    if (!mon) {
+        return {};
+    }
+    MONITORINFO mi;
+    SecureZeroMemory(&mi, sizeof(mi));
+    mi.cbSize = sizeof(mi);
+    if (GetMonitorInfoW(mon, &mi) == FALSE) {
+        return {};
+    }
+    return mi;
+}
+
+bool AcrylicApplicationPrivate::showWindowFullScreen(const HWND hWnd)
+{
+    if (!hWnd) {
+        return false;
+    }
+    auto style = static_cast<DWORD>(GetWindowLongPtrW(hWnd, GWL_STYLE));
+    style &= ~(WS_OVERLAPPEDWINDOW); // fixme: check
+    style |= WS_POPUP;
+    SetWindowLongPtrW(hWnd, GWL_STYLE, style);
+    const RECT rect = getScreenGeometry(hWnd);
+    return (MoveWindow(hWnd, rect.left, rect.top,
+                       RECT_WIDTH(rect), RECT_HEIGHT(rect), TRUE) != FALSE);
 }
 
 bool AcrylicApplicationPrivate::setWindowTransitionsEnabled(const HWND hWnd, const bool enable)
@@ -353,8 +451,8 @@ bool AcrylicApplicationPrivate::openSystemMenu(const HWND hWnd, const POINT pos)
     if (!hWnd) {
         return false;
     }
-    const HMENU hMenu = GetSystemMenu(hWnd, FALSE);
-    if (!hMenu) {
+    const HMENU menu = GetSystemMenu(hWnd, FALSE);
+    if (!menu) {
         return false;
     }
     // Update the options based on window state.
@@ -363,27 +461,39 @@ bool AcrylicApplicationPrivate::openSystemMenu(const HWND hWnd, const POINT pos)
     mii.cbSize = sizeof(mii);
     mii.fMask = MIIM_STATE;
     mii.fType = MFT_STRING;
-    const auto setState = [&mii, hMenu](const UINT item, const bool enabled) {
+    const auto setState = [&mii, menu](const UINT item, const bool enabled) -> bool {
         mii.fState = enabled ? MF_ENABLED : MF_DISABLED;
-        SetMenuItemInfoW(hMenu, item, FALSE, &mii);
+        return (SetMenuItemInfoW(menu, item, FALSE, &mii) != FALSE);
     };
-    const bool isMaximized = (IsMaximized(hWnd) != FALSE);
-    setState(SC_RESTORE, isMaximized);
-    setState(SC_MOVE, !isMaximized);
-    setState(SC_SIZE, !isMaximized);
-    setState(SC_MINIMIZE, true);
-    setState(SC_MAXIMIZE, !isMaximized);
-    setState(SC_CLOSE, true);
-    SetMenuDefaultItem(hMenu, UINT_MAX, FALSE);
-
+    const bool isMaximized = isWindowMaximized(hWnd);
+    if (!setState(SC_RESTORE, isMaximized)) {
+        return false;
+    }
+    if (!setState(SC_MOVE, !isMaximized)) {
+        return false;
+    }
+    if (!setState(SC_SIZE, !isMaximized)) {
+        return false;
+    }
+    if (!setState(SC_MINIMIZE, true)) {
+        return false;
+    }
+    if (!setState(SC_MAXIMIZE, !isMaximized)) {
+        return false;
+    }
+    if (!setState(SC_CLOSE, true)) {
+        return false;
+    }
+    if (SetMenuDefaultItem(menu, UINT_MAX, FALSE) == FALSE) {
+        return false;
+    }
     // ### TODO: support LTR layout.
-    const auto ret = TrackPopupMenu(hMenu, TPM_RETURNCMD, pos.x, pos.y, 0, hWnd, nullptr);
+    const auto ret = TrackPopupMenu(menu, TPM_RETURNCMD, pos.x, pos.y, 0, hWnd, nullptr);
     if (ret != 0) {
         if (PostMessageW(hWnd, WM_SYSCOMMAND, ret, 0) == FALSE) {
             return false;
         }
     }
-
     return true;
 }
 
@@ -409,7 +519,7 @@ LRESULT CALLBACK AcrylicApplicationPrivate::mainWindowProc(HWND hWnd, UINT uMsg,
         // have the WS_POPUP size, so we don't have to worry about
         // borders, and the default frame will be fine.
         bool nonClientAreaExists = false;
-        if (IsMaximized(hWnd) && !isWindowFullScreened(hWnd)) {
+        if (isWindowMaximized(hWnd) && !isWindowFullScreened(hWnd)) {
             // When a window is maximized, its size is actually a little bit more
             // than the monitor's work area. The window is positioned and sized in
             // such a way that the resize handles are outside of the monitor and
@@ -425,25 +535,22 @@ LRESULT CALLBACK AcrylicApplicationPrivate::mainWindowProc(HWND hWnd, UINT uMsg,
         // Make sure to use MONITOR_DEFAULTTONEAREST, so that this will
         // still find the right monitor even when we're restoring from
         // minimized.
-        if (IsMaximized(hWnd) || isWindowFullScreened(hWnd)) {
+        if (isWindowMaximized(hWnd) || isWindowFullScreened(hWnd)) {
             APPBARDATA abd;
             SecureZeroMemory(&abd, sizeof(abd));
             abd.cbSize = sizeof(abd);
             // First, check if we have an auto-hide taskbar at all:
             if (SHAppBarMessage(ABM_GETSTATE, &abd) & ABS_AUTOHIDE) {
-                MONITORINFO mi;
-                SecureZeroMemory(&mi, sizeof(mi));
-                mi.cbSize = sizeof(mi);
-                GetMonitorInfoW(MonitorFromWindow(hWnd, MONITOR_DEFAULTTONEAREST), &mi);
+                const RECT screenRect = getScreenGeometry(hWnd);
                 // This helper can be used to determine if there's a
                 // auto-hide taskbar on the given edge of the monitor
                 // we're currently on.
-                const auto hasAutohideTaskbar = [&mi](const UINT edge) -> bool {
+                const auto hasAutohideTaskbar = [&screenRect](const UINT edge) -> bool {
                     APPBARDATA abd2;
                     SecureZeroMemory(&abd2, sizeof(abd2));
                     abd2.cbSize = sizeof(abd2);
                     abd2.uEdge = edge;
-                    abd2.rc = mi.rcMonitor;
+                    abd2.rc = screenRect;
                     return (reinterpret_cast<HWND>(SHAppBarMessage(ABM_GETAUTOHIDEBAREX, &abd2)) != nullptr);
                 };
                 // If there's a taskbar on any side of the monitor, reduce
@@ -492,7 +599,9 @@ LRESULT CALLBACK AcrylicApplicationPrivate::mainWindowProc(HWND hWnd, UINT uMsg,
             return originalRet;
         }
         POINT pos = {GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)};
-        ScreenToClient(hWnd, &pos);
+        if (ScreenToClient(hWnd, &pos) == FALSE) {
+            break;
+        }
         const int rbtY = getResizeBorderThickness(false, mainWindowDpi);
         // At this point, we know that the cursor is inside the client area
         // so it has to be either the little border at the top of our custom
@@ -503,7 +612,7 @@ LRESULT CALLBACK AcrylicApplicationPrivate::mainWindowProc(HWND hWnd, UINT uMsg,
             return HTTOP;
         }
         const int cth = getCaptionHeight(mainWindowDpi);
-        if (IsMaximized(hWnd) && (pos.y >= 0) && (pos.y <= cth)) {
+        if (isWindowMaximized(hWnd) && (pos.y >= 0) && (pos.y <= cth)) {
             return HTCAPTION;
         }
         if (isWindowNoState(hWnd) && (pos.y > rbtY) && (pos.y <= (rbtY + cth))) {
@@ -514,6 +623,9 @@ LRESULT CALLBACK AcrylicApplicationPrivate::mainWindowProc(HWND hWnd, UINT uMsg,
     case WM_PAINT: {
         PAINTSTRUCT ps = {};
         const HDC hdc = BeginPaint(hWnd, &ps);
+        if (!hdc) {
+            break;
+        }
         // We removed the whole top part of the frame (see handling of
         // WM_NCCALCSIZE) so the top border is missing now. We add it back here.
         // Note #1: You might wonder why we don't remove just the title bar instead
@@ -538,7 +650,9 @@ LRESULT CALLBACK AcrylicApplicationPrivate::mainWindowProc(HWND hWnd, UINT uMsg,
             // recommends to paint the area in black using the stock
             // BLACK_BRUSH to do this:
             // https://docs.microsoft.com/en-us/windows/win32/dwm/customframe#extending-the-client-frame
-            FillRect(hdc, &rcTopBorder, BACKGROUND_BRUSH);
+            if (FillRect(hdc, &rcTopBorder, BACKGROUND_BRUSH) == 0) {
+                break;
+            }
         }
         if (ps.rcPaint.bottom > topBorderHeight) {
             RECT rcRest = ps.rcPaint;
@@ -552,11 +666,23 @@ LRESULT CALLBACK AcrylicApplicationPrivate::mainWindowProc(HWND hWnd, UINT uMsg,
             params.cbSize = sizeof(params);
             params.dwFlags = BPPF_NOCLIP | BPPF_ERASE;
             const HPAINTBUFFER buf = BeginBufferedPaint(hdc, &rcRest, BPBF_TOPDOWNDIB, &params, &opaqueDc);
-            FillRect(opaqueDc, &rcRest, reinterpret_cast<HBRUSH>(GetClassLongPtrW(hWnd, GCLP_HBRBACKGROUND)));
-            BufferedPaintSetAlpha(buf, nullptr, 255);
-            EndBufferedPaint(buf, TRUE);
+            if (!buf) {
+                break;
+            }
+            if (FillRect(opaqueDc, &rcRest,
+                         reinterpret_cast<HBRUSH>(GetClassLongPtrW(hWnd, GCLP_HBRBACKGROUND))) == 0) {
+                break;
+            }
+            if (FAILED(BufferedPaintSetAlpha(buf, nullptr, 255))) {
+                break;
+            }
+            if (FAILED(EndBufferedPaint(buf, TRUE))) {
+                break;
+            }
         }
-        EndPaint(hWnd, &ps);
+        if (EndPaint(hWnd, &ps) == FALSE) {
+            break;
+        }
         return 0;
     }
     case WM_DPICHANGED: {
@@ -564,24 +690,33 @@ LRESULT CALLBACK AcrylicApplicationPrivate::mainWindowProc(HWND hWnd, UINT uMsg,
         const double y = HIWORD(wParam);
         mainWindowDpi = std::round((x + y) / 2.0);
         const auto prcNewWindow = reinterpret_cast<LPRECT>(lParam);
-        MoveWindow(hWnd, prcNewWindow->left, prcNewWindow->top,
-                   RECT_WIDTH(*prcNewWindow), RECT_HEIGHT(*prcNewWindow), TRUE);
+        if (MoveWindow(hWnd, prcNewWindow->left, prcNewWindow->top,
+                   RECT_WIDTH(*prcNewWindow), RECT_HEIGHT(*prcNewWindow), TRUE) == FALSE) {
+            break;
+        }
         return 0;
     }
     case WM_SIZE: {
-        if ((wParam == SIZE_MAXIMIZED) || (wParam == SIZE_RESTORED)) {
-            updateFrameMargins(hWnd, mainWindowDpi);
+        if ((wParam == SIZE_MAXIMIZED) || (wParam == SIZE_RESTORED)
+                || isWindowFullScreened(mainWindowHandle)) {
+            if (!updateFrameMargins(hWnd, mainWindowDpi)) {
+                break;
+            }
         }
         const auto width = LOWORD(lParam);
         const UINT flags = SWP_NOACTIVATE | SWP_SHOWWINDOW | SWP_NOOWNERZORDER;
         if (xamlIslandHandle) {
             // Give enough space to our thin homemade top border.
-            SetWindowPos(xamlIslandHandle, HWND_BOTTOM, 0, getTopFrameMargin(hWnd, mainWindowDpi),
-                         width, HIWORD(lParam), flags);
+            if (SetWindowPos(xamlIslandHandle, HWND_BOTTOM, 0, getTopFrameMargin(hWnd, mainWindowDpi),
+                         width, HIWORD(lParam), flags) == FALSE) {
+                break;
+            }
         }
         if (dragBarWindowHandle) {
-            SetWindowPos(dragBarWindowHandle, HWND_TOP, 0, 0, width,
-                         getTitleBarHeight(hWnd, mainWindowDpi), flags);
+            if (SetWindowPos(dragBarWindowHandle, HWND_TOP, 0, 0, width,
+                         getTitleBarHeight(hWnd, mainWindowDpi), flags) == FALSE) {
+                break;
+            }
         }
     } break;
     case WM_SETFOCUS: {
@@ -622,25 +757,44 @@ LRESULT CALLBACK AcrylicApplicationPrivate::mainWindowProc(HWND hWnd, UINT uMsg,
         // The `DefWindowProc` function doesn't open the system menu for some
         // reason so we have to do it ourselves.
         if (wParam == HTCAPTION) {
-            openSystemMenu(hWnd, {GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)});
+            if (!openSystemMenu(hWnd, {GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)})) {
+                break;
+            }
         }
     } break;
     case WM_CLOSE: {
         if (dragBarWindowHandle) {
-            DestroyWindow(dragBarWindowHandle);
+            if (DestroyWindow(dragBarWindowHandle) == FALSE) {
+                break;
+            }
+            dragBarWindowHandle = nullptr;
         }
+#if 0
         if (xamlIslandHandle) {
-            DestroyWindow(xamlIslandHandle);
+            if (DestroyWindow(xamlIslandHandle) == FALSE) {
+                break;
+            }
+            xamlIslandHandle = nullptr;
         }
-        DestroyWindow(hWnd);
+#endif
+        if (DestroyWindow(hWnd) == FALSE) {
+            break;
+        }
+        mainWindowHandle = nullptr;
         return 0;
     }
     case WM_DESTROY: {
         if (dragBarWindowAtom != static_cast<ATOM>(0)) {
-            UnregisterClassW(dragBarWindowClassName.c_str(), HINST_THISCOMPONENT);
+            if (UnregisterClassW(dragBarWindowClassName.c_str(), HINST_THISCOMPONENT) == FALSE) {
+                break;
+            }
+            dragBarWindowAtom = 0;
         }
         if (mainWindowAtom != static_cast<ATOM>(0)) {
-            UnregisterClassW(mainWindowClassName.c_str(), HINST_THISCOMPONENT);
+            if (UnregisterClassW(mainWindowClassName.c_str(), HINST_THISCOMPONENT) == FALSE) {
+                break;
+            }
+            mainWindowAtom = 0;
         }
 #if 0
         PostQuitMessage(0);
@@ -705,7 +859,9 @@ LRESULT CALLBACK AcrylicApplicationPrivate::dragBarWindowProc(HWND hWnd, UINT uM
     if (nonClientMessage.has_value() && mainWindowHandle)
     {
         POINT pos = {GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)};
-        ClientToScreen(hWnd, &pos);
+        if (ClientToScreen(hWnd, &pos) == FALSE) {
+            return 0;
+        }
         const LPARAM newLParam = MAKELPARAM(pos.x, pos.y);
         // Hit test the parent window at the screen coordinates the user clicked in the drag input sink window,
         // then pass that click through as an NC click in that location.
@@ -782,19 +938,45 @@ bool AcrylicApplicationPrivate::createMainWindow(const int x, const int y, const
 
     mainWindowDpi = getWindowDpi(mainWindowHandle);
 
+    const auto cleanup = []() {
+        if (mainWindowHandle) {
+            DestroyWindow(mainWindowHandle);
+            mainWindowHandle = nullptr;
+        }
+        if (mainWindowAtom != static_cast<ATOM>(0)) {
+            UnregisterClassW(mainWindowClassName.c_str(), HINST_THISCOMPONENT);
+            mainWindowAtom = 0;
+        }
+    };
+
     ShowWindow(mainWindowHandle, SW_SHOW);
-    UpdateWindow(mainWindowHandle);
+    if (UpdateWindow(mainWindowHandle) == FALSE) {
+        cleanup();
+        return false;
+    }
 
     // Ensure DWM still draws the top frame by extending the top frame.
     // This also ensures our window still has the frame shadow drawn by DWM.
-    updateFrameMargins(mainWindowHandle, mainWindowDpi);
+    if (!updateFrameMargins(mainWindowHandle, mainWindowDpi)) {
+        cleanup();
+        return false;
+    }
     // Force a WM_NCCALCSIZE processing to make the window become frameless immediately.
-    triggerFrameChange(mainWindowHandle);
+    if (!triggerFrameChange(mainWindowHandle)) {
+        cleanup();
+        return false;
+    }
     // Ensure our window still has window transitions.
-    setWindowTransitionsEnabled(mainWindowHandle, true);
+    if (!setWindowTransitionsEnabled(mainWindowHandle, true)) {
+        cleanup();
+        return false;
+    }
 
-    RedrawWindow(mainWindowHandle, nullptr, nullptr,
-                 RDW_ERASE | RDW_FRAME | RDW_INVALIDATE | RDW_UPDATENOW);
+    if (RedrawWindow(mainWindowHandle, nullptr, nullptr,
+                 RDW_ERASE | RDW_FRAME | RDW_INVALIDATE | RDW_UPDATENOW) == FALSE) {
+        cleanup();
+        return false;
+    }
 
     return true;
 }
@@ -822,7 +1004,7 @@ bool AcrylicApplicationPrivate::createDragBarWindow() const
     // WS_EX_LAYERED only for top-level windows.
     dragBarWindowHandle = CreateWindowExW(WS_EX_LAYERED | WS_EX_NOREDIRECTIONBITMAP,
                                           dragBarWindowClassName.c_str(), dragBarWindowTitle.c_str(),
-                                          WS_CHILD,
+                                          WS_CHILD | WS_CLIPCHILDREN | WS_CLIPSIBLINGS,
                                           CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
                                           mainWindowHandle, nullptr, HINST_THISCOMPONENT, nullptr);
 
@@ -830,18 +1012,41 @@ bool AcrylicApplicationPrivate::createDragBarWindow() const
         return false;
     }
 
+    const auto cleanup = []() {
+        if (dragBarWindowHandle) {
+            DestroyWindow(dragBarWindowHandle);
+            dragBarWindowHandle = nullptr;
+        }
+        if (dragBarWindowAtom != static_cast<ATOM>(0)) {
+            UnregisterClassW(dragBarWindowClassName.c_str(), HINST_THISCOMPONENT);
+            dragBarWindowAtom = 0;
+        }
+    };
+
     // Layered window won't be visible until we call SetLayeredWindowAttributes()
     // or UpdateLayeredWindow().
-    SetLayeredWindowAttributes(dragBarWindowHandle, RGB(0, 0, 0), 255, LWA_ALPHA);
+    if (SetLayeredWindowAttributes(dragBarWindowHandle, RGB(0, 0, 0), 255, LWA_ALPHA) == FALSE) {
+        cleanup();
+        return false;
+    }
 
     RECT rect = {0, 0, 0, 0};
-    GetClientRect(mainWindowHandle, &rect);
-    SetWindowPos(dragBarWindowHandle, HWND_TOP, 0, 0, rect.right,
+    if (GetClientRect(mainWindowHandle, &rect) == FALSE) {
+        cleanup();
+        return false;
+    }
+    if (SetWindowPos(dragBarWindowHandle, HWND_TOP, 0, 0, rect.right,
                  getTitleBarHeight(mainWindowHandle, mainWindowDpi),
-                 SWP_NOACTIVATE | SWP_SHOWWINDOW | SWP_NOOWNERZORDER);
+                 SWP_NOACTIVATE | SWP_SHOWWINDOW | SWP_NOOWNERZORDER) == FALSE) {
+        cleanup();
+        return false;
+    }
 
     ShowWindow(dragBarWindowHandle, SW_SHOW);
-    UpdateWindow(dragBarWindowHandle);
+    if (UpdateWindow(dragBarWindowHandle) == FALSE) {
+        cleanup();
+        return false;
+    }
 
     return true;
 }
@@ -869,21 +1074,27 @@ bool AcrylicApplicationPrivate::createXAMLIsland() const
     static winrt::Windows::UI::Xaml::Hosting::DesktopWindowXamlSource source = {};
     // Get handle to the core window.
     const auto interop = source.as<IDesktopWindowXamlSourceNative>();
+    if (!interop) {
+        return false;
+    }
     // Parent the DesktopWindowXamlSource object to the current window.
     winrt::check_hresult(interop->AttachToWindow(mainWindowHandle));
     // Get the new XAML Island child window's HWND.
     winrt::check_hresult(interop->get_WindowHandle(&xamlIslandHandle));
     if (!xamlIslandHandle) {
-        print(MessageType::Error, L"Failed to retrieve XAML Island window handle.");
         return false;
     }
     // Update the XAML Island window size because initially it is 0x0.
     RECT rect = {0, 0, 0, 0};
-    GetClientRect(mainWindowHandle, &rect);
+    if (GetClientRect(mainWindowHandle, &rect) == FALSE) {
+        return false;
+    }
     // Give enough space to our thin homemade top border.
-    SetWindowPos(xamlIslandHandle, HWND_BOTTOM, 0,
-                 getTopFrameMargin(mainWindowHandle, mainWindowDpi),
-                 rect.right, rect.bottom, SWP_NOACTIVATE | SWP_SHOWWINDOW | SWP_NOOWNERZORDER);
+    if (SetWindowPos(xamlIslandHandle, HWND_BOTTOM, 0,
+                 getTopFrameMargin(mainWindowHandle, mainWindowDpi), rect.right, rect.bottom,
+                     SWP_NOACTIVATE | SWP_SHOWWINDOW | SWP_NOOWNERZORDER) == FALSE) {
+        return false;
+    }
     // Create the XAML content.
     static winrt::Windows::UI::Xaml::Controls::Grid grid = {};
     static winrt::Windows::UI::Xaml::Media::AcrylicBrush brush = {};
@@ -896,7 +1107,9 @@ bool AcrylicApplicationPrivate::createXAMLIsland() const
     // End XAML Island section.
 
     ShowWindow(xamlIslandHandle, SW_SHOW);
-    UpdateWindow(xamlIslandHandle);
+    if (UpdateWindow(xamlIslandHandle) == FALSE) {
+        return false;
+    }
 
     return true;
 }
@@ -908,11 +1121,6 @@ bool AcrylicApplicationPrivate::createWindow(const int x, const int y, const int
         return false;
     }
     tried = true;
-
-    if (!isCompositionEnabled()) {
-        print(MessageType::Error, L"This application will behave incorrectly when DWM composition is disabled.");
-        return false;
-    }
 
     if (!registerMainWindowClass()) {
         print(MessageType::Error, L"Failed to register main window class.");
@@ -967,6 +1175,8 @@ bool AcrylicApplicationPrivate::moveWindow(const int x, const int y) const
     if (!mainWindowHandle) {
         return false;
     }
+    // The x coordinate and y coordinate can be negative numbers, if so,
+    // the window will be moved to another screen.
     const SIZE s = getWindowSize();
     return (MoveWindow(mainWindowHandle, x, y, s.cx, s.cy, TRUE) != FALSE);
 }
@@ -995,8 +1205,21 @@ bool AcrylicApplicationPrivate::resizeWindow(const int w, const int h) const
 
 bool AcrylicApplicationPrivate::centerWindow() const
 {
-    // todo
-    return false;
+    if (!mainWindowHandle) {
+        return false;
+    }
+    RECT windowRect = {0, 0, 0, 0};
+    if (GetWindowRect(mainWindowHandle, &windowRect) == FALSE) {
+        return false;
+    }
+    const int windowWidth = RECT_WIDTH(windowRect);
+    const int windowHeight = RECT_HEIGHT(windowRect);
+    const RECT screenRect = getScreenGeometry(mainWindowHandle);
+    const int screenWidth = RECT_WIDTH(screenRect);
+    const int screenHeight = RECT_HEIGHT(screenRect);
+    const int newX = (screenWidth - windowWidth) / 2;
+    const int newY = (screenHeight - windowHeight) / 2;
+    return (MoveWindow(mainWindowHandle, newX, newY, windowWidth, windowHeight, TRUE) != FALSE);
 }
 
 WindowState AcrylicApplicationPrivate::getWindowState() const
@@ -1006,14 +1229,17 @@ WindowState AcrylicApplicationPrivate::getWindowState() const
     }
     if (isWindowFullScreened(mainWindowHandle)) {
         return WindowState::FullScreened;
-    } else if (IsMaximized(mainWindowHandle)) {
+    } else if (isWindowMaximized(mainWindowHandle)) {
         return WindowState::Maximized;
-    } else if (IsMinimized(mainWindowHandle)) {
+    } else if (isWindowMinimized(mainWindowHandle)) {
         return WindowState::Minimized;
     } else if (isWindowNoState(mainWindowHandle)) {
         return WindowState::Normal;
+    } else if (isWindowVisible(mainWindowHandle)) {
+        return WindowState::Shown;
+    } else if (isWindowHidden(mainWindowHandle)) {
+        return WindowState::Hidden;
     }
-    // todo: hidden, shown
     return WindowState::Invalid;
 }
 
@@ -1025,37 +1251,44 @@ bool AcrylicApplicationPrivate::setWindowState(const WindowState state) const
     switch (state) {
     case WindowState::Normal:
         ShowWindow(mainWindowHandle, SW_NORMAL);
+        return true;
     case WindowState::Maximized:
         ShowWindow(mainWindowHandle, SW_MAXIMIZE);
+        return true;
     case WindowState::Minimized:
         ShowWindow(mainWindowHandle, SW_MINIMIZE);
+        return true;
     case WindowState::FullScreened:
-        // todo
-        break;
+        return showWindowFullScreen(mainWindowHandle);
     case WindowState::Hidden:
         ShowWindow(mainWindowHandle, SW_HIDE);
+        return true;
     case WindowState::Shown:
         ShowWindow(mainWindowHandle, SW_SHOW);
-    case WindowState::Invalid:
-        return false;
+        return true;
+    default:
+        break;
     }
-    return true;
+    return false;
 }
 
 bool AcrylicApplicationPrivate::destroyWindow() const
 {
-    // TODO: destroy drag bar window.
-    if (!mainWindowHandle) {
-        return false;
+    if (dragBarWindowHandle) {
+        DestroyWindow(dragBarWindowHandle);
+        dragBarWindowHandle = nullptr;
     }
-    if (DestroyWindow(mainWindowHandle) == FALSE) {
-        return false;
+    if (dragBarWindowAtom != static_cast<ATOM>(0)) {
+        UnregisterClassW(dragBarWindowClassName.c_str(), HINST_THISCOMPONENT);
+        dragBarWindowAtom = 0;
     }
-    if (mainWindowAtom == static_cast<ATOM>(0)) {
-        return false;
+    if (mainWindowHandle) {
+        DestroyWindow(mainWindowHandle);
+        mainWindowHandle = nullptr;
     }
-    if (UnregisterClassW(mainWindowClassName.c_str(), HINST_THISCOMPONENT) == FALSE) {
-        return false;
+    if (mainWindowAtom != static_cast<ATOM>(0)) {
+        UnregisterClassW(mainWindowClassName.c_str(), HINST_THISCOMPONENT);
+        mainWindowAtom = 0;
     }
     return true;
 }
@@ -1077,21 +1310,20 @@ bool AcrylicApplicationPrivate::setTheme(const AcrylicTheme theme) const
     return false;
 }
 
-AcrylicVariant AcrylicApplicationPrivate::getParameter(const AcrylicParameter param) const
-{
-    // todo
-    return {};
-}
-
-bool AcrylicApplicationPrivate::setParameter(const AcrylicParameter param,
-                                             const AcrylicVariant value) const
-{
-    // todo
-    return false;
-}
-
 AcrylicApplication::AcrylicApplication(const int argc, wchar_t *argv[])
 {
+    if (!IsWindowsVistaSP2OrGreater()) {
+        AcrylicApplicationPrivate::print(MessageType::Error,
+                                         L"This application cannot be run on such old systems.");
+        std::exit(-1);
+    }
+
+    if (!AcrylicApplicationPrivate::isCompositionEnabled()) {
+        AcrylicApplicationPrivate::print(MessageType::Error,
+                                         L"This application could not be started when DWM composition is disabled.");
+        std::exit(-1);
+    }
+
     if (instance) {
         AcrylicApplicationPrivate::print(MessageType::Error,
                                          L"There could only be one AcrylicApplication instance.");
@@ -1168,17 +1400,6 @@ AcrylicTheme AcrylicApplication::getTheme() const
 bool AcrylicApplication::setTheme(const AcrylicTheme theme) const
 {
     return d->setTheme(theme);
-}
-
-AcrylicVariant AcrylicApplication::getParameter(const AcrylicParameter param) const
-{
-    return d->getParameter(param);
-}
-
-bool AcrylicApplication::setParameter(const AcrylicParameter param,
-                                      const AcrylicVariant value) const
-{
-    return d->setParameter(param, value);
 }
 
 int AcrylicApplication::exec()

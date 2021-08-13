@@ -29,14 +29,6 @@
 
 class AcrylicApplicationPrivate;
 
-enum class AcrylicParameter : int
-{
-    TintColor = 0,
-    TintOpacity,
-    TintLuminosityOpacity,
-    FallbackColor
-};
-
 enum class AcrylicTheme : int
 {
     Invalid = -1,
@@ -58,11 +50,6 @@ enum class WindowState : int
     Shown
 };
 
-struct AcrylicVariant
-{
-    // todo
-};
-
 class AcrylicApplication
 {
 public:
@@ -82,8 +69,6 @@ public:
     [[nodiscard]] HWND getHandle() const;
     [[nodiscard]] AcrylicTheme getTheme() const;
     [[nodiscard]] bool setTheme(const AcrylicTheme theme) const;
-    [[nodiscard]] AcrylicVariant getParameter(const AcrylicParameter param) const;
-    [[nodiscard]] bool setParameter(const AcrylicParameter param, const AcrylicVariant value) const;
 
     [[nodiscard]] static int exec();
 

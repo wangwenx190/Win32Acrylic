@@ -55,23 +55,26 @@ public:
     [[nodiscard]] HWND getHandle() const;
     [[nodiscard]] AcrylicTheme getTheme() const;
     [[nodiscard]] bool setTheme(const AcrylicTheme theme) const;
-    [[nodiscard]] AcrylicVariant getParameter(const AcrylicParameter param) const;
-    [[nodiscard]] bool setParameter(const AcrylicParameter param, const AcrylicVariant value) const;
-
-    [[nodiscard]] static int exec();
 
     [[nodiscard]] static UINT getWindowDpi(const HWND hWnd);
+    [[nodiscard]] static bool isWindowMinimized(const HWND hWnd);
+    [[nodiscard]] static bool isWindowMaximized(const HWND hWnd);
     [[nodiscard]] static bool isWindowFullScreened(const HWND hWnd);
     [[nodiscard]] static bool isWindowNoState(const HWND hWnd);
+    [[nodiscard]] static bool isWindowVisible(const HWND hWnd);
+    [[nodiscard]] static bool isWindowHidden(const HWND hWnd);
     [[nodiscard]] static double getDevicePixelRatio(const UINT dpi);
     [[nodiscard]] static int getResizeBorderThickness(const bool x, const UINT dpi);
     [[nodiscard]] static int getCaptionHeight(const UINT dpi);
     [[nodiscard]] static int getTitleBarHeight(const HWND hWnd, const UINT dpi);
+    [[nodiscard]] static RECT getScreenGeometry(const HWND hWnd);
+    [[nodiscard]] static RECT getScreenAvailableGeometry(const HWND hWnd);
     [[nodiscard]] static bool isCompositionEnabled();
     [[nodiscard]] static bool triggerFrameChange(const HWND hWnd);
     [[nodiscard]] static bool setWindowTransitionsEnabled(const HWND hWnd, const bool enable);
     [[nodiscard]] static bool openSystemMenu(const HWND hWnd, const POINT pos);
 
+    [[nodiscard]] static int exec();
     static void print(const MessageType type, const std::wstring &text);
 
 private:
@@ -83,6 +86,8 @@ private:
 private:
     [[nodiscard]] static int getTopFrameMargin(const HWND hWnd, const UINT dpi);
     [[nodiscard]] static bool updateFrameMargins(const HWND hWnd, const UINT dpi);
+    [[nodiscard]] static MONITORINFO getMonitorInfo(const HWND hWnd);
+    [[nodiscard]] static bool showWindowFullScreen(const HWND hWnd);
 
     static LRESULT CALLBACK mainWindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
     static LRESULT CALLBACK dragBarWindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
@@ -108,8 +113,6 @@ private:
 
     static ATOM mainWindowAtom;
     static ATOM dragBarWindowAtom;
-
-    static bool mainWindowFullScreened;
 
     static std::vector<std::wstring> arguments;
 };

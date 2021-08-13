@@ -29,7 +29,7 @@
 
 class AcrylicApplicationPrivate;
 
-enum class AcrylicTheme : int
+enum class SystemTheme : int
 {
     Invalid = -1,
     Auto,
@@ -67,8 +67,8 @@ public:
     [[nodiscard]] bool setWindowState(const WindowState state) const;
     [[nodiscard]] bool destroyWindow() const;
     [[nodiscard]] HWND getHandle() const;
-    [[nodiscard]] AcrylicTheme getTheme() const;
-    [[nodiscard]] bool setTheme(const AcrylicTheme theme) const;
+    [[nodiscard]] SystemTheme getTheme() const;
+    [[nodiscard]] bool setTheme(const SystemTheme theme) const;
 
     [[nodiscard]] static int exec();
 

@@ -36,6 +36,49 @@ enum class MessageType : int
     Error
 };
 
+enum class WindowsVersion : int
+{
+    WindowsVista = 0,
+    Windows7,
+    Windows8,
+    Windows8_1,
+    Windows10_1507,
+    Windows10_1511,
+    Windows10_1607,
+    Windows10_1703,
+    Windows10_1709,
+    Windows10_1803,
+    Windows10_1809,
+    Windows10_1903,
+    Windows10_1909,
+    Windows10_2004,
+    Windows10_20H2,
+    Windows10_21H1,
+    Windows11,
+    Windows10 = Windows10_1507,
+    Windows10_TH1 = Windows10_1507,
+    Windows10_TH2 = Windows10_1511,
+    Windows10_RS1 = Windows10_1607,
+    Windows10_RS2 = Windows10_1703,
+    Windows10_RS3 = Windows10_1709,
+    Windows10_RS4 = Windows10_1803,
+    Windows10_RS5 = Windows10_1809,
+    Windows10_19H1 = Windows10_1903,
+    Windows10_19H2 = Windows10_1909,
+    Windows10_20H1 = Windows10_2004
+    //Windows10_20H2 = Windows10_20H2,
+    //Windows10_21H1 = Windows10_21H1,
+};
+
+enum class VersionCompare : int
+{
+    Less = 0,
+    Equal,
+    Greater,
+    LessOrEqual,
+    GreaterOrEqual
+};
+
 class AcrylicApplicationPrivate
 {
 public:
@@ -53,8 +96,8 @@ public:
     [[nodiscard]] bool setWindowState(const WindowState state) const;
     [[nodiscard]] bool destroyWindow() const;
     [[nodiscard]] HWND getHandle() const;
-    [[nodiscard]] AcrylicTheme getTheme() const;
-    [[nodiscard]] bool setTheme(const AcrylicTheme theme) const;
+    [[nodiscard]] SystemTheme getTheme() const;
+    [[nodiscard]] bool setTheme(const SystemTheme theme) const;
 
     [[nodiscard]] static UINT getWindowDpi(const HWND hWnd);
     [[nodiscard]] static bool isWindowMinimized(const HWND hWnd);
@@ -73,6 +116,9 @@ public:
     [[nodiscard]] static bool triggerFrameChange(const HWND hWnd);
     [[nodiscard]] static bool setWindowTransitionsEnabled(const HWND hWnd, const bool enable);
     [[nodiscard]] static bool openSystemMenu(const HWND hWnd, const POINT pos);
+    [[nodiscard]] static SystemTheme getSystemTheme();
+    [[nodiscard]] static bool compareSystemVersion(const WindowsVersion ver,
+                                                   const VersionCompare comp);
 
     [[nodiscard]] static int exec();
     static void print(const MessageType type, const std::wstring &text);
@@ -94,7 +140,8 @@ private:
 
     [[nodiscard]] bool registerMainWindowClass() const;
     [[nodiscard]] bool registerDragBarWindowClass() const;
-    [[nodiscard]] bool createMainWindow(const int x, const int y, const int w, const int h) const;
+    [[nodiscard]] bool createMainWindow(const int x, const int y,
+                                        const int w, const int h) const;
     [[nodiscard]] bool createDragBarWindow() const;
     [[nodiscard]] bool createXAMLIsland() const;
 
@@ -115,4 +162,6 @@ private:
     static ATOM dragBarWindowAtom;
 
     static std::vector<std::wstring> arguments;
+
+    static SystemTheme acrylicTheme;
 };

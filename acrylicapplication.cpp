@@ -41,7 +41,6 @@
 #include <ShellScalingApi.h>
 #include <UxTheme.h>
 #include <DwmApi.h>
-#include <VersionHelpers.h>
 #include <WinRT/Windows.UI.Xaml.Hosting.h>
 #include <WinRT/Windows.UI.Xaml.Controls.h>
 #include <WinRT/Windows.UI.Xaml.Media.h>
@@ -104,6 +103,81 @@ EXTERN_C IMAGE_DOS_HEADER __ImageBase;
 static const int kAutoHideTaskbarThicknessPx = 2;
 static const int kAutoHideTaskbarThicknessPy = kAutoHideTaskbarThicknessPx;
 
+namespace Private
+{
+
+class DynamicAPIs
+{
+public:
+    explicit DynamicAPIs() = default;
+    ~DynamicAPIs() = default;
+
+    static DynamicAPIs &instance() {
+        static DynamicAPIs dynamicAPIs = DynamicAPIs{};
+        return dynamicAPIs;
+    }
+
+    [[nodiscard]] bool ShouldAppsUseDarkMode(bool *ok = nullptr) const
+    {
+        if (ok) {
+            *ok = false;
+        }
+        static bool tried = false;
+        using sig = BOOL(WINAPI *)();
+        static sig func = nullptr;
+        if (!func) {
+            if (tried) {
+                return false;
+            } else {
+                tried = true;
+                const HMODULE dll = LoadLibraryExW(L"UxTheme.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
+                if (!dll) {
+                    return false;
+                }
+                func = reinterpret_cast<sig>(GetProcAddress(dll, MAKEINTRESOURCEA(132)));
+                if (!func) {
+                    return false;
+                }
+            }
+        }
+        if (ok) {
+            *ok = true;
+        }
+        return func();
+    }
+
+    [[nodiscard]] bool ShouldSystemUseDarkMode(bool *ok = nullptr) const
+    {
+        if (ok) {
+            *ok = false;
+        }
+        static bool tried = false;
+        using sig = BOOL(WINAPI *)();
+        static sig func = nullptr;
+        if (!func) {
+            if (tried) {
+                return false;
+            } else {
+                tried = true;
+                const HMODULE dll = LoadLibraryExW(L"UxTheme.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
+                if (!dll) {
+                    return false;
+                }
+                func = reinterpret_cast<sig>(GetProcAddress(dll, MAKEINTRESOURCEA(138)));
+                if (!func) {
+                    return false;
+                }
+            }
+        }
+        if (ok) {
+            *ok = true;
+        }
+        return func();
+    }
+};
+
+}
+
 // Initialize global variables.
 AcrylicApplication *AcrylicApplication::instance = nullptr;
 const std::wstring AcrylicApplicationPrivate::mainWindowClassName = L"Win32AcrylicApplicationMainWindowClass";
@@ -117,22 +191,7 @@ HWND AcrylicApplicationPrivate::xamlIslandHandle = nullptr;
 ATOM AcrylicApplicationPrivate::mainWindowAtom = 0;
 ATOM AcrylicApplicationPrivate::dragBarWindowAtom = 0;
 std::vector<std::wstring> AcrylicApplicationPrivate::arguments = {};
-
-[[nodiscard]] static inline bool isWindows10_19H1OrGreater()
-{
-    OSVERSIONINFOEXW osvi;
-    SecureZeroMemory(&osvi, sizeof(osvi));
-    osvi.dwOSVersionInfoSize = sizeof(osvi);
-    osvi.dwMajorVersion = 10;
-    osvi.dwMinorVersion = 0;
-    osvi.dwBuildNumber = 18362;
-    DWORDLONG dwlConditionMask = 0;
-    const BYTE op = VER_GREATER_EQUAL;
-    VER_SET_CONDITION(dwlConditionMask, VER_MAJORVERSION, op);
-    VER_SET_CONDITION(dwlConditionMask, VER_MINORVERSION, op);
-    VER_SET_CONDITION(dwlConditionMask, VER_BUILDNUMBER, op);
-    return (VerifyVersionInfoW(&osvi, VER_MAJORVERSION | VER_MINORVERSION | VER_BUILDNUMBER, dwlConditionMask) != FALSE);
-}
+SystemTheme AcrylicApplicationPrivate::acrylicTheme = SystemTheme::Invalid;
 
 AcrylicApplicationPrivate::AcrylicApplicationPrivate(const std::vector<std::wstring> &args)
 {
@@ -160,6 +219,9 @@ int AcrylicApplicationPrivate::exec()
 
 void AcrylicApplicationPrivate::print(const MessageType type, const std::wstring &text)
 {
+    if (text.empty()) {
+        return;
+    }
     UINT icon = 0;
     std::wstring title = {};
     switch (type) {
@@ -317,7 +379,7 @@ int AcrylicApplicationPrivate::getTopFrameMargin(const HWND hWnd, const UINT dpi
 bool AcrylicApplicationPrivate::isCompositionEnabled()
 {
     // DWM composition is always enabled and can't be disabled since Windows 8.
-    if (IsWindows8OrGreater()) {
+    if (compareSystemVersion(WindowsVersion::Windows8, VersionCompare::GreaterOrEqual)) {
         return true;
     }
     BOOL enabled = FALSE;
@@ -495,6 +557,175 @@ bool AcrylicApplicationPrivate::openSystemMenu(const HWND hWnd, const POINT pos)
         }
     }
     return true;
+}
+
+SystemTheme AcrylicApplicationPrivate::getSystemTheme()
+{
+    HIGHCONTRASTW hc;
+    SecureZeroMemory(&hc, sizeof(hc));
+    hc.cbSize = sizeof(hc);
+    if (SystemParametersInfoW(SPI_GETHIGHCONTRAST, 0, &hc, 0) == FALSE) {
+        return SystemTheme::Invalid;
+    }
+    if (hc.dwFlags & HCF_HIGHCONTRASTON) {
+        return SystemTheme::HighContrast;
+    }
+    // Dark mode was first introduced in Windows 10 1607.
+    if (compareSystemVersion(WindowsVersion::Windows10_1607, VersionCompare::GreaterOrEqual)) {
+        bool ok = false;
+        bool lightModeOn = Private::DynamicAPIs::instance().ShouldAppsUseDarkMode(&ok);
+        if (!ok) {
+            lightModeOn = Private::DynamicAPIs::instance().ShouldSystemUseDarkMode(&ok);
+            if (!ok) {
+#if 0
+                const QString appKey = QStringLiteral("AppsUseLightTheme");
+                const QString sysKey = QStringLiteral("SystemUsesLightTheme");
+                const QSettings registry(g_personalizeRegistryKey, QSettings::NativeFormat);
+                if (registry.contains(appKey)) {
+                    if (registry.value(appKey, 0).toBool()) {
+                        return SystemTheme::Light;
+                    } else {
+                        return SystemTheme::Dark;
+                    }
+                } else if (registry.contains(sysKey)) {
+                    if (registry.value(sysKey, 0).toBool()) {
+                        return SystemTheme::Light;
+                    } else {
+                        return SystemTheme::Dark;
+                    }
+                } else {
+                    return SystemTheme::Light;
+                }
+#endif
+            }
+        }
+        if (ok) {
+            return (lightModeOn ? SystemTheme::Light : SystemTheme::Dark);
+        } else {
+            return SystemTheme::Invalid;
+        }
+    } else {
+        return SystemTheme::Invalid;
+    }
+}
+
+bool AcrylicApplicationPrivate::compareSystemVersion(const WindowsVersion ver,
+                                                     const VersionCompare comp)
+{
+    OSVERSIONINFOEXW osvi;
+    SecureZeroMemory(&osvi, sizeof(osvi));
+    osvi.dwOSVersionInfoSize = sizeof(osvi);
+    switch (ver) {
+    case WindowsVersion::WindowsVista: {
+        osvi.dwMajorVersion = 6;
+        osvi.dwMinorVersion = 0;
+        osvi.dwBuildNumber = 6000; // Windows Vista with Service Pack 1: 6001
+    } break;
+    case WindowsVersion::Windows7: {
+        osvi.dwMajorVersion = 6;
+        osvi.dwMinorVersion = 1;
+        osvi.dwBuildNumber = 7600; // Windows 7 with Service Pack 1: 7601
+    } break;
+    case WindowsVersion::Windows8: {
+        osvi.dwMajorVersion = 6;
+        osvi.dwMinorVersion = 2;
+        osvi.dwBuildNumber = 9200;
+    } break;
+    case WindowsVersion::Windows8_1: {
+        osvi.dwMajorVersion = 6;
+        osvi.dwMinorVersion = 3;
+        osvi.dwBuildNumber = 9200; // Windows 8.1 with Update 1: 9600
+    } break;
+    case WindowsVersion::Windows10_1507: {
+        osvi.dwMajorVersion = 10;
+        osvi.dwMinorVersion = 0;
+        osvi.dwBuildNumber = 10240;
+    } break;
+    case WindowsVersion::Windows10_1511: {
+        osvi.dwMajorVersion = 10;
+        osvi.dwMinorVersion = 0;
+        osvi.dwBuildNumber = 10586;
+    } break;
+    case WindowsVersion::Windows10_1607: {
+        osvi.dwMajorVersion = 10;
+        osvi.dwMinorVersion = 0;
+        osvi.dwBuildNumber = 14393;
+    } break;
+    case WindowsVersion::Windows10_1703: {
+        osvi.dwMajorVersion = 10;
+        osvi.dwMinorVersion = 0;
+        osvi.dwBuildNumber = 15063;
+    } break;
+    case WindowsVersion::Windows10_1709: {
+        osvi.dwMajorVersion = 10;
+        osvi.dwMinorVersion = 0;
+        osvi.dwBuildNumber = 16299;
+    } break;
+    case WindowsVersion::Windows10_1803: {
+        osvi.dwMajorVersion = 10;
+        osvi.dwMinorVersion = 0;
+        osvi.dwBuildNumber = 17134;
+    } break;
+    case WindowsVersion::Windows10_1809: {
+        osvi.dwMajorVersion = 10;
+        osvi.dwMinorVersion = 0;
+        osvi.dwBuildNumber = 17763;
+    } break;
+    case WindowsVersion::Windows10_1903: {
+        osvi.dwMajorVersion = 10;
+        osvi.dwMinorVersion = 0;
+        osvi.dwBuildNumber = 18362;
+    } break;
+    case WindowsVersion::Windows10_1909: {
+        osvi.dwMajorVersion = 10;
+        osvi.dwMinorVersion = 0;
+        osvi.dwBuildNumber = 18363;
+    } break;
+    case WindowsVersion::Windows10_2004: {
+        osvi.dwMajorVersion = 10;
+        osvi.dwMinorVersion = 0;
+        osvi.dwBuildNumber = 19041;
+    } break;
+    case WindowsVersion::Windows10_20H2: {
+        osvi.dwMajorVersion = 10;
+        osvi.dwMinorVersion = 0;
+        osvi.dwBuildNumber = 19042;
+    } break;
+    case WindowsVersion::Windows10_21H1: {
+        osvi.dwMajorVersion = 10;
+        osvi.dwMinorVersion = 0;
+        osvi.dwBuildNumber = 19043;
+    } break;
+    case WindowsVersion::Windows11: {
+        // FIXME: check the actual version number of Win11.
+        osvi.dwMajorVersion = 11;
+        osvi.dwMinorVersion = 0;
+        osvi.dwBuildNumber = 0;
+    } break;
+    }
+    BYTE op = 0;
+    switch (comp) {
+    case VersionCompare::Less:
+        op = VER_LESS;
+        break;
+    case VersionCompare::Equal:
+        op = VER_EQUAL;
+        break;
+    case VersionCompare::Greater:
+        op = VER_GREATER;
+        break;
+    case VersionCompare::LessOrEqual:
+        op = VER_LESS_EQUAL;
+        break;
+    case VersionCompare::GreaterOrEqual:
+        op = VER_GREATER_EQUAL;
+        break;
+    }
+    DWORDLONG dwlConditionMask = 0;
+    VER_SET_CONDITION(dwlConditionMask, VER_MAJORVERSION, op);
+    VER_SET_CONDITION(dwlConditionMask, VER_MINORVERSION, op);
+    VER_SET_CONDITION(dwlConditionMask, VER_BUILDNUMBER, op);
+    return (VerifyVersionInfoW(&osvi, VER_MAJORVERSION | VER_MINORVERSION | VER_BUILDNUMBER, dwlConditionMask) != FALSE);
 }
 
 LRESULT CALLBACK AcrylicApplicationPrivate::mainWindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
@@ -894,7 +1125,7 @@ bool AcrylicApplicationPrivate::registerMainWindowClass() const
 
 bool AcrylicApplicationPrivate::registerDragBarWindowClass() const
 {
-    if (!IsWindows8OrGreater()) {
+    if (compareSystemVersion(WindowsVersion::Windows8, VersionCompare::Less)) {
         return false;
     }
     if (!mainWindowHandle) {
@@ -984,7 +1215,7 @@ bool AcrylicApplicationPrivate::createMainWindow(const int x, const int y, const
 bool AcrylicApplicationPrivate::createDragBarWindow() const
 {
     // Please refer to the "IMPORTANT NOTE" section below.
-    if (!IsWindows8OrGreater()) {
+    if (compareSystemVersion(WindowsVersion::Windows8, VersionCompare::Less)) {
         return false;
     }
     if (dragBarWindowAtom == static_cast<ATOM>(0)) {
@@ -1054,10 +1285,13 @@ bool AcrylicApplicationPrivate::createDragBarWindow() const
 bool AcrylicApplicationPrivate::createXAMLIsland() const
 {
     // XAML Island is only supported on Windows 10 19H1 and onwards.
-    if (!isWindows10_19H1OrGreater()) {
+    if (compareSystemVersion(WindowsVersion::Windows10_19H1, VersionCompare::Less)) {
         return false;
     }
     if (!mainWindowHandle) {
+        return false;
+    }
+    if (acrylicTheme == SystemTheme::Invalid) {
         return false;
     }
 
@@ -1130,8 +1364,8 @@ bool AcrylicApplicationPrivate::createWindow(const int x, const int y, const int
         print(MessageType::Error, L"Failed to create main window.");
         return false;
     }
-    if (IsWindows10OrGreater()) {
-        if (isWindows10_19H1OrGreater()) {
+    if (compareSystemVersion(WindowsVersion::Windows10, VersionCompare::GreaterOrEqual)) {
+        if (compareSystemVersion(WindowsVersion::Windows10_19H1, VersionCompare::GreaterOrEqual)) {
             if (createXAMLIsland()) {
                 if (registerDragBarWindowClass()) {
                     if (!createDragBarWindow()) {
@@ -1298,13 +1532,13 @@ HWND AcrylicApplicationPrivate::getHandle() const
     return mainWindowHandle;
 }
 
-AcrylicTheme AcrylicApplicationPrivate::getTheme() const
+SystemTheme AcrylicApplicationPrivate::getTheme() const
 {
     // todo
-    return AcrylicTheme::Auto;
+    return SystemTheme::Default;
 }
 
-bool AcrylicApplicationPrivate::setTheme(const AcrylicTheme theme) const
+bool AcrylicApplicationPrivate::setTheme(const SystemTheme theme) const
 {
     // todo
     return false;
@@ -1312,7 +1546,7 @@ bool AcrylicApplicationPrivate::setTheme(const AcrylicTheme theme) const
 
 AcrylicApplication::AcrylicApplication(const int argc, wchar_t *argv[])
 {
-    if (!IsWindowsVistaSP2OrGreater()) {
+    if (AcrylicApplicationPrivate::compareSystemVersion(WindowsVersion::WindowsVista, VersionCompare::Less)) {
         AcrylicApplicationPrivate::print(MessageType::Error,
                                          L"This application cannot be run on such old systems.");
         std::exit(-1);
@@ -1392,12 +1626,12 @@ HWND AcrylicApplication::getHandle() const
     return d->getHandle();
 }
 
-AcrylicTheme AcrylicApplication::getTheme() const
+SystemTheme AcrylicApplication::getTheme() const
 {
     return d->getTheme();
 }
 
-bool AcrylicApplication::setTheme(const AcrylicTheme theme) const
+bool AcrylicApplication::setTheme(const SystemTheme theme) const
 {
     return d->setTheme(theme);
 }

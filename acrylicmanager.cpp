@@ -743,7 +743,22 @@ bool compareSystemVersion_p(const WindowsVersion ver, const VersionCompare comp)
     }
     // Dark mode was first introduced in Windows 10 1607.
     if (compareSystemVersion_p(WindowsVersion::Windows10_1607, VersionCompare::GreaterOrEqual)) {
-        // registry
+        HKEY hKey = nullptr;
+        if (RegOpenKeyExW(HKEY_CURRENT_USER,
+                          LR"(Software\Microsoft\Windows\CurrentVersion\Themes\Personalize)",
+                          0, KEY_READ, &hKey) == ERROR_SUCCESS) {
+            LPCWSTR valueName = L"AppsUseLightTheme";
+            DWORD dwValue = 0;
+            DWORD dwSize = 0;
+            RegQueryValueExW(hKey, valueName, nullptr, nullptr, reinterpret_cast<LPBYTE>(&dwValue), &dwSize);
+            const bool success = (RegQueryValueExW(hKey, valueName,
+                                                   nullptr, nullptr, reinterpret_cast<LPBYTE>(&dwValue),
+                                                   &dwSize) == ERROR_SUCCESS);
+            RegCloseKey(hKey);
+            if (success) {
+                return ((dwValue == 0) ? SystemTheme::Dark : SystemTheme::Light);
+            }
+        }
     } else {
         print_p(L"Current system version doesn't support dark mode.");
     }
@@ -867,8 +882,18 @@ bool compareSystemVersion_p(const WindowsVersion ver, const VersionCompare comp)
     return false;
 }
 
-[[nodiscard]] static inline bool destroyWindow_p()
+static inline void cleanup_p()
 {
+    if (xamlSource) {
+        xamlSource.Close();
+        xamlSource = nullptr;
+    }
+    xamlGrid = nullptr;
+    xamlBrush = nullptr;
+    if (xamlManager) {
+        xamlManager.Close();
+        xamlManager = nullptr;
+    }
     if (dragBarWindowHandle) {
         DestroyWindow(dragBarWindowHandle);
         dragBarWindowHandle = nullptr;
@@ -885,7 +910,6 @@ bool compareSystemVersion_p(const WindowsVersion ver, const VersionCompare comp)
         UnregisterClassW(mainWindowClassName, HINST_THISCOMPONENT);
         mainWindowAtom = 0;
     }
-    return true;
 }
 
 [[nodiscard]] static inline bool getTintColor_p(int *r, int *g, int *b, int *a)
@@ -1346,29 +1370,12 @@ bool compareSystemVersion_p(const WindowsVersion ver, const VersionCompare comp)
         }
     } break;
     case WM_CLOSE: {
-        if (dragBarWindowHandle) {
-            DestroyWindow(dragBarWindowHandle);
-            dragBarWindowHandle = nullptr;
-        }
-        DestroyWindow(hWnd);
-        mainWindowHandle = nullptr;
+        cleanup_p();
         return 0;
     }
     case WM_DESTROY: {
-        if (dragBarWindowAtom != static_cast<ATOM>(0)) {
-            UnregisterClassW(dragBarWindowClassName, HINST_THISCOMPONENT);
-            dragBarWindowAtom = 0;
-        }
-        if (mainWindowAtom != static_cast<ATOM>(0)) {
-            UnregisterClassW(mainWindowClassName, HINST_THISCOMPONENT);
-            mainWindowAtom = 0;
-        }
-#if 0
         PostQuitMessage(0);
         return 0;
-#else
-        std::exit(0);
-#endif
     }
     default:
         break;
@@ -1524,34 +1531,23 @@ bool compareSystemVersion_p(const WindowsVersion ver, const VersionCompare comp)
         mainWindowDpi = USER_DEFAULT_SCREEN_DPI;
     }
 
-    const auto cleanup = []() {
-        if (mainWindowHandle) {
-            DestroyWindow(mainWindowHandle);
-            mainWindowHandle = nullptr;
-        }
-        if (mainWindowAtom != static_cast<ATOM>(0)) {
-            UnregisterClassW(mainWindowClassName, HINST_THISCOMPONENT);
-            mainWindowAtom = 0;
-        }
-    };
-
     // Ensure DWM still draws the top frame by extending the top frame.
     // This also ensures our window still has the frame shadow drawn by DWM.
     if (!updateFrameMargins_p(mainWindowHandle, mainWindowDpi)) {
         print_p(L"Failed to update main window's frame margins.");
-        cleanup();
+        cleanup_p();
         return false;
     }
     // Force a WM_NCCALCSIZE processing to make the window become frameless immediately.
     if (!triggerFrameChange_p(mainWindowHandle)) {
         print_p(L"Failed to trigger frame change event for main window.");
-        cleanup();
+        cleanup_p();
         return false;
     }
     // Ensure our window still has window transitions.
     if (!setWindowTransitionsEnabled_p(mainWindowHandle, true)) {
         print_p(L"Failed to enable window transitions for main window.");
-        cleanup();
+        cleanup_p();
         return false;
     }
 
@@ -1812,7 +1808,8 @@ bool setWindowState(const WindowState state)
 
 bool destroyWindow()
 {
-    return destroyWindow_p();
+    cleanup_p();
+    return true;
 }
 
 HWND getWindowHandle()

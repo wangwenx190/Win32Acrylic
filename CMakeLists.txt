@@ -46,11 +46,15 @@ set(SOURCES_LIB
 
 if(BUILD_SHARED_LIBS)
     enable_language(RC)
-    list(APPEND SOURCES acrylicmanager.rc)
+    list(APPEND SOURCES_LIB acrylicmanager.rc)
 endif()
 
 add_library(AcrylicManager ${SOURCES_LIB})
 add_library(wangwenx190::AcrylicManager ALIAS AcrylicManager)
+
+target_include_directories(AcrylicManager PUBLIC
+    "$<BUILD_INTERFACE:${CMAKE_CURRENT_LIST_DIR}>"
+)
 
 set(NTDDI_WIN10_19H1 0x0A000007)
 target_compile_definitions(AcrylicManager PRIVATE

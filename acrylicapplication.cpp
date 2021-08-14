@@ -388,7 +388,7 @@ static inline void print_p(const MessageType type, LPCWSTR text, const bool show
     HIGHCONTRASTW hc;
     SecureZeroMemory(&hc, sizeof(hc));
     hc.cbSize = sizeof(hc);
-    if (SystemParametersInfoW(SPI_GETHIGHCONTRAST, 0, &hc, 0) == FALSE) {
+    if (SystemParametersInfoW(SPI_GETHIGHCONTRAST, sizeof(hc), &hc, 0) == FALSE) {
         print_p(MessageType::Error, L"Failed to retrieve high contrast mode state.", false);
         return SystemTheme::Invalid;
     }

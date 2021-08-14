@@ -36,22 +36,21 @@
 #define _DWMAPI_
 #endif
 
-#include <Unknwn.h>
+#include "acrylicapplication.h"
+#include "acrylicapplication_p.h"
 
 #include <ShellApi.h>
 #include <ShellScalingApi.h>
 #include <UxTheme.h>
 #include <DwmApi.h>
 
+#include <Unknwn.h>
+
 #include <WinRT\Windows.Foundation.Collections.h>
 #include <WinRT\Windows.UI.Xaml.Hosting.h>
 #include <WinRT\Windows.UI.Xaml.Controls.h>
 #include <WinRT\Windows.UI.Xaml.Media.h>
 #include <Windows.UI.Xaml.Hosting.DesktopWindowXamlSource.h>
-
-#include "acrylicapplication_global.h"
-#include "acrylicapplication.h"
-#include "acrylicapplication_p.h"
 
 #ifndef HINST_THISCOMPONENT
 EXTERN_C IMAGE_DOS_HEADER __ImageBase;
@@ -268,7 +267,6 @@ static HWND dragBarWindowHandle = nullptr;
 static HWND xamlIslandHandle = nullptr;
 static ATOM mainWindowAtom = 0;
 static ATOM dragBarWindowAtom = 0;
-static wchar_t **arguments = nullptr;
 static SystemTheme acrylicBrushTheme = SystemTheme::Invalid;
 
 // XAML
@@ -1772,8 +1770,6 @@ AcrylicApplication::AcrylicApplication(const int argc, wchar_t *argv[])
     } else {
         instance = this;
     }
-
-    arguments = argv;
 }
 
 AcrylicApplication::~AcrylicApplication() = default;

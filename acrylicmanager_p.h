@@ -24,7 +24,7 @@
 
 #pragma once
 
-#include "Windows.h"
+#include "acrylicmanager_global.h"
 
 enum class WindowsVersion : int
 {
@@ -69,19 +69,27 @@ enum class VersionCompare : int
     GreaterOrEqual
 };
 
-[[nodiscard]] UINT getWindowDpi_p(const HWND hWnd);
-[[nodiscard]] bool isWindowMinimized_p(const HWND hWnd);
-[[nodiscard]] bool isWindowMaximized_p(const HWND hWnd);
-[[nodiscard]] bool isWindowFullScreened_p(const HWND hWnd);
-[[nodiscard]] bool isWindowNoState_p(const HWND hWnd);
-[[nodiscard]] bool isWindowVisible_p(const HWND hWnd);
-[[nodiscard]] int getResizeBorderThickness_p(const bool x, const UINT dpi);
-[[nodiscard]] int getCaptionHeight_p(const UINT dpi);
-[[nodiscard]] int getTitleBarHeight_p(const HWND hWnd, const UINT dpi);
-[[nodiscard]] RECT getScreenGeometry_p(const HWND hWnd);
-[[nodiscard]] RECT getScreenAvailableGeometry_p(const HWND hWnd);
-[[nodiscard]] bool isCompositionEnabled_p();
-[[nodiscard]] bool triggerFrameChange_p(const HWND hWnd);
-[[nodiscard]] bool setWindowTransitionsEnabled_p(const HWND hWnd, const bool enable);
-[[nodiscard]] bool openSystemMenu_p(const HWND hWnd, const POINT pos);
-[[nodiscard]] bool compareSystemVersion_p(const WindowsVersion ver, const VersionCompare comp);
+#ifdef __cplusplus
+EXTERN_C_BEGIN
+#endif
+
+ACRYLICMANAGER_API [[nodiscard]] UINT getWindowDpi_p(const HWND hWnd);
+ACRYLICMANAGER_API [[nodiscard]] bool isWindowMinimized_p(const HWND hWnd);
+ACRYLICMANAGER_API [[nodiscard]] bool isWindowMaximized_p(const HWND hWnd);
+ACRYLICMANAGER_API [[nodiscard]] bool isWindowFullScreened_p(const HWND hWnd);
+ACRYLICMANAGER_API [[nodiscard]] bool isWindowNoState_p(const HWND hWnd);
+ACRYLICMANAGER_API [[nodiscard]] bool isWindowVisible_p(const HWND hWnd);
+ACRYLICMANAGER_API [[nodiscard]] int getResizeBorderThickness_p(const bool x, const UINT dpi);
+ACRYLICMANAGER_API [[nodiscard]] int getCaptionHeight_p(const UINT dpi);
+ACRYLICMANAGER_API [[nodiscard]] int getTitleBarHeight_p(const HWND hWnd, const UINT dpi);
+ACRYLICMANAGER_API [[nodiscard]] RECT getScreenGeometry_p(const HWND hWnd);
+ACRYLICMANAGER_API [[nodiscard]] RECT getScreenAvailableGeometry_p(const HWND hWnd);
+ACRYLICMANAGER_API [[nodiscard]] bool isCompositionEnabled_p();
+ACRYLICMANAGER_API [[nodiscard]] bool triggerFrameChange_p(const HWND hWnd);
+ACRYLICMANAGER_API [[nodiscard]] bool setWindowTransitionsEnabled_p(const HWND hWnd, const bool enable);
+ACRYLICMANAGER_API [[nodiscard]] bool openSystemMenu_p(const HWND hWnd, const POINT pos);
+ACRYLICMANAGER_API [[nodiscard]] bool compareSystemVersion_p(const WindowsVersion ver, const VersionCompare comp);
+
+#ifdef __cplusplus
+EXTERN_C_END
+#endif

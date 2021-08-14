@@ -22,29 +22,42 @@
  * SOFTWARE.
  */
 
-#include "acrylicmanager.h"
-#include <ShellApi.h>
+#include <Windows.h>
 
-EXTERN_C int APIENTRY
-wWinMain(
-    _In_ HINSTANCE     hInstance,
-    _In_opt_ HINSTANCE hPrevInstance,
-    _In_ LPWSTR        lpCmdLine,
-    _In_ int           nCmdShow
-)
-{
-    UNREFERENCED_PARAMETER(hInstance);
-    UNREFERENCED_PARAMETER(hPrevInstance);
-    UNREFERENCED_PARAMETER(lpCmdLine);
-    UNREFERENCED_PARAMETER(nCmdShow);
-
-    if (application.createWindow()) {
-        if (application.centerWindow()) {
-            if (application.setWindowState(WindowState::Shown)) {
-                result = AcrylicApplication::exec();
-            }
-        }
-    }
-
-    return result;
-}
+VS_VERSION_INFO VERSIONINFO
+FILEVERSION     1,0,0,0
+PRODUCTVERSION  1,0,0,0
+FILEFLAGSMASK   0x3fL
+#ifdef _DEBUG
+FILEFLAGS       VS_FF_DEBUG
+#else
+FILEFLAGS       0x0L
+#endif
+FILEOS          VOS_NT_WINDOWS32
+FILETYPE        VFT_DLL
+FILESUBTYPE     VFT2_UNKNOWN
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "040904b0"
+        BEGIN
+            VALUE "CompanyName",      "wangwenx190\0"
+            VALUE "FileDescription",  "AcrylicManager\0"
+            VALUE "FileVersion",      "1.0.0.0\0"
+            VALUE "LegalCopyright",   "MIT License\0"
+            #ifdef _DEBUG
+            VALUE "OriginalFilename", "AcrylicManagerd.dll\0"
+            #else
+            VALUE "OriginalFilename", "AcrylicManager.dll\0"
+            #endif
+            VALUE "ProductName",      "AcrylicManager\0"
+            VALUE "ProductVersion",   "1.0.0.0\0"
+            VALUE "Comments",         "Based on the technology of XAML Island.\0"
+            VALUE "InternalName",     "acrylicmanager\0"
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x409, 1200
+    END
+END

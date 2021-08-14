@@ -43,10 +43,10 @@
 #include <UxTheme.h>
 #include <DwmApi.h>
 
-#include <WinRT/Windows.Foundation.Collections.h>
-#include <WinRT/Windows.UI.Xaml.Hosting.h>
-#include <WinRT/Windows.UI.Xaml.Controls.h>
-#include <WinRT/Windows.UI.Xaml.Media.h>
+#include <WinRT\Windows.Foundation.Collections.h>
+#include <WinRT\Windows.UI.Xaml.Hosting.h>
+#include <WinRT\Windows.UI.Xaml.Controls.h>
+#include <WinRT\Windows.UI.Xaml.Media.h>
 #include <Windows.UI.Xaml.Hosting.DesktopWindowXamlSource.h>
 
 #include "acrylicapplication_global.h"
@@ -955,11 +955,6 @@ static inline LRESULT CALLBACK mainWindowProc(HWND hWnd, UINT uMsg, WPARAM wPara
                 print_p(MessageType::Error, L"WM_SIZE: Failed to move XAML Island window.", false);
                 break;
             }
-            if (rootGrid) {
-                // todo: check
-                rootGrid.Width(width);
-                rootGrid.Height(height);
-            }
         }
         if (dragBarWindowHandle) {
             if (SetWindowPos(dragBarWindowHandle, HWND_TOP, 0, 0, width,
@@ -1375,6 +1370,11 @@ static inline LRESULT CALLBACK dragBarWindowProc(HWND hWnd, UINT uMsg, WPARAM wP
     //rootGrid.Children().Append(/* some UWP control */);
     //rootGrid.UpdateLayout();
     xamlSource.Content(rootGrid);
+
+    if (UpdateWindow(xamlIslandHandle) == FALSE) {
+        print_p(MessageType::Error, L"Failed to update XAML Island window.", false);
+        return false;
+    }
 
     return true;
 }

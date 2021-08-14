@@ -64,8 +64,16 @@ public:
     [[nodiscard]] bool setWindowState(const WindowState state) const;
     [[nodiscard]] bool destroyWindow() const;
     [[nodiscard]] HWND getHandle() const;
-    [[nodiscard]] SystemTheme getTheme() const;
-    [[nodiscard]] bool setTheme(const SystemTheme theme) const;
+    [[nodiscard]] SystemTheme getAcrylicBrushTheme() const;
+    [[nodiscard]] bool setAcrylicBrushTheme(const SystemTheme theme) const;
+    [[nodiscard]] bool getTintColor(int *r, int *g, int *b, int *a) const;
+    [[nodiscard]] bool setTintColor(const int r, const int g, const int b, const int a) const;
+    [[nodiscard]] bool getTintOpacity(double *opacity) const;
+    [[nodiscard]] bool setTintOpacity(const double opacity) const;
+    [[nodiscard]] bool getTintLuminosityOpacity(double *opacity) const;
+    [[nodiscard]] bool setTintLuminosityOpacity(const double opacity) const;
+    [[nodiscard]] bool getFallbackColor(int *r, int *g, int *b, int *a) const;
+    [[nodiscard]] bool setFallbackColor(const int r, const int g, const int b, const int a) const;
 
     [[nodiscard]] static int exec();
 

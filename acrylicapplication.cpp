@@ -37,14 +37,18 @@
 #endif
 
 #include <Unknwn.h>
+
 #include <ShellApi.h>
 #include <ShellScalingApi.h>
 #include <UxTheme.h>
 #include <DwmApi.h>
+
+#include <WinRT/Windows.Foundation.Collections.h>
 #include <WinRT/Windows.UI.Xaml.Hosting.h>
 #include <WinRT/Windows.UI.Xaml.Controls.h>
 #include <WinRT/Windows.UI.Xaml.Media.h>
 #include <Windows.UI.Xaml.Hosting.DesktopWindowXamlSource.h>
+
 #include "acrylicapplication_global.h"
 #include "acrylicapplication.h"
 #include "acrylicapplication_p.h"
@@ -274,7 +278,7 @@ static HWND xamlIslandHandle = nullptr;
 static ATOM mainWindowAtom = 0;
 static ATOM dragBarWindowAtom = 0;
 static wchar_t **arguments = nullptr;
-static SystemTheme acrylicTheme = SystemTheme::Invalid;
+static SystemTheme acrylicBrushTheme = SystemTheme::Invalid;
 
 // XAML
 static winrt::Windows::UI::Xaml::Hosting::WindowsXamlManager xamlManager = nullptr;
@@ -559,32 +563,164 @@ static inline void print_p(const MessageType type, LPCWSTR text, const bool show
     return true;
 }
 
+[[nodiscard]] static inline bool getTintColor_p(int *r, int *g, int *b, int *a)
+{
+    if (!acrylicBrush) {
+        print_p(MessageType::Error, L"Acrylic brush is not available.", false);
+        return false;
+    }
+    if (!r || !g || !b || !a) {
+        print_p(MessageType::Error, L"Can't retrieve tint color: invalid parameters.", false);
+        return false;
+    }
+    const winrt::Windows::UI::Color color = acrylicBrush.TintColor();
+    *r = static_cast<int>(color.R);
+    *g = static_cast<int>(color.G);
+    *b = static_cast<int>(color.B);
+    *a = static_cast<int>(color.A);
+    return true;
+}
+
+[[nodiscard]] static inline bool setTintColor_p(const int r, const int g, const int b, const int a)
+{
+    if (!acrylicBrush) {
+        print_p(MessageType::Error, L"Acrylic brush is not available.", false);
+        return false;
+    }
+    const auto red = static_cast<uint8_t>(std::clamp(r, 0, 255));
+    const auto green = static_cast<uint8_t>(std::clamp(g, 0, 255));
+    const auto blue = static_cast<uint8_t>(std::clamp(b, 0, 255));
+    const auto alpha = static_cast<uint8_t>(std::clamp(a, 0, 255));
+    acrylicBrush.TintColor({alpha, red, green, blue}); // ARGB
+    return true;
+}
+
+[[nodiscard]] static inline bool getTintOpacity_p(double *opacity)
+{
+    if (!acrylicBrush) {
+        print_p(MessageType::Error, L"Acrylic brush is not available.", false);
+        return false;
+    }
+    if (!opacity) {
+        print_p(MessageType::Error, L"Can't retrieve tint opacity: invalid parameter.", false);
+        return false;
+    }
+    const double value = acrylicBrush.TintOpacity();
+    *opacity = value;
+    return true;
+}
+
+[[nodiscard]] static inline bool setTintOpacity_p(const double opacity)
+{
+    if (!acrylicBrush) {
+        print_p(MessageType::Error, L"Acrylic brush is not available.", false);
+        return false;
+    }
+    const double value = std::clamp(opacity, 0.0, 1.0);
+    acrylicBrush.TintOpacity(value);
+    return true;
+}
+
+[[nodiscard]] static inline bool getTintLuminosityOpacity_p(double *opacity)
+{
+    if (!acrylicBrush) {
+        print_p(MessageType::Error, L"Acrylic brush is not available.", false);
+        return false;
+    }
+    if (!opacity) {
+        print_p(MessageType::Error, L"Can't retrieve tint luminosity opacity: invalid parameter.", false);
+        return false;
+    }
+    const double value = acrylicBrush.TintLuminosityOpacity().GetDouble();
+    *opacity = value;
+    return true;
+}
+
+[[nodiscard]] static inline bool setTintLuminosityOpacity_p(const double opacity)
+{
+    if (!acrylicBrush) {
+        print_p(MessageType::Error, L"Acrylic brush is not available.", false);
+        return false;
+    }
+    const double value = std::clamp(opacity, 0.0, 1.0);
+    acrylicBrush.TintLuminosityOpacity(value);
+    return true;
+}
+
+[[nodiscard]] static inline bool getFallbackColor_p(int *r, int *g, int *b, int *a)
+{
+    if (!acrylicBrush) {
+        print_p(MessageType::Error, L"Acrylic brush is not available.", false);
+        return false;
+    }
+    if (!r || !g || !b || !a) {
+        print_p(MessageType::Error, L"Can't retrieve fallback color: invalid parameters.", false);
+        return false;
+    }
+    const winrt::Windows::UI::Color color = acrylicBrush.FallbackColor();
+    *r = static_cast<int>(color.R);
+    *g = static_cast<int>(color.G);
+    *b = static_cast<int>(color.B);
+    *a = static_cast<int>(color.A);
+    return true;
+}
+
+[[nodiscard]] static inline bool setFallbackColor_p(const int r, const int g, const int b, const int a)
+{
+    if (!acrylicBrush) {
+        print_p(MessageType::Error, L"Acrylic brush is not available.", false);
+        return false;
+    }
+    const auto red = static_cast<uint8_t>(std::clamp(r, 0, 255));
+    const auto green = static_cast<uint8_t>(std::clamp(g, 0, 255));
+    const auto blue = static_cast<uint8_t>(std::clamp(b, 0, 255));
+    const auto alpha = static_cast<uint8_t>(std::clamp(a, 0, 255));
+    acrylicBrush.FallbackColor({alpha, red, green, blue}); // ARGB
+    return true;
+}
+
 [[nodiscard]] static inline bool switchAcrylicBrushTheme_p(const SystemTheme theme)
 {
     if (!acrylicBrush) {
+        print_p(MessageType::Error, L"Acrylic brush is not available.", false);
         return false;
     }
     if (theme == SystemTheme::Invalid) {
         print_p(MessageType::Error, L"The given theme type is not valid.", false);
         return false;
     }
+    int tc[4] = {0, 0, 0, 0};
+    double to = 0.0;
+    double tlo = 0.0;
+    int fbc[4] = {0, 0, 0, 0};
     if (theme == SystemTheme::Light) {
-        // #FCFCFC
-        acrylicBrush.TintColor({255, 252, 252, 252}); // ARGB
-        acrylicBrush.TintOpacity(0.0);
-        //acrylicBrush.TintLuminosityOpacity(0.85);
-        // #F9F9F9
-        acrylicBrush.FallbackColor({255, 249, 249, 249}); // ARGB
-        acrylicTheme = SystemTheme::Light;
+        tc[0] = 252; tc[1] = 252; tc[2] = 252; tc[3] = 255; // #FCFCFC
+        to = 0.0;
+        tlo = 0.85;
+        fbc[0] = 249; fbc[1] = 249; fbc[2] = 249; fbc[3] = 255; // #F9F9F9
     } else {
-        // #2C2C2C
-        acrylicBrush.TintColor({255, 44, 44, 44}); // ARGB
-        acrylicBrush.TintOpacity(0.15);
-        //acrylicBrush.TintLuminosityOpacity(0.96);
-        // #2C2C2C
-        acrylicBrush.FallbackColor({255, 44, 44, 44}); // ARGB
-        acrylicTheme = SystemTheme::Dark;
+        tc[0] = 44; tc[1] = 44; tc[2] = 44; tc[3] = 255; // #2C2C2C
+        to = 0.15;
+        tlo = 0.96;
+        fbc[0] = 44; fbc[1] = 44; fbc[2] = 44; fbc[3] = 255; // #2C2C2C
     }
+    if (!setTintColor_p(tc[0], tc[1], tc[2], tc[3])) {
+        print_p(MessageType::Error, L"Failed to change acrylic brush's tint color.", false);
+        return false;
+    }
+    if (!setTintOpacity_p(to)) {
+        print_p(MessageType::Error, L"Failed to change acrylic brush's tint opacity.", false);
+        return false;
+    }
+    if (!setTintLuminosityOpacity_p(tlo)) {
+        print_p(MessageType::Error, L"Failed to change acrylic brush's tint luminosity opacity.", false);
+        return false;
+    }
+    if (!setFallbackColor_p(fbc[0], fbc[1], fbc[2], fbc[3])) {
+        print_p(MessageType::Error, L"Failed to change acrylic brush's fallback color.", false);
+        return false;
+    }
+    acrylicBrushTheme = theme;
     return true;
 }
 
@@ -921,11 +1057,11 @@ static inline LRESULT CALLBACK mainWindowProc(HWND hWnd, UINT uMsg, WPARAM wPara
     default:
         break;
     }
-    if (acrylicBrush && (acrylicTheme == SystemTheme::Auto) && systemThemeChanged) {
+    if (acrylicBrush && (acrylicBrushTheme == SystemTheme::Auto) && systemThemeChanged) {
         const SystemTheme systemTheme = getSystemTheme_p();
         if (systemTheme != SystemTheme::Invalid) {
             if (switchAcrylicBrushTheme_p(systemTheme)) {
-                acrylicTheme = SystemTheme::Auto;
+                acrylicBrushTheme = SystemTheme::Auto;
             } else {
                 print_p(MessageType::Error, L"Failed to switch acrylic brush theme.", false);
             }
@@ -1231,7 +1367,7 @@ static inline LRESULT CALLBACK dragBarWindowProc(HWND hWnd, UINT uMsg, WPARAM wP
         print_p(MessageType::Error, L"Failed to change acrylic brush's theme.", false);
         return false;
     }
-    acrylicTheme = SystemTheme::Auto;
+    acrylicBrushTheme = SystemTheme::Auto;
     acrylicBrush.BackgroundSource(winrt::Windows::UI::Xaml::Media::AcrylicBackgroundSource::HostBackdrop);
     rootGrid = {};
     rootGrid.Background(acrylicBrush);
@@ -1762,14 +1898,54 @@ HWND AcrylicApplication::getHandle() const
     return mainWindowHandle;
 }
 
-SystemTheme AcrylicApplication::getTheme() const
+SystemTheme AcrylicApplication::getAcrylicBrushTheme() const
 {
-    return acrylicTheme;
+    return acrylicBrushTheme;
 }
 
-bool AcrylicApplication::setTheme(const SystemTheme theme) const
+bool AcrylicApplication::setAcrylicBrushTheme(const SystemTheme theme) const
 {
     return switchAcrylicBrushTheme_p(theme);
+}
+
+bool AcrylicApplication::getTintColor(int *r, int *g, int *b, int *a) const
+{
+    return getTintColor_p(r, g, b, a);
+}
+
+bool AcrylicApplication::setTintColor(const int r, const int g, const int b, const int a) const
+{
+    return setTintColor_p(r, g, b, a);
+}
+
+bool AcrylicApplication::getTintOpacity(double *opacity) const
+{
+    return getTintOpacity_p(opacity);
+}
+
+bool AcrylicApplication::setTintOpacity(const double opacity) const
+{
+    return setTintOpacity_p(opacity);
+}
+
+bool AcrylicApplication::getTintLuminosityOpacity(double *opacity) const
+{
+    return getTintLuminosityOpacity_p(opacity);
+}
+
+bool AcrylicApplication::setTintLuminosityOpacity(const double opacity) const
+{
+    return setTintLuminosityOpacity_p(opacity);
+}
+
+bool AcrylicApplication::getFallbackColor(int *r, int *g, int *b, int *a) const
+{
+    return getFallbackColor_p(r, g, b, a);
+}
+
+bool AcrylicApplication::setFallbackColor(const int r, const int g, const int b, const int a) const
+{
+    return setFallbackColor_p(r, g, b, a);
 }
 
 int AcrylicApplication::exec()

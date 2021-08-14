@@ -39,7 +39,6 @@ set(SOURCES
     acrylicapplication.rc
     acrylicapplication_global.h
     runtimeobject.cpp
-    resource.h
     acrylicapplication.h
     acrylicapplication_p.h
     acrylicapplication.cpp

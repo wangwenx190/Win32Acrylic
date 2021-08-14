@@ -52,7 +52,6 @@
 #include "acrylicapplication_global.h"
 #include "acrylicapplication.h"
 #include "acrylicapplication_p.h"
-#include "resource.h"
 
 #ifndef HINST_THISCOMPONENT
 EXTERN_C IMAGE_DOS_HEADER __ImageBase;
@@ -1469,7 +1468,6 @@ bool compareSystemVersion(const WindowsVersion ver,
     wcex.hCursor = LoadCursorW(nullptr, IDC_ARROW);
     wcex.hbrBackground = reinterpret_cast<HBRUSH>(COLOR_WINDOW + 1);
     wcex.lpszClassName = mainWindowClassName;
-    wcex.hIcon = LoadIconW(HINST_THISCOMPONENT, MAKEINTRESOURCEW(IDI_APPLICATIONICON));
 
     mainWindowAtom = RegisterClassExW(&wcex);
 

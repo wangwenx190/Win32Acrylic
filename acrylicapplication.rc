@@ -25,7 +25,7 @@
 #include <Windows.h>
 #include "resource.h"
 
-IDI_APPLICATIONICON ICON "acrylicapplication.ico"
+101 ICON "acrylicapplication.ico"
 
 VS_VERSION_INFO VERSIONINFO
 FILEVERSION     1,0,0,0

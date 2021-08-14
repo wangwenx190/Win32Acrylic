@@ -67,6 +67,14 @@ EXTERN_C IMAGE_DOS_HEADER __ImageBase;
 #define ABM_GETAUTOHIDEBAREX (0x0000000b)
 #endif
 
+#ifndef WM_DWMCOMPOSITIONCHANGED
+#define WM_DWMCOMPOSITIONCHANGED (0x031E)
+#endif
+
+#ifndef WM_DWMCOLORIZATIONCOLORCHANGED
+#define WM_DWMCOLORIZATIONCOLORCHANGED (0x0320)
+#endif
+
 #ifndef WM_DPICHANGED
 #define WM_DPICHANGED (0x02E0)
 #endif
@@ -582,6 +590,7 @@ static inline void print_p(const MessageType type, LPCWSTR text, const bool show
 
 static inline LRESULT CALLBACK mainWindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
+    bool systemThemeChanged = false;
     switch (uMsg)
     {
     case WM_NCCALCSIZE: {
@@ -868,6 +877,22 @@ static inline LRESULT CALLBACK mainWindowProc(HWND hWnd, UINT uMsg, WPARAM wPara
             }
         }
     } break;
+    case WM_SETTINGCHANGE: {
+        if ((wParam == 0) && (wcscmp(reinterpret_cast<LPCWSTR>(lParam), L"ImmersiveColorSet") == 0)) {
+            systemThemeChanged = true;
+        }
+    } break;
+    case WM_THEMECHANGED:
+    case WM_DWMCOLORIZATIONCOLORCHANGED:
+        systemThemeChanged = true;
+        break;
+    case WM_DWMCOMPOSITIONCHANGED: {
+        if (!Private::isCompositionEnabled()) {
+            print_p(MessageType::Error, L"This application can't continue running when "
+                                         "DWM composition is disabled.", true);
+            std::exit(-1);
+        }
+    } break;
     case WM_CLOSE: {
         if (dragBarWindowHandle) {
             DestroyWindow(dragBarWindowHandle);
@@ -895,6 +920,19 @@ static inline LRESULT CALLBACK mainWindowProc(HWND hWnd, UINT uMsg, WPARAM wPara
     }
     default:
         break;
+    }
+    if (acrylicBrush && (acrylicTheme == SystemTheme::Auto) && systemThemeChanged) {
+        const SystemTheme systemTheme = getSystemTheme_p();
+        if (systemTheme != SystemTheme::Invalid) {
+            if (switchAcrylicBrushTheme_p(systemTheme)) {
+                acrylicTheme = SystemTheme::Auto;
+            } else {
+                print_p(MessageType::Error, L"Failed to switch acrylic brush theme.", false);
+            }
+        } else {
+            print_p(MessageType::Error,
+                    L"Failed to retrieve system theme or high contrast mode is on.", false);
+        }
     }
     return DefWindowProcW(hWnd, uMsg, wParam, lParam);
 }

@@ -69,26 +69,19 @@ enum class VersionCompare : int
     GreaterOrEqual
 };
 
-namespace Private
-{
-
-[[nodiscard]] UINT getWindowDpi(const HWND hWnd);
-[[nodiscard]] bool isWindowMinimized(const HWND hWnd);
-[[nodiscard]] bool isWindowMaximized(const HWND hWnd);
-[[nodiscard]] bool isWindowFullScreened(const HWND hWnd);
-[[nodiscard]] bool isWindowNoState(const HWND hWnd);
-[[nodiscard]] bool isWindowVisible(const HWND hWnd);
-[[nodiscard]] bool isWindowHidden(const HWND hWnd);
-[[nodiscard]] double getDevicePixelRatio(const UINT dpi);
-[[nodiscard]] int getResizeBorderThickness(const bool x, const UINT dpi);
-[[nodiscard]] int getCaptionHeight(const UINT dpi);
-[[nodiscard]] int getTitleBarHeight(const HWND hWnd, const UINT dpi);
-[[nodiscard]] RECT getScreenGeometry(const HWND hWnd);
-[[nodiscard]] RECT getScreenAvailableGeometry(const HWND hWnd);
-[[nodiscard]] bool isCompositionEnabled();
-[[nodiscard]] bool triggerFrameChange(const HWND hWnd);
-[[nodiscard]] bool setWindowTransitionsEnabled(const HWND hWnd, const bool enable);
-[[nodiscard]] bool openSystemMenu(const HWND hWnd, const POINT pos);
-[[nodiscard]] bool compareSystemVersion(const WindowsVersion ver, const VersionCompare comp);
-
-}
+[[nodiscard]] UINT getWindowDpi_p(const HWND hWnd);
+[[nodiscard]] bool isWindowMinimized_p(const HWND hWnd);
+[[nodiscard]] bool isWindowMaximized_p(const HWND hWnd);
+[[nodiscard]] bool isWindowFullScreened_p(const HWND hWnd);
+[[nodiscard]] bool isWindowNoState_p(const HWND hWnd);
+[[nodiscard]] bool isWindowVisible_p(const HWND hWnd);
+[[nodiscard]] int getResizeBorderThickness_p(const bool x, const UINT dpi);
+[[nodiscard]] int getCaptionHeight_p(const UINT dpi);
+[[nodiscard]] int getTitleBarHeight_p(const HWND hWnd, const UINT dpi);
+[[nodiscard]] RECT getScreenGeometry_p(const HWND hWnd);
+[[nodiscard]] RECT getScreenAvailableGeometry_p(const HWND hWnd);
+[[nodiscard]] bool isCompositionEnabled_p();
+[[nodiscard]] bool triggerFrameChange_p(const HWND hWnd);
+[[nodiscard]] bool setWindowTransitionsEnabled_p(const HWND hWnd, const bool enable);
+[[nodiscard]] bool openSystemMenu_p(const HWND hWnd, const POINT pos);
+[[nodiscard]] bool compareSystemVersion_p(const WindowsVersion ver, const VersionCompare comp);

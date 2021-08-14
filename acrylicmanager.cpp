@@ -1589,36 +1589,25 @@ static inline void cleanup_p()
         return false;
     }
 
-    const auto cleanup = []() {
-        if (dragBarWindowHandle) {
-            DestroyWindow(dragBarWindowHandle);
-            dragBarWindowHandle = nullptr;
-        }
-        if (dragBarWindowAtom != static_cast<ATOM>(0)) {
-            UnregisterClassW(dragBarWindowClassName, HINST_THISCOMPONENT);
-            dragBarWindowAtom = 0;
-        }
-    };
-
     // Layered window won't be visible until we call SetLayeredWindowAttributes()
     // or UpdateLayeredWindow().
     if (SetLayeredWindowAttributes(dragBarWindowHandle, RGB(0, 0, 0), 255, LWA_ALPHA) == FALSE) {
         print_p(L"SetLayeredWindowAttributes() failed.");
-        cleanup();
+        cleanup_p();
         return false;
     }
 
     RECT rect = {0, 0, 0, 0};
     if (GetClientRect(mainWindowHandle, &rect) == FALSE) {
         print_p(L"Failed to retrieve client rect of main window.");
-        cleanup();
+        cleanup_p();
         return false;
     }
     if (SetWindowPos(dragBarWindowHandle, HWND_TOP, 0, 0, rect.right,
                  getTitleBarHeight_p(mainWindowHandle, mainWindowDpi),
                  SWP_NOACTIVATE | SWP_SHOWWINDOW | SWP_NOOWNERZORDER) == FALSE) {
         print_p(L"Failed to move drag bar window.");
-        cleanup();
+        cleanup_p();
         return false;
     }
 
@@ -1806,7 +1795,7 @@ bool setWindowState(const WindowState state)
     return setWindowState_p(state);
 }
 
-bool destroyWindow()
+bool release()
 {
     cleanup_p();
     return true;

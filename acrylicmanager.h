@@ -61,7 +61,7 @@ EXTERN_C_START
 [[nodiscard]] ACRYLICMANAGER_API bool WINAPI centerWindow();
 [[nodiscard]] ACRYLICMANAGER_API WindowState WINAPI getWindowState();
 [[nodiscard]] ACRYLICMANAGER_API bool WINAPI setWindowState(const WindowState state);
-[[nodiscard]] ACRYLICMANAGER_API bool WINAPI destroyWindow();
+[[nodiscard]] ACRYLICMANAGER_API bool WINAPI release();
 [[nodiscard]] ACRYLICMANAGER_API HWND WINAPI getWindowHandle();
 [[nodiscard]] ACRYLICMANAGER_API SystemTheme WINAPI getAcrylicBrushTheme();
 [[nodiscard]] ACRYLICMANAGER_API bool WINAPI setAcrylicBrushTheme(const SystemTheme theme);

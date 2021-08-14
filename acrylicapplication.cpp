@@ -1371,11 +1371,6 @@ static inline LRESULT CALLBACK dragBarWindowProc(HWND hWnd, UINT uMsg, WPARAM wP
     //rootGrid.UpdateLayout();
     xamlSource.Content(rootGrid);
 
-    if (UpdateWindow(xamlIslandHandle) == FALSE) {
-        print_p(MessageType::Error, L"Failed to update XAML Island window.", false);
-        return false;
-    }
-
     return true;
 }
 

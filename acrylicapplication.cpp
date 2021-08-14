@@ -344,12 +344,14 @@ static inline void print_p(const MessageType type, LPCWSTR text, const bool show
     }
     const HMONITOR mon = CURRENT_SCREEN(hWnd);
     if (!mon) {
+        print_p(MessageType::Error, L"Failed to retrieve current screen.", false);
         return {};
     }
     MONITORINFO mi;
     SecureZeroMemory(&mi, sizeof(mi));
     mi.cbSize = sizeof(mi);
     if (GetMonitorInfoW(mon, &mi) == FALSE) {
+        print_p(MessageType::Error, L"Failed to retrieve monitor information.", false);
         return {};
     }
     return mi;
@@ -375,41 +377,38 @@ static inline void print_p(const MessageType type, LPCWSTR text, const bool show
     SecureZeroMemory(&hc, sizeof(hc));
     hc.cbSize = sizeof(hc);
     if (SystemParametersInfoW(SPI_GETHIGHCONTRAST, 0, &hc, 0) == FALSE) {
+        print_p(MessageType::Error, L"Failed to retrieve high contrast mode state.", false);
         return SystemTheme::Invalid;
     }
     if (hc.dwFlags & HCF_HIGHCONTRASTON) {
+        print_p(MessageType::Warning, L"High contrast mode is on.", false);
         return SystemTheme::HighContrast;
     }
     // Dark mode was first introduced in Windows 10 1607.
     if (Private::compareSystemVersion(WindowsVersion::Windows10_1607, VersionCompare::GreaterOrEqual)) {
         static bool tried = false;
         using sig = BOOL(WINAPI *)();
-        static sig ShouldAppsUseDarkMode = nullptr;
         static sig ShouldSystemUseDarkMode = nullptr;
-        if (!ShouldAppsUseDarkMode || !ShouldSystemUseDarkMode) {
+        if (!ShouldSystemUseDarkMode) {
             if (tried) {
                 return SystemTheme::Invalid;
             } else {
                 tried = true;
                 const HMODULE dll = LoadLibraryExW(L"UxTheme.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
                 if (!dll) {
-                    print_p(MessageType::Error, L"Failed to load UxTheme.dll.", true);
+                    print_p(MessageType::Error, L"Failed to load UxTheme.dll.", false);
                     return SystemTheme::Invalid;
                 }
-                if (!ShouldAppsUseDarkMode) {
-                    ShouldAppsUseDarkMode = reinterpret_cast<sig>(GetProcAddress(dll, MAKEINTRESOURCEA(132)));
-                    if (ShouldAppsUseDarkMode) {
-                        return ((ShouldAppsUseDarkMode() == FALSE) ? SystemTheme::Light : SystemTheme::Dark);
-                    }
-                }
+                ShouldSystemUseDarkMode = reinterpret_cast<sig>(GetProcAddress(dll, MAKEINTRESOURCEA(138)));
                 if (!ShouldSystemUseDarkMode) {
-                    ShouldSystemUseDarkMode = reinterpret_cast<sig>(GetProcAddress(dll, MAKEINTRESOURCEA(138)));
-                    if (ShouldSystemUseDarkMode) {
-                        return ((ShouldSystemUseDarkMode() == FALSE) ? SystemTheme::Light : SystemTheme::Dark);
-                    }
+                    print_p(MessageType::Error, L"Failed to resolve ShouldSystemUseDarkMode().", false);
+                    return SystemTheme::Invalid;
                 }
             }
         }
+        return ((ShouldSystemUseDarkMode() == FALSE) ? SystemTheme::Light : SystemTheme::Dark);
+    } else {
+        print_p(MessageType::Warning, L"Current system version doesn't support dark mode.", false);
     }
     return SystemTheme::Invalid;
 }
@@ -421,6 +420,7 @@ static inline void print_p(const MessageType type, LPCWSTR text, const bool show
     }
     RECT geo = {0, 0, 0, 0};
     if (GetWindowRect(mainWindowHandle, &geo) == FALSE) {
+        print_p(MessageType::Error, L"Failed to retrieve window rect of main window.", false);
         return {};
     }
     return geo;
@@ -452,6 +452,7 @@ static inline void print_p(const MessageType type, LPCWSTR text, const bool show
         return false;
     }
     if ((w <= 0) || (h <= 0)) {
+        print_p(MessageType::Error, L"Can't resize window to empty or negative size.", false);
         return false;
     }
     const RECT geo = getWindowGeometry_p();
@@ -466,6 +467,7 @@ static inline void print_p(const MessageType type, LPCWSTR text, const bool show
     }
     RECT windowRect = {0, 0, 0, 0};
     if (GetWindowRect(mainWindowHandle, &windowRect) == FALSE) {
+        print_p(MessageType::Error, L"Failed to retrieve window rect of main window.", false);
         return false;
     }
     const int windowWidth = RECT_WIDTH(windowRect);
@@ -549,12 +551,13 @@ static inline void print_p(const MessageType type, LPCWSTR text, const bool show
     return true;
 }
 
-[[nodiscard]] static inline bool setAcrylicTheme_p(const SystemTheme theme)
+[[nodiscard]] static inline bool switchAcrylicBrushTheme_p(const SystemTheme theme)
 {
     if (!acrylicBrush) {
         return false;
     }
     if (theme == SystemTheme::Invalid) {
+        print_p(MessageType::Error, L"The given theme type is not valid.", false);
         return false;
     }
     if (theme == SystemTheme::Light) {
@@ -680,6 +683,8 @@ static inline LRESULT CALLBACK mainWindowProc(HWND hWnd, UINT uMsg, WPARAM wPara
         }
         POINT pos = {GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)};
         if (ScreenToClient(hWnd, &pos) == FALSE) {
+            print_p(MessageType::Error, L"WM_NCHITTEST: Failed to translate screen "
+                    "coordinates to client coordinates.", false);
             break;
         }
         const int rbtY = Private::getResizeBorderThickness(false, mainWindowDpi);
@@ -704,6 +709,7 @@ static inline LRESULT CALLBACK mainWindowProc(HWND hWnd, UINT uMsg, WPARAM wPara
         PAINTSTRUCT ps = {};
         const HDC hdc = BeginPaint(hWnd, &ps);
         if (!hdc) {
+            print_p(MessageType::Error, L"WM_PAINT: BeginPaint() returns null.", false);
             break;
         }
         // We removed the whole top part of the frame (see handling of
@@ -731,6 +737,7 @@ static inline LRESULT CALLBACK mainWindowProc(HWND hWnd, UINT uMsg, WPARAM wPara
             // BLACK_BRUSH to do this:
             // https://docs.microsoft.com/en-us/windows/win32/dwm/customframe#extending-the-client-frame
             if (FillRect(hdc, &rcTopBorder, BACKGROUND_BRUSH) == 0) {
+                print_p(MessageType::Error, L"WM_PAINT: FillRect() returns zero.", false);
                 break;
             }
         }
@@ -747,20 +754,25 @@ static inline LRESULT CALLBACK mainWindowProc(HWND hWnd, UINT uMsg, WPARAM wPara
             params.dwFlags = BPPF_NOCLIP | BPPF_ERASE;
             const HPAINTBUFFER buf = BeginBufferedPaint(hdc, &rcRest, BPBF_TOPDOWNDIB, &params, &opaqueDc);
             if (!buf) {
+                print_p(MessageType::Error, L"WM_PAINT: BeginBufferedPaint() returns null.", false);
                 break;
             }
             if (FillRect(opaqueDc, &rcRest,
                          reinterpret_cast<HBRUSH>(GetClassLongPtrW(hWnd, GCLP_HBRBACKGROUND))) == 0) {
+                print_p(MessageType::Error, L"WM_PAINT: FillRect() returns zero.", false);
                 break;
             }
             if (FAILED(BufferedPaintSetAlpha(buf, nullptr, 255))) {
+                print_p(MessageType::Error, L"WM_PAINT: BufferedPaintSetAlpha() failed.", false);
                 break;
             }
             if (FAILED(EndBufferedPaint(buf, TRUE))) {
+                print_p(MessageType::Error, L"WM_PAINT: EndBufferedPaint() failed.", false);
                 break;
             }
         }
         if (EndPaint(hWnd, &ps) == FALSE) {
+            print_p(MessageType::Error, L"WM_PAINT: EndPaint() returns FALSE.", false);
             break;
         }
         return 0;
@@ -769,9 +781,12 @@ static inline LRESULT CALLBACK mainWindowProc(HWND hWnd, UINT uMsg, WPARAM wPara
         const double x = LOWORD(wParam);
         const double y = HIWORD(wParam);
         mainWindowDpi = std::round((x + y) / 2.0);
+        print_p(MessageType::Information, L"WM_DPICHANGED: New DPI: ", false);
         const auto prcNewWindow = reinterpret_cast<LPRECT>(lParam);
         if (MoveWindow(hWnd, prcNewWindow->left, prcNewWindow->top,
                    RECT_WIDTH(*prcNewWindow), RECT_HEIGHT(*prcNewWindow), TRUE) == FALSE) {
+            print_p(MessageType::Error,
+                    L"WM_DPICHANGED: Failed to move window to new position and size.", false);
             break;
         }
         return 0;
@@ -780,6 +795,7 @@ static inline LRESULT CALLBACK mainWindowProc(HWND hWnd, UINT uMsg, WPARAM wPara
         if ((wParam == SIZE_MAXIMIZED) || (wParam == SIZE_RESTORED)
                 || Private::isWindowFullScreened(mainWindowHandle)) {
             if (!updateFrameMargins_p(hWnd, mainWindowDpi)) {
+                print_p(MessageType::Error, L"WM_SIZE: Failed to update frame margins.", false);
                 break;
             }
         }
@@ -791,9 +807,11 @@ static inline LRESULT CALLBACK mainWindowProc(HWND hWnd, UINT uMsg, WPARAM wPara
             const int height = (HIWORD(lParam) - topMargin);
             if (SetWindowPos(xamlIslandHandle, HWND_BOTTOM, 0, topMargin,
                          width, height, flags) == FALSE) {
+                print_p(MessageType::Error, L"WM_SIZE: Failed to move XAML Island window.", false);
                 break;
             }
             if (rootGrid) {
+                // todo: check
                 rootGrid.Width(width);
                 rootGrid.Height(height);
             }
@@ -801,6 +819,7 @@ static inline LRESULT CALLBACK mainWindowProc(HWND hWnd, UINT uMsg, WPARAM wPara
         if (dragBarWindowHandle) {
             if (SetWindowPos(dragBarWindowHandle, HWND_TOP, 0, 0, width,
                          Private::getTitleBarHeight(hWnd, mainWindowDpi), flags) == FALSE) {
+                print_p(MessageType::Error, L"WM_SIZE: Failed to move drag bar window.", false);
                 break;
             }
         }
@@ -844,23 +863,16 @@ static inline LRESULT CALLBACK mainWindowProc(HWND hWnd, UINT uMsg, WPARAM wPara
         // reason so we have to do it ourselves.
         if (wParam == HTCAPTION) {
             if (!Private::openSystemMenu(hWnd, {GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)})) {
+                print_p(MessageType::Error, L"WM_NCRBUTTONUP: Failed to open the system menu.", false);
                 break;
             }
         }
     } break;
-    case WM_ERASEBKGND:
-        return 1;
     case WM_CLOSE: {
         if (dragBarWindowHandle) {
             DestroyWindow(dragBarWindowHandle);
             dragBarWindowHandle = nullptr;
         }
-#if 0
-        if (xamlIslandHandle) {
-            DestroyWindow(xamlIslandHandle);
-            xamlIslandHandle = nullptr;
-        }
-#endif
         DestroyWindow(hWnd);
         mainWindowHandle = nullptr;
         return 0;
@@ -938,6 +950,9 @@ static inline LRESULT CALLBACK dragBarWindowProc(HWND hWnd, UINT uMsg, WPARAM wP
     {
         POINT pos = {GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)};
         if (ClientToScreen(hWnd, &pos) == FALSE) {
+            print_p(MessageType::Error,
+                    L"dragBarWindowProc: Failed to translate client coordinates"
+                     " to screen coordinates.", false);
             return 0;
         }
         const LPARAM newLParam = MAKELPARAM(pos.x, pos.y);
@@ -973,9 +988,11 @@ static inline LRESULT CALLBACK dragBarWindowProc(HWND hWnd, UINT uMsg, WPARAM wP
 [[nodiscard]] static inline bool registerDragBarWindowClass_p()
 {
     if (Private::compareSystemVersion(WindowsVersion::Windows8, VersionCompare::Less)) {
+        print_p(MessageType::Error, L"Drag bar window is only available on Windows 8 and onwards.", false);
         return false;
     }
     if (!mainWindowHandle) {
+        print_p(MessageType::Error, L"Main window has not been created.", false);
         return false;
     }
 
@@ -998,12 +1015,13 @@ static inline LRESULT CALLBACK dragBarWindowProc(HWND hWnd, UINT uMsg, WPARAM wP
 [[nodiscard]] static inline bool createMainWindow_p(const int x, const int y, const int w, const int h)
 {
     if (mainWindowAtom == static_cast<ATOM>(0)) {
+        print_p(MessageType::Error, L"Main window class has not been registered.", false);
         return false;
     }
 
-    mainWindowHandle = CreateWindowExW(WS_EX_OVERLAPPEDWINDOW,
+    mainWindowHandle = CreateWindowExW(0L,
                                        mainWindowClassName, mainWindowTitle,
-                                       WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN | WS_CLIPSIBLINGS,
+                                       WS_OVERLAPPEDWINDOW,
                                        ((x > 0) ? x : CW_USEDEFAULT),
                                        ((y > 0) ? y : CW_USEDEFAULT),
                                        ((w > 0) ? w : CW_USEDEFAULT),
@@ -1011,10 +1029,14 @@ static inline LRESULT CALLBACK dragBarWindowProc(HWND hWnd, UINT uMsg, WPARAM wP
                                        nullptr, nullptr, HINST_THISCOMPONENT, nullptr);
 
     if (!mainWindowHandle) {
+        print_p(MessageType::Error, L"Failed to create main window.", false);
         return false;
     }
 
     mainWindowDpi = Private::getWindowDpi(mainWindowHandle);
+    if (mainWindowDpi == 0) {
+        mainWindowDpi = USER_DEFAULT_SCREEN_DPI;
+    }
 
     const auto cleanup = []() {
         if (mainWindowHandle) {
@@ -1027,31 +1049,22 @@ static inline LRESULT CALLBACK dragBarWindowProc(HWND hWnd, UINT uMsg, WPARAM wP
         }
     };
 
-    ShowWindow(mainWindowHandle, SW_SHOW);
-    if (UpdateWindow(mainWindowHandle) == FALSE) {
-        cleanup();
-        return false;
-    }
-
     // Ensure DWM still draws the top frame by extending the top frame.
     // This also ensures our window still has the frame shadow drawn by DWM.
     if (!updateFrameMargins_p(mainWindowHandle, mainWindowDpi)) {
+        print_p(MessageType::Error, L"Failed to update main window's frame margins.", false);
         cleanup();
         return false;
     }
     // Force a WM_NCCALCSIZE processing to make the window become frameless immediately.
     if (!Private::triggerFrameChange(mainWindowHandle)) {
+        print_p(MessageType::Error, L"Failed to trigger frame change event for main window.", false);
         cleanup();
         return false;
     }
     // Ensure our window still has window transitions.
     if (!Private::setWindowTransitionsEnabled(mainWindowHandle, true)) {
-        cleanup();
-        return false;
-    }
-
-    if (RedrawWindow(mainWindowHandle, nullptr, nullptr,
-                 RDW_ERASE | RDW_FRAME | RDW_INVALIDATE | RDW_UPDATENOW) == FALSE) {
+        print_p(MessageType::Error, L"Failed to enable window transitions for main window.", false);
         cleanup();
         return false;
     }
@@ -1063,12 +1076,15 @@ static inline LRESULT CALLBACK dragBarWindowProc(HWND hWnd, UINT uMsg, WPARAM wP
 {
     // Please refer to the "IMPORTANT NOTE" section below.
     if (Private::compareSystemVersion(WindowsVersion::Windows8, VersionCompare::Less)) {
+        print_p(MessageType::Error, L"Drag bar window is only available on Windows 8 and onwards.", false);
         return false;
     }
     if (dragBarWindowAtom == static_cast<ATOM>(0)) {
+        print_p(MessageType::Error, L"Drag bar window class has not been created.", false);
         return false;
     }
     if (!mainWindowHandle) {
+        print_p(MessageType::Error, L"Main window has not been created.", false);
         return false;
     }
 
@@ -1082,11 +1098,12 @@ static inline LRESULT CALLBACK dragBarWindowProc(HWND hWnd, UINT uMsg, WPARAM wP
     // WS_EX_LAYERED only for top-level windows.
     dragBarWindowHandle = CreateWindowExW(WS_EX_LAYERED | WS_EX_NOREDIRECTIONBITMAP,
                                           dragBarWindowClassName, dragBarWindowTitle,
-                                          WS_CHILD | WS_CLIPCHILDREN | WS_CLIPSIBLINGS,
+                                          WS_CHILD,
                                           CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
                                           mainWindowHandle, nullptr, HINST_THISCOMPONENT, nullptr);
 
     if (!dragBarWindowHandle) {
+        print_p(MessageType::Error, L"Failed to create drag bar window.", false);
         return false;
     }
 
@@ -1104,24 +1121,21 @@ static inline LRESULT CALLBACK dragBarWindowProc(HWND hWnd, UINT uMsg, WPARAM wP
     // Layered window won't be visible until we call SetLayeredWindowAttributes()
     // or UpdateLayeredWindow().
     if (SetLayeredWindowAttributes(dragBarWindowHandle, RGB(0, 0, 0), 255, LWA_ALPHA) == FALSE) {
+        print_p(MessageType::Error, L"SetLayeredWindowAttributes() failed.", false);
         cleanup();
         return false;
     }
 
     RECT rect = {0, 0, 0, 0};
     if (GetClientRect(mainWindowHandle, &rect) == FALSE) {
+        print_p(MessageType::Error, L"Failed to retrieve client rect of main window.", false);
         cleanup();
         return false;
     }
     if (SetWindowPos(dragBarWindowHandle, HWND_TOP, 0, 0, rect.right,
                  Private::getTitleBarHeight(mainWindowHandle, mainWindowDpi),
                  SWP_NOACTIVATE | SWP_SHOWWINDOW | SWP_NOOWNERZORDER) == FALSE) {
-        cleanup();
-        return false;
-    }
-
-    ShowWindow(dragBarWindowHandle, SW_SHOW);
-    if (UpdateWindow(dragBarWindowHandle) == FALSE) {
+        print_p(MessageType::Error, L"Failed to move drag bar window.", false);
         cleanup();
         return false;
     }
@@ -1133,13 +1147,16 @@ static inline LRESULT CALLBACK dragBarWindowProc(HWND hWnd, UINT uMsg, WPARAM wP
 {
     // XAML Island is only supported on Windows 10 19H1 and onwards.
     if (Private::compareSystemVersion(WindowsVersion::Windows10_19H1, VersionCompare::Less)) {
+        print_p(MessageType::Error, L"XAML Island is only supported on Windows 10 19H1 and onwards.", false);
         return false;
     }
     if (!mainWindowHandle) {
+        print_p(MessageType::Error, L"Main window has not been created.", false);
         return false;
     }
     const SystemTheme systemTheme = getSystemTheme_p();
     if (systemTheme == SystemTheme::Invalid) {
+        print_p(MessageType::Error, L"Failed to retrieve system theme or high contrast mode is on.", false);
         return false;
     }
 
@@ -1148,16 +1165,19 @@ static inline LRESULT CALLBACK dragBarWindowProc(HWND hWnd, UINT uMsg, WPARAM wP
     xamlSource = {};
     const auto interop = xamlSource.as<IDesktopWindowXamlSourceNative>();
     if (!interop) {
+        print_p(MessageType::Error, L"Failed to retrieve IDesktopWindowXamlSourceNative.", false);
         return false;
     }
     winrt::check_hresult(interop->AttachToWindow(mainWindowHandle));
     winrt::check_hresult(interop->get_WindowHandle(&xamlIslandHandle));
     if (!xamlIslandHandle) {
+        print_p(MessageType::Error, L"Failed to retrieve XAML Island window handle.", false);
         return false;
     }
     // Update the XAML Island window size because initially it is 0x0.
     RECT rect = {0, 0, 0, 0};
     if (GetClientRect(mainWindowHandle, &rect) == FALSE) {
+        print_p(MessageType::Error, L"Failed to retrieve client rect of main window.", false);
         return false;
     }
     // Give enough space to our thin homemade top border.
@@ -1165,24 +1185,22 @@ static inline LRESULT CALLBACK dragBarWindowProc(HWND hWnd, UINT uMsg, WPARAM wP
     if (SetWindowPos(xamlIslandHandle, HWND_BOTTOM, 0,
                  topMargin, rect.right, (rect.bottom - topMargin),
                      SWP_NOACTIVATE | SWP_SHOWWINDOW | SWP_NOOWNERZORDER) == FALSE) {
+        print_p(MessageType::Error, L"Failed to move XAML Island window.", false);
         return false;
     }
     acrylicBrush = {};
-    acrylicBrush.BackgroundSource(winrt::Windows::UI::Xaml::Media::AcrylicBackgroundSource::HostBackdrop);
-    if (!setAcrylicTheme_p(systemTheme)) {
+    if (!switchAcrylicBrushTheme_p((systemTheme == SystemTheme::Auto) ? SystemTheme::Default : systemTheme)) {
+        print_p(MessageType::Error, L"Failed to change acrylic brush's theme.", false);
         return false;
     }
+    acrylicTheme = SystemTheme::Auto;
+    acrylicBrush.BackgroundSource(winrt::Windows::UI::Xaml::Media::AcrylicBackgroundSource::HostBackdrop);
     rootGrid = {};
     rootGrid.Background(acrylicBrush);
     //rootGrid.Children().Clear();
     //rootGrid.Children().Append(/* some UWP control */);
     //rootGrid.UpdateLayout();
     xamlSource.Content(rootGrid);
-
-    ShowWindow(xamlIslandHandle, SW_SHOW);
-    if (UpdateWindow(xamlIslandHandle) == FALSE) {
-        return false;
-    }
 
     return true;
 }
@@ -1191,6 +1209,7 @@ static inline LRESULT CALLBACK dragBarWindowProc(HWND hWnd, UINT uMsg, WPARAM wP
 {
     static bool tried = false;
     if (tried) {
+        print_p(MessageType::Error, L"Acrylic application has been initialized already.", false);
         return false;
     }
     tried = true;
@@ -1220,7 +1239,7 @@ static inline LRESULT CALLBACK dragBarWindowProc(HWND hWnd, UINT uMsg, WPARAM wP
                 return false;
             }
         } else {
-            print_p(MessageType::Warning, L"XAML Island applications are only supported from Windows 10 19H1.", true);
+            print_p(MessageType::Warning, L"XAML Island is only supported on Windows 10 19H1 and onwards.", true);
             //return false;
         }
     } else {
@@ -1340,12 +1359,15 @@ int Private::getTitleBarHeight(const HWND hWnd, const UINT dpi)
     int titleBarHeight = 0;
     if (hWnd) {
         RECT frame = {0, 0, 0, 0};
-        AdjustWindowRectExForDpi(&frame,
+        if (AdjustWindowRectExForDpi(&frame,
                                  (static_cast<DWORD>(GetWindowLongPtrW(hWnd, GWL_STYLE)) & ~WS_OVERLAPPED),
                                  FALSE,
                                  static_cast<DWORD>(GetWindowLongPtrW(hWnd, GWL_EXSTYLE)),
-                                 _dpi);
-        titleBarHeight = std::abs(frame.top);
+                                 _dpi) == FALSE) {
+            print_p(MessageType::Error, L"AdjustWindowRectExForDpi() failed.", false);
+        } else {
+            titleBarHeight = std::abs(frame.top);
+        }
     }
     if (titleBarHeight <= 0) {
         titleBarHeight = getResizeBorderThickness(false, _dpi) + getCaptionHeight(_dpi);
@@ -1389,6 +1411,7 @@ bool Private::isWindowFullScreened(const HWND hWnd)
     }
     RECT windowRect = {0, 0, 0, 0};
     if (GetWindowRect(hWnd, &windowRect) == FALSE) {
+        print_p(MessageType::Error, L"Failed to retrieve window rect of main window.", false);
         return false;
     }
     const RECT screenRect = getScreenGeometry(hWnd);
@@ -1407,6 +1430,7 @@ bool Private::isWindowNoState(const HWND hWnd)
     SecureZeroMemory(&wp, sizeof(wp));
     wp.length = sizeof(wp);
     if (GetWindowPlacement(hWnd, &wp) == FALSE) {
+        print_p(MessageType::Error, L"Failed to retrieve window placement of main window.", false);
         return false;
     }
     return (wp.showCmd == SW_NORMAL);
@@ -1454,6 +1478,7 @@ bool Private::openSystemMenu(const HWND hWnd, const POINT pos)
     }
     const HMENU menu = GetSystemMenu(hWnd, FALSE);
     if (!menu) {
+        print_p(MessageType::Error, L"Failed to retrieve system menu of main window.", false);
         return false;
     }
     // Update the options based on window state.
@@ -1468,30 +1493,38 @@ bool Private::openSystemMenu(const HWND hWnd, const POINT pos)
     };
     const bool isMaximized = isWindowMaximized(hWnd);
     if (!setState(SC_RESTORE, isMaximized)) {
+        print_p(MessageType::Error, L"Failed to change menu item state.", false);
         return false;
     }
     if (!setState(SC_MOVE, !isMaximized)) {
+        print_p(MessageType::Error, L"Failed to change menu item state.", false);
         return false;
     }
     if (!setState(SC_SIZE, !isMaximized)) {
+        print_p(MessageType::Error, L"Failed to change menu item state.", false);
         return false;
     }
     if (!setState(SC_MINIMIZE, true)) {
+        print_p(MessageType::Error, L"Failed to change menu item state.", false);
         return false;
     }
     if (!setState(SC_MAXIMIZE, !isMaximized)) {
+        print_p(MessageType::Error, L"Failed to change menu item state.", false);
         return false;
     }
     if (!setState(SC_CLOSE, true)) {
+        print_p(MessageType::Error, L"Failed to change menu item state.", false);
         return false;
     }
     if (SetMenuDefaultItem(menu, UINT_MAX, FALSE) == FALSE) {
+        print_p(MessageType::Error, L"Failed to set default menu item.", false);
         return false;
     }
     // ### TODO: support LTR layout.
     const auto ret = TrackPopupMenu(menu, TPM_RETURNCMD, pos.x, pos.y, 0, hWnd, nullptr);
     if (ret != 0) {
         if (PostMessageW(hWnd, WM_SYSCOMMAND, ret, 0) == FALSE) {
+            print_p(MessageType::Error, L"Failed to post system menu message to main window.", false);
             return false;
         }
     }
@@ -1698,7 +1731,7 @@ SystemTheme AcrylicApplication::getTheme() const
 
 bool AcrylicApplication::setTheme(const SystemTheme theme) const
 {
-    return setAcrylicTheme_p(theme);
+    return switchAcrylicBrushTheme_p(theme);
 }
 
 int AcrylicApplication::exec()

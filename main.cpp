@@ -49,7 +49,9 @@ wWinMain(
     AcrylicApplication application(argc, argv);
     if (application.createWindow()) {
         if (application.centerWindow()) {
-            result = AcrylicApplication::exec();
+            if (application.setWindowState(WindowState::Shown)) {
+                result = AcrylicApplication::exec();
+            }
         }
     }
 

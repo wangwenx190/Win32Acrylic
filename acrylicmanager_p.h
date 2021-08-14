@@ -70,25 +70,25 @@ enum class VersionCompare : int
 };
 
 #ifdef __cplusplus
-EXTERN_C_BEGIN
+EXTERN_C_START
 #endif
 
-ACRYLICMANAGER_API WINAPI [[nodiscard]] UINT getWindowDpi_p(const HWND hWnd);
-ACRYLICMANAGER_API WINAPI [[nodiscard]] bool isWindowMinimized_p(const HWND hWnd);
-ACRYLICMANAGER_API WINAPI [[nodiscard]] bool isWindowMaximized_p(const HWND hWnd);
-ACRYLICMANAGER_API WINAPI [[nodiscard]] bool isWindowFullScreened_p(const HWND hWnd);
-ACRYLICMANAGER_API WINAPI [[nodiscard]] bool isWindowNoState_p(const HWND hWnd);
-ACRYLICMANAGER_API WINAPI [[nodiscard]] bool isWindowVisible_p(const HWND hWnd);
-ACRYLICMANAGER_API WINAPI [[nodiscard]] int getResizeBorderThickness_p(const bool x, const UINT dpi);
-ACRYLICMANAGER_API WINAPI [[nodiscard]] int getCaptionHeight_p(const UINT dpi);
-ACRYLICMANAGER_API WINAPI [[nodiscard]] int getTitleBarHeight_p(const HWND hWnd, const UINT dpi);
-ACRYLICMANAGER_API WINAPI [[nodiscard]] RECT getScreenGeometry_p(const HWND hWnd);
-ACRYLICMANAGER_API WINAPI [[nodiscard]] RECT getScreenAvailableGeometry_p(const HWND hWnd);
-ACRYLICMANAGER_API WINAPI [[nodiscard]] bool isCompositionEnabled_p();
-ACRYLICMANAGER_API WINAPI [[nodiscard]] bool triggerFrameChange_p(const HWND hWnd);
-ACRYLICMANAGER_API WINAPI [[nodiscard]] bool setWindowTransitionsEnabled_p(const HWND hWnd, const bool enable);
-ACRYLICMANAGER_API WINAPI [[nodiscard]] bool openSystemMenu_p(const HWND hWnd, const POINT pos);
-ACRYLICMANAGER_API WINAPI [[nodiscard]] bool compareSystemVersion_p(const WindowsVersion ver, const VersionCompare comp);
+[[nodiscard]] ACRYLICMANAGER_API UINT WINAPI getWindowDpi_p(const HWND hWnd);
+[[nodiscard]] ACRYLICMANAGER_API bool WINAPI isWindowMinimized_p(const HWND hWnd);
+[[nodiscard]] ACRYLICMANAGER_API bool WINAPI isWindowMaximized_p(const HWND hWnd);
+[[nodiscard]] ACRYLICMANAGER_API bool WINAPI isWindowFullScreened_p(const HWND hWnd);
+[[nodiscard]] ACRYLICMANAGER_API bool WINAPI isWindowNoState_p(const HWND hWnd);
+[[nodiscard]] ACRYLICMANAGER_API bool WINAPI isWindowVisible_p(const HWND hWnd);
+[[nodiscard]] ACRYLICMANAGER_API int WINAPI getResizeBorderThickness_p(const bool x, const UINT dpi);
+[[nodiscard]] ACRYLICMANAGER_API int WINAPI getCaptionHeight_p(const UINT dpi);
+[[nodiscard]] ACRYLICMANAGER_API int WINAPI getTitleBarHeight_p(const HWND hWnd, const UINT dpi);
+[[nodiscard]] ACRYLICMANAGER_API RECT WINAPI getScreenGeometry_p(const HWND hWnd);
+[[nodiscard]] ACRYLICMANAGER_API RECT WINAPI getScreenAvailableGeometry_p(const HWND hWnd);
+[[nodiscard]] ACRYLICMANAGER_API bool WINAPI isCompositionEnabled_p();
+[[nodiscard]] ACRYLICMANAGER_API bool WINAPI triggerFrameChange_p(const HWND hWnd);
+[[nodiscard]] ACRYLICMANAGER_API bool WINAPI setWindowTransitionsEnabled_p(const HWND hWnd, const bool enable);
+[[nodiscard]] ACRYLICMANAGER_API bool WINAPI openSystemMenu_p(const HWND hWnd, const POINT pos);
+[[nodiscard]] ACRYLICMANAGER_API bool WINAPI compareSystemVersion_p(const WindowsVersion ver, const VersionCompare comp);
 
 #ifdef __cplusplus
 EXTERN_C_END

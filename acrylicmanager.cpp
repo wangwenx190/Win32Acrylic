@@ -256,10 +256,10 @@ static const int kAutoHideTaskbarThicknessPx = 2;
 static const int kAutoHideTaskbarThicknessPy = kAutoHideTaskbarThicknessPx;
 
 //
-static AcrylicApplication *instance = nullptr;
-static const wchar_t mainWindowClassName[] = L"Win32AcrylicApplicationMainWindowClass";
-static const wchar_t dragBarWindowClassName[] = L"Win32AcrylicApplicationDragBarWindowClass";
-static const wchar_t mainWindowTitle[] = L"Win32 Native C++ Acrylic Application Main Window";
+static bool instanceFlag = false;
+static const wchar_t mainWindowClassName[] = L"AcrylicManagerMainWindowClass";
+static const wchar_t dragBarWindowClassName[] = L"AcrylicManagerDragBarWindowClass";
+static const wchar_t mainWindowTitle[] = L"AcrylicManager Main Window";
 static const wchar_t dragBarWindowTitle[] = L"";
 static UINT mainWindowDpi = USER_DEFAULT_SCREEN_DPI;
 static HWND mainWindowHandle = nullptr;
@@ -357,7 +357,7 @@ bool isWindowMaximized_p(const HWND hWnd)
     return (IsMaximized(hWnd) != FALSE);
 }
 
-int getResizeBorderThickness(const bool x, const UINT dpi)
+int getResizeBorderThickness_p(const bool x, const UINT dpi)
 {
     const UINT _dpi = (dpi == 0) ? USER_DEFAULT_SCREEN_DPI : dpi;
     // There is no "SM_CYPADDEDBORDER".
@@ -367,7 +367,7 @@ int getResizeBorderThickness(const bool x, const UINT dpi)
     return ((result > 0) ? result : preset);
 }
 
-int getCaptionHeight(const UINT dpi)
+int getCaptionHeight_p(const UINT dpi)
 {
     const UINT _dpi = (dpi == 0) ? USER_DEFAULT_SCREEN_DPI : dpi;
     const int result = GetSystemMetricsForDpi(SM_CYCAPTION, _dpi);
@@ -375,7 +375,7 @@ int getCaptionHeight(const UINT dpi)
     return ((result > 0) ? result : preset);
 }
 
-int getTitleBarHeight(const HWND hWnd, const UINT dpi)
+int getTitleBarHeight_p(const HWND hWnd, const UINT dpi)
 {
     const UINT _dpi = (dpi == 0) ? USER_DEFAULT_SCREEN_DPI : dpi;
     int titleBarHeight = 0;
@@ -392,7 +392,7 @@ int getTitleBarHeight(const HWND hWnd, const UINT dpi)
         }
     }
     if (titleBarHeight <= 0) {
-        titleBarHeight = getResizeBorderThickness(false, _dpi) + getCaptionHeight(_dpi);
+        titleBarHeight = getResizeBorderThickness_p(false, _dpi) + getCaptionHeight_p(_dpi);
         if (titleBarHeight <= 0) {
             titleBarHeight = std::round(31.0 * getDevicePixelRatio_p(_dpi));
         }
@@ -420,7 +420,7 @@ int getTitleBarHeight(const HWND hWnd, const UINT dpi)
     return mi;
 }
 
-RECT getScreenGeometry(const HWND hWnd)
+RECT getScreenGeometry_p(const HWND hWnd)
 {
     if (!hWnd) {
         return {};
@@ -428,7 +428,7 @@ RECT getScreenGeometry(const HWND hWnd)
     return getMonitorInfo_p(hWnd).rcMonitor;
 }
 
-RECT getScreenAvailableGeometry(const HWND hWnd)
+RECT getScreenAvailableGeometry_p(const HWND hWnd)
 {
     if (!hWnd) {
         return {};
@@ -436,7 +436,7 @@ RECT getScreenAvailableGeometry(const HWND hWnd)
     return getMonitorInfo_p(hWnd).rcWork;
 }
 
-bool isCompositionEnabled()
+bool isCompositionEnabled_p()
 {
     // DWM composition is always enabled and can't be disabled since Windows 8.
     if (compareSystemVersion_p(WindowsVersion::Windows8, VersionCompare::GreaterOrEqual)) {
@@ -446,7 +446,7 @@ bool isCompositionEnabled()
     return (SUCCEEDED(DwmIsCompositionEnabled(&enabled)) && (enabled != FALSE));
 }
 
-bool isWindowFullScreened(const HWND hWnd)
+bool isWindowFullScreened_p(const HWND hWnd)
 {
     if (!hWnd) {
         return false;
@@ -456,14 +456,14 @@ bool isWindowFullScreened(const HWND hWnd)
         print_p(L"Failed to retrieve window rect of main window.");
         return false;
     }
-    const RECT screenRect = getScreenGeometry(hWnd);
+    const RECT screenRect = getScreenGeometry_p(hWnd);
     return ((windowRect.left == screenRect.left)
             && (windowRect.right == screenRect.right)
             && (windowRect.top == screenRect.top)
             && (windowRect.bottom == screenRect.bottom));
 }
 
-bool isWindowNoState(const HWND hWnd)
+bool isWindowNoState_p(const HWND hWnd)
 {
     if (!hWnd) {
         return false;
@@ -478,7 +478,7 @@ bool isWindowNoState(const HWND hWnd)
     return (wp.showCmd == SW_NORMAL);
 }
 
-bool isWindowVisible(const HWND hWnd)
+bool isWindowVisible_p(const HWND hWnd)
 {
     if (!hWnd) {
         return false;
@@ -486,7 +486,7 @@ bool isWindowVisible(const HWND hWnd)
     return (IsWindowVisible(hWnd) != FALSE);
 }
 
-bool triggerFrameChange(const HWND hWnd)
+bool triggerFrameChange_p(const HWND hWnd)
 {
     if (!hWnd) {
         return false;
@@ -496,7 +496,7 @@ bool triggerFrameChange(const HWND hWnd)
     return (result != FALSE);
 }
 
-bool setWindowTransitionsEnabled(const HWND hWnd, const bool enable)
+bool setWindowTransitionsEnabled_p(const HWND hWnd, const bool enable)
 {
     if (!hWnd) {
         return false;
@@ -505,7 +505,7 @@ bool setWindowTransitionsEnabled(const HWND hWnd, const bool enable)
     return SUCCEEDED(DwmSetWindowAttribute(hWnd, DWMWA_TRANSITIONS_FORCEDISABLED, &disabled, sizeof(disabled)));
 }
 
-bool openSystemMenu(const HWND hWnd, const POINT pos)
+bool openSystemMenu_p(const HWND hWnd, const POINT pos)
 {
     if (!hWnd) {
         return false;
@@ -565,8 +565,7 @@ bool openSystemMenu(const HWND hWnd, const POINT pos)
     return true;
 }
 
-bool compareSystemVersion(const WindowsVersion ver,
-                                                     const VersionCompare comp)
+bool compareSystemVersion_p(const WindowsVersion ver, const VersionCompare comp)
 {
     OSVERSIONINFOEXW osvi;
     SecureZeroMemory(&osvi, sizeof(osvi));
@@ -833,7 +832,7 @@ bool compareSystemVersion(const WindowsVersion ver,
         return WindowState::Normal;
     } else if (isWindowVisible_p(mainWindowHandle)) {
         return WindowState::Shown;
-    } else if (!isWindowVisible(mainWindowHandle)) {
+    } else if (!isWindowVisible_p(mainWindowHandle)) {
         return WindowState::Hidden;
     }
     return WindowState::Invalid;
@@ -1694,12 +1693,12 @@ bool compareSystemVersion(const WindowsVersion ver,
 
 [[nodiscard]] static inline bool initialize_p(const int x, const int y, const int w, const int h)
 {
-    static bool tried = false;
-    if (tried) {
-        print_p(L"Acrylic application has been initialized already.");
+    static bool inited = false;
+    if (inited) {
+        print_p(L"AcrylicManager has been initialized already.");
         return false;
     }
-    tried = true;
+    inited = true;
 
     if (!registerMainWindowClass_p()) {
         print_p(L"Failed to register main window class.", true);
@@ -1752,7 +1751,9 @@ bool compareSystemVersion(const WindowsVersion ver,
     return static_cast<int>(msg.wParam);
 }
 
-AcrylicApplication::AcrylicApplication(const int argc, wchar_t *argv[])
+// Public interface
+
+bool createWindow(const int x, const int y, const int w, const int h)
 {
     if (compareSystemVersion_p(WindowsVersion::WindowsVista, VersionCompare::Less)) {
         print_p(L"This application cannot be run on such old systems.", true);
@@ -1764,117 +1765,124 @@ AcrylicApplication::AcrylicApplication(const int argc, wchar_t *argv[])
         std::exit(-1);
     }
 
-    if (instance) {
-        print_p(L"There could only be one AcrylicApplication instance.", true);
+    if (instanceFlag) {
+        print_p(L"There could only be one AcrylicManager instance.", true);
         std::exit(-1);
     } else {
-        instance = this;
+        instanceFlag = true;
     }
-}
 
-AcrylicApplication::~AcrylicApplication() = default;
-
-bool AcrylicApplication::createWindow(const int x, const int y, const int w, const int h) const
-{
     return initialize_p(x, y, w, h);
 }
 
-RECT AcrylicApplication::getWindowGeometry() const
+RECT getWindowGeometry()
 {
     return getWindowGeometry_p();
 }
 
-bool AcrylicApplication::moveWindow(const int x, const int y) const
+bool moveWindow(const int x, const int y)
 {
     return moveWindow_p(x, y);
 }
 
-SIZE AcrylicApplication::getWindowSize() const
+SIZE getWindowSize()
 {
     return getWindowSize_p();
 }
 
-bool AcrylicApplication::resizeWindow(const int w, const int h) const
+bool resizeWindow(const int w, const int h)
 {
     return resizeWindow_p(w, h);
 }
 
-bool AcrylicApplication::centerWindow() const
+bool centerWindow()
 {
     return centerWindow_p();
 }
 
-WindowState AcrylicApplication::getWindowState() const
+WindowState getWindowState()
 {
     return getWindowState_p();
 }
 
-bool AcrylicApplication::setWindowState(const WindowState state) const
+bool setWindowState(const WindowState state)
 {
     return setWindowState_p(state);
 }
 
-bool AcrylicApplication::destroyWindow() const
+bool destroyWindow()
 {
     return destroyWindow_p();
 }
 
-HWND AcrylicApplication::getHandle() const
+HWND getWindowHandle()
 {
     return mainWindowHandle;
 }
 
-SystemTheme AcrylicApplication::getAcrylicBrushTheme() const
+SystemTheme getAcrylicBrushTheme()
 {
     return acrylicBrushTheme;
 }
 
-bool AcrylicApplication::setAcrylicBrushTheme(const SystemTheme theme) const
+bool setAcrylicBrushTheme(const SystemTheme theme)
 {
     return switchAcrylicBrushTheme_p(theme);
 }
 
-bool AcrylicApplication::getTintColor(int *r, int *g, int *b, int *a) const
+bool getTintColor(int *r, int *g, int *b, int *a)
 {
     return getTintColor_p(r, g, b, a);
 }
 
-bool AcrylicApplication::setTintColor(const int r, const int g, const int b, const int a) const
+bool setTintColor(const int r, const int g, const int b, const int a)
 {
     return setTintColor_p(r, g, b, a);
 }
 
-bool AcrylicApplication::getTintOpacity(double *opacity) const
+bool getTintOpacity(double *opacity)
 {
     return getTintOpacity_p(opacity);
 }
 
-bool AcrylicApplication::setTintOpacity(const double opacity) const
+bool setTintOpacity(const double opacity)
 {
     return setTintOpacity_p(opacity);
 }
 
-bool AcrylicApplication::getTintLuminosityOpacity(double *opacity) const
+bool getTintLuminosityOpacity(double *opacity)
 {
     return getTintLuminosityOpacity_p(opacity);
 }
 
-bool AcrylicApplication::setTintLuminosityOpacity(const double opacity) const
+bool setTintLuminosityOpacity(const double opacity)
 {
     return setTintLuminosityOpacity_p(opacity);
 }
 
-bool AcrylicApplication::getFallbackColor(int *r, int *g, int *b, int *a) const
+bool getFallbackColor(int *r, int *g, int *b, int *a)
 {
     return getFallbackColor_p(r, g, b, a);
 }
 
-bool AcrylicApplication::setFallbackColor(const int r, const int g, const int b, const int a) const
+bool setFallbackColor(const int r, const int g, const int b, const int a)
 {
     return setFallbackColor_p(r, g, b, a);
 }
 
-int AcrylicApplication::exec()
+int acrylicEventLoop()
 {
     return mainWindowEventLoop_p();
+}
+
+bool isAcrylicAvailable()
+{
+    return compareSystemVersion_p(WindowsVersion::Windows10_19H1, VersionCompare::GreaterOrEqual);
+}
+
+bool isAcrylicInitialized()
+{
+    return ((mainWindowHandle != nullptr)
+            && (xamlIslandHandle != nullptr)
+            && (dragBarWindowHandle != nullptr));
 }

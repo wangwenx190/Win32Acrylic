@@ -38,13 +38,13 @@ wWinMain(
     UNREFERENCED_PARAMETER(lpCmdLine);
     UNREFERENCED_PARAMETER(nCmdShow);
 
-    if (application.createWindow()) {
-        if (application.centerWindow()) {
-            if (application.setWindowState(WindowState::Shown)) {
-                result = AcrylicApplication::exec();
-            }
-        }
+    if (createWindow()) {
+        const bool result1 = centerWindow();
+        const bool result2 = setWindowState(WindowState::Shown);
+        UNREFERENCED_PARAMETER(result1);
+        UNREFERENCED_PARAMETER(result2);
+        return acrylicEventLoop();
     }
 
-    return result;
+    return -1;
 }

@@ -366,7 +366,7 @@ int getResizeBorderThickness(const bool x, const UINT dpi)
     // There is no "SM_CYPADDEDBORDER".
     const int result = GetSystemMetricsForDpi(SM_CXPADDEDBORDER, _dpi)
             + GetSystemMetricsForDpi((x ? SM_CXSIZEFRAME : SM_CYSIZEFRAME), _dpi);
-    const int preset = std::round(8.0 * getDevicePixelRatio(_dpi));
+    const int preset = std::round(8.0 * getDevicePixelRatio_p(_dpi));
     return ((result > 0) ? result : preset);
 }
 
@@ -374,7 +374,7 @@ int getCaptionHeight(const UINT dpi)
 {
     const UINT _dpi = (dpi == 0) ? USER_DEFAULT_SCREEN_DPI : dpi;
     const int result = GetSystemMetricsForDpi(SM_CYCAPTION, _dpi);
-    const int preset = std::round(23.0 * getDevicePixelRatio(_dpi));
+    const int preset = std::round(23.0 * getDevicePixelRatio_p(_dpi));
     return ((result > 0) ? result : preset);
 }
 
@@ -397,10 +397,30 @@ int getTitleBarHeight(const HWND hWnd, const UINT dpi)
     if (titleBarHeight <= 0) {
         titleBarHeight = getResizeBorderThickness(false, _dpi) + getCaptionHeight(_dpi);
         if (titleBarHeight <= 0) {
-            titleBarHeight = std::round(31.0 * getDevicePixelRatio(_dpi));
+            titleBarHeight = std::round(31.0 * getDevicePixelRatio_p(_dpi));
         }
     }
     return titleBarHeight;
+}
+
+[[nodiscard]] static inline MONITORINFO getMonitorInfo_p(const HWND hWnd)
+{
+    if (!hWnd) {
+        return {};
+    }
+    const HMONITOR mon = CURRENT_SCREEN(hWnd);
+    if (!mon) {
+        print_p(L"Failed to retrieve current screen.");
+        return {};
+    }
+    MONITORINFO mi;
+    SecureZeroMemory(&mi, sizeof(mi));
+    mi.cbSize = sizeof(mi);
+    if (GetMonitorInfoW(mon, &mi) == FALSE) {
+        print_p(L"Failed to retrieve monitor information.");
+        return {};
+    }
+    return mi;
 }
 
 RECT getScreenGeometry(const HWND hWnd)
@@ -422,7 +442,7 @@ RECT getScreenAvailableGeometry(const HWND hWnd)
 bool isCompositionEnabled()
 {
     // DWM composition is always enabled and can't be disabled since Windows 8.
-    if (compareSystemVersion(WindowsVersion::Windows8, VersionCompare::GreaterOrEqual)) {
+    if (compareSystemVersion_p(WindowsVersion::Windows8, VersionCompare::GreaterOrEqual)) {
         return true;
     }
     BOOL enabled = FALSE;
@@ -508,7 +528,7 @@ bool openSystemMenu(const HWND hWnd, const POINT pos)
         mii.fState = enabled ? MF_ENABLED : MF_DISABLED;
         return (SetMenuItemInfoW(menu, item, FALSE, &mii) != FALSE);
     };
-    const bool isMaximized = isWindowMaximized(hWnd);
+    const bool isMaximized = isWindowMaximized_p(hWnd);
     if (!setState(SC_RESTORE, isMaximized)) {
         print_p(L"Failed to change menu item state.");
         return false;
@@ -696,26 +716,6 @@ bool compareSystemVersion(const WindowsVersion ver,
     //  so it should work fine.
     const MARGINS margins = {0, 0, (isWindowNoState_p(hWnd) ? getTitleBarHeight_p(hWnd, _dpi) : 0), 0};
     return SUCCEEDED(DwmExtendFrameIntoClientArea(hWnd, &margins));
-}
-
-[[nodiscard]] static inline MONITORINFO getMonitorInfo_p(const HWND hWnd)
-{
-    if (!hWnd) {
-        return {};
-    }
-    const HMONITOR mon = CURRENT_SCREEN(hWnd);
-    if (!mon) {
-        print_p(L"Failed to retrieve current screen.");
-        return {};
-    }
-    MONITORINFO mi;
-    SecureZeroMemory(&mi, sizeof(mi));
-    mi.cbSize = sizeof(mi);
-    if (GetMonitorInfoW(mon, &mi) == FALSE) {
-        print_p(L"Failed to retrieve monitor information.");
-        return {};
-    }
-    return mi;
 }
 
 [[nodiscard]] static inline bool showWindowFullScreen_p(const HWND hWnd, const bool enable)
@@ -1245,7 +1245,7 @@ bool compareSystemVersion(const WindowsVersion ver,
             }
         }
         if (EndPaint(hWnd, &ps) == FALSE) {
-            print_p(MessageType::Error, L"WM_PAINT: EndPaint() returns FALSE.", false);
+            print_p(L"WM_PAINT: EndPaint() returns FALSE.");
             break;
         }
         return 0;

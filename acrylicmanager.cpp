@@ -36,8 +36,8 @@
 #define _DWMAPI_
 #endif
 
-#include "acrylicapplication.h"
-#include "acrylicapplication_p.h"
+#include "acrylicmanager.h"
+#include "acrylicmanager_p.h"
 
 #include <ShellApi.h>
 #include <ShellScalingApi.h>
@@ -127,13 +127,13 @@ GetDpiForWindow(
     HWND hWnd
 )
 {
-    ACRYLICAPPLICATION_TRY_EXECUTE_USER_INT_FUNCTION(GetDpiForWindow, hWnd)
+    ACRYLICMANAGER_TRY_EXECUTE_USER_INT_FUNCTION(GetDpiForWindow, hWnd)
 }
 
 UINT WINAPI
 GetDpiForSystem()
 {
-    ACRYLICAPPLICATION_TRY_EXECUTE_USER_INT_FUNCTION(GetDpiForSystem)
+    ACRYLICMANAGER_TRY_EXECUTE_USER_INT_FUNCTION(GetDpiForSystem)
 }
 
 UINT WINAPI
@@ -141,7 +141,7 @@ GetSystemDpiForProcess(
     HANDLE hProcess
 )
 {
-    ACRYLICAPPLICATION_TRY_EXECUTE_USER_INT_FUNCTION(GetSystemDpiForProcess, hProcess)
+    ACRYLICMANAGER_TRY_EXECUTE_USER_INT_FUNCTION(GetSystemDpiForProcess, hProcess)
 }
 
 int WINAPI
@@ -150,7 +150,7 @@ GetSystemMetricsForDpi(
     UINT dpi
 )
 {
-    ACRYLICAPPLICATION_TRY_EXECUTE_USER_INT_FUNCTION(GetSystemMetricsForDpi, nIndex, dpi)
+    ACRYLICMANAGER_TRY_EXECUTE_USER_INT_FUNCTION(GetSystemMetricsForDpi, nIndex, dpi)
 }
 
 BOOL WINAPI
@@ -162,7 +162,7 @@ AdjustWindowRectExForDpi(
     UINT   dpi
 )
 {
-    ACRYLICAPPLICATION_TRY_EXECUTE_USER_FUNCTION(AdjustWindowRectExForDpi, lpRect, dwStyle, bMenu, dwExStyle, dpi)
+    ACRYLICMANAGER_TRY_EXECUTE_USER_FUNCTION(AdjustWindowRectExForDpi, lpRect, dwStyle, bMenu, dwExStyle, dpi)
 }
 
 /////////////////////////////////
@@ -177,7 +177,7 @@ GetDpiForMonitor(
     UINT             *dpiY
 )
 {
-    ACRYLICAPPLICATION_TRY_EXECUTE_SHCORE_FUNCTION(GetDpiForMonitor, hMonitor, dpiType, dpiX, dpiY)
+    ACRYLICMANAGER_TRY_EXECUTE_SHCORE_FUNCTION(GetDpiForMonitor, hMonitor, dpiType, dpiX, dpiY)
 }
 
 /////////////////////////////////
@@ -193,7 +193,7 @@ BeginBufferedPaint(
     HDC             *phdc
 )
 {
-    ACRYLICAPPLICATION_TRY_EXECUTE_THEME_PTR_FUNCTION(BeginBufferedPaint, hdcTarget, prcTarget, dwFormat, pPaintParams, phdc)
+    ACRYLICMANAGER_TRY_EXECUTE_THEME_PTR_FUNCTION(BeginBufferedPaint, hdcTarget, prcTarget, dwFormat, pPaintParams, phdc)
 }
 
 HRESULT WINAPI
@@ -202,7 +202,7 @@ EndBufferedPaint(
     BOOL         fUpdateTarget
 )
 {
-    ACRYLICAPPLICATION_TRY_EXECUTE_THEME_FUNCTION(EndBufferedPaint, hBufferedPaint, fUpdateTarget)
+    ACRYLICMANAGER_TRY_EXECUTE_THEME_FUNCTION(EndBufferedPaint, hBufferedPaint, fUpdateTarget)
 }
 
 HRESULT WINAPI
@@ -212,7 +212,7 @@ BufferedPaintSetAlpha(
     BYTE         alpha
 )
 {
-    ACRYLICAPPLICATION_TRY_EXECUTE_THEME_FUNCTION(BufferedPaintSetAlpha, hBufferedPaint, prc, alpha)
+    ACRYLICMANAGER_TRY_EXECUTE_THEME_FUNCTION(BufferedPaintSetAlpha, hBufferedPaint, prc, alpha)
 }
 
 /////////////////////////////////
@@ -225,7 +225,7 @@ DwmExtendFrameIntoClientArea(
     const MARGINS *pMarInset
 )
 {
-    ACRYLICAPPLICATION_TRY_EXECUTE_DWM_FUNCTION(DwmExtendFrameIntoClientArea, hWnd, pMarInset)
+    ACRYLICMANAGER_TRY_EXECUTE_DWM_FUNCTION(DwmExtendFrameIntoClientArea, hWnd, pMarInset)
 }
 
 HRESULT WINAPI
@@ -236,7 +236,7 @@ DwmSetWindowAttribute(
     DWORD   cbAttribute
 )
 {
-    ACRYLICAPPLICATION_TRY_EXECUTE_DWM_FUNCTION(DwmSetWindowAttribute, hWnd, dwAttribute, pvAttribute, cbAttribute)
+    ACRYLICMANAGER_TRY_EXECUTE_DWM_FUNCTION(DwmSetWindowAttribute, hWnd, dwAttribute, pvAttribute, cbAttribute)
 }
 
 HRESULT WINAPI
@@ -244,7 +244,7 @@ DwmIsCompositionEnabled(
     BOOL *pfEnabled
 )
 {
-    ACRYLICAPPLICATION_TRY_EXECUTE_DWM_FUNCTION(DwmIsCompositionEnabled, pfEnabled)
+    ACRYLICMANAGER_TRY_EXECUTE_DWM_FUNCTION(DwmIsCompositionEnabled, pfEnabled)
 }
 
 #ifdef __cplusplus

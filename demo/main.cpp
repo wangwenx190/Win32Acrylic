@@ -23,7 +23,6 @@
  */
 
 #include "acrylicmanager.h"
-#include <ShellApi.h>
 
 EXTERN_C int APIENTRY
 wWinMain(
@@ -38,12 +37,12 @@ wWinMain(
     UNREFERENCED_PARAMETER(lpCmdLine);
     UNREFERENCED_PARAMETER(nCmdShow);
 
-    if (createWindow()) {
-        const bool result1 = centerWindow();
-        const bool result2 = setWindowState(WindowState::Shown);
+    if (am_CreateWindow()) {
+        const bool result1 = am_CenterWindow();
+        const bool result2 = am_SetWindowState(WindowState::Shown);
         UNREFERENCED_PARAMETER(result1);
         UNREFERENCED_PARAMETER(result2);
-        return acrylicEventLoop();
+        return am_MainEventLoop();
     }
 
     return -1;

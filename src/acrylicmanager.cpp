@@ -113,149 +113,11 @@ EXTERN_C IMAGE_DOS_HEADER __ImageBase;
 #define CURRENT_SCREEN(window) (MonitorFromWindow(window, MONITOR_DEFAULTTONEAREST))
 #endif
 
-//
-#ifdef __cplusplus
-EXTERN_C_START
-#endif
-
-/////////////////////////////////
-/////     User32
-/////////////////////////////////
-
-UINT WINAPI
-GetDpiForWindow(
-    HWND hWnd
-)
-{
-    ACRYLICMANAGER_TRY_EXECUTE_USER_INT_FUNCTION(GetDpiForWindow, hWnd)
-}
-
-UINT WINAPI
-GetDpiForSystem()
-{
-    ACRYLICMANAGER_TRY_EXECUTE_USER_INT_FUNCTION(GetDpiForSystem)
-}
-
-UINT WINAPI
-GetSystemDpiForProcess(
-    HANDLE hProcess
-)
-{
-    ACRYLICMANAGER_TRY_EXECUTE_USER_INT_FUNCTION(GetSystemDpiForProcess, hProcess)
-}
-
-int WINAPI
-GetSystemMetricsForDpi(
-    int  nIndex,
-    UINT dpi
-)
-{
-    ACRYLICMANAGER_TRY_EXECUTE_USER_INT_FUNCTION(GetSystemMetricsForDpi, nIndex, dpi)
-}
-
-BOOL WINAPI
-AdjustWindowRectExForDpi(
-    LPRECT lpRect,
-    DWORD  dwStyle,
-    BOOL   bMenu,
-    DWORD  dwExStyle,
-    UINT   dpi
-)
-{
-    ACRYLICMANAGER_TRY_EXECUTE_USER_FUNCTION(AdjustWindowRectExForDpi, lpRect, dwStyle, bMenu, dwExStyle, dpi)
-}
-
-/////////////////////////////////
-/////     SHCore
-/////////////////////////////////
-
-HRESULT WINAPI
-GetDpiForMonitor(
-    HMONITOR         hMonitor,
-    MONITOR_DPI_TYPE dpiType,
-    UINT             *dpiX,
-    UINT             *dpiY
-)
-{
-    ACRYLICMANAGER_TRY_EXECUTE_SHCORE_FUNCTION(GetDpiForMonitor, hMonitor, dpiType, dpiX, dpiY)
-}
-
-/////////////////////////////////
-/////     UxTheme
-/////////////////////////////////
-
-HPAINTBUFFER WINAPI
-BeginBufferedPaint(
-    HDC             hdcTarget,
-    const RECT      *prcTarget,
-    BP_BUFFERFORMAT dwFormat,
-    BP_PAINTPARAMS  *pPaintParams,
-    HDC             *phdc
-)
-{
-    ACRYLICMANAGER_TRY_EXECUTE_THEME_PTR_FUNCTION(BeginBufferedPaint, hdcTarget, prcTarget, dwFormat, pPaintParams, phdc)
-}
-
-HRESULT WINAPI
-EndBufferedPaint(
-    HPAINTBUFFER hBufferedPaint,
-    BOOL         fUpdateTarget
-)
-{
-    ACRYLICMANAGER_TRY_EXECUTE_THEME_FUNCTION(EndBufferedPaint, hBufferedPaint, fUpdateTarget)
-}
-
-HRESULT WINAPI
-BufferedPaintSetAlpha(
-    HPAINTBUFFER hBufferedPaint,
-    const RECT   *prc,
-    BYTE         alpha
-)
-{
-    ACRYLICMANAGER_TRY_EXECUTE_THEME_FUNCTION(BufferedPaintSetAlpha, hBufferedPaint, prc, alpha)
-}
-
-/////////////////////////////////
-/////     DwmApi
-/////////////////////////////////
-
-HRESULT WINAPI
-DwmExtendFrameIntoClientArea(
-    HWND          hWnd,
-    const MARGINS *pMarInset
-)
-{
-    ACRYLICMANAGER_TRY_EXECUTE_DWM_FUNCTION(DwmExtendFrameIntoClientArea, hWnd, pMarInset)
-}
-
-HRESULT WINAPI
-DwmSetWindowAttribute(
-    HWND    hWnd,
-    DWORD   dwAttribute,
-    LPCVOID pvAttribute,
-    DWORD   cbAttribute
-)
-{
-    ACRYLICMANAGER_TRY_EXECUTE_DWM_FUNCTION(DwmSetWindowAttribute, hWnd, dwAttribute, pvAttribute, cbAttribute)
-}
-
-HRESULT WINAPI
-DwmIsCompositionEnabled(
-    BOOL *pfEnabled
-)
-{
-    ACRYLICMANAGER_TRY_EXECUTE_DWM_FUNCTION(DwmIsCompositionEnabled, pfEnabled)
-}
-
-#ifdef __cplusplus
-EXTERN_C_END
-#endif
-
 // The thickness of an auto-hide taskbar in pixels.
 static const int kAutoHideTaskbarThicknessPx = 2;
 static const int kAutoHideTaskbarThicknessPy = kAutoHideTaskbarThicknessPx;
 
-//
+// Global variables
 static bool instanceFlag = false;
 static const wchar_t mainWindowClassName[] = L"AcrylicManagerMainWindowClass";
 static const wchar_t dragBarWindowClassName[] = L"AcrylicManagerDragBarWindowClass";
@@ -275,7 +137,6 @@ static winrt::Windows::UI::Xaml::Hosting::DesktopWindowXamlSource xamlSource = n
 static winrt::Windows::UI::Xaml::Controls::Grid xamlGrid = nullptr;
 static winrt::Windows::UI::Xaml::Media::AcrylicBrush xamlBrush = nullptr;
 
-//
 static inline void print_p(LPCWSTR text, const bool showUi = false, LPCWSTR title = nullptr)
 {
     if (!text) {

@@ -52,6 +52,8 @@
 #define NOMINMAX
 #endif
 
+#include <Windows.h>
+
 #ifdef WINVER
 #undef WINVER
 #endif
@@ -199,5 +201,3 @@ ACRYLICMANAGER_TRY_EXECUTE_FUNCTION_CALL_FUNC_RETURN(__VA_ARGS__)
 #endif
 #endif
 #endif
-
-#include <Windows.h>

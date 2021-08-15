@@ -1,6 +1,7 @@
 set(SOURCES
     acrylicmanager_global.h
     runtimeobject.cpp
+    dynamicapis.cpp
     acrylicmanager.h
     acrylicmanager_p.h
     acrylicmanager.cpp

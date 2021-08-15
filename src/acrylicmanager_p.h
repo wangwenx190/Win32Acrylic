@@ -146,7 +146,7 @@ am_SetWindowTransitionsEnabled_p(
 
 [[nodiscard]] ACRYLICMANAGER_API bool WINAPI
 am_OpenSystemMenu_p(
-    _In_ const HWND hWnd,
+    _In_ const HWND  hWnd,
     _In_ const POINT pos
 );
 
@@ -154,6 +154,11 @@ am_OpenSystemMenu_p(
 am_CompareSystemVersion_p(
     _In_ const WindowsVersion ver,
     _In_ const VersionCompare comp
+);
+
+[[nodiscard]] ACRYLICMANAGER_API bool WINAPI
+am_GenerateGUID_p(
+    _Out_ LPWSTR *guid
 );
 
 #ifdef __cplusplus

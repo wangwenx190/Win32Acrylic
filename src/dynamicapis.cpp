@@ -22,20 +22,6 @@
  * SOFTWARE.
  */
 
-// Define these macros first before including their header files to avoid linking
-// to their import libraries.
-#ifndef _USER32_
-#define _USER32_
-#endif
-
-#ifndef _UXTHEME_
-#define _UXTHEME_
-#endif
-
-#ifndef _DWMAPI_
-#define _DWMAPI_
-#endif
-
 #include "acrylicmanager_global.h"
 #include <ShellScalingApi.h>
 #include <UxTheme.h>
@@ -172,6 +158,17 @@ DwmIsCompositionEnabled(
 )
 {
     ACRYLICMANAGER_TRY_EXECUTE_DWM_FUNCTION(DwmIsCompositionEnabled, pfEnabled)
+}
+
+HRESULT WINAPI
+DwmGetWindowAttribute(
+    HWND  hWnd,
+    DWORD dwAttribute,
+    PVOID pvAttribute,
+    DWORD cbAttribute
+)
+{
+    ACRYLICMANAGER_TRY_EXECUTE_DWM_FUNCTION(DwmGetWindowAttribute, hWnd, dwAttribute, pvAttribute, cbAttribute)
 }
 
 #ifdef __cplusplus

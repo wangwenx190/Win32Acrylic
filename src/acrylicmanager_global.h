@@ -32,10 +32,6 @@
 #define WINRT_LEAN_AND_MEAN
 #endif
 
-#ifndef _CRT_SECURE_NO_WARNINGS
-#define _CRT_SECURE_NO_WARNINGS
-#endif
-
 #ifndef UNICODE
 #define UNICODE
 #endif
@@ -50,6 +46,20 @@
 
 #ifndef NOMINMAX
 #define NOMINMAX
+#endif
+
+// Define these macros first before including their header files to avoid linking
+// to their import libraries.
+#ifndef _USER32_
+#define _USER32_
+#endif
+
+#ifndef _UXTHEME_
+#define _UXTHEME_
+#endif
+
+#ifndef _DWMAPI_
+#define _DWMAPI_
 #endif
 
 #include <Windows.h>

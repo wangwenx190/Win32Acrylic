@@ -25,6 +25,8 @@
 #include "acrylicmanager.h"
 #include "acrylicmanager_p.h"
 
+#include <strsafe.h>
+
 #include <ShellApi.h>
 #include <ShellScalingApi.h>
 #include <UxTheme.h>
@@ -779,12 +781,12 @@ static inline void am_Cleanup_p(const int idx)
         if (g_am_DragBarWindowAtom_p != 0) {
             UnregisterClassW(g_am_DragBarWindowClassName_p, HINST_THISCOMPONENT);
             g_am_DragBarWindowAtom_p = 0;
-            delete g_am_DragBarWindowClassName_p;
+            delete [] g_am_DragBarWindowClassName_p;
         }
         if (g_am_MainWindowAtom_p != 0) {
             UnregisterClassW(g_am_MainWindowClassName_p, HINST_THISCOMPONENT);
             g_am_MainWindowAtom_p = 0;
-            delete g_am_MainWindowClassName_p;
+            delete [] g_am_MainWindowClassName_p;
         }
     }
 }
@@ -1393,6 +1395,40 @@ bool am_GenerateGUID_p(LPWSTR *guid)
     return DefWindowProcW(hWnd, uMsg, wParam, lParam);
 }
 
+static inline void am_ShowErrorMessageFromLastCode_p(LPCWSTR lpszFunction)
+{
+    const DWORD dw = GetLastError();
+    if (dw == 0) {
+        return;
+    }
+
+    LPVOID lpMsgBuf = nullptr;
+    LPVOID lpDisplayBuf = nullptr;
+
+    FormatMessageW(
+        FORMAT_MESSAGE_ALLOCATE_BUFFER |
+        FORMAT_MESSAGE_FROM_SYSTEM |
+        FORMAT_MESSAGE_IGNORE_INSERTS,
+        nullptr,
+        dw,
+        MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+        (LPWSTR) &lpMsgBuf,
+        0, nullptr );
+
+    // Display the error message and exit the process
+
+    lpDisplayBuf = (LPVOID)LocalAlloc(LMEM_ZEROINIT,
+        (wcslen((LPCWSTR)lpMsgBuf) + wcslen((LPCWSTR)lpszFunction) + 40) * sizeof(WCHAR));
+    StringCchPrintfW((LPWSTR)lpDisplayBuf,
+        LocalSize(lpDisplayBuf) / sizeof(WCHAR),
+        L"%s failed with error %d: %s",
+        lpszFunction, dw, lpMsgBuf);
+    am_Print_p((LPCWSTR)lpDisplayBuf, true);
+
+    LocalFree(lpMsgBuf);
+    LocalFree(lpDisplayBuf);
+}
+
 [[nodiscard]] static inline bool am_RegisterMainWindowClass_p(const int idx)
 {
     if (g_am_MainWindowAtom_p != 0) {
@@ -1416,6 +1452,7 @@ bool am_GenerateGUID_p(LPWSTR *guid)
     wcex.lpszClassName = g_am_MainWindowClassName_p;
 
     g_am_MainWindowAtom_p = RegisterClassExW(&wcex);
+    am_ShowErrorMessageFromLastCode_p(L"RegisterClassExW");
 
     if (g_am_MainWindowAtom_p == 0) {
         am_Cleanup_p(idx);
@@ -1454,6 +1491,7 @@ bool am_GenerateGUID_p(LPWSTR *guid)
     wcex.lpszClassName = g_am_DragBarWindowClassName_p;
 
     g_am_DragBarWindowAtom_p = RegisterClassExW(&wcex);
+    am_ShowErrorMessageFromLastCode_p(L"RegisterClassExW");
 
     if (g_am_DragBarWindowAtom_p == 0) {
         am_Cleanup_p(idx);
@@ -1480,8 +1518,8 @@ bool am_GenerateGUID_p(LPWSTR *guid)
                                        ((h > 0) ? h : CW_USEDEFAULT),
                                        nullptr, nullptr, HINST_THISCOMPONENT, nullptr);
 
+    am_ShowErrorMessageFromLastCode_p(L"CreateWindowExW");
     if (!mainWindowHandle) {
-        const auto code = GetLastError();
         am_Print_p(g_am_MainWindowClassName_p);
         am_Print_p(L"111111111111111Failed to create main window.");
         am_Cleanup_p(idx);

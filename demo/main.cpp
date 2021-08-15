@@ -37,16 +37,13 @@ wWinMain(
     UNREFERENCED_PARAMETER(lpCmdLine);
     UNREFERENCED_PARAMETER(nCmdShow);
 
-    int win1 = 0, win2 = 0, win3 = 0;
-    if (am_CreateWindow(&win1)) {
-        am_SetWindowState(win1, WindowState::Shown);
-    }
-    if (am_CreateWindow(&win2)) {
-        am_SetWindowState(win2, WindowState::Shown);
-    }
-    if (am_CreateWindow(&win3)) {
-        am_SetWindowState(win3, WindowState::Shown);
+    if (am_CreateWindow()) {
+        const bool result = am_CenterWindow();
+        UNREFERENCED_PARAMETER(result);
+        if (am_SetWindowState(WindowState::Shown)) {
+            return am_EventLoopExec();
+        }
     }
 
-    return am_EventLoopExec();
+    return -1;
 }

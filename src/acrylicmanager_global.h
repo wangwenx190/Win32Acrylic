@@ -48,6 +48,14 @@
 #define NOMINMAX
 #endif
 
+#ifndef _CRT_NON_CONFORMING_SWPRINTFS
+#define _CRT_NON_CONFORMING_SWPRINTFS
+#endif
+
+#ifndef _CRT_SECURE_NO_WARNINGS
+#define _CRT_SECURE_NO_WARNINGS
+#endif
+
 // Define these macros first before including their header files to avoid linking
 // to their import libraries.
 #ifndef _USER32_

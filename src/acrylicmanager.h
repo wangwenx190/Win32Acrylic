@@ -52,7 +52,6 @@ EXTERN_C_START
 
 [[nodiscard]] ACRYLICMANAGER_API bool WINAPI
 am_CreateWindow(
-    _Out_ int      *idx,
     _In_ const int x = -1,
     _In_ const int y = -1,
     _In_ const int w = -1,
@@ -60,13 +59,10 @@ am_CreateWindow(
 );
 
 [[nodiscard]] ACRYLICMANAGER_API RECT WINAPI
-am_GetWindowGeometry(
-    _In_ const int idx
-);
+am_GetWindowGeometry();
 
 [[nodiscard]] ACRYLICMANAGER_API RECT WINAPI
 am_SetWindowGeometry(
-    _In_ const int idx,
     _In_ const int x,
     _In_ const int y,
     _In_ const int w,
@@ -75,63 +71,46 @@ am_SetWindowGeometry(
 
 [[nodiscard]] ACRYLICMANAGER_API bool WINAPI
 am_MoveWindow(
-    _In_ const int idx,
     _In_ const int x,
     _In_ const int y
 );
 
 [[nodiscard]] ACRYLICMANAGER_API SIZE WINAPI
-am_GetWindowSize(
-    _In_ const int idx
-);
+am_GetWindowSize();
 
 [[nodiscard]] ACRYLICMANAGER_API bool WINAPI
 am_ResizeWindow(
-    _In_ const int idx,
     _In_ const int w,
     _In_ const int h
 );
 
 [[nodiscard]] ACRYLICMANAGER_API bool WINAPI
-am_CenterWindow(
-    _In_ const int idx
-);
+am_CenterWindow();
 
 [[nodiscard]] ACRYLICMANAGER_API WindowState WINAPI
-am_GetWindowState(
-    _In_ const int idx
-);
+am_GetWindowState();
 
 [[nodiscard]] ACRYLICMANAGER_API bool WINAPI
 am_SetWindowState(
-    _In_ const int         idx,
     _In_ const WindowState state
 );
 
 [[nodiscard]] ACRYLICMANAGER_API bool WINAPI
-am_CloseWindow(
-    _In_ const int idx
-);
+am_CloseWindow();
 
 [[nodiscard]] ACRYLICMANAGER_API HWND WINAPI
-am_GetWindowHandle(
-    _In_ const int idx
-);
+am_GetWindowHandle();
 
 [[nodiscard]] ACRYLICMANAGER_API SystemTheme WINAPI
-am_GetBrushTheme(
-    _In_ const int idx
-);
+am_GetBrushTheme();
 
 [[nodiscard]] ACRYLICMANAGER_API bool WINAPI
 am_SetBrushTheme(
-    _In_ const int         idx,
     _In_ const SystemTheme theme
 );
 
 [[nodiscard]] ACRYLICMANAGER_API bool WINAPI
 am_GetTintColor(
-    _In_ const int idx,
     _Out_ int      *r,
     _Out_ int      *g,
     _Out_ int      *b,
@@ -140,7 +119,6 @@ am_GetTintColor(
 
 [[nodiscard]] ACRYLICMANAGER_API bool WINAPI
 am_SetTintColor(
-    _In_ const int idx,
     _In_ const int r,
     _In_ const int g,
     _In_ const int b,
@@ -149,31 +127,26 @@ am_SetTintColor(
 
 [[nodiscard]] ACRYLICMANAGER_API bool WINAPI
 am_GetTintOpacity(
-    _In_ const int idx,
     _Out_ double   *opacity
 );
 
 [[nodiscard]] ACRYLICMANAGER_API bool WINAPI
 am_SetTintOpacity(
-    _In_ const int    idx,
     _In_ const double opacity
 );
 
 [[nodiscard]] ACRYLICMANAGER_API bool WINAPI
 am_GetTintLuminosityOpacity(
-    _In_ const int idx,
     _Out_ double   *opacity
 );
 
 [[nodiscard]] ACRYLICMANAGER_API bool WINAPI
 am_SetTintLuminosityOpacity(
-    _In_ const int    idx,
     _In_ const double opacity
 );
 
 [[nodiscard]] ACRYLICMANAGER_API bool WINAPI
 am_GetFallbackColor(
-    _In_ const int idx,
     _Out_ int      *r,
     _Out_ int      *g,
     _Out_ int      *b,
@@ -182,7 +155,6 @@ am_GetFallbackColor(
 
 [[nodiscard]] ACRYLICMANAGER_API bool WINAPI
 am_SetFallbackColor(
-    _In_ const int idx,
     _In_ const int r,
     _In_ const int g,
     _In_ const int b,

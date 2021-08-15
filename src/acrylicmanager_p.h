@@ -161,6 +161,11 @@ am_GenerateGUID_p(
     _Out_ LPWSTR *guid
 );
 
+[[nodiscard]] ACRYLICMANAGER_API bool WINAPI
+am_ShowErrorMessageFromLastErrorCode_p(
+    _In_ LPCWSTR functionName
+);
+
 #ifdef __cplusplus
 EXTERN_C_END
 #endif

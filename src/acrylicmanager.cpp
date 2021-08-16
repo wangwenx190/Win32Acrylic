@@ -105,6 +105,8 @@ EXTERN_C IMAGE_DOS_HEADER __ImageBase;
 static const int g_am_AutoHideTaskbarThicknessPx_p = 2;
 static const int g_am_AutoHideTaskbarThicknessPy_p = g_am_AutoHideTaskbarThicknessPx_p;
 
+static LPCWSTR g_am_PersonalizeRegistryKey_p = LR"(Software\Microsoft\Windows\CurrentVersion\Themes\Personalize)";
+
 static LPWSTR g_am_MainWindowClassName_p = nullptr;
 static LPWSTR g_am_DragBarWindowClassName_p = nullptr;
 static LPCWSTR g_am_MainWindowTitle_p = L"AcrylicManager Main Window";
@@ -578,39 +580,20 @@ bool am_CompareSystemVersion_p(const WindowsVersion ver, const VersionCompare co
 
 [[nodiscard]] static inline SystemTheme am_GetSystemTheme_p()
 {
-    HIGHCONTRASTW hc;
-    SecureZeroMemory(&hc, sizeof(hc));
-    hc.cbSize = sizeof(hc);
-    if (SystemParametersInfoW(SPI_GETHIGHCONTRAST, sizeof(hc), &hc, 0) == FALSE) {
-        am_Print_p(L"Failed to retrieve high contrast mode state.");
-        return SystemTheme::Invalid;
-    }
-    if (hc.dwFlags & HCF_HIGHCONTRASTON) {
+    if (am_IsHighContrastModeOn_p()) {
         am_Print_p(L"High contrast mode is on.");
         return SystemTheme::HighContrast;
     }
     // Dark mode was first introduced in Windows 10 1607.
     if (am_CompareSystemVersion_p(WindowsVersion::Windows10_1607, VersionCompare::GreaterOrEqual)) {
-        HKEY hKey = nullptr;
-        if (RegOpenKeyExW(HKEY_CURRENT_USER,
-                          LR"(Software\Microsoft\Windows\CurrentVersion\Themes\Personalize)",
-                          0, KEY_READ, &hKey) == ERROR_SUCCESS) {
-            DWORD dwValue = 0;
-            DWORD dwType = REG_DWORD;
-            DWORD dwSize = sizeof(dwValue);
-            bool success = (RegQueryValueExW(hKey, L"AppsUseLightTheme", nullptr, &dwType,
-                                             reinterpret_cast<LPBYTE>(&dwValue),
-                                             &dwSize) == ERROR_SUCCESS);
-            if (!success) {
-                success = (RegQueryValueExW(hKey, L"SystemUsesLightTheme", nullptr, &dwType,
-                                            reinterpret_cast<LPBYTE>(&dwValue),
-                                            &dwSize) == ERROR_SUCCESS);
-            }
-            RegCloseKey(hKey);
-            if (success) {
-                return ((dwValue == 0) ? SystemTheme::Dark : SystemTheme::Light);
+        bool lightModeOn = false;
+        if (!am_ShouldAppsUseLightTheme_p(&lightModeOn)) {
+            if (!am_ShouldSystemUsesLightTheme_p(&lightModeOn)) {
+                am_Print_p(L"Failed to retrieve the system theme setting.");
+                return SystemTheme::Invalid;
             }
         }
+        return (lightModeOn ? SystemTheme::Light : SystemTheme::Dark);
     } else {
         am_Print_p(L"Current system version doesn't support dark mode.");
     }
@@ -967,6 +950,102 @@ bool am_GenerateGUID_p(LPWSTR *guid)
             uuid.Data4[4], uuid.Data4[5], uuid.Data4[6], uuid.Data4[7]);
     *guid = buf;
     return true;
+}
+
+[[nodiscard]] static inline DWORD am_GetDWORDValueFromRegister_p(const HKEY rootKey, LPCWSTR subKey,
+                                                                 LPCWSTR valueName, bool *ok = nullptr)
+{
+    if (ok) {
+        *ok = false;
+    }
+    if (!rootKey || !subKey || !valueName) {
+        return 0;
+    }
+    HKEY hKey = nullptr;
+    if (RegOpenKeyExW(rootKey, subKey, 0, KEY_READ, &hKey) != ERROR_SUCCESS) {
+        return 0;
+    }
+    DWORD dwValue = 0;
+    DWORD dwType = REG_DWORD;
+    DWORD dwSize = sizeof(dwValue);
+    const bool success = (RegQueryValueExW(hKey, valueName, nullptr, &dwType,
+                                reinterpret_cast<LPBYTE>(&dwValue), &dwSize) == ERROR_SUCCESS);
+    RegCloseKey(hKey);
+    if (ok) {
+        *ok = success;
+    }
+    return dwValue;
+}
+
+bool am_ShouldAppsUseLightTheme_p(bool *result)
+{
+    if (!result) {
+        return false;
+    }
+    bool ok = false;
+    const DWORD value = am_GetDWORDValueFromRegister_p(HKEY_CURRENT_USER, g_am_PersonalizeRegistryKey_p, L"AppsUseLightTheme", &ok);
+    if (!ok) {
+        return false;
+    }
+    *result = (value != 0);
+    return true;
+}
+
+bool am_ShouldSystemUsesLightTheme_p(bool *result)
+{
+    if (!result) {
+        return false;
+    }
+    bool ok = false;
+    const DWORD value = am_GetDWORDValueFromRegister_p(HKEY_CURRENT_USER, g_am_PersonalizeRegistryKey_p, L"SystemUsesLightTheme", &ok);
+    if (!ok) {
+        return false;
+    }
+    *result = (value != 0);
+    return true;
+}
+
+bool am_IsHighContrastModeOn_p()
+{
+    HIGHCONTRASTW hc;
+    SecureZeroMemory(&hc, sizeof(hc));
+    hc.cbSize = sizeof(hc);
+    if (SystemParametersInfoW(SPI_GETHIGHCONTRAST, sizeof(hc), &hc, 0) == FALSE) {
+        const bool result = am_ShowErrorMessageFromLastErrorCode_p(L"SystemParametersInfoW");
+        UNREFERENCED_PARAMETER(result);
+        return false;
+    }
+    return (hc.dwFlags & HCF_HIGHCONTRASTON);
+}
+
+bool am_SetWindowCompositionAttribute_p(const HWND hWnd, LPWINDOWCOMPOSITIONATTRIBDATA pwcad)
+{
+    if (!hWnd || !pwcad) {
+        return false;
+    }
+    static bool tried = false;
+    using sig = BOOL(WINAPI *)(HWND, LPWINDOWCOMPOSITIONATTRIBDATA);
+    static sig func = nullptr;
+    if (!func) {
+        if (tried) {
+            return false;
+        } else {
+            tried = true;
+            const HMODULE dll = LoadLibraryExW(L"User32.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
+            if (!dll) {
+                const bool result = am_ShowErrorMessageFromLastErrorCode_p(L"LoadLibraryExW");
+                UNREFERENCED_PARAMETER(result);
+                return false;
+            }
+            func = reinterpret_cast<sig>(GetProcAddress(dll, "SetWindowCompositionAttribute"));
+            if (!func) {
+                const bool result = am_ShowErrorMessageFromLastErrorCode_p(L"GetProcAddress");
+                UNREFERENCED_PARAMETER(result);
+                return false;
+            }
+        }
+    }
+    return (func(hWnd, pwcad) != FALSE);
 }
 
 [[nodiscard]] static inline LRESULT CALLBACK am_MainWindowProc_p(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)

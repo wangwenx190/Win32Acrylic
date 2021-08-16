@@ -111,10 +111,10 @@ am_SetBrushTheme(
 
 [[nodiscard]] ACRYLICMANAGER_API bool WINAPI
 am_GetTintColor(
-    _Out_ int      *r,
-    _Out_ int      *g,
-    _Out_ int      *b,
-    _Out_ int      *a
+    _Out_ int *r,
+    _Out_ int *g,
+    _Out_ int *b,
+    _Out_ int *a
 );
 
 [[nodiscard]] ACRYLICMANAGER_API bool WINAPI
@@ -127,7 +127,7 @@ am_SetTintColor(
 
 [[nodiscard]] ACRYLICMANAGER_API bool WINAPI
 am_GetTintOpacity(
-    _Out_ double   *opacity
+    _Out_ double *opacity
 );
 
 [[nodiscard]] ACRYLICMANAGER_API bool WINAPI
@@ -137,7 +137,7 @@ am_SetTintOpacity(
 
 [[nodiscard]] ACRYLICMANAGER_API bool WINAPI
 am_GetTintLuminosityOpacity(
-    _Out_ double   *opacity
+    _Out_ double opacity
 );
 
 [[nodiscard]] ACRYLICMANAGER_API bool WINAPI
@@ -147,10 +147,10 @@ am_SetTintLuminosityOpacity(
 
 [[nodiscard]] ACRYLICMANAGER_API bool WINAPI
 am_GetFallbackColor(
-    _Out_ int      *r,
-    _Out_ int      *g,
-    _Out_ int      *b,
-    _Out_ int      *a
+    _Out_ int *r,
+    _Out_ int *g,
+    _Out_ int *b,
+    _Out_ int *a
 );
 
 [[nodiscard]] ACRYLICMANAGER_API bool WINAPI

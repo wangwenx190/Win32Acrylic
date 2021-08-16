@@ -70,7 +70,11 @@
 #define _DWMAPI_
 #endif
 
-#include <Windows.h>
+#include <SDKDDKVer.h>
+
+#ifndef NTDDI_WIN10_19H1
+#define NTDDI_WIN10_19H1 0x0A000007
+#endif
 
 #ifdef WINVER
 #undef WINVER
@@ -78,10 +82,6 @@
 
 #ifdef _WIN32_WINNT
 #undef _WIN32_WINNT
-#endif
-
-#ifndef NTDDI_WIN10_19H1
-#define NTDDI_WIN10_19H1 0x0A000007
 #endif
 
 #define WINVER NTDDI_WIN10_19H1
@@ -219,3 +219,5 @@ ACRYLICMANAGER_TRY_EXECUTE_FUNCTION_CALL_FUNC_RETURN(__VA_ARGS__)
 #endif
 #endif
 #endif
+
+#include <Windows.h>

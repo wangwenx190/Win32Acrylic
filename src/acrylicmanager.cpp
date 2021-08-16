@@ -627,7 +627,7 @@ bool am_CompareSystemVersion_p(const WindowsVersion ver, const VersionCompare co
     }
     RECT geo = {0, 0, 0, 0};
     if (GetWindowRect(g_am_MainWindowHandle_p, &geo) == FALSE) {
-        am_Print_p(L"Failed to retrieve window rect of main window.");
+        PRINT_ERROR_MESSAGE(GetWindowRect)
         return {};
     }
     return geo;
@@ -1304,40 +1304,99 @@ bool am_ShowErrorMessageFromLastErrorCode_p(LPCWSTR functionName)
         return nonClientAreaExists ? 0 : WVR_REDRAW;
     }
     case WM_NCHITTEST: {
-        // This will handle the left, right and bottom parts of the frame
-        // because we didn't change them.
-        const LRESULT originalRet = DefWindowProcW(hWnd, uMsg, wParam, lParam);
-        if (originalRet != HTCLIENT) {
-            return originalRet;
-        }
-        POINT pos = {GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)};
-        if (ScreenToClient(hWnd, &pos) == FALSE) {
-            am_Print_p(L"WM_NCHITTEST: Failed to translate screen coordinates to client coordinates.");
+        const POINT globalPos = {GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)};
+        POINT localPos = globalPos;
+        if (ScreenToClient(hWnd, &localPos) == FALSE) {
+            PRINT_ERROR_MESSAGE(ScreenToClient)
             break;
         }
+        const bool maxOrFull = (am_IsMaximized_p(hWnd) || am_IsFullScreened_p(hWnd));
+        const bool normal = am_IsWindowNoState_p(hWnd);
+        const SIZE ws = am_GetWindowSize_p();
+        const LONG ww = ws.cx;
+        const int rbtX = am_GetResizeBorderThickness_p(true, g_am_CurrentDpi_p);
         const int rbtY = am_GetResizeBorderThickness_p(false, g_am_CurrentDpi_p);
-        // At this point, we know that the cursor is inside the client area
-        // so it has to be either the little border at the top of our custom
-        // title bar or the drag bar. Apparently, it must be the drag bar or
-        // the little border at the top which the user can use to move or
-        // resize the window.
-        if (am_IsWindowNoState_p(hWnd) && (pos.y <= rbtY)) {
-            return HTTOP;
-        }
         const int cth = am_GetCaptionHeight_p(g_am_CurrentDpi_p);
-        if (am_IsMaximized_p(hWnd) && (pos.y >= 0) && (pos.y <= cth)) {
-            return HTCAPTION;
+        const bool hitTestVisible = /*am_IsHitTestVisibleInChrome_p(hWnd)*/false; // todo
+        bool isTitleBar = false;
+        if (maxOrFull) {
+            isTitleBar = ((localPos.y >= 0) && (localPos.y <= cth)
+                          && (localPos.x >= 0) && (localPos.x <= ww)
+                          && !hitTestVisible);
+        } else if (normal) {
+            isTitleBar = ((localPos.y > rbtY) && (localPos.y <= am_GetTitleBarHeight_p(hWnd, g_am_CurrentDpi_p))
+                          && (localPos.x > rbtX) && (localPos.x < (ww - rbtX))
+                          && !hitTestVisible);
         }
-        if (am_IsWindowNoState_p(hWnd) && (pos.y > rbtY) && (pos.y <= (rbtY + cth))) {
-            return HTCAPTION;
+        const bool isTop = (normal ? (localPos.y <= rbtY) : false);
+        if (am_CompareSystemVersion_p(WindowsVersion::Windows10, VersionCompare::GreaterOrEqual)) {
+            // This will handle the left, right and bottom parts of the frame
+            // because we didn't change them.
+            const LRESULT originalRet = DefWindowProcW(hWnd, uMsg, wParam, lParam);
+            if (originalRet != HTCLIENT) {
+                return originalRet;
+            }
+            // At this point, we know that the cursor is inside the client area
+            // so it has to be either the little border at the top of our custom
+            // title bar or the drag bar. Apparently, it must be the drag bar or
+            // the little border at the top which the user can use to move or
+            // resize the window.
+            if (isTop) {
+                return HTTOP;
+            }
+            if (isTitleBar) {
+                return HTCAPTION;
+            }
+            return HTCLIENT;
+        } else {
+            if (maxOrFull) {
+                if (isTitleBar) {
+                    return HTCAPTION;
+                }
+                return HTCLIENT;
+            }
+            const LONG wh = ws.cy;
+            const bool isBottom = (normal ? (localPos.y >= (wh - rbtY)) : false);
+            // Make the border a little wider to let the user easy to resize on corners.
+            const double factor = (normal ? ((isTop || isBottom) ? 2.0 : 1.0) : 0.0);
+            const bool isLeft = (normal ? (localPos.x <= std::round(static_cast<double>(rbtX) * factor)) : false);
+            const bool isRight = (normal ? (localPos.x >= (ww - std::round(static_cast<double>(rbtX) * factor))) : false);
+            if (isTop) {
+                if (isLeft) {
+                    return HTTOPLEFT;
+                }
+                if (isRight) {
+                    return HTTOPRIGHT;
+                }
+                return HTTOP;
+            }
+            if (isBottom) {
+                if (isLeft) {
+                    return HTBOTTOMLEFT;
+                }
+                if (isRight) {
+                    return HTBOTTOMRIGHT;
+                }
+                return HTBOTTOM;
+            }
+            if (isLeft) {
+                return HTLEFT;
+            }
+            if (isRight) {
+                return HTRIGHT;
+            }
+            if (isTitleBar) {
+                return HTCAPTION;
+            }
+            return HTCLIENT;
         }
-        return HTCLIENT;
+        return HTNOWHERE;
     }
     case WM_PAINT: {
         PAINTSTRUCT ps = {};
         const HDC hdc = BeginPaint(hWnd, &ps);
         if (!hdc) {
-            am_Print_p(L"WM_PAINT: BeginPaint() returns null.");
+            PRINT_ERROR_MESSAGE(BeginPaint)
             break;
         }
         // We removed the whole top part of the frame (see handling of
@@ -1365,7 +1424,7 @@ bool am_ShowErrorMessageFromLastErrorCode_p(LPCWSTR functionName)
             // BLACK_BRUSH to do this:
             // https://docs.microsoft.com/en-us/windows/win32/dwm/customframe#extending-the-client-frame
             if (FillRect(hdc, &rcTopBorder, BACKGROUND_BRUSH) == 0) {
-                am_Print_p(L"WM_PAINT: FillRect() returns zero.");
+                PRINT_ERROR_MESSAGE(FillRect)
                 break;
             }
         }
@@ -1382,12 +1441,12 @@ bool am_ShowErrorMessageFromLastErrorCode_p(LPCWSTR functionName)
             params.dwFlags = BPPF_NOCLIP | BPPF_ERASE;
             const HPAINTBUFFER buf = BeginBufferedPaint(hdc, &rcRest, BPBF_TOPDOWNDIB, &params, &opaqueDc);
             if (!buf) {
-                am_Print_p(L"WM_PAINT: BeginBufferedPaint() returns null.");
+                PRINT_ERROR_MESSAGE(BeginBufferedPaint)
                 break;
             }
             if (FillRect(opaqueDc, &rcRest,
                          reinterpret_cast<HBRUSH>(GetClassLongPtrW(hWnd, GCLP_HBRBACKGROUND))) == 0) {
-                am_Print_p(L"WM_PAINT: FillRect() returns zero.");
+                PRINT_ERROR_MESSAGE(FillRect)
                 break;
             }
             if (FAILED(BufferedPaintSetAlpha(buf, nullptr, 255))) {
@@ -1400,7 +1459,7 @@ bool am_ShowErrorMessageFromLastErrorCode_p(LPCWSTR functionName)
             }
         }
         if (EndPaint(hWnd, &ps) == FALSE) {
-            am_Print_p(L"WM_PAINT: EndPaint() returns FALSE.");
+            PRINT_ERROR_MESSAGE(EndPaint)
             break;
         }
         return 0;
@@ -1412,7 +1471,7 @@ bool am_ShowErrorMessageFromLastErrorCode_p(LPCWSTR functionName)
         const auto prcNewWindow = reinterpret_cast<LPRECT>(lParam);
         if (MoveWindow(hWnd, prcNewWindow->left, prcNewWindow->top,
                    RECT_WIDTH(*prcNewWindow), RECT_HEIGHT(*prcNewWindow), TRUE) == FALSE) {
-            am_Print_p(L"WM_DPICHANGED: Failed to move window to new position and size.");
+            PRINT_ERROR_MESSAGE(MoveWindow)
             break;
         }
         return 0;
@@ -1433,14 +1492,14 @@ bool am_ShowErrorMessageFromLastErrorCode_p(LPCWSTR functionName)
             const int height = (HIWORD(lParam) - topMargin);
             if (SetWindowPos(g_am_XAMLIslandWindowHandle_p, HWND_BOTTOM, 0, topMargin,
                          width, height, flags) == FALSE) {
-                am_Print_p(L"WM_SIZE: Failed to move XAML Island window.");
+                PRINT_ERROR_MESSAGE(SetWindowPos)
                 break;
             }
         }
         if (g_am_DragBarWindowHandle_p) {
             if (SetWindowPos(g_am_DragBarWindowHandle_p, HWND_TOP, 0, 0, width,
                          am_GetTitleBarHeight_p(hWnd, g_am_CurrentDpi_p), flags) == FALSE) {
-                am_Print_p(L"WM_SIZE: Failed to move drag bar window.");
+                PRINT_ERROR_MESSAGE(SetWindowPos)
                 break;
             }
         }
@@ -1581,7 +1640,7 @@ bool am_ShowErrorMessageFromLastErrorCode_p(LPCWSTR functionName)
     {
         POINT pos = {GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)};
         if (ClientToScreen(hWnd, &pos) == FALSE) {
-            am_Print_p(L"dragBarWindowProc: Failed to translate client coordinates to screen coordinates.");
+            PRINT_ERROR_MESSAGE(ClientToScreen)
             return 0;
         }
         const LPARAM newLParam = MAKELPARAM(pos.x, pos.y);
@@ -1608,6 +1667,7 @@ bool am_ShowErrorMessageFromLastErrorCode_p(LPCWSTR functionName)
     }
     g_am_MainWindowClassName_p = new wchar_t[MAX_PATH];
     SecureZeroMemory(g_am_MainWindowClassName_p, sizeof(g_am_MainWindowClassName_p));
+    wcscat(g_am_MainWindowClassName_p, g_am_WindowClassNamePrefix_p);
     wcscat(g_am_MainWindowClassName_p, guid);
     delete [] guid;
     wcscat(g_am_MainWindowClassName_p, g_am_MainWindowClassNameSuffix_p);
@@ -1656,6 +1716,7 @@ bool am_ShowErrorMessageFromLastErrorCode_p(LPCWSTR functionName)
     }
     g_am_DragBarWindowClassName_p = new wchar_t[MAX_PATH];
     SecureZeroMemory(g_am_DragBarWindowClassName_p, sizeof(g_am_DragBarWindowClassName_p));
+    wcscat(g_am_DragBarWindowClassName_p, g_am_WindowClassNamePrefix_p);
     wcscat(g_am_DragBarWindowClassName_p, guid);
     delete [] guid;
     wcscat(g_am_DragBarWindowClassName_p, g_am_DragBarWindowClassNameSuffix_p);

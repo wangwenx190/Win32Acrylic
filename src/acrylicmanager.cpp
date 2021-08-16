@@ -1228,6 +1228,14 @@ bool am_ShowErrorMessageFromLastErrorCode_p(LPCWSTR functionName)
     return (MoveWindow(g_am_MainWindowHandle_p, x, y, w, h, TRUE) != FALSE);
 }
 
+[[nodiscard]] static inline bool am_IsWindowActive_p()
+{
+    if (!g_am_MainWindowHandle_p) {
+        return false;
+    }
+    return (GetActiveWindow() == g_am_MainWindowHandle_p);
+}
+
 [[nodiscard]] static inline LRESULT CALLBACK am_MainWindowProc_p(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
     bool systemThemeChanged = false;
@@ -1452,13 +1460,15 @@ bool am_ShowErrorMessageFromLastErrorCode_p(LPCWSTR functionName)
         return HTNOWHERE;
     }
     case WM_PAINT: {
+        if (am_CompareSystemVersion_p(WindowsVersion::Windows10, VersionCompare::Less)) {
+            break;
+        }
         PAINTSTRUCT ps = {};
         const HDC hdc = BeginPaint(hWnd, &ps);
         if (!hdc) {
             PRINT_ERROR_MESSAGE(BeginPaint)
             break;
         }
-        const bool win10 = am_CompareSystemVersion_p(WindowsVersion::Windows10, VersionCompare::GreaterOrEqual);
         // We removed the whole top part of the frame (see handling of
         // WM_NCCALCSIZE) so the top border is missing now. We add it back here.
         // Note #1: You might wonder why we don't remove just the title bar instead
@@ -1477,9 +1487,7 @@ bool am_ShowErrorMessageFromLastErrorCode_p(LPCWSTR functionName)
         const LONG borderThickness = am_GetWindowVisibleFrameBorderThickness_p(hWnd, g_am_CurrentDpi_p);
         if (ps.rcPaint.top < borderThickness) {
             RECT rcPaint = ps.rcPaint;
-            if (win10) {
-                rcPaint.bottom = borderThickness;
-            }
+            rcPaint.bottom = borderThickness;
             // To show the original top border, we have to paint on top
             // of it with the alpha component set to 0. This page
             // recommends to paint the area in black using the stock
@@ -1492,14 +1500,7 @@ bool am_ShowErrorMessageFromLastErrorCode_p(LPCWSTR functionName)
         }
         if (ps.rcPaint.bottom > borderThickness) {
             RECT rcPaint = ps.rcPaint;
-            if (win10) {
-                rcPaint.top = borderThickness;
-            } else {
-                rcPaint.top = rcPaint.top + borderThickness + 1;
-                rcPaint.bottom = rcPaint.bottom - borderThickness - 1;
-                rcPaint.left = rcPaint.left + borderThickness + 1;
-                rcPaint.right = rcPaint.right - borderThickness - 1;
-            }
+            rcPaint.top = borderThickness;
             // To hide the original title bar, we have to paint on top
             // of it with the alpha component set to 255. This is a hack
             // to do it with GDI. See updateFrameMargins() for more information.
@@ -1630,6 +1631,43 @@ bool am_ShowErrorMessageFromLastErrorCode_p(LPCWSTR functionName)
         if (!am_IsCompositionEnabled_p()) {
             am_Print_p(L"This application can't continue running when DWM composition is disabled.", true);
             std::exit(-1);
+        }
+    } break;
+    case WM_ACTIVATE: {
+        if (am_CompareSystemVersion_p(WindowsVersion::Windows10, VersionCompare::GreaterOrEqual)) {
+            break;
+        }
+        const auto status = LOWORD(wParam);
+        const bool active = ((status == WA_ACTIVE) || (status == WA_CLICKACTIVE));
+        const COLORREF color = (active ? RGB(20, 20, 20) : RGB(53, 56, 68));
+        const HPEN hpen = CreatePen(PS_SOLID, 4, color);
+        if (!hpen) {
+            PRINT_ERROR_MESSAGE(CreatePen)
+            break;
+        }
+        const HDC hdc = GetDC(hWnd);
+        if (!hdc) {
+            PRINT_ERROR_MESSAGE(GetDC)
+            break;
+        }
+        HGDIOBJ result = SelectObject(hdc, hpen);
+        if (!result || (result == HGDI_ERROR)) {
+            PRINT_ERROR_MESSAGE(SelectObject)
+            break;
+        }
+        result = SelectObject(hdc, (HBRUSH)GetStockObject(NULL_BRUSH));
+        if (!result || (result == HGDI_ERROR)) {
+            PRINT_ERROR_MESSAGE(SelectObject)
+            break;
+        }
+        const SIZE ws = am_GetWindowSize_p();
+        if (Rectangle(hdc, 0, 0, ws.cx, ws.cy) == FALSE) {
+            PRINT_ERROR_MESSAGE(Rectangle)
+            break;
+        }
+        if (ReleaseDC(hWnd, hdc) == 0) {
+            PRINT_ERROR_MESSAGE(ReleaseDC)
+            break;
         }
     } break;
     case WM_CLOSE: {
@@ -2205,4 +2243,9 @@ bool am_SetFallbackColor(const int r, const int g, const int b, const int a)
 int am_EventLoopExec()
 {
     return am_MainWindowEventLoop_p();
+}
+
+bool am_IsWindowActive()
+{
+    return am_IsWindowActive_p();
 }

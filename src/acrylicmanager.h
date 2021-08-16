@@ -164,6 +164,45 @@ am_SetFallbackColor(
 [[nodiscard]] ACRYLICMANAGER_API int WINAPI
 am_EventLoopExec();
 
+[[nodiscard]] ACRYLICMANAGER_API bool WINAPI
+am_IsWindowActive();
+
+#if 0
+[[nodiscard]] ACRYLICMANAGER_API int WINAPI
+am_GetTitleBarHeight();
+
+[[nodiscard]] ACRYLICMANAGER_API bool WINAPI
+am_SetTitleBarHeight(
+    _In_ const int height
+);
+
+[[nodiscard]] ACRYLICMANAGER_API bool WINAPI
+am_IsTitleBarVisible();
+
+[[nodiscard]] ACRYLICMANAGER_API bool WINAPI
+am_SetTitleBarVisible(
+    _In_ const bool visible
+);
+
+[[nodiscard]] ACRYLICMANAGER_API COLORREF WINAPI
+am_GetTitleBarColor();
+
+[[nodiscard]] ACRYLICMANAGER_API bool WINAPI
+am_SetTitleBarColor(
+    _In_ const COLORREF color
+);
+
+// min, max, close buttons visibility
+
+[[nodiscard]] ACRYLICMANAGER_API bool WINAPI
+am_IsCaptionTextAlignedCenter();
+
+[[nodiscard]] ACRYLICMANAGER_API bool WINAPI
+am_SetCaptionTextAlignedCenter(
+    _In_ const bool center
+);
+#endif
+
 #ifdef __cplusplus
 EXTERN_C_END
 #endif

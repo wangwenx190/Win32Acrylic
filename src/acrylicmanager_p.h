@@ -69,6 +69,14 @@ enum class VersionCompare : int
     GreaterOrEqual
 };
 
+enum class ColorizationArea : int
+{
+    None = 0,
+    WindowFrame,
+    TitleBar,
+    StartMenuAndTaskBar
+};
+
 typedef enum _WINDOWCOMPOSITIONATTRIB
 {
     WCA_UNDEFINED = 0x0,
@@ -151,12 +159,12 @@ am_IsFullScreened_p(
 );
 
 [[nodiscard]] ACRYLICMANAGER_API bool WINAPI
-am_IsNoState_p(
+am_IsWindowNoState_p(
     _In_ const HWND hWnd
 );
 
 [[nodiscard]] ACRYLICMANAGER_API bool WINAPI
-am_IsVisible_p(
+am_IsWindowVisible_p(
     _In_ const HWND hWnd
 );
 
@@ -192,6 +200,11 @@ am_IsCompositionEnabled_p();
 
 [[nodiscard]] ACRYLICMANAGER_API bool WINAPI
 am_TriggerFrameChange_p(
+    _In_ const HWND hWnd
+);
+
+[[nodiscard]] ACRYLICMANAGER_API bool WINAPI
+am_IsWindowTransitionsEnabled_p(
     _In_ const HWND hWnd
 );
 
@@ -241,6 +254,18 @@ am_SetWindowCompositionAttribute_p(
     _In_ const HWND hWnd,
     _In_ LPWINDOWCOMPOSITIONATTRIBDATA pwcad
 );
+
+[[nodiscard]] ACRYLICMANAGER_API bool WINAPI
+am_ShouldWindowUseDarkFrame_p(
+    _In_ const HWND hWnd,
+    _Out_ bool      *result
+);
+
+[[nodiscard]] ACRYLICMANAGER_API COLORREF WINAPI
+am_GetColorizationColor_p();
+
+[[nodiscard]] ACRYLICMANAGER_API ColorizationArea WINAPI
+am_GetColorizationArea_p();
 
 #ifdef __cplusplus
 EXTERN_C_END

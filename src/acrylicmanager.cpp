@@ -312,7 +312,7 @@ bool am_IsFullScreened_p(const HWND hWnd)
             && (windowRect.bottom == screenRect.bottom));
 }
 
-bool am_IsNoState_p(const HWND hWnd)
+bool am_IsWindowNoState_p(const HWND hWnd)
 {
     if (!hWnd) {
         return false;
@@ -327,7 +327,7 @@ bool am_IsNoState_p(const HWND hWnd)
     return (wp.showCmd == SW_NORMAL);
 }
 
-bool am_IsVisible_p(const HWND hWnd)
+bool am_IsWindowVisible_p(const HWND hWnd)
 {
     if (!hWnd) {
         return false;
@@ -536,7 +536,7 @@ bool am_CompareSystemVersion_p(const WindowsVersion ver, const VersionCompare co
 {
     // TODO: DwmGetWindowAttribute().
     const UINT _dpi = (dpi == 0) ? USER_DEFAULT_SCREEN_DPI : dpi;
-    return ((hWnd && am_IsNoState_p(hWnd)) ? std::round(1.0 * am_GetDevicePixelRatio_p(_dpi)) : 0);
+    return ((hWnd && am_IsWindowNoState_p(hWnd)) ? std::round(1.0 * am_GetDevicePixelRatio_p(_dpi)) : 0);
 }
 
 [[nodiscard]] static inline bool am_UpdateFrameMargins_p(const HWND hWnd, const UINT dpi)
@@ -560,7 +560,7 @@ bool am_CompareSystemVersion_p(const WindowsVersion ver, const VersionCompare co
     //  at the top) in the WM_PAINT handler. This eliminates the transparency
     //  bug and it's what a lot of Win32 apps that customize the title bar do
     //  so it should work fine.
-    const MARGINS margins = {0, 0, (am_IsNoState_p(hWnd) ? am_GetTitleBarHeight_p(hWnd, _dpi) : 0), 0};
+    const MARGINS margins = {0, 0, (am_IsWindowNoState_p(hWnd) ? am_GetTitleBarHeight_p(hWnd, _dpi) : 0), 0};
     return SUCCEEDED(DwmExtendFrameIntoClientArea(hWnd, &margins));
 }
 
@@ -679,11 +679,11 @@ bool am_CompareSystemVersion_p(const WindowsVersion ver, const VersionCompare co
         return WindowState::Maximized;
     } else if (am_IsMinimized_p(g_am_MainWindowHandle_p)) {
         return WindowState::Minimized;
-    } else if (am_IsNoState_p(g_am_MainWindowHandle_p)) {
+    } else if (am_IsWindowNoState_p(g_am_MainWindowHandle_p)) {
         return WindowState::Normal;
-    } else if (am_IsVisible_p(g_am_MainWindowHandle_p)) {
+    } else if (am_IsWindowVisible_p(g_am_MainWindowHandle_p)) {
         return WindowState::Shown;
-    } else if (!am_IsVisible_p(g_am_MainWindowHandle_p)) {
+    } else if (!am_IsWindowVisible_p(g_am_MainWindowHandle_p)) {
         return WindowState::Hidden;
     }
     return WindowState::Invalid;
@@ -1048,6 +1048,45 @@ bool am_SetWindowCompositionAttribute_p(const HWND hWnd, LPWINDOWCOMPOSITIONATTR
     return (func(hWnd, pwcad) != FALSE);
 }
 
+bool am_IsWindowTransitionsEnabled_p(const HWND hWnd)
+{
+    if (!hWnd) {
+        return false;
+    }
+    BOOL disabled = FALSE;
+    if (FAILED(DwmGetWindowAttribute(hWnd, DWMWA_TRANSITIONS_FORCEDISABLED, &disabled, sizeof(disabled)))) {
+        am_Print_p(L"Failed to retrieve window transitions state.");
+        return false;
+    }
+    return (disabled == FALSE);
+}
+
+bool am_ShouldWindowUseDarkFrame_p(const HWND hWnd, bool *result)
+{
+    if (!hWnd || !result) {
+        return false;
+    }
+    // todo
+    return false;
+}
+
+COLORREF am_GetColorizationColor_p()
+{
+    COLORREF color = RGB(0, 0, 0);
+    BOOL opaque = FALSE;
+    if (FAILED(DwmGetColorizationColor(&color, &opaque))) {
+        am_Print_p(L"Failed to retrieve the colorization color.");
+        return RGB(128, 128, 128); // #808080, DarkGray
+    }
+    return color;
+}
+
+ColorizationArea am_GetColorizationArea_p()
+{
+    // todo
+    return ColorizationArea::None;
+}
+
 [[nodiscard]] static inline LRESULT CALLBACK am_MainWindowProc_p(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
     bool systemThemeChanged = false;
@@ -1161,14 +1200,14 @@ bool am_SetWindowCompositionAttribute_p(const HWND hWnd, LPWINDOWCOMPOSITIONATTR
         // title bar or the drag bar. Apparently, it must be the drag bar or
         // the little border at the top which the user can use to move or
         // resize the window.
-        if (am_IsNoState_p(hWnd) && (pos.y <= rbtY)) {
+        if (am_IsWindowNoState_p(hWnd) && (pos.y <= rbtY)) {
             return HTTOP;
         }
         const int cth = am_GetCaptionHeight_p(g_am_CurrentDpi_p);
         if (am_IsMaximized_p(hWnd) && (pos.y >= 0) && (pos.y <= cth)) {
             return HTCAPTION;
         }
-        if (am_IsNoState_p(hWnd) && (pos.y > rbtY) && (pos.y <= (rbtY + cth))) {
+        if (am_IsWindowNoState_p(hWnd) && (pos.y > rbtY) && (pos.y <= (rbtY + cth))) {
             return HTCAPTION;
         }
         return HTCLIENT;

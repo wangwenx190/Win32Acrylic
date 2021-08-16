@@ -171,6 +171,15 @@ DwmGetWindowAttribute(
     ACRYLICMANAGER_TRY_EXECUTE_DWM_FUNCTION(DwmGetWindowAttribute, hWnd, dwAttribute, pvAttribute, cbAttribute)
 }
 
+HRESULT WINAPI
+DwmGetColorizationColor(
+    DWORD *pcrColorization,
+    BOOL  *pfOpaqueBlend
+)
+{
+    ACRYLICMANAGER_TRY_EXECUTE_DWM_FUNCTION(DwmGetColorizationColor, pcrColorization, pfOpaqueBlend)
+}
+
 #ifdef __cplusplus
 EXTERN_C_END
 #endif

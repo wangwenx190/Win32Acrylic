@@ -101,11 +101,20 @@ EXTERN_C IMAGE_DOS_HEADER __ImageBase;
 #define CURRENT_SCREEN(window) (MonitorFromWindow(window, MONITOR_DEFAULTTONEAREST))
 #endif
 
+#ifndef PRINT_ERROR_MESSAGE
+#define PRINT_ERROR_MESSAGE(function) \
+const bool __result_##function = am_ShowErrorMessageFromLastErrorCode_p(L#function); \
+static_cast<void>(__result_##function);
+#endif
+
 // The thickness of an auto-hide taskbar in pixels.
 static const int g_am_AutoHideTaskbarThicknessPx_p = 2;
 static const int g_am_AutoHideTaskbarThicknessPy_p = g_am_AutoHideTaskbarThicknessPx_p;
 
 static LPCWSTR g_am_PersonalizeRegistryKey_p = LR"(Software\Microsoft\Windows\CurrentVersion\Themes\Personalize)";
+static LPCWSTR g_am_WindowClassNamePrefix_p = LR"(wangwenx190\AcrylicManager\WindowClass\)";
+static LPCWSTR g_am_MainWindowClassNameSuffix_p = L"@MainWindow";
+static LPCWSTR g_am_DragBarWindowClassNameSuffix_p = L"@DragBarWindow";
 
 static LPWSTR g_am_MainWindowClassName_p = nullptr;
 static LPWSTR g_am_DragBarWindowClassName_p = nullptr;
@@ -301,11 +310,22 @@ bool am_IsFullScreened_p(const HWND hWnd)
     }
     RECT windowRect = {0, 0, 0, 0};
     if (GetWindowRect(hWnd, &windowRect) == FALSE) {
-        am_Print_p(L"Failed to retrieve window rect of main window.");
+        PRINT_ERROR_MESSAGE(GetWindowRect)
         return false;
     }
-    // FIXME: MONITOR_DEFAULTTOPRIMARY?
-    const RECT screenRect = am_GetScreenGeometry_p(hWnd);
+    const HMONITOR mon = MonitorFromWindow(hWnd, MONITOR_DEFAULTTOPRIMARY);
+    if (!mon) {
+        PRINT_ERROR_MESSAGE(MonitorFromWindow)
+        return false;
+    }
+    MONITORINFO mi;
+    SecureZeroMemory(&mi, sizeof(mi));
+    mi.cbSize = sizeof(mi);
+    if (GetMonitorInfoW(mon, &mi) == FALSE) {
+        PRINT_ERROR_MESSAGE(GetMonitorInfoW)
+        return false;
+    }
+    const RECT screenRect = mi.rcMonitor;
     return ((windowRect.left == screenRect.left)
             && (windowRect.right == screenRect.right)
             && (windowRect.top == screenRect.top)
@@ -732,28 +752,24 @@ static inline void am_Cleanup_p()
     }
     if (g_am_DragBarWindowHandle_p) {
         DestroyWindow(g_am_DragBarWindowHandle_p);
-        const bool result = am_ShowErrorMessageFromLastErrorCode_p(L"DestroyWindow (DragBarWindow)");
-        UNREFERENCED_PARAMETER(result);
+        PRINT_ERROR_MESSAGE(DestroyWindow)
         g_am_DragBarWindowHandle_p = nullptr;
     }
     if (g_am_MainWindowHandle_p) {
         DestroyWindow(g_am_MainWindowHandle_p);
-        const bool result = am_ShowErrorMessageFromLastErrorCode_p(L"DestroyWindow (MainWindow)");
-        UNREFERENCED_PARAMETER(result);
+        PRINT_ERROR_MESSAGE(DestroyWindow)
         g_am_MainWindowHandle_p = nullptr;
     }
     if (g_am_DragBarWindowAtom_p != 0) {
         UnregisterClassW(g_am_DragBarWindowClassName_p, HINST_THISCOMPONENT);
-        const bool result = am_ShowErrorMessageFromLastErrorCode_p(L"UnregisterClassW (DragBarWindow)");
-        UNREFERENCED_PARAMETER(result);
+        PRINT_ERROR_MESSAGE(UnregisterClassW)
         g_am_DragBarWindowAtom_p = 0;
         delete [] g_am_DragBarWindowClassName_p;
         g_am_DragBarWindowClassName_p = nullptr;
     }
     if (g_am_MainWindowAtom_p != 0) {
         UnregisterClassW(g_am_MainWindowClassName_p, HINST_THISCOMPONENT);
-        const bool result = am_ShowErrorMessageFromLastErrorCode_p(L"UnregisterClassW (MainWindow)");
-        UNREFERENCED_PARAMETER(result);
+        PRINT_ERROR_MESSAGE(UnregisterClassW)
         g_am_MainWindowAtom_p = 0;
         delete [] g_am_MainWindowClassName_p;
         g_am_MainWindowClassName_p = nullptr;
@@ -933,10 +949,12 @@ bool am_GenerateGUID_p(LPWSTR *guid)
         return false;
     }
     if (FAILED(CoInitialize(nullptr))) {
+        am_Print_p(L"Failed to initialize COM.");
         return false;
     }
     GUID uuid = {};
     if (FAILED(CoCreateGuid(&uuid))) {
+        am_Print_p(L"Failed to create GUID.");
         CoUninitialize();
         return false;
     }
@@ -952,7 +970,7 @@ bool am_GenerateGUID_p(LPWSTR *guid)
     return true;
 }
 
-[[nodiscard]] static inline DWORD am_GetDWORDValueFromRegister_p(const HKEY rootKey, LPCWSTR subKey,
+[[nodiscard]] static inline DWORD am_GetDWORDValueFromRegistry_p(const HKEY rootKey, LPCWSTR subKey,
                                                                  LPCWSTR valueName, bool *ok = nullptr)
 {
     if (ok) {
@@ -983,7 +1001,7 @@ bool am_ShouldAppsUseLightTheme_p(bool *result)
         return false;
     }
     bool ok = false;
-    const DWORD value = am_GetDWORDValueFromRegister_p(HKEY_CURRENT_USER, g_am_PersonalizeRegistryKey_p, L"AppsUseLightTheme", &ok);
+    const DWORD value = am_GetDWORDValueFromRegistry_p(HKEY_CURRENT_USER, g_am_PersonalizeRegistryKey_p, L"AppsUseLightTheme", &ok);
     if (!ok) {
         return false;
     }
@@ -997,7 +1015,7 @@ bool am_ShouldSystemUsesLightTheme_p(bool *result)
         return false;
     }
     bool ok = false;
-    const DWORD value = am_GetDWORDValueFromRegister_p(HKEY_CURRENT_USER, g_am_PersonalizeRegistryKey_p, L"SystemUsesLightTheme", &ok);
+    const DWORD value = am_GetDWORDValueFromRegistry_p(HKEY_CURRENT_USER, g_am_PersonalizeRegistryKey_p, L"SystemUsesLightTheme", &ok);
     if (!ok) {
         return false;
     }
@@ -1011,8 +1029,7 @@ bool am_IsHighContrastModeOn_p()
     SecureZeroMemory(&hc, sizeof(hc));
     hc.cbSize = sizeof(hc);
     if (SystemParametersInfoW(SPI_GETHIGHCONTRAST, sizeof(hc), &hc, 0) == FALSE) {
-        const bool result = am_ShowErrorMessageFromLastErrorCode_p(L"SystemParametersInfoW");
-        UNREFERENCED_PARAMETER(result);
+        PRINT_ERROR_MESSAGE(SystemParametersInfoW)
         return false;
     }
     return (hc.dwFlags & HCF_HIGHCONTRASTON);
@@ -1033,14 +1050,12 @@ bool am_SetWindowCompositionAttribute_p(const HWND hWnd, LPWINDOWCOMPOSITIONATTR
             tried = true;
             const HMODULE dll = LoadLibraryExW(L"User32.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
             if (!dll) {
-                const bool result = am_ShowErrorMessageFromLastErrorCode_p(L"LoadLibraryExW");
-                UNREFERENCED_PARAMETER(result);
+                PRINT_ERROR_MESSAGE(LoadLibraryExW)
                 return false;
             }
             func = reinterpret_cast<sig>(GetProcAddress(dll, "SetWindowCompositionAttribute"));
             if (!func) {
-                const bool result = am_ShowErrorMessageFromLastErrorCode_p(L"GetProcAddress");
-                UNREFERENCED_PARAMETER(result);
+                PRINT_ERROR_MESSAGE(GetProcAddress)
                 return false;
             }
         }
@@ -1087,6 +1102,24 @@ ColorizationArea am_GetColorizationArea_p()
     return ColorizationArea::None;
 }
 
+void am_FreeStringA_p(void *mem)
+{
+    if (!mem) {
+        return;
+    }
+    delete [] static_cast<LPSTR>(mem);
+    mem = nullptr;
+}
+
+void am_FreeStringW_p(void *mem)
+{
+    if (!mem) {
+        return;
+    }
+    delete [] static_cast<LPWSTR>(mem);
+    mem = nullptr;
+}
+
 bool am_ShowErrorMessageFromLastErrorCode_p(LPCWSTR functionName)
 {
     if (!functionName) {
@@ -1113,9 +1146,9 @@ bool am_ShowErrorMessageFromLastErrorCode_p(LPCWSTR functionName)
 
     lpDisplayBuf = reinterpret_cast<LPVOID>(LocalAlloc(LMEM_ZEROINIT,
         (wcslen(reinterpret_cast<LPCWSTR>(lpMsgBuf))
-         + wcslen(reinterpret_cast<LPCWSTR>(functionName)) + 40) * sizeof(WCHAR)));
+         + wcslen(reinterpret_cast<LPCWSTR>(functionName)) + 40) * sizeof(wchar_t)));
     StringCchPrintfW(reinterpret_cast<LPWSTR>(lpDisplayBuf),
-        LocalSize(lpDisplayBuf) / sizeof(WCHAR),
+        LocalSize(lpDisplayBuf) / sizeof(wchar_t),
         L"%s failed with error %d: %s",
         functionName, dw, lpMsgBuf);
     am_Print_p(reinterpret_cast<LPCWSTR>(lpDisplayBuf), true);
@@ -1147,15 +1180,17 @@ bool am_ShowErrorMessageFromLastErrorCode_p(LPCWSTR functionName)
             return 0;
         }
         const auto clientRect = &(reinterpret_cast<LPNCCALCSIZE_PARAMS>(lParam)->rgrc[0]);
-        // Store the original top before the default window proc applies the default frame.
-        const LONG originalTop = clientRect->top;
-        // Apply the default frame
-        const LRESULT ret = DefWindowProcW(hWnd, uMsg, wParam, lParam);
-        if (ret != 0) {
-            return ret;
+        if (am_CompareSystemVersion_p(WindowsVersion::Windows10, VersionCompare::GreaterOrEqual)) {
+            // Store the original top before the default window proc applies the default frame.
+            const LONG originalTop = clientRect->top;
+            // Apply the default frame
+            const LRESULT ret = DefWindowProcW(hWnd, uMsg, wParam, lParam);
+            if (ret != 0) {
+                return ret;
+            }
+            // Re-apply the original top from before the size of the default frame was applied.
+            clientRect->top = originalTop;
         }
-        // Re-apply the original top from before the size of the default frame was applied.
-        clientRect->top = originalTop;
         // We don't need this correction when we're fullscreen. We will
         // have the WS_POPUP size, so we don't have to worry about
         // borders, and the default frame will be fine.
@@ -1167,7 +1202,14 @@ bool am_ShowErrorMessageFromLastErrorCode_p(LPCWSTR functionName)
             // then the window is clipped to the monitor so that the resize handle
             // do not appear because you don't need them (because you can't resize
             // a window when it's maximized unless you restore it).
-            clientRect->top += am_GetResizeBorderThickness_p(false, g_am_CurrentDpi_p);
+            const int rbtY = am_GetResizeBorderThickness_p(false, g_am_CurrentDpi_p);
+            clientRect->top += rbtY;
+            if (am_CompareSystemVersion_p(WindowsVersion::Windows10, VersionCompare::Less)) {
+                clientRect->bottom -= rbtY;
+                const int rbtX = am_GetResizeBorderThickness_p(true, g_am_CurrentDpi_p);
+                clientRect->left += rbtX;
+                clientRect->right -= rbtX;
+            }
             nonClientAreaExists = true;
         }
         // Attempt to detect if there's an autohide taskbar, and if
@@ -1182,18 +1224,47 @@ bool am_ShowErrorMessageFromLastErrorCode_p(LPCWSTR functionName)
             abd.cbSize = sizeof(abd);
             // First, check if we have an auto-hide taskbar at all:
             if (SHAppBarMessage(ABM_GETSTATE, &abd) & ABS_AUTOHIDE) {
-                const RECT screenRect = am_GetScreenGeometry_p(hWnd);
-                // This helper can be used to determine if there's a
-                // auto-hide taskbar on the given edge of the monitor
-                // we're currently on.
-                const auto hasAutohideTaskbar = [&screenRect](const UINT edge) -> bool {
-                    APPBARDATA abd2;
-                    SecureZeroMemory(&abd2, sizeof(abd2));
-                    abd2.cbSize = sizeof(abd2);
-                    abd2.uEdge = edge;
-                    abd2.rc = screenRect;
-                    return (reinterpret_cast<HWND>(SHAppBarMessage(ABM_GETAUTOHIDEBAREX, &abd2)) != nullptr);
-                };
+                bool top = false, bottom = false, left = false, right = false;
+                // Due to "ABM_GETAUTOHIDEBAREX" only has effect since Windows 8.1,
+                // we have to use another way to judge the edge of the auto-hide taskbar
+                // when the application is running on Windows 7 or Windows 8.
+                if (am_CompareSystemVersion_p(WindowsVersion::Windows8_1, VersionCompare::GreaterOrEqual)) {
+                    const RECT screenRect = am_GetScreenGeometry_p(hWnd);
+                    // This helper can be used to determine if there's a
+                    // auto-hide taskbar on the given edge of the monitor
+                    // we're currently on.
+                    const auto hasAutohideTaskbar = [&screenRect](const UINT edge) -> bool {
+                        APPBARDATA abd2;
+                        SecureZeroMemory(&abd2, sizeof(abd2));
+                        abd2.cbSize = sizeof(abd2);
+                        abd2.uEdge = edge;
+                        abd2.rc = screenRect;
+                        return (reinterpret_cast<HWND>(SHAppBarMessage(ABM_GETAUTOHIDEBAREX, &abd2)) != nullptr);
+                    };
+                    top = hasAutohideTaskbar(ABE_TOP);
+                    bottom = hasAutohideTaskbar(ABE_BOTTOM);
+                    left = hasAutohideTaskbar(ABE_LEFT);
+                    right = hasAutohideTaskbar(ABE_RIGHT);
+                } else {
+                    // The following code is copied from Mozilla Firefox with some modifications.
+                    int edge = -1;
+                    APPBARDATA _abd;
+                    SecureZeroMemory(&_abd, sizeof(_abd));
+                    _abd.cbSize = sizeof(_abd);
+                    _abd.hWnd = FindWindowW(L"Shell_TrayWnd", nullptr);
+                    if (_abd.hWnd) {
+                        const HMONITOR windowMonitor = CURRENT_SCREEN(hWnd);
+                        const HMONITOR taskbarMonitor = MonitorFromWindow(_abd.hWnd, MONITOR_DEFAULTTOPRIMARY);
+                        if (taskbarMonitor == windowMonitor) {
+                            SHAppBarMessage(ABM_GETTASKBARPOS, &_abd);
+                            edge = _abd.uEdge;
+                        }
+                    }
+                    top = (edge == ABE_TOP);
+                    bottom = (edge == ABE_BOTTOM);
+                    left = (edge == ABE_LEFT);
+                    right = (edge == ABE_RIGHT);
+                }
                 // If there's a taskbar on any side of the monitor, reduce
                 // our size a little bit on that edge.
                 // Note to future code archeologists:
@@ -1204,17 +1275,17 @@ bool am_ShowErrorMessageFromLastErrorCode_p(LPCWSTR functionName)
                 // fullscreen mode. This includes Edge, Firefox, Chrome,
                 // Sublime Text, PowerPoint - none seemed to support this.
                 // This does however work fine for maximized.
-                if (hasAutohideTaskbar(ABE_TOP)) {
+                if (top) {
                     // Peculiarly, when we're fullscreen,
                     clientRect->top += g_am_AutoHideTaskbarThicknessPy_p;
                     nonClientAreaExists = true;
-                } else if (hasAutohideTaskbar(ABE_BOTTOM)) {
+                } else if (bottom) {
                     clientRect->bottom -= g_am_AutoHideTaskbarThicknessPy_p;
                     nonClientAreaExists = true;
-                } else if (hasAutohideTaskbar(ABE_LEFT)) {
+                } else if (left) {
                     clientRect->left += g_am_AutoHideTaskbarThicknessPx_p;
                     nonClientAreaExists = true;
-                } else if (hasAutohideTaskbar(ABE_RIGHT)) {
+                } else if (right) {
                     clientRect->right -= g_am_AutoHideTaskbarThicknessPx_p;
                     nonClientAreaExists = true;
                 }
@@ -1530,10 +1601,16 @@ bool am_ShowErrorMessageFromLastErrorCode_p(LPCWSTR functionName)
         return true;
     }
 
-    if (!am_GenerateGUID_p(&g_am_MainWindowClassName_p)) {
+    LPWSTR guid = nullptr;
+    if (!am_GenerateGUID_p(&guid)) {
         am_Print_p(L"Failed to generate main window class name.");
         return false;
     }
+    g_am_MainWindowClassName_p = new wchar_t[MAX_PATH];
+    SecureZeroMemory(g_am_MainWindowClassName_p, sizeof(g_am_MainWindowClassName_p));
+    wcscat(g_am_MainWindowClassName_p, guid);
+    delete [] guid;
+    wcscat(g_am_MainWindowClassName_p, g_am_MainWindowClassNameSuffix_p);
 
     WNDCLASSEXW wcex;
     SecureZeroMemory(&wcex, sizeof(wcex));
@@ -1572,10 +1649,16 @@ bool am_ShowErrorMessageFromLastErrorCode_p(LPCWSTR functionName)
         return true;
     }
 
-    if (!am_GenerateGUID_p(&g_am_DragBarWindowClassName_p)) {
+    LPWSTR guid = nullptr;
+    if (!am_GenerateGUID_p(&guid)) {
         am_Print_p(L"Failed to generate drag bar window class name.");
         return false;
     }
+    g_am_DragBarWindowClassName_p = new wchar_t[MAX_PATH];
+    SecureZeroMemory(g_am_DragBarWindowClassName_p, sizeof(g_am_DragBarWindowClassName_p));
+    wcscat(g_am_DragBarWindowClassName_p, guid);
+    delete [] guid;
+    wcscat(g_am_DragBarWindowClassName_p, g_am_DragBarWindowClassNameSuffix_p);
 
     WNDCLASSEXW wcex;
     SecureZeroMemory(&wcex, sizeof(wcex));

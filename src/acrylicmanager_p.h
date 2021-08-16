@@ -267,6 +267,16 @@ am_GetColorizationColor_p();
 [[nodiscard]] ACRYLICMANAGER_API ColorizationArea WINAPI
 am_GetColorizationArea_p();
 
+ACRYLICMANAGER_API void WINAPI
+am_FreeStringA_p(
+    _In_ void *mem
+);
+
+ACRYLICMANAGER_API void WINAPI
+am_FreeStringW_p(
+    _In_ void *mem
+);
+
 #ifdef __cplusplus
 EXTERN_C_END
 #endif

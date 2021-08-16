@@ -112,6 +112,7 @@ static const int g_am_AutoHideTaskbarThicknessPx_p = 2;
 static const int g_am_AutoHideTaskbarThicknessPy_p = g_am_AutoHideTaskbarThicknessPx_p;
 
 static LPCWSTR g_am_PersonalizeRegistryKey_p = LR"(Software\Microsoft\Windows\CurrentVersion\Themes\Personalize)";
+static LPCWSTR g_am_DWMRegistryKey_p = LR"(Software\Microsoft\Windows\DWM)";
 static LPCWSTR g_am_WindowClassNamePrefix_p = LR"(wangwenx190\AcrylicManager\WindowClass\)";
 static LPCWSTR g_am_MainWindowClassNameSuffix_p = L"@MainWindow";
 static LPCWSTR g_am_DragBarWindowClassNameSuffix_p = L"@DragBarWindow";
@@ -341,7 +342,7 @@ bool am_IsWindowNoState_p(const HWND hWnd)
     SecureZeroMemory(&wp, sizeof(wp));
     wp.length = sizeof(wp);
     if (GetWindowPlacement(hWnd, &wp) == FALSE) {
-        am_Print_p(L"Failed to retrieve window placement of main window.");
+        PRINT_ERROR_MESSAGE(GetWindowPlacement)
         return false;
     }
     return (wp.showCmd == SW_NORMAL);
@@ -371,7 +372,7 @@ bool am_SetWindowTransitionsEnabled_p(const HWND hWnd, const bool enable)
         return false;
     }
     const BOOL disabled = enable ? FALSE : TRUE;
-    return SUCCEEDED(DwmSetWindowAttribute(hWnd, DWMWA_TRANSITIONS_FORCEDISABLED, &disabled, sizeof(disabled)));
+    return SUCCEEDED(DwmSetWindowAttribute(hWnd, DWMWAEX_TRANSITIONS_FORCEDISABLED, &disabled, sizeof(disabled)));
 }
 
 bool am_OpenSystemMenu_p(const HWND hWnd, const POINT pos)
@@ -552,11 +553,17 @@ bool am_CompareSystemVersion_p(const WindowsVersion ver, const VersionCompare co
     return (VerifyVersionInfoW(&osvi, VER_MAJORVERSION | VER_MINORVERSION | VER_BUILDNUMBER, dwlConditionMask) != FALSE);
 }
 
-[[nodiscard]] static inline int am_GetWindowVisibleFrameThickness_p(const HWND hWnd, const UINT dpi)
+[[nodiscard]] static inline int am_GetWindowVisibleFrameBorderThickness_p(const HWND hWnd, const UINT dpi)
 {
-    // TODO: DwmGetWindowAttribute().
+    if (!hWnd) {
+        return 0;
+    }
+    UINT value = 0;
+    if (SUCCEEDED(DwmGetWindowAttribute(hWnd, DWMWAEX_VISIBLE_FRAME_BORDER_THICKNESS, &value, sizeof(value)))) {
+        return value;
+    }
     const UINT _dpi = (dpi == 0) ? USER_DEFAULT_SCREEN_DPI : dpi;
-    return ((hWnd && am_IsWindowNoState_p(hWnd)) ? std::round(1.0 * am_GetDevicePixelRatio_p(_dpi)) : 0);
+    return (am_IsWindowNoState_p(hWnd) ? std::round(1.0 * am_GetDevicePixelRatio_p(_dpi)) : 0);
 }
 
 [[nodiscard]] static inline bool am_UpdateFrameMargins_p(const HWND hWnd, const UINT dpi)
@@ -566,7 +573,7 @@ bool am_CompareSystemVersion_p(const WindowsVersion ver, const VersionCompare co
     }
     const bool normal = am_IsWindowNoState_p(hWnd);
     const UINT _dpi = (dpi == 0) ? USER_DEFAULT_SCREEN_DPI : dpi;
-    const LONG border = (normal ? am_GetWindowVisibleFrameThickness_p(hWnd, _dpi) : 0);
+    const LONG border = (normal ? am_GetWindowVisibleFrameBorderThickness_p(hWnd, _dpi) : 0);
     const LONG topFrameMargin = (normal ? /*am_GetTitleBarHeight_p(hWnd, _dpi)*/border : border);
     // We removed the whole top part of the frame (see handling of
     // WM_NCCALCSIZE) so the top border is missing now. We add it back here.
@@ -984,6 +991,7 @@ bool am_GenerateGUID_p(LPWSTR *guid)
     }
     HKEY hKey = nullptr;
     if (RegOpenKeyExW(rootKey, subKey, 0, KEY_READ, &hKey) != ERROR_SUCCESS) {
+        PRINT_ERROR_MESSAGE(RegOpenKeyExW)
         return 0;
     }
     DWORD dwValue = 0;
@@ -991,7 +999,9 @@ bool am_GenerateGUID_p(LPWSTR *guid)
     DWORD dwSize = sizeof(dwValue);
     const bool success = (RegQueryValueExW(hKey, valueName, nullptr, &dwType,
                                 reinterpret_cast<LPBYTE>(&dwValue), &dwSize) == ERROR_SUCCESS);
+    PRINT_ERROR_MESSAGE(RegQueryValueExW)
     RegCloseKey(hKey);
+    PRINT_ERROR_MESSAGE(RegCloseKey)
     if (ok) {
         *ok = success;
     }
@@ -1072,19 +1082,43 @@ bool am_IsWindowTransitionsEnabled_p(const HWND hWnd)
         return false;
     }
     BOOL disabled = FALSE;
-    if (FAILED(DwmGetWindowAttribute(hWnd, DWMWA_TRANSITIONS_FORCEDISABLED, &disabled, sizeof(disabled)))) {
+    if (FAILED(DwmGetWindowAttribute(hWnd, DWMWAEX_TRANSITIONS_FORCEDISABLED, &disabled, sizeof(disabled)))) {
         am_Print_p(L"Failed to retrieve window transitions state.");
         return false;
     }
     return (disabled == FALSE);
 }
 
-bool am_ShouldWindowUseDarkFrame_p(const HWND hWnd, bool *result)
+bool am_IsWindowUsingDarkFrame_p(const HWND hWnd, bool *result)
 {
     if (!hWnd || !result) {
         return false;
     }
-    // todo
+    *result = false;
+    BOOL enabled = FALSE;
+    if (SUCCEEDED(DwmGetWindowAttribute(hWnd, DWMWAEX_USE_IMMERSIVE_DARK_MODE_BEFORE_20H1, &enabled, sizeof(enabled)))) {
+        *result = (enabled != FALSE);
+        return true;
+    }
+    if (SUCCEEDED(DwmGetWindowAttribute(hWnd, DWMWAEX_USE_IMMERSIVE_DARK_MODE, &enabled, sizeof(enabled)))) {
+        *result = (enabled != FALSE);
+        return true;
+    }
+    return false;
+}
+
+bool am_SetWindowDarkFrameEnabled_p(const HWND hWnd, const bool enable)
+{
+    if (!hWnd) {
+        return false;
+    }
+    const BOOL enabled = enable ? TRUE : FALSE;
+    if (SUCCEEDED(DwmSetWindowAttribute(hWnd, DWMWAEX_USE_IMMERSIVE_DARK_MODE_BEFORE_20H1, &enabled, sizeof(enabled)))) {
+        return true;
+    }
+    if (SUCCEEDED(DwmSetWindowAttribute(hWnd, DWMWAEX_USE_IMMERSIVE_DARK_MODE, &enabled, sizeof(enabled)))) {
+        return true;
+    }
     return false;
 }
 
@@ -1101,7 +1135,28 @@ COLORREF am_GetColorizationColor_p()
 
 ColorizationArea am_GetColorizationArea_p()
 {
-    // todo
+    // todo: check which specific win10.
+    if (am_CompareSystemVersion_p(WindowsVersion::Windows10, VersionCompare::Less)) {
+        return ColorizationArea::None;
+    }
+    const HKEY rootKey = HKEY_CURRENT_USER;
+    LPCWSTR valueName = L"ColorPrevalence";
+    bool ok = false;
+    const bool theme = (am_GetDWORDValueFromRegistry_p(rootKey, g_am_PersonalizeRegistryKey_p, valueName, &ok) != 0);
+    if (!ok) {
+        return ColorizationArea::None;
+    }
+    const bool dwm = (am_GetDWORDValueFromRegistry_p(rootKey, g_am_DWMRegistryKey_p, valueName, &ok) != 0);
+    if (!ok) {
+        return ColorizationArea::None;
+    }
+    if (theme && dwm) {
+        return ColorizationArea::All;
+    } else if (theme) {
+        return ColorizationArea::StartMenu_TaskBar_ActionCenter;
+    } else if (dwm) {
+        return ColorizationArea::TitleBar_WindowBorder;
+    }
     return ColorizationArea::None;
 }
 
@@ -1145,7 +1200,7 @@ bool am_ShowErrorMessageFromLastErrorCode_p(LPCWSTR functionName)
         dw,
         MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
         reinterpret_cast<LPWSTR>(&lpMsgBuf),
-        0, nullptr );
+        0, nullptr);
 
     lpDisplayBuf = reinterpret_cast<LPVOID>(LocalAlloc(LMEM_ZEROINIT,
         (wcslen(reinterpret_cast<LPCWSTR>(lpMsgBuf))
@@ -1419,11 +1474,11 @@ bool am_ShowErrorMessageFromLastErrorCode_p(LPCWSTR functionName)
         //  at the top) in the WM_PAINT handler. This eliminates the transparency
         //  bug and it's what a lot of Win32 apps that customize the title bar do
         //  so it should work fine.
-        const LONG visibleFrameThickness = am_GetWindowVisibleFrameThickness_p(hWnd, g_am_CurrentDpi_p);
-        if (ps.rcPaint.top < visibleFrameThickness) {
+        const LONG borderThickness = am_GetWindowVisibleFrameBorderThickness_p(hWnd, g_am_CurrentDpi_p);
+        if (ps.rcPaint.top < borderThickness) {
             RECT rcPaint = ps.rcPaint;
             if (win10) {
-                rcPaint.bottom = visibleFrameThickness;
+                rcPaint.bottom = borderThickness;
             }
             // To show the original top border, we have to paint on top
             // of it with the alpha component set to 0. This page
@@ -1435,15 +1490,15 @@ bool am_ShowErrorMessageFromLastErrorCode_p(LPCWSTR functionName)
                 break;
             }
         }
-        if (ps.rcPaint.bottom > visibleFrameThickness) {
+        if (ps.rcPaint.bottom > borderThickness) {
             RECT rcPaint = ps.rcPaint;
             if (win10) {
-                rcPaint.top = visibleFrameThickness;
+                rcPaint.top = borderThickness;
             } else {
-                rcPaint.top = rcPaint.top + visibleFrameThickness + 1;
-                rcPaint.bottom = rcPaint.bottom - visibleFrameThickness - 1;
-                rcPaint.left = rcPaint.left + visibleFrameThickness + 1;
-                rcPaint.right = rcPaint.right - visibleFrameThickness - 1;
+                rcPaint.top = rcPaint.top + borderThickness + 1;
+                rcPaint.bottom = rcPaint.bottom - borderThickness - 1;
+                rcPaint.left = rcPaint.left + borderThickness + 1;
+                rcPaint.right = rcPaint.right - borderThickness - 1;
             }
             // To hide the original title bar, we have to paint on top
             // of it with the alpha component set to 255. This is a hack
@@ -1502,9 +1557,9 @@ bool am_ShowErrorMessageFromLastErrorCode_p(LPCWSTR functionName)
         const UINT flags = SWP_NOACTIVATE | SWP_SHOWWINDOW | SWP_NOOWNERZORDER;
         if (g_am_XAMLIslandWindowHandle_p) {
             // Give enough space to our thin homemade top border.
-            const int visibleFrameThickness = am_GetWindowVisibleFrameThickness_p(hWnd, g_am_CurrentDpi_p);
-            const int height = (HIWORD(lParam) - visibleFrameThickness);
-            if (SetWindowPos(g_am_XAMLIslandWindowHandle_p, HWND_BOTTOM, 0, visibleFrameThickness,
+            const int borderThickness = am_GetWindowVisibleFrameBorderThickness_p(hWnd, g_am_CurrentDpi_p);
+            const int height = (HIWORD(lParam) - borderThickness);
+            if (SetWindowPos(g_am_XAMLIslandWindowHandle_p, HWND_BOTTOM, 0, borderThickness,
                          width, height, flags) == FALSE) {
                 PRINT_ERROR_MESSAGE(SetWindowPos)
                 break;
@@ -1933,9 +1988,9 @@ bool am_ShowErrorMessageFromLastErrorCode_p(LPCWSTR functionName)
         return false;
     }
     // Give enough space to our thin homemade top border.
-    const int visibleFrameThickness = am_GetWindowVisibleFrameThickness_p(g_am_MainWindowHandle_p, g_am_CurrentDpi_p);
+    const int borderThickness = am_GetWindowVisibleFrameBorderThickness_p(g_am_MainWindowHandle_p, g_am_CurrentDpi_p);
     if (SetWindowPos(g_am_XAMLIslandWindowHandle_p, HWND_BOTTOM, 0,
-                 visibleFrameThickness, rect.right, (rect.bottom - visibleFrameThickness),
+                 borderThickness, rect.right, (rect.bottom - borderThickness),
                      SWP_NOACTIVATE | SWP_SHOWWINDOW | SWP_NOOWNERZORDER) == FALSE) {
         am_Print_p(L"Failed to move XAML Island window.");
         am_Cleanup_p();

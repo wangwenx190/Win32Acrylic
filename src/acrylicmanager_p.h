@@ -72,9 +72,9 @@ enum class VersionCompare : int
 enum class ColorizationArea : int
 {
     None = 0,
-    WindowFrame,
-    TitleBar,
-    StartMenuAndTaskBar
+    StartMenu_TaskBar_ActionCenter,
+    TitleBar_WindowBorder,
+    All
 };
 
 typedef enum _WINDOWCOMPOSITIONATTRIB
@@ -133,6 +133,27 @@ typedef struct ACRYLICMANAGER_API _ACCENT_POLICY
     COLORREF GradientColor;
     DWORD AnimationId;
 } ACCENT_POLICY, *PACCENT_POLICY, *LPACCENT_POLICY;
+
+typedef enum _DWMWINDOWATTRIBUTE_EX
+{
+    DWMWAEX_TRANSITIONS_FORCEDISABLED = 3,            // [get/set] BOOL, Enable or disable window transitions.
+    DWMWAEX_CAPTION_BUTTON_BOUNDS = 5,                // [get] RECT, Bounds of the caption (titlebar) button area rectangle in window-relative space.
+    DWMWAEX_EXTENDED_FRAME_BOUNDS = 9,                // [get] RECT, Bounds of the extended frame rectangle in screen space.
+    DWMWAEX_EXCLUDED_FROM_PEEK = 12,                  // [get/set] BOOL, Exclude or include window from LivePreview.
+    DWMWAEX_USE_HOSTBACKDROPBRUSH = 17,               // [get/set] BOOL, Allows the use of host backdrop brushes for the window.
+    DWMWAEX_USE_IMMERSIVE_DARK_MODE_BEFORE_20H1 = 19, // [get/set] BOOL, Allows a window to either use the accent color, or dark, according to the user Color Mode preferences.
+    DWMWAEX_USE_IMMERSIVE_DARK_MODE = 20,             // [get/set] BOOL, The same as "DWMWA_USE_IMMERSIVE_DARK_MODE_BEFORE_20H1".
+    DWMWAEX_WINDOW_CORNER_PREFERENCE = 33,            // [get/set] WINDOW_CORNER_PREFERENCE, Controls the policy that rounds top-level window corners.
+    DWMWAEX_BORDER_COLOR = 34,                        // [get/set] COLORREF, Color of the thin border around a top-level window.
+    DWMWAEX_CAPTION_COLOR = 35,                       // [get/set] COLORREF, Color of the caption (titlebar).
+    DWMWAEX_TEXT_COLOR = 36,                          // [get/set] COLORREF, Color of the caption (titlebar) text.
+    DWMWAEX_VISIBLE_FRAME_BORDER_THICKNESS = 37       // [get] UINT, Width of the visible border around a thick frame window.
+} DWMWINDOWATTRIBUTE_EX;
+
+typedef enum _MONITOR_DPI_TYPE_EX
+{
+    MDTEX_EFFECTIVE_DPI = 0
+} MONITOR_DPI_TYPE_EX;
 
 #ifdef __cplusplus
 EXTERN_C_START
@@ -256,9 +277,15 @@ am_SetWindowCompositionAttribute_p(
 );
 
 [[nodiscard]] ACRYLICMANAGER_API bool WINAPI
-am_ShouldWindowUseDarkFrame_p(
+am_IsWindowUsingDarkFrame_p(
     _In_ const HWND hWnd,
     _Out_ bool      *result
+);
+
+[[nodiscard]] ACRYLICMANAGER_API bool WINAPI
+am_SetWindowDarkFrameEnabled_p(
+    _In_ const HWND hWnd,
+    _In_ const bool enable
 );
 
 [[nodiscard]] ACRYLICMANAGER_API COLORREF WINAPI

@@ -93,8 +93,8 @@ EXTERN_C IMAGE_DOS_HEADER __ImageBase;
 #define RECT_HEIGHT(rect) (std::abs((rect).bottom - (rect).top))
 #endif
 
-#ifndef BACKGROUND_BRUSH
-#define BACKGROUND_BRUSH (reinterpret_cast<HBRUSH>(GetStockObject(BLACK_BRUSH)))
+#ifndef BLACK_BACKGROUND_BRUSH
+#define BLACK_BACKGROUND_BRUSH (reinterpret_cast<HBRUSH>(GetStockObject(BLACK_BRUSH)))
 #endif
 
 #ifndef CURRENT_SCREEN
@@ -552,7 +552,7 @@ bool am_CompareSystemVersion_p(const WindowsVersion ver, const VersionCompare co
     return (VerifyVersionInfoW(&osvi, VER_MAJORVERSION | VER_MINORVERSION | VER_BUILDNUMBER, dwlConditionMask) != FALSE);
 }
 
-[[nodiscard]] static inline int am_GetTopFrameMargin_p(const HWND hWnd, const UINT dpi)
+[[nodiscard]] static inline int am_GetWindowVisibleFrameThickness_p(const HWND hWnd, const UINT dpi)
 {
     // TODO: DwmGetWindowAttribute().
     const UINT _dpi = (dpi == 0) ? USER_DEFAULT_SCREEN_DPI : dpi;
@@ -564,7 +564,10 @@ bool am_CompareSystemVersion_p(const WindowsVersion ver, const VersionCompare co
     if (!hWnd) {
         return false;
     }
+    const bool normal = am_IsWindowNoState_p(hWnd);
     const UINT _dpi = (dpi == 0) ? USER_DEFAULT_SCREEN_DPI : dpi;
+    const LONG border = (normal ? am_GetWindowVisibleFrameThickness_p(hWnd, _dpi) : 0);
+    const LONG topFrameMargin = (normal ? /*am_GetTitleBarHeight_p(hWnd, _dpi)*/border : border);
     // We removed the whole top part of the frame (see handling of
     // WM_NCCALCSIZE) so the top border is missing now. We add it back here.
     // Note #1: You might wonder why we don't remove just the title bar instead
@@ -580,7 +583,7 @@ bool am_CompareSystemVersion_p(const WindowsVersion ver, const VersionCompare co
     //  at the top) in the WM_PAINT handler. This eliminates the transparency
     //  bug and it's what a lot of Win32 apps that customize the title bar do
     //  so it should work fine.
-    const MARGINS margins = {0, 0, (am_IsWindowNoState_p(hWnd) ? am_GetTitleBarHeight_p(hWnd, _dpi) : 0), 0};
+    const MARGINS margins = {border, border, topFrameMargin, border};
     return SUCCEEDED(DwmExtendFrameIntoClientArea(hWnd, &margins));
 }
 
@@ -1179,8 +1182,9 @@ bool am_ShowErrorMessageFromLastErrorCode_p(LPCWSTR functionName)
         if (!wParam) {
             return 0;
         }
+        const bool win10 = am_CompareSystemVersion_p(WindowsVersion::Windows10, VersionCompare::GreaterOrEqual);
         const auto clientRect = &(reinterpret_cast<LPNCCALCSIZE_PARAMS>(lParam)->rgrc[0]);
-        if (am_CompareSystemVersion_p(WindowsVersion::Windows10, VersionCompare::GreaterOrEqual)) {
+        if (win10) {
             // Store the original top before the default window proc applies the default frame.
             const LONG originalTop = clientRect->top;
             // Apply the default frame
@@ -1204,7 +1208,7 @@ bool am_ShowErrorMessageFromLastErrorCode_p(LPCWSTR functionName)
             // a window when it's maximized unless you restore it).
             const int rbtY = am_GetResizeBorderThickness_p(false, g_am_CurrentDpi_p);
             clientRect->top += rbtY;
-            if (am_CompareSystemVersion_p(WindowsVersion::Windows10, VersionCompare::Less)) {
+            if (!win10) {
                 clientRect->bottom -= rbtY;
                 const int rbtX = am_GetResizeBorderThickness_p(true, g_am_CurrentDpi_p);
                 clientRect->left += rbtX;
@@ -1399,6 +1403,7 @@ bool am_ShowErrorMessageFromLastErrorCode_p(LPCWSTR functionName)
             PRINT_ERROR_MESSAGE(BeginPaint)
             break;
         }
+        const bool win10 = am_CompareSystemVersion_p(WindowsVersion::Windows10, VersionCompare::GreaterOrEqual);
         // We removed the whole top part of the frame (see handling of
         // WM_NCCALCSIZE) so the top border is missing now. We add it back here.
         // Note #1: You might wonder why we don't remove just the title bar instead
@@ -1414,23 +1419,32 @@ bool am_ShowErrorMessageFromLastErrorCode_p(LPCWSTR functionName)
         //  at the top) in the WM_PAINT handler. This eliminates the transparency
         //  bug and it's what a lot of Win32 apps that customize the title bar do
         //  so it should work fine.
-        const LONG topBorderHeight = am_GetTopFrameMargin_p(hWnd, g_am_CurrentDpi_p);
-        if (ps.rcPaint.top < topBorderHeight) {
-            RECT rcTopBorder = ps.rcPaint;
-            rcTopBorder.bottom = topBorderHeight;
+        const LONG visibleFrameThickness = am_GetWindowVisibleFrameThickness_p(hWnd, g_am_CurrentDpi_p);
+        if (ps.rcPaint.top < visibleFrameThickness) {
+            RECT rcPaint = ps.rcPaint;
+            if (win10) {
+                rcPaint.bottom = visibleFrameThickness;
+            }
             // To show the original top border, we have to paint on top
             // of it with the alpha component set to 0. This page
             // recommends to paint the area in black using the stock
             // BLACK_BRUSH to do this:
             // https://docs.microsoft.com/en-us/windows/win32/dwm/customframe#extending-the-client-frame
-            if (FillRect(hdc, &rcTopBorder, BACKGROUND_BRUSH) == 0) {
+            if (FillRect(hdc, &rcPaint, BLACK_BACKGROUND_BRUSH) == 0) {
                 PRINT_ERROR_MESSAGE(FillRect)
                 break;
             }
         }
-        if (ps.rcPaint.bottom > topBorderHeight) {
-            RECT rcRest = ps.rcPaint;
-            rcRest.top = topBorderHeight;
+        if (ps.rcPaint.bottom > visibleFrameThickness) {
+            RECT rcPaint = ps.rcPaint;
+            if (win10) {
+                rcPaint.top = visibleFrameThickness;
+            } else {
+                rcPaint.top = rcPaint.top + visibleFrameThickness + 1;
+                rcPaint.bottom = rcPaint.bottom - visibleFrameThickness - 1;
+                rcPaint.left = rcPaint.left + visibleFrameThickness + 1;
+                rcPaint.right = rcPaint.right - visibleFrameThickness - 1;
+            }
             // To hide the original title bar, we have to paint on top
             // of it with the alpha component set to 255. This is a hack
             // to do it with GDI. See updateFrameMargins() for more information.
@@ -1439,12 +1453,12 @@ bool am_ShowErrorMessageFromLastErrorCode_p(LPCWSTR functionName)
             SecureZeroMemory(&params, sizeof(params));
             params.cbSize = sizeof(params);
             params.dwFlags = BPPF_NOCLIP | BPPF_ERASE;
-            const HPAINTBUFFER buf = BeginBufferedPaint(hdc, &rcRest, BPBF_TOPDOWNDIB, &params, &opaqueDc);
+            const HPAINTBUFFER buf = BeginBufferedPaint(hdc, &rcPaint, BPBF_TOPDOWNDIB, &params, &opaqueDc);
             if (!buf) {
                 PRINT_ERROR_MESSAGE(BeginBufferedPaint)
                 break;
             }
-            if (FillRect(opaqueDc, &rcRest,
+            if (FillRect(opaqueDc, &rcPaint,
                          reinterpret_cast<HBRUSH>(GetClassLongPtrW(hWnd, GCLP_HBRBACKGROUND))) == 0) {
                 PRINT_ERROR_MESSAGE(FillRect)
                 break;
@@ -1488,9 +1502,9 @@ bool am_ShowErrorMessageFromLastErrorCode_p(LPCWSTR functionName)
         const UINT flags = SWP_NOACTIVATE | SWP_SHOWWINDOW | SWP_NOOWNERZORDER;
         if (g_am_XAMLIslandWindowHandle_p) {
             // Give enough space to our thin homemade top border.
-            const int topMargin = am_GetTopFrameMargin_p(hWnd, g_am_CurrentDpi_p);
-            const int height = (HIWORD(lParam) - topMargin);
-            if (SetWindowPos(g_am_XAMLIslandWindowHandle_p, HWND_BOTTOM, 0, topMargin,
+            const int visibleFrameThickness = am_GetWindowVisibleFrameThickness_p(hWnd, g_am_CurrentDpi_p);
+            const int height = (HIWORD(lParam) - visibleFrameThickness);
+            if (SetWindowPos(g_am_XAMLIslandWindowHandle_p, HWND_BOTTOM, 0, visibleFrameThickness,
                          width, height, flags) == FALSE) {
                 PRINT_ERROR_MESSAGE(SetWindowPos)
                 break;
@@ -1729,7 +1743,7 @@ bool am_ShowErrorMessageFromLastErrorCode_p(LPCWSTR functionName)
     wcex.lpfnWndProc = am_DragBarWindowProc_p;
     wcex.hInstance = HINST_THISCOMPONENT;
     wcex.hCursor = LoadCursorW(nullptr, IDC_ARROW);
-    wcex.hbrBackground = BACKGROUND_BRUSH;
+    wcex.hbrBackground = BLACK_BACKGROUND_BRUSH;
     wcex.lpszClassName = g_am_DragBarWindowClassName_p;
 
     g_am_DragBarWindowAtom_p = RegisterClassExW(&wcex);
@@ -1919,9 +1933,9 @@ bool am_ShowErrorMessageFromLastErrorCode_p(LPCWSTR functionName)
         return false;
     }
     // Give enough space to our thin homemade top border.
-    const int topMargin = am_GetTopFrameMargin_p(g_am_MainWindowHandle_p, g_am_CurrentDpi_p);
+    const int visibleFrameThickness = am_GetWindowVisibleFrameThickness_p(g_am_MainWindowHandle_p, g_am_CurrentDpi_p);
     if (SetWindowPos(g_am_XAMLIslandWindowHandle_p, HWND_BOTTOM, 0,
-                 topMargin, rect.right, (rect.bottom - topMargin),
+                 visibleFrameThickness, rect.right, (rect.bottom - visibleFrameThickness),
                      SWP_NOACTIVATE | SWP_SHOWWINDOW | SWP_NOOWNERZORDER) == FALSE) {
         am_Print_p(L"Failed to move XAML Island window.");
         am_Cleanup_p();

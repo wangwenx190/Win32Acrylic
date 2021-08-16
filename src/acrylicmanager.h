@@ -61,7 +61,7 @@ am_CreateWindow(
 [[nodiscard]] ACRYLICMANAGER_API RECT WINAPI
 am_GetWindowGeometry();
 
-[[nodiscard]] ACRYLICMANAGER_API RECT WINAPI
+[[nodiscard]] ACRYLICMANAGER_API bool WINAPI
 am_SetWindowGeometry(
     _In_ const int x,
     _In_ const int y,

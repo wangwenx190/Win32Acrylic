@@ -1087,6 +1087,56 @@ ColorizationArea am_GetColorizationArea_p()
     return ColorizationArea::None;
 }
 
+bool am_ShowErrorMessageFromLastErrorCode_p(LPCWSTR functionName)
+{
+    if (!functionName) {
+        return false;
+    }
+
+    const DWORD dw = GetLastError();
+    if (dw == 0) {
+        return true;
+    }
+
+    LPVOID lpMsgBuf = nullptr;
+    LPVOID lpDisplayBuf = nullptr;
+
+    FormatMessageW(
+        FORMAT_MESSAGE_ALLOCATE_BUFFER |
+        FORMAT_MESSAGE_FROM_SYSTEM |
+        FORMAT_MESSAGE_IGNORE_INSERTS,
+        nullptr,
+        dw,
+        MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+        reinterpret_cast<LPWSTR>(&lpMsgBuf),
+        0, nullptr );
+
+    lpDisplayBuf = reinterpret_cast<LPVOID>(LocalAlloc(LMEM_ZEROINIT,
+        (wcslen(reinterpret_cast<LPCWSTR>(lpMsgBuf))
+         + wcslen(reinterpret_cast<LPCWSTR>(functionName)) + 40) * sizeof(WCHAR)));
+    StringCchPrintfW(reinterpret_cast<LPWSTR>(lpDisplayBuf),
+        LocalSize(lpDisplayBuf) / sizeof(WCHAR),
+        L"%s failed with error %d: %s",
+        functionName, dw, lpMsgBuf);
+    am_Print_p(reinterpret_cast<LPCWSTR>(lpDisplayBuf), true);
+
+    LocalFree(lpMsgBuf);
+    LocalFree(lpDisplayBuf);
+
+    return false;
+}
+
+[[nodiscard]] static inline bool am_SetWindowGeometry_p(const int x, const int y, const int w, const int h)
+{
+    if (!g_am_MainWindowHandle_p) {
+        return false;
+    }
+    if ((x <= 0) || (y <= 0) || (w <= 0) || (h <= 0)) {
+        return false;
+    }
+    return (MoveWindow(g_am_MainWindowHandle_p, x, y, w, h, TRUE) != FALSE);
+}
+
 [[nodiscard]] static inline LRESULT CALLBACK am_MainWindowProc_p(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
     bool systemThemeChanged = false;
@@ -1474,45 +1524,6 @@ ColorizationArea am_GetColorizationArea_p()
     return DefWindowProcW(hWnd, uMsg, wParam, lParam);
 }
 
-bool am_ShowErrorMessageFromLastErrorCode_p(LPCWSTR functionName)
-{
-    if (!functionName) {
-        return false;
-    }
-
-    const DWORD dw = GetLastError();
-    if (dw == 0) {
-        return true;
-    }
-
-    LPVOID lpMsgBuf = nullptr;
-    LPVOID lpDisplayBuf = nullptr;
-
-    FormatMessageW(
-        FORMAT_MESSAGE_ALLOCATE_BUFFER |
-        FORMAT_MESSAGE_FROM_SYSTEM |
-        FORMAT_MESSAGE_IGNORE_INSERTS,
-        nullptr,
-        dw,
-        MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
-        reinterpret_cast<LPWSTR>(&lpMsgBuf),
-        0, nullptr );
-
-    lpDisplayBuf = reinterpret_cast<LPVOID>(LocalAlloc(LMEM_ZEROINIT,
-        (wcslen(reinterpret_cast<LPCWSTR>(lpMsgBuf))
-         + wcslen(reinterpret_cast<LPCWSTR>(functionName)) + 40) * sizeof(WCHAR)));
-    StringCchPrintfW(reinterpret_cast<LPWSTR>(lpDisplayBuf),
-        LocalSize(lpDisplayBuf) / sizeof(WCHAR),
-        L"%s failed with error %d: %s",
-        functionName, dw, lpMsgBuf);
-    am_Print_p(reinterpret_cast<LPCWSTR>(lpDisplayBuf), true);
-
-    LocalFree(lpMsgBuf);
-    LocalFree(lpDisplayBuf);
-
-    return false;
-}
-
 [[nodiscard]] static inline bool am_RegisterMainWindowClass_p()
 {
     if (g_am_MainWindowAtom_p != 0) {
@@ -1882,10 +1893,9 @@ RECT am_GetWindowGeometry()
     return am_GetWindowGeometry_p();
 }
 
-RECT am_SetWindowGeometry(const int x, const int y, const int w, const int h)
+bool am_SetWindowGeometry(const int x, const int y, const int w, const int h)
 {
-    // TODO
-    return {};
+    return am_SetWindowGeometry_p(x, y, w, h);
 }
 
 bool am_MoveWindow(const int x, const int y)

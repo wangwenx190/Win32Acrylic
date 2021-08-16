@@ -134,6 +134,41 @@ static winrt::Windows::UI::Xaml::Hosting::DesktopWindowXamlSource g_am_XAMLSourc
 static winrt::Windows::UI::Xaml::Controls::Grid g_am_RootGrid_p = nullptr;
 static winrt::Windows::UI::Xaml::Media::AcrylicBrush g_am_BackgroundBrush_p = nullptr;
 
+[[nodiscard]] static inline bool am_IsWindows7OrGreater_p()
+{
+    return am_CompareSystemVersion_p(WindowsVersion::Windows7, VersionCompare::GreaterOrEqual);
+}
+
+[[nodiscard]] static inline bool am_IsWindows8OrGreater_p()
+{
+    return am_CompareSystemVersion_p(WindowsVersion::Windows8, VersionCompare::GreaterOrEqual);
+}
+
+[[nodiscard]] static inline bool am_IsWindows8Point1OrGreater_p()
+{
+    return am_CompareSystemVersion_p(WindowsVersion::Windows8_1, VersionCompare::GreaterOrEqual);
+}
+
+[[nodiscard]] static inline bool am_IsWindows10OrGreater_p()
+{
+    return am_CompareSystemVersion_p(WindowsVersion::Windows10, VersionCompare::GreaterOrEqual);
+}
+
+[[nodiscard]] static inline bool am_IsWindows10_1607OrGreater_p()
+{
+    return am_CompareSystemVersion_p(WindowsVersion::Windows10_1607, VersionCompare::GreaterOrEqual);
+}
+
+[[nodiscard]] static inline bool am_IsWindows10_19H1OrGreater_p()
+{
+    return am_CompareSystemVersion_p(WindowsVersion::Windows10_19H1, VersionCompare::GreaterOrEqual);
+}
+
+[[nodiscard]] static inline bool am_IsWindows11OrGreater_p()
+{
+    return am_CompareSystemVersion_p(WindowsVersion::Windows11, VersionCompare::GreaterOrEqual);
+}
+
 static inline void am_Print_p(LPCWSTR text, const bool showUi = false, LPCWSTR title = nullptr)
 {
     if (!text) {
@@ -297,10 +332,11 @@ RECT am_GetScreenAvailableGeometry_p(const HWND hWnd)
 bool am_IsCompositionEnabled_p()
 {
     // DWM composition is always enabled and can't be disabled since Windows 8.
-    if (am_CompareSystemVersion_p(WindowsVersion::Windows8, VersionCompare::GreaterOrEqual)) {
+    if (am_IsWindows8OrGreater_p()) {
         return true;
     }
     BOOL enabled = FALSE;
+    // todo: read from reg when failed.
     return (SUCCEEDED(DwmIsCompositionEnabled(&enabled)) && (enabled != FALSE));
 }
 
@@ -571,10 +607,8 @@ bool am_CompareSystemVersion_p(const WindowsVersion ver, const VersionCompare co
     if (!hWnd) {
         return false;
     }
-    const bool normal = am_IsWindowNoState_p(hWnd);
     const UINT _dpi = (dpi == 0) ? USER_DEFAULT_SCREEN_DPI : dpi;
-    const LONG border = (normal ? am_GetWindowVisibleFrameBorderThickness_p(hWnd, _dpi) : 0);
-    const LONG topFrameMargin = (normal ? /*am_GetTitleBarHeight_p(hWnd, _dpi)*/border : border);
+    const LONG topFrameMargin = (am_IsWindowNoState_p(hWnd) ? am_GetWindowVisibleFrameBorderThickness_p(hWnd, _dpi) : 0);
     // We removed the whole top part of the frame (see handling of
     // WM_NCCALCSIZE) so the top border is missing now. We add it back here.
     // Note #1: You might wonder why we don't remove just the title bar instead
@@ -590,7 +624,7 @@ bool am_CompareSystemVersion_p(const WindowsVersion ver, const VersionCompare co
     //  at the top) in the WM_PAINT handler. This eliminates the transparency
     //  bug and it's what a lot of Win32 apps that customize the title bar do
     //  so it should work fine.
-    const MARGINS margins = {border, border, topFrameMargin, border};
+    const MARGINS margins = {0, 0, topFrameMargin, 0};
     return SUCCEEDED(DwmExtendFrameIntoClientArea(hWnd, &margins));
 }
 
@@ -615,7 +649,7 @@ bool am_CompareSystemVersion_p(const WindowsVersion ver, const VersionCompare co
         return SystemTheme::HighContrast;
     }
     // Dark mode was first introduced in Windows 10 1607.
-    if (am_CompareSystemVersion_p(WindowsVersion::Windows10_1607, VersionCompare::GreaterOrEqual)) {
+    if (am_IsWindows10_1607OrGreater_p()) {
         bool lightModeOn = false;
         if (!am_ShouldAppsUseLightTheme_p(&lightModeOn)) {
             if (!am_ShouldSystemUsesLightTheme_p(&lightModeOn)) {
@@ -1136,7 +1170,7 @@ COLORREF am_GetColorizationColor_p()
 ColorizationArea am_GetColorizationArea_p()
 {
     // todo: check which specific win10.
-    if (am_CompareSystemVersion_p(WindowsVersion::Windows10, VersionCompare::Less)) {
+    if (!am_IsWindows10OrGreater_p()) {
         return ColorizationArea::None;
     }
     const HKEY rootKey = HKEY_CURRENT_USER;
@@ -1245,7 +1279,7 @@ bool am_ShowErrorMessageFromLastErrorCode_p(LPCWSTR functionName)
         if (!wParam) {
             return 0;
         }
-        const bool win10 = am_CompareSystemVersion_p(WindowsVersion::Windows10, VersionCompare::GreaterOrEqual);
+        const bool win10 = am_IsWindows10OrGreater_p();
         const auto clientRect = &(reinterpret_cast<LPNCCALCSIZE_PARAMS>(lParam)->rgrc[0]);
         if (win10) {
             // Store the original top before the default window proc applies the default frame.
@@ -1295,7 +1329,7 @@ bool am_ShowErrorMessageFromLastErrorCode_p(LPCWSTR functionName)
                 // Due to "ABM_GETAUTOHIDEBAREX" only has effect since Windows 8.1,
                 // we have to use another way to judge the edge of the auto-hide taskbar
                 // when the application is running on Windows 7 or Windows 8.
-                if (am_CompareSystemVersion_p(WindowsVersion::Windows8_1, VersionCompare::GreaterOrEqual)) {
+                if (am_IsWindows8Point1OrGreater_p()) {
                     const RECT screenRect = am_GetScreenGeometry_p(hWnd);
                     // This helper can be used to determine if there's a
                     // auto-hide taskbar on the given edge of the monitor
@@ -1396,7 +1430,7 @@ bool am_ShowErrorMessageFromLastErrorCode_p(LPCWSTR functionName)
                           && !hitTestVisible);
         }
         const bool isTop = (normal ? (localPos.y <= rbtY) : false);
-        if (am_CompareSystemVersion_p(WindowsVersion::Windows10, VersionCompare::GreaterOrEqual)) {
+        if (am_IsWindows10OrGreater_p()) {
             // This will handle the left, right and bottom parts of the frame
             // because we didn't change them.
             const LRESULT originalRet = DefWindowProcW(hWnd, uMsg, wParam, lParam);
@@ -1460,7 +1494,7 @@ bool am_ShowErrorMessageFromLastErrorCode_p(LPCWSTR functionName)
         return HTNOWHERE;
     }
     case WM_PAINT: {
-        if (am_CompareSystemVersion_p(WindowsVersion::Windows10, VersionCompare::Less)) {
+        if (!am_IsWindows10OrGreater_p()) {
             break;
         }
         PAINTSTRUCT ps = {};
@@ -1634,7 +1668,7 @@ bool am_ShowErrorMessageFromLastErrorCode_p(LPCWSTR functionName)
         }
     } break;
     case WM_ACTIVATE: {
-        if (am_CompareSystemVersion_p(WindowsVersion::Windows10, VersionCompare::GreaterOrEqual)) {
+        if (am_IsWindows10OrGreater_p()) {
             break;
         }
         const auto status = LOWORD(wParam);
@@ -1791,12 +1825,9 @@ bool am_ShowErrorMessageFromLastErrorCode_p(LPCWSTR functionName)
     wcex.lpszClassName = g_am_MainWindowClassName_p;
 
     g_am_MainWindowAtom_p = RegisterClassExW(&wcex);
-    if (!am_ShowErrorMessageFromLastErrorCode_p(L"RegisterClassExW (MainWindow)")) {
-        am_Cleanup_p();
-        return false;
-    }
 
     if (g_am_MainWindowAtom_p == 0) {
+        PRINT_ERROR_MESSAGE(RegisterClassExW)
         am_Cleanup_p();
         return false;
     }
@@ -1806,7 +1837,7 @@ bool am_ShowErrorMessageFromLastErrorCode_p(LPCWSTR functionName)
 
 [[nodiscard]] static inline bool am_RegisterDragBarWindowClass_p()
 {
-    if (am_CompareSystemVersion_p(WindowsVersion::Windows8, VersionCompare::Less)) {
+    if (!am_IsWindows8OrGreater_p()) {
         am_Print_p(L"Drag bar window is only available on Windows 8 and onwards.");
         am_Cleanup_p();
         return false;
@@ -1840,12 +1871,9 @@ bool am_ShowErrorMessageFromLastErrorCode_p(LPCWSTR functionName)
     wcex.lpszClassName = g_am_DragBarWindowClassName_p;
 
     g_am_DragBarWindowAtom_p = RegisterClassExW(&wcex);
-    if (!am_ShowErrorMessageFromLastErrorCode_p(L"RegisterClassExW (DragBarWindow)")) {
-        //am_Cleanup_p();
-        //return false;
-    }
 
     if (g_am_DragBarWindowAtom_p == 0) {
+        PRINT_ERROR_MESSAGE(RegisterClassExW)
         am_Cleanup_p();
         return false;
     }
@@ -1869,13 +1897,9 @@ bool am_ShowErrorMessageFromLastErrorCode_p(LPCWSTR functionName)
                                        ((w > 0) ? w : CW_USEDEFAULT),
                                        ((h > 0) ? h : CW_USEDEFAULT),
                                        nullptr, nullptr, HINST_THISCOMPONENT, nullptr);
-    if (!am_ShowErrorMessageFromLastErrorCode_p(L"CreateWindowExW (MainWindow)")) {
-        am_Cleanup_p();
-        return false;
-    }
 
     if (!g_am_MainWindowHandle_p) {
-        am_Print_p(L"Failed to create main window.");
+        PRINT_ERROR_MESSAGE(CreateWindowExW)
         am_Cleanup_p();
         return false;
     }
@@ -1916,7 +1940,7 @@ bool am_ShowErrorMessageFromLastErrorCode_p(LPCWSTR functionName)
     }
 
     // Please refer to the "IMPORTANT NOTE" section below.
-    if (am_CompareSystemVersion_p(WindowsVersion::Windows8, VersionCompare::Less)) {
+    if (!am_IsWindows8OrGreater_p()) {
         am_Print_p(L"Drag bar window is only available on Windows 8 and onwards.");
         am_Cleanup_p();
         return false;
@@ -1940,13 +1964,9 @@ bool am_ShowErrorMessageFromLastErrorCode_p(LPCWSTR functionName)
                                           WS_CHILD,
                                           CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
                                           g_am_MainWindowHandle_p, nullptr, HINST_THISCOMPONENT, nullptr);
-    if (!am_ShowErrorMessageFromLastErrorCode_p(L"CreateWindowExW (DragBarWindow)")) {
-        am_Cleanup_p();
-        return false;
-    }
 
     if (!g_am_DragBarWindowHandle_p) {
-        am_Print_p(L"Failed to create drag bar window.");
+        PRINT_ERROR_MESSAGE(CreateWindowExW)
         am_Cleanup_p();
         return false;
     }
@@ -1984,7 +2004,7 @@ bool am_ShowErrorMessageFromLastErrorCode_p(LPCWSTR functionName)
     }
 
     // XAML Island is only supported on Windows 10 19H1 and onwards.
-    if (am_CompareSystemVersion_p(WindowsVersion::Windows10_19H1, VersionCompare::Less)) {
+    if (!am_IsWindows10_19H1OrGreater_p()) {
         am_Print_p(L"XAML Island is only supported on Windows 10 19H1 and onwards.");
         am_Cleanup_p();
         return false;
@@ -2069,8 +2089,8 @@ bool am_ShowErrorMessageFromLastErrorCode_p(LPCWSTR functionName)
         am_Print_p(L"Failed to create main window.", true);
         return false;
     }
-    if (am_CompareSystemVersion_p(WindowsVersion::Windows10, VersionCompare::GreaterOrEqual)) {
-        if (am_CompareSystemVersion_p(WindowsVersion::Windows10_19H1, VersionCompare::GreaterOrEqual)) {
+    if (am_IsWindows10OrGreater_p()) {
+        if (am_IsWindows10_19H1OrGreater_p()) {
             if (am_CreateXAMLIsland_p()) {
                 if (am_RegisterDragBarWindowClass_p()) {
                     if (!am_CreateDragBarWindow_p()) {
@@ -2126,7 +2146,7 @@ bool am_ShowErrorMessageFromLastErrorCode_p(LPCWSTR functionName)
 
 bool am_CreateWindow(const int x, const int y, const int w, const int h)
 {
-    if (am_CompareSystemVersion_p(WindowsVersion::WindowsVista, VersionCompare::Less)) {
+    if (!am_IsWindows7OrGreater_p()) {
         am_Print_p(L"This application cannot be run on such old systems.", true);
         return false;
     }
@@ -2248,4 +2268,24 @@ int am_EventLoopExec()
 bool am_IsWindowActive()
 {
     return am_IsWindowActive_p();
+}
+
+BOOL APIENTRY
+DllMain(
+    HMODULE hModule,
+    DWORD  ul_reason_for_call,
+    LPVOID lpReserved
+)
+{
+    switch (ul_reason_for_call)
+    {
+    case DLL_PROCESS_ATTACH:
+    case DLL_THREAD_ATTACH:
+        break;
+    case DLL_THREAD_DETACH:
+    case DLL_PROCESS_DETACH:
+        //am_Cleanup_p();
+        break;
+    }
+    return TRUE;
 }

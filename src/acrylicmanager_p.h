@@ -159,147 +159,169 @@ typedef enum _MONITOR_DPI_TYPE_EX
 EXTERN_C_START
 #endif
 
-[[nodiscard]] ACRYLICMANAGER_API UINT WINAPI
+[[nodiscard]] ACRYLICMANAGER_API HRESULT WINAPI
 am_GetWindowDpi_p(
-    _In_ const HWND hWnd
+    _In_ const HWND hWnd,
+    _Out_ UINT      *dpi
 );
 
-[[nodiscard]] ACRYLICMANAGER_API bool WINAPI
+[[nodiscard]] ACRYLICMANAGER_API HRESULT WINAPI
 am_IsMinimized_p(
-    _In_ const HWND hWnd
+    _In_ const HWND hWnd,
+    _Out_ bool      *min
 );
 
-[[nodiscard]] ACRYLICMANAGER_API bool WINAPI
+[[nodiscard]] ACRYLICMANAGER_API HRESULT WINAPI
 am_IsMaximized_p(
-    _In_ const HWND hWnd
+    _In_ const HWND hWnd,
+    _Out_ bool      *max
 );
 
-[[nodiscard]] ACRYLICMANAGER_API bool WINAPI
+[[nodiscard]] ACRYLICMANAGER_API HRESULT WINAPI
 am_IsFullScreened_p(
-    _In_ const HWND hWnd
+    _In_ const HWND hWnd,
+    _Out_ bool      *full
 );
 
-[[nodiscard]] ACRYLICMANAGER_API bool WINAPI
+[[nodiscard]] ACRYLICMANAGER_API HRESULT WINAPI
 am_IsWindowNoState_p(
-    _In_ const HWND hWnd
+    _In_ const HWND hWnd,
+    _Out_ bool      *normal
 );
 
-[[nodiscard]] ACRYLICMANAGER_API bool WINAPI
+[[nodiscard]] ACRYLICMANAGER_API HRESULT WINAPI
 am_IsWindowVisible_p(
-    _In_ const HWND hWnd
+    _In_ const HWND hWnd,
+    _Out_ bool      *visible
 );
 
-[[nodiscard]] ACRYLICMANAGER_API int WINAPI
+[[nodiscard]] ACRYLICMANAGER_API HRESULT WINAPI
 am_GetResizeBorderThickness_p(
     _In_ const bool x,
-    _In_ const UINT dpi
+    _In_ const UINT dpi,
+    _Out_ int       *thickness
 );
 
-[[nodiscard]] ACRYLICMANAGER_API int WINAPI
+[[nodiscard]] ACRYLICMANAGER_API HRESULT WINAPI
 am_GetCaptionHeight_p(
-    _In_ const UINT dpi
+    _In_ const UINT dpi,
+    _Out_ int       *height
 );
 
-[[nodiscard]] ACRYLICMANAGER_API int WINAPI
+[[nodiscard]] ACRYLICMANAGER_API HRESULT WINAPI
 am_GetTitleBarHeight_p(
     _In_ const HWND hWnd,
-    _In_ const UINT dpi
+    _In_ const UINT dpi,
+    _Out_ int       *height
 );
 
-[[nodiscard]] ACRYLICMANAGER_API RECT WINAPI
+[[nodiscard]] ACRYLICMANAGER_API HRESULT WINAPI
 am_GetScreenGeometry_p(
-    _In_ const HWND hWnd
+    _In_ const HWND hWnd,
+    _Out_ RECT      *rect
 );
 
-[[nodiscard]] ACRYLICMANAGER_API RECT WINAPI
+[[nodiscard]] ACRYLICMANAGER_API HRESULT WINAPI
 am_GetScreenAvailableGeometry_p(
-    _In_ const HWND hWnd
+    _In_ const HWND hWnd,
+    _Out_ RECT      *rect
 );
 
-[[nodiscard]] ACRYLICMANAGER_API bool WINAPI
-am_IsCompositionEnabled_p();
+[[nodiscard]] ACRYLICMANAGER_API HRESULT WINAPI
+am_IsCompositionEnabled_p(
+    _Out_ bool *enabled
+);
 
-[[nodiscard]] ACRYLICMANAGER_API bool WINAPI
+[[nodiscard]] ACRYLICMANAGER_API HRESULT WINAPI
 am_TriggerFrameChange_p(
     _In_ const HWND hWnd
 );
 
-[[nodiscard]] ACRYLICMANAGER_API bool WINAPI
+[[nodiscard]] ACRYLICMANAGER_API HRESULT WINAPI
 am_IsWindowTransitionsEnabled_p(
-    _In_ const HWND hWnd
+    _In_ const HWND hWnd,
+    _Out_ bool      *enabled
 );
 
-[[nodiscard]] ACRYLICMANAGER_API bool WINAPI
+[[nodiscard]] ACRYLICMANAGER_API HRESULT WINAPI
 am_SetWindowTransitionsEnabled_p(
     _In_ const HWND hWnd,
     _In_ const bool enable
 );
 
-[[nodiscard]] ACRYLICMANAGER_API bool WINAPI
+[[nodiscard]] ACRYLICMANAGER_API HRESULT WINAPI
 am_OpenSystemMenu_p(
     _In_ const HWND  hWnd,
     _In_ const POINT pos
 );
 
-[[nodiscard]] ACRYLICMANAGER_API bool WINAPI
+[[nodiscard]] ACRYLICMANAGER_API HRESULT WINAPI
 am_CompareSystemVersion_p(
     _In_ const WindowsVersion ver,
-    _In_ const VersionCompare comp
+    _In_ const VersionCompare comp,
+    _Out_ bool                *result
 );
 
-[[nodiscard]] ACRYLICMANAGER_API bool WINAPI
+[[nodiscard]] ACRYLICMANAGER_API HRESULT WINAPI
 am_GenerateGUID_p(
     _Out_ LPWSTR *guid
 );
 
-[[nodiscard]] ACRYLICMANAGER_API bool WINAPI
-am_ShowErrorMessageFromLastErrorCode_p(
-    _In_ LPCWSTR functionName
+[[nodiscard]] ACRYLICMANAGER_API HRESULT WINAPI
+am_PrintErrorMessageFromHResult_p(
+    _In_ LPCWSTR       function,
+    _In_ const HRESULT hr
 );
 
-[[nodiscard]] ACRYLICMANAGER_API bool WINAPI
+[[nodiscard]] ACRYLICMANAGER_API HRESULT WINAPI
 am_ShouldAppsUseLightTheme_p(
     _Out_ bool *result
 );
 
-[[nodiscard]] ACRYLICMANAGER_API bool WINAPI
+[[nodiscard]] ACRYLICMANAGER_API HRESULT WINAPI
 am_ShouldSystemUsesLightTheme_p(
     _Out_ bool *result
 );
 
-[[nodiscard]] ACRYLICMANAGER_API bool WINAPI
-am_IsHighContrastModeOn_p();
+[[nodiscard]] ACRYLICMANAGER_API HRESULT WINAPI
+am_IsHighContrastModeOn_p(
+    _Out_ bool *enabled
+);
 
-[[nodiscard]] ACRYLICMANAGER_API bool WINAPI
+[[nodiscard]] ACRYLICMANAGER_API HRESULT WINAPI
 am_SetWindowCompositionAttribute_p(
     _In_ const HWND hWnd,
     _In_ LPWINDOWCOMPOSITIONATTRIBDATA pwcad
 );
 
-[[nodiscard]] ACRYLICMANAGER_API bool WINAPI
+[[nodiscard]] ACRYLICMANAGER_API HRESULT WINAPI
 am_IsWindowUsingDarkFrame_p(
     _In_ const HWND hWnd,
     _Out_ bool      *result
 );
 
-[[nodiscard]] ACRYLICMANAGER_API bool WINAPI
+[[nodiscard]] ACRYLICMANAGER_API HRESULT WINAPI
 am_SetWindowDarkFrameEnabled_p(
     _In_ const HWND hWnd,
     _In_ const bool enable
 );
 
-[[nodiscard]] ACRYLICMANAGER_API COLORREF WINAPI
-am_GetColorizationColor_p();
+[[nodiscard]] ACRYLICMANAGER_API HRESULT WINAPI
+am_GetColorizationColor_p(
+    _Out_ COLORREF *color
+);
 
-[[nodiscard]] ACRYLICMANAGER_API ColorizationArea WINAPI
-am_GetColorizationArea_p();
+[[nodiscard]] ACRYLICMANAGER_API HRESULT WINAPI
+am_GetColorizationArea_p(
+    _Out_ ColorizationArea *area
+);
 
-ACRYLICMANAGER_API void WINAPI
+ACRYLICMANAGER_API HRESULT WINAPI
 am_FreeStringA_p(
     _In_ void *mem
 );
 
-ACRYLICMANAGER_API void WINAPI
+ACRYLICMANAGER_API HRESULT WINAPI
 am_FreeStringW_p(
     _In_ void *mem
 );

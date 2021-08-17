@@ -43,7 +43,8 @@
 #include <WinRT\Windows.UI.Xaml.Media.h>
 #include <Windows.UI.Xaml.Hosting.DesktopWindowXamlSource.h>
 
-#include <d2d1.h>
+#include <D2D1.h>
+#include <WinCodec.h>
 
 #ifndef HINST_THISCOMPONENT
 EXTERN_C IMAGE_DOS_HEADER __ImageBase;
@@ -134,7 +135,7 @@ static LPCWSTR g_am_DragBarWindowClassNameSuffix_p = L"@DragBarWindow";
 static LPWSTR g_am_MainWindowClassName_p = nullptr;
 static LPWSTR g_am_DragBarWindowClassName_p = nullptr;
 static LPCWSTR g_am_MainWindowTitle_p = L"AcrylicManager Main Window";
-static LPCWSTR g_am_DragBarWindowTitle_p = L"";
+static LPCWSTR g_am_DragBarWindowTitle_p = nullptr;
 static ATOM g_am_MainWindowAtom_p = 0;
 static ATOM g_am_DragBarWindowAtom_p = 0;
 static HWND g_am_MainWindowHandle_p = nullptr;
@@ -142,11 +143,19 @@ static HWND g_am_XAMLIslandWindowHandle_p = nullptr;
 static HWND g_am_DragBarWindowHandle_p = nullptr;
 static UINT g_am_CurrentDpi_p = 0;
 static SystemTheme g_am_BrushTheme_p = SystemTheme::Invalid;
+static LPWSTR g_am_WallpaperFilePath_p = nullptr;
+static COLORREF g_am_DesktopBackgroundColor_p = RGB(0, 0, 0);
+static WallpaperAspectStyle g_am_WallpaperAspectStyle_p = WallpaperAspectStyle::Invalid;
 
 static winrt::Windows::UI::Xaml::Hosting::WindowsXamlManager g_am_XAMLManager_p = nullptr;
 static winrt::Windows::UI::Xaml::Hosting::DesktopWindowXamlSource g_am_XAMLSource_p = nullptr;
 static winrt::Windows::UI::Xaml::Controls::Grid g_am_RootGrid_p = nullptr;
 static winrt::Windows::UI::Xaml::Media::AcrylicBrush g_am_BackgroundBrush_p = nullptr;
+
+static CComPtr<ID2D1Factory> g_am_D2DFactory_p = nullptr;
+static CComPtr<ID2D1HwndRenderTarget> g_am_D2DRenderTarget_p = nullptr;
+static CComPtr<ID2D1BitmapBrush> g_am_D2DBitmapBrush_p = nullptr;
+static CComPtr<ID2D1Bitmap> g_am_D2DWallpaperBitmap_p = nullptr;
 
 static const bool g_am_IsWindows7OrGreater_p = []{
     bool result = false;
@@ -913,6 +922,31 @@ HRESULT am_GetWindowVisibleFrameBorderThickness_p(const HWND hWnd, const UINT dp
 
 static inline void am_Cleanup_p()
 {
+    // Direct2D
+    if (g_am_D2DWallpaperBitmap_p) {
+        g_am_D2DWallpaperBitmap_p.Release();
+        g_am_D2DWallpaperBitmap_p = nullptr;
+    }
+    if (g_am_D2DBitmapBrush_p) {
+        g_am_D2DBitmapBrush_p.Release();
+        g_am_D2DBitmapBrush_p = nullptr;
+    }
+    if (g_am_D2DRenderTarget_p) {
+        g_am_D2DRenderTarget_p.Release();
+        g_am_D2DRenderTarget_p = nullptr;
+    }
+    if (g_am_D2DFactory_p) {
+        g_am_D2DFactory_p.Release();
+        g_am_D2DFactory_p = nullptr;
+    }
+    if (g_am_WallpaperFilePath_p) {
+        delete [] g_am_WallpaperFilePath_p;
+        g_am_WallpaperFilePath_p = nullptr;
+    }
+    g_am_DesktopBackgroundColor_p = RGB(0, 0, 0);
+    g_am_WallpaperAspectStyle_p = WallpaperAspectStyle::Invalid;
+
+    // XAML Island
     if (g_am_XAMLSource_p) {
         g_am_XAMLSource_p.Close();
         g_am_XAMLSource_p = nullptr;
@@ -923,34 +957,46 @@ static inline void am_Cleanup_p()
         g_am_XAMLManager_p.Close();
         g_am_XAMLManager_p = nullptr;
     }
+
+    // Drag bar window
     if (g_am_DragBarWindowHandle_p) {
         if (DestroyWindow(g_am_DragBarWindowHandle_p) == FALSE) {
             PRINT_ERROR_MESSAGE(DestroyWindow)
         }
         g_am_DragBarWindowHandle_p = nullptr;
     }
+    if (g_am_DragBarWindowAtom_p != 0) {
+        if (g_am_DragBarWindowClassName_p) {
+            if (UnregisterClassW(g_am_DragBarWindowClassName_p, HINST_THISCOMPONENT) == FALSE) {
+                PRINT_ERROR_MESSAGE(UnregisterClassW)
+            }
+            delete [] g_am_DragBarWindowClassName_p;
+            g_am_DragBarWindowClassName_p = nullptr;
+        }
+        g_am_DragBarWindowAtom_p = 0;
+    }
+
+    // Main window
     if (g_am_MainWindowHandle_p) {
         if (DestroyWindow(g_am_MainWindowHandle_p) == FALSE) {
             PRINT_ERROR_MESSAGE(DestroyWindow)
         }
         g_am_MainWindowHandle_p = nullptr;
     }
-    if (g_am_DragBarWindowAtom_p != 0) {
-        if (UnregisterClassW(g_am_DragBarWindowClassName_p, HINST_THISCOMPONENT) == FALSE) {
-            PRINT_ERROR_MESSAGE(UnregisterClassW)
-        }
-        g_am_DragBarWindowAtom_p = 0;
-        delete [] g_am_DragBarWindowClassName_p;
-        g_am_DragBarWindowClassName_p = nullptr;
-    }
     if (g_am_MainWindowAtom_p != 0) {
-        if (UnregisterClassW(g_am_MainWindowClassName_p, HINST_THISCOMPONENT) == FALSE) {
-            PRINT_ERROR_MESSAGE(UnregisterClassW)
+        if (g_am_MainWindowClassName_p) {
+            if (UnregisterClassW(g_am_MainWindowClassName_p, HINST_THISCOMPONENT) == FALSE) {
+                PRINT_ERROR_MESSAGE(UnregisterClassW)
+            }
+            delete [] g_am_MainWindowClassName_p;
+            g_am_MainWindowClassName_p = nullptr;
         }
         g_am_MainWindowAtom_p = 0;
-        delete [] g_am_MainWindowClassName_p;
-        g_am_MainWindowClassName_p = nullptr;
     }
+
+    // Misc
+    g_am_CurrentDpi_p = 0;
+    g_am_BrushTheme_p = SystemTheme::Invalid;
 }
 
 [[nodiscard]] static inline HRESULT am_GetTintColor_p(int *r, int *g, int *b, int *a)
@@ -1316,7 +1362,7 @@ HRESULT am_PrintErrorMessageFromHResult_p(LPCWSTR function, const HRESULT hr)
     lpDisplayBuf = reinterpret_cast<LPVOID>(LocalAlloc(LMEM_ZEROINIT,
         (wcslen(reinterpret_cast<LPCWSTR>(lpMsgBuf)) + wcslen(reinterpret_cast<LPCWSTR>(function)) + 40) * sizeof(wchar_t)));
     swprintf_s(reinterpret_cast<LPWSTR>(lpDisplayBuf), LocalSize(lpDisplayBuf) / sizeof(wchar_t),
-               L"%s failed with error %d: %s", function, dwError, lpMsgBuf);
+               L"%s failed with error %d: %s", function, dwError, reinterpret_cast<LPCWSTR>(lpMsgBuf));
     am_Print_p(reinterpret_cast<LPCWSTR>(lpDisplayBuf), true);
 
     LocalFree(lpMsgBuf);
@@ -1425,7 +1471,8 @@ HRESULT am_GetDesktopBackgroundColor_p(COLORREF *result)
     }
     // TODO: Is there any other way to get the background color? Traditional Win32 API? Registry?
     // Is there a COM API for Win7?
-    return E_FAIL;
+    *result = RGB(0, 0, 0);
+    return S_OK;
 }
 
 HRESULT am_GetWallpaperAspectStyle_p(const int screen, WallpaperAspectStyle *result)
@@ -1540,6 +1587,106 @@ HRESULT am_GetWindowDpiAwareness_p(const HWND hWnd, int *result)
     // todo
     return E_FAIL;
 }
+
+// Direct2D
+
+[[nodiscard]] static inline HRESULT
+am_CreateD2DBitmapBrushFromURI_p(
+    ID2D1RenderTarget *pRenderTarget,
+    LPCWSTR           uri,
+    UINT              width,
+    UINT              height,
+    ID2D1Bitmap       **ppBitmap
+)
+{
+    if (!g_am_D2DRenderTarget_p || !pRenderTarget || !uri || (width <= 0) || (height <= 0) || !ppBitmap) {
+        return E_INVALIDARG;
+    }
+    CComPtr<IWICBitmapDecoder> pDecoder = nullptr;
+    CComPtr<IWICBitmapFrameDecode> pSource = nullptr;
+    CComPtr<IWICStream> pStream = nullptr;
+    CComPtr<IWICFormatConverter> pConverter = nullptr;
+    CComPtr<IWICBitmapScaler> pScalar = nullptr;
+    CComPtr<IWICImagingFactory> pIWICFactory = nullptr;
+    if (FAILED(CoInitialize(nullptr))) {
+        return E_FAIL;
+    }
+    if (SUCCEEDED(CoCreateInstance(CLSID_WICImagingFactory1, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&pIWICFactory)))) {
+        if (SUCCEEDED(pIWICFactory->CreateDecoderFromFilename(uri, nullptr, GENERIC_READ, WICDecodeMetadataCacheOnLoad, &pDecoder))) {
+            if (SUCCEEDED(pDecoder->GetFrame(0, &pSource))) {
+                if (SUCCEEDED(pIWICFactory->CreateFormatConverter(&pConverter))) {
+                    if (SUCCEEDED(pConverter->Initialize(pSource, GUID_WICPixelFormat32bppPBGRA, WICBitmapDitherTypeNone,
+                                                         nullptr, 0.0f, WICBitmapPaletteTypeMedianCut))) {
+                        if (SUCCEEDED(pRenderTarget->CreateBitmapFromWicBitmap(pConverter, nullptr, ppBitmap))) {
+                            if (SUCCEEDED(g_am_D2DRenderTarget_p->CreateBitmapBrush(*ppBitmap, &g_am_D2DBitmapBrush_p))) {
+                                CoUninitialize();
+                                return S_OK;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    CoUninitialize();
+    return E_FAIL;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 [[nodiscard]] static inline LRESULT CALLBACK am_MainWindowProc_p(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
@@ -1782,83 +1929,102 @@ HRESULT am_GetWindowDpiAwareness_p(const HWND hWnd, int *result)
         return HTNOWHERE;
     }
     case WM_PAINT: {
-        if (!g_am_IsWindows10OrGreater_p) {
-            break;
-        }
-        PAINTSTRUCT ps = {};
-        const HDC hdc = BeginPaint(hWnd, &ps);
-        if (!hdc) {
-            PRINT_ERROR_MESSAGE(BeginPaint)
-            break;
-        }
-        // We removed the whole top part of the frame (see handling of
-        // WM_NCCALCSIZE) so the top border is missing now. We add it back here.
-        // Note #1: You might wonder why we don't remove just the title bar instead
-        //  of removing the whole top part of the frame and then adding the little
-        //  top border back. I tried to do this but it didn't work: DWM drew the
-        //  whole title bar anyways on top of the window. It seems that DWM only
-        //  wants to draw either nothing or the whole top part of the frame.
-        // Note #2: For some reason if you try to set the top margin to just the
-        //  top border height (what we want to do), then there is a transparency
-        //  bug when the window is inactive, so I've decided to add the whole top
-        //  part of the frame instead and then we will hide everything that we
-        //  don't need (that is, the whole thing but the little 1 pixel wide border
-        //  at the top) in the WM_PAINT handler. This eliminates the transparency
-        //  bug and it's what a lot of Win32 apps that customize the title bar do
-        //  so it should work fine.
-        int borderThickness = 0;
-        if (FAILED(am_GetWindowVisibleFrameBorderThickness_p(hWnd, g_am_CurrentDpi_p, &borderThickness))) {
-            break;
-        }
-        if (ps.rcPaint.top < borderThickness) {
-            RECT rcPaint = ps.rcPaint;
-            rcPaint.bottom = borderThickness;
-            // To show the original top border, we have to paint on top
-            // of it with the alpha component set to 0. This page
-            // recommends to paint the area in black using the stock
-            // BLACK_BRUSH to do this:
-            // https://docs.microsoft.com/en-us/windows/win32/dwm/customframe#extending-the-client-frame
-            if (FillRect(hdc, &rcPaint, BLACK_BACKGROUND_BRUSH) == 0) {
-                PRINT_ERROR_MESSAGE(FillRect)
+        if (g_am_IsWindows10OrGreater_p) {
+            PAINTSTRUCT ps = {};
+            const HDC hdc = BeginPaint(hWnd, &ps);
+            if (!hdc) {
+                PRINT_ERROR_MESSAGE(BeginPaint)
                 break;
             }
+            // We removed the whole top part of the frame (see handling of
+            // WM_NCCALCSIZE) so the top border is missing now. We add it back here.
+            // Note #1: You might wonder why we don't remove just the title bar instead
+            //  of removing the whole top part of the frame and then adding the little
+            //  top border back. I tried to do this but it didn't work: DWM drew the
+            //  whole title bar anyways on top of the window. It seems that DWM only
+            //  wants to draw either nothing or the whole top part of the frame.
+            // Note #2: For some reason if you try to set the top margin to just the
+            //  top border height (what we want to do), then there is a transparency
+            //  bug when the window is inactive, so I've decided to add the whole top
+            //  part of the frame instead and then we will hide everything that we
+            //  don't need (that is, the whole thing but the little 1 pixel wide border
+            //  at the top) in the WM_PAINT handler. This eliminates the transparency
+            //  bug and it's what a lot of Win32 apps that customize the title bar do
+            //  so it should work fine.
+            int borderThickness = 0;
+            if (FAILED(am_GetWindowVisibleFrameBorderThickness_p(hWnd, g_am_CurrentDpi_p, &borderThickness))) {
+                break;
+            }
+            if (ps.rcPaint.top < borderThickness) {
+                RECT rcPaint = ps.rcPaint;
+                rcPaint.bottom = borderThickness;
+                // To show the original top border, we have to paint on top
+                // of it with the alpha component set to 0. This page
+                // recommends to paint the area in black using the stock
+                // BLACK_BRUSH to do this:
+                // https://docs.microsoft.com/en-us/windows/win32/dwm/customframe#extending-the-client-frame
+                if (FillRect(hdc, &rcPaint, BLACK_BACKGROUND_BRUSH) == 0) {
+                    PRINT_ERROR_MESSAGE(FillRect)
+                    break;
+                }
+            }
+            if (ps.rcPaint.bottom > borderThickness) {
+                RECT rcPaint = ps.rcPaint;
+                rcPaint.top = borderThickness;
+                // To hide the original title bar, we have to paint on top
+                // of it with the alpha component set to 255. This is a hack
+                // to do it with GDI. See updateFrameMargins() for more information.
+                HDC opaqueDc = nullptr;
+                BP_PAINTPARAMS params;
+                SecureZeroMemory(&params, sizeof(params));
+                params.cbSize = sizeof(params);
+                params.dwFlags = BPPF_NOCLIP | BPPF_ERASE;
+                const HPAINTBUFFER buf = BeginBufferedPaint(hdc, &rcPaint, BPBF_TOPDOWNDIB, &params, &opaqueDc);
+                if (!buf) {
+                    PRINT_ERROR_MESSAGE(BeginBufferedPaint)
+                    break;
+                }
+                if (FillRect(opaqueDc, &rcPaint,
+                             reinterpret_cast<HBRUSH>(GetClassLongPtrW(hWnd, GCLP_HBRBACKGROUND))) == 0) {
+                    PRINT_ERROR_MESSAGE(FillRect)
+                    break;
+                }
+                if (FAILED(BufferedPaintSetAlpha(buf, nullptr, 255))) {
+                    am_Print_p(L"WM_PAINT: BufferedPaintSetAlpha() failed.");
+                    break;
+                }
+                if (FAILED(EndBufferedPaint(buf, TRUE))) {
+                    am_Print_p(L"WM_PAINT: EndBufferedPaint() failed.");
+                    break;
+                }
+            }
+            if (EndPaint(hWnd, &ps) == FALSE) {
+                PRINT_ERROR_MESSAGE(EndPaint)
+                break;
+            }
+            return 0;
+        } else {
+            if (!g_am_D2DFactory_p || !g_am_D2DRenderTarget_p || !g_am_WallpaperFilePath_p) {
+                break;
+            }
+            SIZE size = {};
+            if (FAILED(am_GetWindowSize_p(hWnd, &size))) {
+                break;
+            }
+            if (!g_am_D2DWallpaperBitmap_p) {
+                if (FAILED(am_CreateD2DBitmapBrushFromURI_p(g_am_D2DRenderTarget_p, g_am_WallpaperFilePath_p, size.cx, size.cy, &g_am_D2DWallpaperBitmap_p))) {
+                    break;
+                }
+            }
+            g_am_D2DRenderTarget_p->BeginDraw();
+            g_am_D2DRenderTarget_p->Clear(D2D1::ColorF(g_am_DesktopBackgroundColor_p));
+            g_am_D2DRenderTarget_p->DrawBitmap(g_am_D2DWallpaperBitmap_p, D2D1::RectF(0, 0, size.cx, size.cy));
+            if (FAILED(g_am_D2DRenderTarget_p->EndDraw())) {
+                break;
+            }
+            return 0;
         }
-        if (ps.rcPaint.bottom > borderThickness) {
-            RECT rcPaint = ps.rcPaint;
-            rcPaint.top = borderThickness;
-            // To hide the original title bar, we have to paint on top
-            // of it with the alpha component set to 255. This is a hack
-            // to do it with GDI. See updateFrameMargins() for more information.
-            HDC opaqueDc = nullptr;
-            BP_PAINTPARAMS params;
-            SecureZeroMemory(&params, sizeof(params));
-            params.cbSize = sizeof(params);
-            params.dwFlags = BPPF_NOCLIP | BPPF_ERASE;
-            const HPAINTBUFFER buf = BeginBufferedPaint(hdc, &rcPaint, BPBF_TOPDOWNDIB, &params, &opaqueDc);
-            if (!buf) {
-                PRINT_ERROR_MESSAGE(BeginBufferedPaint)
-                break;
-            }
-            if (FillRect(opaqueDc, &rcPaint,
-                         reinterpret_cast<HBRUSH>(GetClassLongPtrW(hWnd, GCLP_HBRBACKGROUND))) == 0) {
-                PRINT_ERROR_MESSAGE(FillRect)
-                break;
-            }
-            if (FAILED(BufferedPaintSetAlpha(buf, nullptr, 255))) {
-                am_Print_p(L"WM_PAINT: BufferedPaintSetAlpha() failed.");
-                break;
-            }
-            if (FAILED(EndBufferedPaint(buf, TRUE))) {
-                am_Print_p(L"WM_PAINT: EndBufferedPaint() failed.");
-                break;
-            }
-        }
-        if (EndPaint(hWnd, &ps) == FALSE) {
-            PRINT_ERROR_MESSAGE(EndPaint)
-            break;
-        }
-        return 0;
-    }
+    } break;
     case WM_DPICHANGED: {
         const double x = LOWORD(wParam);
         const double y = HIWORD(wParam);
@@ -1870,7 +2036,7 @@ HRESULT am_GetWindowDpiAwareness_p(const HWND hWnd, int *result)
             break;
         }
         return 0;
-    }
+    } break;
     case WM_SIZE: {
         bool full = false;
         if ((wParam == SIZE_MAXIMIZED) || (wParam == SIZE_RESTORED)
@@ -1965,6 +2131,7 @@ HRESULT am_GetWindowDpiAwareness_p(const HWND hWnd, int *result)
         }
     } break;
     case WM_ACTIVATE: {
+        break; // test
         if (g_am_IsWindows10OrGreater_p) {
             break;
         }
@@ -2100,12 +2267,13 @@ HRESULT am_GetWindowDpiAwareness_p(const HWND hWnd, int *result)
 [[nodiscard]] static inline HRESULT am_RegisterMainWindowClass_p()
 {
     if (g_am_MainWindowAtom_p != 0) {
+        am_Cleanup_p();
         return E_INVALIDARG;
     }
 
     LPWSTR guid = nullptr;
     if (FAILED(am_GenerateGUID_p(&guid))) {
-        am_Print_p(L"Failed to generate main window class name.");
+        am_Cleanup_p();
         return E_FAIL;
     }
     g_am_MainWindowClassName_p = new wchar_t[MAX_PATH];
@@ -2145,13 +2313,14 @@ HRESULT am_GetWindowDpiAwareness_p(const HWND hWnd, int *result)
         return E_FAIL;
     }
 
-    if (g_am_DragBarWindowAtom_p != 0) {
+    if ((g_am_MainWindowAtom_p == 0) || (g_am_DragBarWindowAtom_p != 0)) {
+        am_Cleanup_p();
         return E_INVALIDARG;
     }
 
     LPWSTR guid = nullptr;
     if (FAILED(am_GenerateGUID_p(&guid))) {
-        am_Print_p(L"Failed to generate drag bar window class name.");
+        am_Cleanup_p();
         return E_FAIL;
     }
     g_am_DragBarWindowClassName_p = new wchar_t[MAX_PATH];
@@ -2185,8 +2354,7 @@ HRESULT am_GetWindowDpiAwareness_p(const HWND hWnd, int *result)
 
 [[nodiscard]] static inline HRESULT am_CreateMainWindow_p(const int x, const int y, const int w, const int h)
 {
-    if (g_am_MainWindowAtom_p == 0) {
-        am_Print_p(L"Main window class has not been registered.");
+    if ((g_am_MainWindowAtom_p == 0) || g_am_MainWindowHandle_p) {
         am_Cleanup_p();
         return E_INVALIDARG;
     }
@@ -2246,8 +2414,7 @@ HRESULT am_GetWindowDpiAwareness_p(const HWND hWnd, int *result)
         am_Cleanup_p();
         return E_FAIL;
     }
-    if (g_am_DragBarWindowAtom_p == 0) {
-        am_Print_p(L"Drag bar window class has not been created.");
+    if ((g_am_DragBarWindowAtom_p == 0) || g_am_DragBarWindowHandle_p) {
         am_Cleanup_p();
         return E_INVALIDARG;
     }
@@ -2385,14 +2552,54 @@ HRESULT am_GetWindowDpiAwareness_p(const HWND hWnd, int *result)
     return S_OK;
 }
 
-[[nodiscard]] static inline HRESULT am_Initialize_p(const int x, const int y, const int w, const int h)
+[[nodiscard]] static inline HRESULT am_InitializeDirect2DInfrastructure_p()
 {
-    static bool inited = false;
-    if (inited) {
-        am_Print_p(L"The AcrylicManager has been initialized already.");
+    if (!g_am_MainWindowHandle_p || g_am_D2DFactory_p || g_am_D2DRenderTarget_p) {
+        am_Cleanup_p();
+        return E_INVALIDARG;
+    }
+    const int screen = 0; // fixme: use the correct screen id.
+    if (FAILED(am_GetWallpaperFilePath_p(screen, &g_am_WallpaperFilePath_p))) {
+        am_Cleanup_p();
         return E_FAIL;
     }
-    inited = true;
+    if (FAILED(am_GetDesktopBackgroundColor_p(&g_am_DesktopBackgroundColor_p))) {
+        am_Cleanup_p();
+        return E_FAIL;
+    }
+    if (FAILED(am_GetWallpaperAspectStyle_p(screen, &g_am_WallpaperAspectStyle_p))) {
+        am_Cleanup_p();
+        return E_FAIL;
+    }
+    if (FAILED(D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED, &g_am_D2DFactory_p))) {
+        am_Cleanup_p();
+        return E_FAIL;
+    }
+    SIZE size = {};
+    if (FAILED(am_GetWindowSize_p(g_am_MainWindowHandle_p, &size))) {
+        am_Cleanup_p();
+        return E_FAIL;
+    }
+    if (FAILED(g_am_D2DFactory_p->CreateHwndRenderTarget({}, D2D1::HwndRenderTargetProperties(g_am_MainWindowHandle_p, D2D1::SizeU(size.cx, size.cy)), &g_am_D2DRenderTarget_p))) {
+        am_Cleanup_p();
+        return E_FAIL;
+    }
+#if 0
+    if (FAILED(am_CreateD2DBitmapBrushFromURI_p(g_am_D2DRenderTarget_p, g_am_WallpaperFilePath_p, size.cx, size.cy, &g_am_D2DWallpaperBitmap_p))) {
+        am_Cleanup_p();
+        return E_FAIL;
+    }
+#endif
+    return S_OK;
+}
+
+[[nodiscard]] static inline HRESULT am_InitializeAcrylicManager_p(const int x, const int y, const int w, const int h)
+{
+    static bool tried = false;
+    if (tried) {
+        return E_FAIL;
+    }
+    tried = true;
 
     if (FAILED(am_RegisterMainWindowClass_p())) {
         am_Print_p(L"Failed to register main window class.", true);
@@ -2406,7 +2613,9 @@ HRESULT am_GetWindowDpiAwareness_p(const HWND hWnd, int *result)
         if (g_am_IsXAMLIslandAvailable_p) {
             if (SUCCEEDED(am_CreateXAMLIsland_p())) {
                 if (SUCCEEDED(am_RegisterDragBarWindowClass_p())) {
-                    if (FAILED(am_CreateDragBarWindow_p())) {
+                    if (SUCCEEDED(am_CreateDragBarWindow_p())) {
+                        return S_OK;
+                    } else {
                         am_Print_p(L"Failed to create drag bar window.", true);
                         return E_FAIL;
                     }
@@ -2418,16 +2627,9 @@ HRESULT am_GetWindowDpiAwareness_p(const HWND hWnd, int *result)
                 am_Print_p(L"Failed to create XAML Island.", true);
                 return E_FAIL;
             }
-        } else {
-            am_Print_p(L"XAML Island is only supported on Windows 10 19H1 and onwards.", true);
-            //return E_FAIL;
         }
-    } else {
-        am_Print_p(L"This application only supports Windows 10 and onwards.", true);
-        //return E_FAIL;
     }
-
-    return S_OK;
+    return am_InitializeDirect2DInfrastructure_p();
 }
 
 [[nodiscard]] static inline HRESULT am_GetWindowHandle_p(HWND *result)
@@ -2480,7 +2682,7 @@ HRESULT am_CreateWindow(const int x, const int y, const int w, const int h)
         return E_FAIL;
     }
 
-    return am_Initialize_p(x, y, w, h);
+    return am_InitializeAcrylicManager_p(x, y, w, h);
 }
 
 HRESULT am_GetWindowGeometry(RECT *result)

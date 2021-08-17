@@ -26,6 +26,7 @@
 #include <ShellScalingApi.h>
 #include <UxTheme.h>
 #include <DwmApi.h>
+#include <D2D1.h>
 
 #ifdef __cplusplus
 EXTERN_C_START
@@ -214,6 +215,42 @@ void WINAPI
 CoUninitialize()
 {
     ACRYLICMANAGER_TRY_EXECUTE_OLE_VOID_FUNCTION(CoUninitialize)
+}
+
+/////////////////////////////////
+/////     Direct2D
+/////////////////////////////////
+
+// D2D1CreateFactory() has some overloads so we have to load it manually here.
+HRESULT WINAPI
+D2D1CreateFactory(
+    D2D1_FACTORY_TYPE          factoryType,
+    REFIID                     riid,
+    const D2D1_FACTORY_OPTIONS *pFactoryOptions,
+    void                       **ppIFactory
+)
+{
+    static bool tried = false;
+    using sig = HRESULT(WINAPI *)(D2D1_FACTORY_TYPE, REFIID, const D2D1_FACTORY_OPTIONS *, void **);
+    static sig func = nullptr;
+    if (!func) {
+        if (tried) {
+            return E_NOTIMPL;
+        } else {
+            tried = true;
+            const HMODULE dll = LoadLibraryExW(L"D2D1.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
+            if (!dll) {
+                OutputDebugStringW(L"Failed to load D2D1.dll.");
+                return E_NOTIMPL;
+            }
+            func = reinterpret_cast<sig>(GetProcAddress(dll, "D2D1CreateFactory"));
+            if (!func) {
+                OutputDebugStringW(L"Failed to resolve D2D1CreateFactory().");
+                return E_NOTIMPL;
+            }
+        }
+    }
+    return func(factoryType, riid, pFactoryOptions, ppIFactory);
 }
 
 #ifdef __cplusplus

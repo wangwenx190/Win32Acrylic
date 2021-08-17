@@ -77,6 +77,17 @@ enum class ColorizationArea : int
     All
 };
 
+enum class WallpaperAspectStyle : int
+{
+    Invalid = -1,
+    Central,
+    Tiled,
+    IgnoreRatioFit, // Stretch
+    KeepRatioFit, // Fit
+    KeepRatioByExpanding, // Fill
+    Span
+};
+
 typedef enum _WINDOWCOMPOSITIONATTRIB
 {
     WCA_UNDEFINED = 0x0,
@@ -331,6 +342,29 @@ am_GetWindowVisibleFrameBorderThickness_p(
     _In_ const HWND hWnd,
     _In_ const UINT dpi,
     _Out_ int       *thickness
+);
+
+[[nodiscard]] ACRYLICMANAGER_API HRESULT WINAPI
+am_GetWallpaperFilePath_p(
+    _In_ const int screen,
+    _Out_ LPWSTR   path
+);
+
+[[nodiscard]] ACRYLICMANAGER_API HRESULT WINAPI
+am_GetDesktopBackgroundColor_p(
+    _Out_ COLORREF *color
+);
+
+[[nodiscard]] ACRYLICMANAGER_API HRESULT WINAPI
+am_GetWallpaperAspectStyle_p(
+    _In_ const int             screen,
+    _Out_ WallpaperAspectStyle *style
+);
+
+[[nodiscard]] ACRYLICMANAGER_API HRESULT WINAPI
+am_GetWindowDpiAwareness_p(
+    _In_ const HWND hWnd,
+    _Out_ int       *result
 );
 
 #ifdef __cplusplus

@@ -62,6 +62,14 @@
 #define _USER32_
 #endif
 
+#ifndef _SHELL32_
+#define _SHELL32_
+#endif
+
+#ifndef _GDI32_
+#define _GDI32_
+#endif
+
 #ifndef _UXTHEME_
 #define _UXTHEME_
 #endif
@@ -73,7 +81,7 @@
 #include <SDKDDKVer.h>
 
 #ifndef NTDDI_WIN10_19H1
-#define NTDDI_WIN10_19H1 0x0A000007
+#define NTDDI_WIN10_19H1 (0x0A000007)
 #endif
 
 #ifdef WINVER

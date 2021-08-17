@@ -40,6 +40,11 @@
 #include <WinRT\Windows.UI.Xaml.Media.h>
 #include <Windows.UI.Xaml.Hosting.DesktopWindowXamlSource.h>
 
+#include <shobjidl_core.h>
+#include <wininet.h>
+#include <shlobj_core.h>
+#include <atlbase.h>
+
 #ifndef HINST_THISCOMPONENT
 EXTERN_C IMAGE_DOS_HEADER __ImageBase;
 #define HINST_THISCOMPONENT (reinterpret_cast<HINSTANCE>(&__ImageBase))
@@ -121,6 +126,7 @@ static const int g_am_AutoHideTaskbarThicknessPy_p = g_am_AutoHideTaskbarThickne
 
 static LPCWSTR g_am_PersonalizeRegistryKey_p = LR"(Software\Microsoft\Windows\CurrentVersion\Themes\Personalize)";
 static LPCWSTR g_am_DWMRegistryKey_p = LR"(Software\Microsoft\Windows\DWM)";
+static LPCWSTR g_am_DesktopRegistryKey_p = LR"(Control Panel\Desktop)";
 static LPCWSTR g_am_WindowClassNamePrefix_p = LR"(wangwenx190\AcrylicManager\WindowClass\)";
 static LPCWSTR g_am_MainWindowClassNameSuffix_p = L"@MainWindow";
 static LPCWSTR g_am_DragBarWindowClassNameSuffix_p = L"@DragBarWindow";
@@ -366,6 +372,32 @@ HRESULT am_GetScreenAvailableGeometry_p(const HWND hWnd, RECT *rect)
     return S_OK;
 }
 
+[[nodiscard]] static inline HRESULT am_GetDWORDValueFromRegistry_p(const HKEY rootKey, LPCWSTR subKey,
+                                                                 LPCWSTR valueName, DWORD *result)
+{
+    if (!rootKey || !subKey || !valueName || !result) {
+        return E_INVALIDARG;
+    }
+    HKEY hKey = nullptr;
+    if (RegOpenKeyExW(rootKey, subKey, 0, KEY_READ, &hKey) != ERROR_SUCCESS) {
+        PRINT_ERROR_MESSAGE(RegOpenKeyExW)
+        return E_FAIL;
+    }
+    DWORD dwValue = 0;
+    DWORD dwType = REG_DWORD;
+    DWORD dwSize = sizeof(dwValue);
+    const bool success = (RegQueryValueExW(hKey, valueName, nullptr, &dwType,
+                                reinterpret_cast<LPBYTE>(&dwValue), &dwSize) == ERROR_SUCCESS);
+    if (!success) {
+        PRINT_ERROR_MESSAGE(RegQueryValueExW)
+    }
+    if (RegCloseKey(hKey) != ERROR_SUCCESS) {
+        PRINT_ERROR_MESSAGE(RegCloseKey)
+    }
+    *result = dwValue;
+    return S_OK;
+}
+
 HRESULT am_IsCompositionEnabled_p(bool *result)
 {
     if (!result) {
@@ -381,7 +413,11 @@ HRESULT am_IsCompositionEnabled_p(bool *result)
         *result = (enabled != FALSE);
         return S_OK;
     }
-    // todo: read reg
+    DWORD dwmComp = 0;
+    if (SUCCEEDED(am_GetDWORDValueFromRegistry_p(HKEY_CURRENT_USER, g_am_DWMRegistryKey_p, L"Composition", &dwmComp))) {
+        *result = (dwmComp != 0);
+        return S_OK;
+    }
     return E_FAIL;
 }
 
@@ -698,13 +734,18 @@ HRESULT am_GetWindowVisibleFrameBorderThickness_p(const HWND hWnd, const UINT dp
     style &= ~(WS_OVERLAPPEDWINDOW); // fixme: check
     style |= WS_POPUP;
     SetWindowLongPtrW(hWnd, GWL_STYLE, style);
-    RECT rect = {};
-    if (FAILED(am_GetScreenGeometry_p(hWnd, &rect))) {
-        return E_FAIL;
-    }
-    if (MoveWindow(hWnd, rect.left, rect.top,
-                    RECT_WIDTH(rect), RECT_HEIGHT(rect), TRUE) != FALSE) {
-        return S_OK;
+    if (enable) {
+        // fixme: rethink
+        RECT rect = {};
+        if (FAILED(am_GetScreenGeometry_p(hWnd, &rect))) {
+            return E_FAIL;
+        }
+        if (MoveWindow(hWnd, rect.left, rect.top,
+                        RECT_WIDTH(rect), RECT_HEIGHT(rect), TRUE) != FALSE) {
+            return S_OK;
+        }
+    } else {
+        // todo
     }
     return E_FAIL;
 }
@@ -1071,32 +1112,6 @@ HRESULT am_GenerateGUID_p(LPWSTR *guid)
     return S_OK;
 }
 
-[[nodiscard]] static inline HRESULT am_GetDWORDValueFromRegistry_p(const HKEY rootKey, LPCWSTR subKey,
-                                                                 LPCWSTR valueName, DWORD *result)
-{
-    if (!rootKey || !subKey || !valueName || !result) {
-        return E_INVALIDARG;
-    }
-    HKEY hKey = nullptr;
-    if (RegOpenKeyExW(rootKey, subKey, 0, KEY_READ, &hKey) != ERROR_SUCCESS) {
-        PRINT_ERROR_MESSAGE(RegOpenKeyExW)
-        return E_FAIL;
-    }
-    DWORD dwValue = 0;
-    DWORD dwType = REG_DWORD;
-    DWORD dwSize = sizeof(dwValue);
-    const bool success = (RegQueryValueExW(hKey, valueName, nullptr, &dwType,
-                                reinterpret_cast<LPBYTE>(&dwValue), &dwSize) == ERROR_SUCCESS);
-    if (!success) {
-        PRINT_ERROR_MESSAGE(RegQueryValueExW)
-    }
-    if (RegCloseKey(hKey) != ERROR_SUCCESS) {
-        PRINT_ERROR_MESSAGE(RegCloseKey)
-    }
-    *result = dwValue;
-    return S_OK;
-}
-
 HRESULT am_ShouldAppsUseLightTheme_p(bool *result)
 {
     if (!result) {
@@ -1339,6 +1354,202 @@ HRESULT am_PrintErrorMessageFromHResult_p(LPCWSTR function, const HRESULT hr)
     }
     *result = (GetActiveWindow() == hWnd);
     return S_OK;
+}
+
+HRESULT am_GetWallpaperFilePath_p(const int screen, LPWSTR result)
+{
+    if ((screen < 0) || !result) {
+        return E_INVALIDARG;
+    }
+    if (g_am_IsWindows8OrGreater_p) {
+        if (SUCCEEDED(CoInitialize(nullptr))) {
+            CComPtr<IDesktopWallpaper> pDesktopWallpaper = nullptr;
+            if (SUCCEEDED(CoCreateInstance(CLSID_DesktopWallpaper, nullptr, CLSCTX_LOCAL_SERVER, IID_PPV_ARGS(&pDesktopWallpaper)))) {
+                UINT monitorCount = 0;
+                if (SUCCEEDED(pDesktopWallpaper->GetMonitorDevicePathCount(&monitorCount))) {
+                    if (screen < monitorCount) {
+                        LPWSTR monitorId = nullptr;
+                        if (SUCCEEDED(pDesktopWallpaper->GetMonitorDevicePathAt(screen, &monitorId))) {
+                            LPWSTR wallpaperPath = nullptr;
+                            if (SUCCEEDED(pDesktopWallpaper->GetWallpaper(monitorId, &wallpaperPath))) {
+                                CoTaskMemFree(monitorId);
+                                const auto _path = new wchar_t[MAX_PATH];
+                                SecureZeroMemory(_path, sizeof(_path));
+                                memcpy(_path, wallpaperPath, wcslen(wallpaperPath));
+                                result = _path;
+                                CoTaskMemFree(wallpaperPath);
+                                CoUninitialize();
+                                return S_OK;
+                            } else {
+                                CoTaskMemFree(monitorId);
+                            }
+                        }
+                    }
+                }
+            }
+            CoUninitialize();
+        }
+    }
+    if (SUCCEEDED(CoInitialize(nullptr))) {
+        CComPtr<IActiveDesktop> pActiveDesktop = nullptr;
+        if (SUCCEEDED(CoCreateInstance(CLSID_ActiveDesktop, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&pActiveDesktop)))) {
+            const auto wallpaperPath = new wchar_t[MAX_PATH];
+            SecureZeroMemory(wallpaperPath, sizeof(wallpaperPath));
+            // TODO: AD_GETWP_BMP, AD_GETWP_IMAGE, AD_GETWP_LAST_APPLIED. What's the difference?
+            if (SUCCEEDED(pActiveDesktop->GetWallpaper(wallpaperPath, MAX_PATH, AD_GETWP_LAST_APPLIED))) {
+                result = wallpaperPath;
+                CoUninitialize();
+                return S_OK;
+            }
+        }
+        CoUninitialize();
+    }
+    const auto wallpaperPath = new wchar_t[MAX_PATH];
+    SecureZeroMemory(wallpaperPath, sizeof(wallpaperPath));
+    if (SystemParametersInfoW(SPI_GETDESKWALLPAPER, MAX_PATH, wallpaperPath, 0) != FALSE) {
+        result = wallpaperPath;
+        return S_OK;
+    }
+    //const QSettings registry(g_desktopRegistryKey, QSettings::NativeFormat);
+    //return QImage(registry.value(QStringLiteral("WallPaper")).toString());
+    return E_FAIL;
+}
+
+HRESULT am_GetDesktopBackgroundColor_p(COLORREF *result)
+{
+    if (!result) {
+        return E_INVALIDARG;
+    }
+    if (g_am_IsWindows8OrGreater_p) {
+        if (SUCCEEDED(CoInitialize(nullptr))) {
+            CComPtr<IDesktopWallpaper> pDesktopWallpaper = nullptr;
+            if (SUCCEEDED(CoCreateInstance(CLSID_DesktopWallpaper, nullptr, CLSCTX_LOCAL_SERVER, IID_PPV_ARGS(&pDesktopWallpaper)))) {
+                COLORREF color = RGB(0, 0, 0);
+                if (SUCCEEDED(pDesktopWallpaper->GetBackgroundColor(&color))) {
+                    *result = color;
+                    CoUninitialize();
+                    return S_OK;
+                }
+            }
+            CoUninitialize();
+        }
+    }
+    // TODO: Is there any other way to get the background color? Traditional Win32 API? Registry?
+    // Is there a COM API for Win7?
+    return E_FAIL;
+}
+
+HRESULT am_GetWallpaperAspectStyle_p(const int screen, WallpaperAspectStyle *result)
+{
+    if ((screen < 0) || !result) {
+        return E_INVALIDARG;
+    }
+    if (g_am_IsWindows8OrGreater_p) {
+        if (SUCCEEDED(CoInitialize(nullptr))) {
+            CComPtr<IDesktopWallpaper> pDesktopWallpaper = nullptr;
+            if (SUCCEEDED(CoCreateInstance(CLSID_DesktopWallpaper, nullptr, CLSCTX_LOCAL_SERVER, IID_PPV_ARGS(&pDesktopWallpaper)))) {
+                DESKTOP_WALLPAPER_POSITION position = DWPOS_FILL;
+                if (SUCCEEDED(pDesktopWallpaper->GetPosition(&position))) {
+                    switch (position) {
+                    case DWPOS_CENTER:
+                        *result = WallpaperAspectStyle::Central;
+                        break;
+                    case DWPOS_TILE:
+                        *result = WallpaperAspectStyle::Tiled;
+                        break;
+                    case DWPOS_STRETCH:
+                        *result = WallpaperAspectStyle::IgnoreRatioFit;
+                        break;
+                    case DWPOS_FIT:
+                        *result = WallpaperAspectStyle::KeepRatioFit;
+                        break;
+                    case DWPOS_FILL:
+                        *result = WallpaperAspectStyle::KeepRatioByExpanding;
+                        break;
+                    case DWPOS_SPAN:
+                        *result = WallpaperAspectStyle::Span;
+                        break;
+                    }
+                    CoUninitialize();
+                    return S_OK;
+                }
+            }
+            CoUninitialize();
+        }
+    }
+    if (SUCCEEDED(CoInitialize(nullptr))) {
+        CComPtr<IActiveDesktop> pActiveDesktop = nullptr;
+        if (SUCCEEDED(CoCreateInstance(CLSID_ActiveDesktop, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&pActiveDesktop)))) {
+            WALLPAPEROPT opt;
+            SecureZeroMemory(&opt, sizeof(opt));
+            opt.dwSize = sizeof(opt);
+            if (SUCCEEDED(pActiveDesktop->GetWallpaperOptions(&opt, 0))) {
+                switch (opt.dwStyle) {
+                case WPSTYLE_CENTER:
+                    *result = WallpaperAspectStyle::Central;
+                    break;
+                case WPSTYLE_TILE:
+                    *result = WallpaperAspectStyle::Tiled;
+                    break;
+                case WPSTYLE_STRETCH:
+                    *result = WallpaperAspectStyle::IgnoreRatioFit;
+                    break;
+                case WPSTYLE_KEEPASPECT:
+                    *result = WallpaperAspectStyle::KeepRatioFit;
+                    break;
+                case WPSTYLE_CROPTOFIT:
+                    *result = WallpaperAspectStyle::KeepRatioByExpanding;
+                    break;
+                case WPSTYLE_SPAN:
+                    *result = WallpaperAspectStyle::Span;
+                    break;
+                }
+                CoUninitialize();
+                return S_OK;
+            }
+        }
+        CoUninitialize();
+    }
+    const HKEY rootKey = HKEY_CURRENT_USER;
+    DWORD dwStyle = 0;
+    if (SUCCEEDED(am_GetDWORDValueFromRegistry_p(rootKey, g_am_DesktopRegistryKey_p, L"WallpaperStyle", &dwStyle))) {
+        switch (dwStyle) {
+        case 0: {
+            DWORD dwTile = 0;
+            if (SUCCEEDED(am_GetDWORDValueFromRegistry_p(rootKey, g_am_DesktopRegistryKey_p, L"TileWallpaper", &dwTile))
+                    && (dwTile != 0)) {
+                *result = WallpaperAspectStyle::Tiled;
+            } else {
+                *result = WallpaperAspectStyle::Central;
+            }
+        } break;
+        case 2:
+            *result = WallpaperAspectStyle::IgnoreRatioFit;
+            break;
+        case 6:
+            *result = WallpaperAspectStyle::KeepRatioFit;
+            break;
+        case 10:
+            *result = WallpaperAspectStyle::KeepRatioByExpanding;
+            break;
+        case 22:
+            *result = WallpaperAspectStyle::Span;
+            break;
+        default:
+            return E_FAIL;
+        }
+        return S_OK;
+    }
+    return E_FAIL;
+}
+
+HRESULT am_GetWindowDpiAwareness_p(const HWND hWnd, int *result)
+{
+    if (!hWnd || !result) {
+        return E_INVALIDARG;
+    }
+    // todo
+    return E_FAIL;
 }
 
 [[nodiscard]] static inline LRESULT CALLBACK am_MainWindowProc_p(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)

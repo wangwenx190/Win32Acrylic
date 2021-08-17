@@ -347,7 +347,7 @@ am_GetWindowVisibleFrameBorderThickness_p(
 [[nodiscard]] ACRYLICMANAGER_API HRESULT WINAPI
 am_GetWallpaperFilePath_p(
     _In_ const int screen,
-    _Out_ LPWSTR   path
+    _Out_ LPWSTR   *path
 );
 
 [[nodiscard]] ACRYLICMANAGER_API HRESULT WINAPI

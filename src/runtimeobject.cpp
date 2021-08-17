@@ -25,15 +25,6 @@
 // Define these macros first before including their header files to avoid linking
 // to their import libraries.
 
-// Compat name for ComBaseApi, remove it once Microsoft renamed it
-#ifndef _OLE32_
-#define _OLE32_
-#endif
-
-#ifndef _COMBASEAPI_
-#define _COMBASEAPI_
-#endif
-
 #ifndef _ROAPI_
 #define _ROAPI_
 #endif

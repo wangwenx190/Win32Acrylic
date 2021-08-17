@@ -1087,28 +1087,27 @@ static inline void am_Cleanup_p()
     return S_OK;
 }
 
-HRESULT am_GenerateGUID_p(LPWSTR *guid)
+HRESULT am_GenerateGUID_p(LPWSTR *result)
 {
-    if (!guid) {
+    if (!result) {
         return E_INVALIDARG;
     }
     if (FAILED(CoInitialize(nullptr))) {
         return E_FAIL;
     }
-    GUID uuid = {};
-    if (FAILED(CoCreateGuid(&uuid))) {
+    GUID guid = {};
+    if (FAILED(CoCreateGuid(&guid))) {
+        CoUninitialize();
+        return E_FAIL;
+    }
+    const auto buf = new wchar_t[MAX_PATH];
+    SecureZeroMemory(buf, sizeof(buf));
+    if (StringFromGUID2(guid, buf, MAX_PATH) == 0) {
         CoUninitialize();
         return E_FAIL;
     }
     CoUninitialize();
-    const auto buf = new wchar_t[64];
-    SecureZeroMemory(buf, sizeof(buf));
-    swprintf(buf,
-            L"{%08X-%04X-%04X-%02X%02X-%02X%02X%02X%02X%02X%02X}",
-            uuid.Data1, uuid.Data2, uuid.Data3,
-            uuid.Data4[0], uuid.Data4[1], uuid.Data4[2], uuid.Data4[3],
-            uuid.Data4[4], uuid.Data4[5], uuid.Data4[6], uuid.Data4[7]);
-    *guid = buf;
+    *result = buf;
     return S_OK;
 }
 
@@ -1356,7 +1355,7 @@ HRESULT am_PrintErrorMessageFromHResult_p(LPCWSTR function, const HRESULT hr)
     return S_OK;
 }
 
-HRESULT am_GetWallpaperFilePath_p(const int screen, LPWSTR result)
+HRESULT am_GetWallpaperFilePath_p(const int screen, LPWSTR *result)
 {
     if ((screen < 0) || !result) {
         return E_INVALIDARG;
@@ -1376,7 +1375,7 @@ HRESULT am_GetWallpaperFilePath_p(const int screen, LPWSTR result)
                                 const auto _path = new wchar_t[MAX_PATH];
                                 SecureZeroMemory(_path, sizeof(_path));
                                 memcpy(_path, wallpaperPath, wcslen(wallpaperPath));
-                                result = _path;
+                                *result = _path;
                                 CoTaskMemFree(wallpaperPath);
                                 CoUninitialize();
                                 return S_OK;
@@ -1397,7 +1396,7 @@ HRESULT am_GetWallpaperFilePath_p(const int screen, LPWSTR result)
             SecureZeroMemory(wallpaperPath, sizeof(wallpaperPath));
             // TODO: AD_GETWP_BMP, AD_GETWP_IMAGE, AD_GETWP_LAST_APPLIED. What's the difference?
             if (SUCCEEDED(pActiveDesktop->GetWallpaper(wallpaperPath, MAX_PATH, AD_GETWP_LAST_APPLIED))) {
-                result = wallpaperPath;
+                *result = wallpaperPath;
                 CoUninitialize();
                 return S_OK;
             }
@@ -1407,7 +1406,7 @@ HRESULT am_GetWallpaperFilePath_p(const int screen, LPWSTR result)
     const auto wallpaperPath = new wchar_t[MAX_PATH];
     SecureZeroMemory(wallpaperPath, sizeof(wallpaperPath));
     if (SystemParametersInfoW(SPI_GETDESKWALLPAPER, MAX_PATH, wallpaperPath, 0) != FALSE) {
-        result = wallpaperPath;
+        *result = wallpaperPath;
         return S_OK;
     }
     //const QSettings registry(g_desktopRegistryKey, QSettings::NativeFormat);

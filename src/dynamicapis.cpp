@@ -180,6 +180,42 @@ DwmGetColorizationColor(
     ACRYLICMANAGER_TRY_EXECUTE_DWM_FUNCTION(DwmGetColorizationColor, pcrColorization, pfOpaqueBlend)
 }
 
+/////////////////////////////////
+/////     ComBaseApi
+/////////////////////////////////
+
+HRESULT WINAPI
+CoInitialize(
+    LPVOID pvReserved
+)
+{
+    ACRYLICMANAGER_TRY_EXECUTE_OLE_FUNCTION(CoInitialize, pvReserved)
+}
+
+HRESULT WINAPI
+CoCreateGuid(
+    GUID *pGuid
+)
+{
+    ACRYLICMANAGER_TRY_EXECUTE_OLE_FUNCTION(CoCreateGuid, pGuid)
+}
+
+int WINAPI
+StringFromGUID2(
+    REFGUID  rGuid,
+    LPOLESTR lpsz,
+    int      cchMax
+)
+{
+    ACRYLICMANAGER_TRY_EXECUTE_OLE_INT_FUNCTION(StringFromGUID2, rGuid, lpsz, cchMax)
+}
+
+void WINAPI
+CoUninitialize()
+{
+    ACRYLICMANAGER_TRY_EXECUTE_OLE_VOID_FUNCTION(CoUninitialize)
+}
+
 #ifdef __cplusplus
 EXTERN_C_END
 #endif

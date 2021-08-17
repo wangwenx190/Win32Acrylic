@@ -316,14 +316,21 @@ am_GetColorizationArea_p(
     _Out_ ColorizationArea *area
 );
 
-ACRYLICMANAGER_API HRESULT WINAPI
+[[nodiscard]] ACRYLICMANAGER_API HRESULT WINAPI
 am_FreeStringA_p(
     _In_ void *mem
 );
 
-ACRYLICMANAGER_API HRESULT WINAPI
+[[nodiscard]] ACRYLICMANAGER_API HRESULT WINAPI
 am_FreeStringW_p(
     _In_ void *mem
+);
+
+[[nodiscard]] ACRYLICMANAGER_API HRESULT WINAPI
+am_GetWindowVisibleFrameBorderThickness_p(
+    _In_ const HWND hWnd,
+    _In_ const UINT dpi,
+    _Out_ int       *thickness
 );
 
 #ifdef __cplusplus

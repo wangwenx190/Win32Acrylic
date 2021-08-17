@@ -634,7 +634,7 @@ HRESULT am_CompareSystemVersion_p(const WindowsVersion ver, const VersionCompare
     return S_OK;
 }
 
-[[nodiscard]] static inline HRESULT am_GetWindowVisibleFrameBorderThickness_p(const HWND hWnd, const UINT dpi, int *result)
+HRESULT am_GetWindowVisibleFrameBorderThickness_p(const HWND hWnd, const UINT dpi, int *result)
 {
     if (!hWnd || (dpi == 0) || !result) {
         return E_INVALIDARG;
@@ -2396,6 +2396,7 @@ HRESULT am_IsWindowActive(bool *result)
 
 // DLL entry point function
 
+#ifndef ACRYLICMANAGER_STATIC
 BOOL APIENTRY
 DllMain(
     HMODULE hModule,
@@ -2413,3 +2414,4 @@ DllMain(
     }
     return TRUE;
 }
+#endif

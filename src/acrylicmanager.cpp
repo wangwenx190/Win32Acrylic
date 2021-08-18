@@ -161,14 +161,39 @@ __PRINT_WIN32_ERROR_MESSAGE_HEAD(function) \
 __PRINT_WIN32_ERROR_MESSAGE_FOOT
 #endif
 
-#ifndef PRINT_HR_ERROR_MESSAGE
-#define PRINT_HR_ERROR_MESSAGE(function, hresult) \
+#ifndef __PRINT_HR_ERROR_MESSAGE_HEAD
+#define __PRINT_HR_ERROR_MESSAGE_HEAD(function, hresult) \
 { \
     if (FAILED(hresult)) { \
         const HRESULT __hr = am_PrintErrorMessageFromHResult_p(L#function, hresult); \
-        DECLARE_UNUSED(__hr); \
+        DECLARE_UNUSED(__hr);
+#endif
+
+#ifndef __PRINT_HR_ERROR_MESSAGE_FOOT
+#define __PRINT_HR_ERROR_MESSAGE_FOOT \
     } \
 }
+#endif
+
+#ifndef PRINT_HR_ERROR_MESSAGE
+#define PRINT_HR_ERROR_MESSAGE(function, hresult) \
+__PRINT_HR_ERROR_MESSAGE_HEAD(function, hresult) \
+__PRINT_HR_ERROR_MESSAGE_FOOT
+#endif
+
+#ifndef PRINT_HR_ERROR_MESSAGE_AND_RETURN
+#define PRINT_HR_ERROR_MESSAGE_AND_RETURN(function, hresult) \
+__PRINT_HR_ERROR_MESSAGE_HEAD(function, hresult) \
+return hresult; \
+__PRINT_HR_ERROR_MESSAGE_FOOT
+#endif
+
+#ifndef PRINT_HR_ERROR_MESSAGE_AND_SAFE_RETURN
+#define PRINT_HR_ERROR_MESSAGE_AND_SAFE_RETURN(function, hresult) \
+__PRINT_HR_ERROR_MESSAGE_HEAD(function, hresult) \
+SAFE_RELEASE_RESOURCES \
+return hresult; \
+__PRINT_HR_ERROR_MESSAGE_FOOT
 #endif
 
 #ifndef SAFE_RELEASE_RESOURCES
@@ -196,6 +221,38 @@ __PRINT_WIN32_ERROR_MESSAGE_FOOT
     (color).G = static_cast<uint8_t>(std::clamp(g, 0, 255)); \
     (color).B = static_cast<uint8_t>(std::clamp(b, 0, 255)); \
     (color).A = static_cast<uint8_t>(std::clamp(a, 0, 255)); \
+}
+#endif
+
+#ifndef SAFE_RETURN
+#define SAFE_RETURN \
+{ \
+    SAFE_RELEASE_RESOURCES \
+    return E_FAIL; \
+}
+#endif
+
+#ifndef PRINT
+#define PRINT(message) \
+{ \
+    const HRESULT __hr = am_Print_p(message, true); \
+    DECLARE_UNUSED(__hr); \
+}
+#endif
+
+#ifndef PRINT_AND_RETURN
+#define PRINT_AND_RETURN(message) \
+{ \
+    PRINT(message) \
+    return E_FAIL; \
+}
+#endif
+
+#ifndef PRINT_AND_SAFE_RETURN
+#define PRINT_AND_SAFE_RETURN(message) \
+{ \
+    PRINT(message) \
+    SAFE_RETURN \
 }
 #endif
 
@@ -297,15 +354,16 @@ static const bool g_am_IsXAMLIslandAvailable_p = []{
     return (should || force);
 }();
 
-static inline void am_Print_p(LPCWSTR text, const bool showUi = false, LPCWSTR title = nullptr)
+[[nodiscard]] static inline HRESULT am_Print_p(LPCWSTR text, const bool showUi = false, LPCWSTR title = nullptr)
 {
     if (!text) {
-        return;
+        return E_INVALIDARG;
     }
     OutputDebugStringW(text);
     if (showUi) {
         MessageBoxW(nullptr, text, (title ? title : L"Error"), MB_ICONERROR | MB_OK);
     }
+    return S_OK;
 }
 
 HRESULT am_GetWindowDpi_p(const HWND hWnd, UINT *result)
@@ -415,6 +473,8 @@ HRESULT am_GetTitleBarHeight_p(const HWND hWnd, const UINT dpi, int *height)
                              dpi) != FALSE) {
         *height = std::abs(frame.top);
         return S_OK;
+    } else {
+        PRINT_WIN32_ERROR_MESSAGE(AdjustWindowRectExForDpi)
     }
     int rbtY = 0, cth = 0;
     if (SUCCEEDED(am_GetResizeBorderThickness_p(false, dpi, &rbtY)) && SUCCEEDED(am_GetCaptionHeight_p(dpi, &cth))) {
@@ -507,9 +567,12 @@ HRESULT am_IsCompositionEnabled_p(bool *result)
         return S_OK;
     }
     BOOL enabled = FALSE;
-    if (SUCCEEDED(DwmIsCompositionEnabled(&enabled))) {
+    const HRESULT hr = DwmIsCompositionEnabled(&enabled);
+    if (SUCCEEDED(hr)) {
         *result = (enabled != FALSE);
         return S_OK;
+    } else {
+        PRINT_HR_ERROR_MESSAGE(DwmIsCompositionEnabled, hr)
     }
     DWORD dwmComp = 0;
     if (SUCCEEDED(am_GetDWORDValueFromRegistry_p(HKEY_CURRENT_USER, g_am_DWMRegistryKey_p, L"Composition", &dwmComp))) {
@@ -773,9 +836,12 @@ HRESULT am_GetWindowVisibleFrameBorderThickness_p(const HWND hWnd, const UINT dp
         return E_INVALIDARG;
     }
     UINT value = 0;
-    if (SUCCEEDED(DwmGetWindowAttribute(hWnd, static_cast<DWORD>(DwmWindowAttribute::VISIBLE_FRAME_BORDER_THICKNESS), &value, sizeof(value)))) {
+    const HRESULT hr = DwmGetWindowAttribute(hWnd, static_cast<DWORD>(DwmWindowAttribute::VISIBLE_FRAME_BORDER_THICKNESS), &value, sizeof(value));
+    if (SUCCEEDED(hr)) {
         *result = value;
         return S_OK;
+    } else {
+        PRINT_HR_ERROR_MESSAGE(DwmGetWindowAttribute, hr)
     }
     bool normal = false;
     if (FAILED(am_IsWindowNoState_p(hWnd, &normal))) {
@@ -1234,20 +1300,22 @@ HRESULT am_GenerateGUID_p(LPWSTR *result)
     }
     HRESULT hr = CoInitialize(nullptr);
     if (FAILED(hr)) {
-        return hr;
+        PRINT_HR_ERROR_MESSAGE_AND_RETURN(CoInitialize, hr)
     }
     GUID guid = {};
     hr = CoCreateGuid(&guid);
     if (FAILED(hr)) {
+        PRINT_HR_ERROR_MESSAGE(CoCreateGuid, hr)
         CoUninitialize();
         return hr;
     }
     const auto buf = new wchar_t[MAX_PATH];
     SecureZeroMemory(buf, sizeof(buf));
     if (StringFromGUID2(guid, buf, MAX_PATH) == 0) {
+        PRINT_WIN32_ERROR_MESSAGE(StringFromGUID2)
         CoUninitialize();
         delete [] buf;
-        PRINT_WIN32_ERROR_MESSAGE_AND_RETURN(StringFromGUID2)
+        return E_FAIL;
     }
     CoUninitialize();
     *result = buf;
@@ -1329,7 +1397,7 @@ HRESULT am_IsWindowTransitionsEnabled_p(const HWND hWnd, bool *result)
     BOOL disabled = FALSE;
     const HRESULT hr = DwmGetWindowAttribute(hWnd, static_cast<DWORD>(DwmWindowAttribute::TRANSITIONS_FORCEDISABLED), &disabled, sizeof(disabled));
     if (FAILED(hr)) {
-        return hr;
+        PRINT_HR_ERROR_MESSAGE_AND_RETURN(DwmGetWindowAttribute, hr)
     }
     *result = (disabled == FALSE);
     return S_OK;
@@ -1341,13 +1409,19 @@ HRESULT am_IsWindowUsingDarkFrame_p(const HWND hWnd, bool *result)
         return E_INVALIDARG;
     }
     BOOL enabled = FALSE;
-    if (SUCCEEDED(DwmGetWindowAttribute(hWnd, static_cast<DWORD>(DwmWindowAttribute::USE_IMMERSIVE_DARK_MODE_BEFORE_20H1), &enabled, sizeof(enabled)))) {
+    HRESULT hr = DwmGetWindowAttribute(hWnd, static_cast<DWORD>(DwmWindowAttribute::USE_IMMERSIVE_DARK_MODE_BEFORE_20H1), &enabled, sizeof(enabled));
+    if (SUCCEEDED(hr)) {
         *result = (enabled != FALSE);
         return S_OK;
+    } else {
+        PRINT_HR_ERROR_MESSAGE(DwmGetWindowAttribute, hr)
     }
-    if (SUCCEEDED(DwmGetWindowAttribute(hWnd, static_cast<DWORD>(DwmWindowAttribute::USE_IMMERSIVE_DARK_MODE), &enabled, sizeof(enabled)))) {
+    hr = DwmGetWindowAttribute(hWnd, static_cast<DWORD>(DwmWindowAttribute::USE_IMMERSIVE_DARK_MODE), &enabled, sizeof(enabled));
+    if (SUCCEEDED(hr)) {
         *result = (enabled != FALSE);
         return S_OK;
+    } else {
+        PRINT_HR_ERROR_MESSAGE(DwmGetWindowAttribute, hr)
     }
     return E_FAIL;
 }
@@ -1358,11 +1432,17 @@ HRESULT am_SetWindowDarkFrameEnabled_p(const HWND hWnd, const bool enable)
         return E_INVALIDARG;
     }
     const BOOL enabled = enable ? TRUE : FALSE;
-    if (SUCCEEDED(DwmSetWindowAttribute(hWnd, static_cast<DWORD>(DwmWindowAttribute::USE_IMMERSIVE_DARK_MODE_BEFORE_20H1), &enabled, sizeof(enabled)))) {
+    HRESULT hr = DwmSetWindowAttribute(hWnd, static_cast<DWORD>(DwmWindowAttribute::USE_IMMERSIVE_DARK_MODE_BEFORE_20H1), &enabled, sizeof(enabled));
+    if (SUCCEEDED(hr)) {
         return S_OK;
+    } else {
+        PRINT_HR_ERROR_MESSAGE(DwmSetWindowAttribute, hr)
     }
-    if (SUCCEEDED(DwmSetWindowAttribute(hWnd, static_cast<DWORD>(DwmWindowAttribute::USE_IMMERSIVE_DARK_MODE), &enabled, sizeof(enabled)))) {
+    hr = DwmSetWindowAttribute(hWnd, static_cast<DWORD>(DwmWindowAttribute::USE_IMMERSIVE_DARK_MODE), &enabled, sizeof(enabled));
+    if (SUCCEEDED(hr)) {
         return S_OK;
+    } else {
+        PRINT_HR_ERROR_MESSAGE(DwmSetWindowAttribute, hr)
     }
     return E_FAIL;
 }
@@ -1376,7 +1456,7 @@ HRESULT am_GetColorizationColor_p(COLORREF *result)
     BOOL opaque = FALSE;
     const HRESULT hr = DwmGetColorizationColor(&color, &opaque);
     if (FAILED(hr)) {
-        return hr;
+        PRINT_HR_ERROR_MESSAGE_AND_RETURN(DwmGetColorizationColor, hr)
     }
     *result = color;
     return S_OK;
@@ -1448,7 +1528,7 @@ HRESULT am_PrintErrorMessageFromHResult_p(LPCWSTR function, const HRESULT hr)
         (wcslen(reinterpret_cast<LPCWSTR>(lpMsgBuf)) + wcslen(reinterpret_cast<LPCWSTR>(function)) + 40) * sizeof(wchar_t)));
     swprintf_s(reinterpret_cast<LPWSTR>(lpDisplayBuf), LocalSize(lpDisplayBuf) / sizeof(wchar_t),
                L"%s failed with error %d: %s", function, dwError, reinterpret_cast<LPCWSTR>(lpMsgBuf));
-    am_Print_p(reinterpret_cast<LPCWSTR>(lpDisplayBuf), true);
+    PRINT(reinterpret_cast<LPCWSTR>(lpDisplayBuf))
 
     LocalFree(lpMsgBuf);
     LocalFree(lpDisplayBuf);
@@ -1482,16 +1562,21 @@ HRESULT am_GetWallpaperFilePath_p(const int screen, LPWSTR *result)
         return E_INVALIDARG;
     }
     if (g_am_IsWindows8OrGreater_p) {
-        if (SUCCEEDED(CoInitialize(nullptr))) {
+        HRESULT hr = CoInitialize(nullptr);
+        if (SUCCEEDED(hr)) {
             CComPtr<IDesktopWallpaper> pDesktopWallpaper = nullptr;
-            if (SUCCEEDED(CoCreateInstance(CLSID_DesktopWallpaper, nullptr, CLSCTX_LOCAL_SERVER, IID_PPV_ARGS(&pDesktopWallpaper)))) {
+            hr = CoCreateInstance(CLSID_DesktopWallpaper, nullptr, CLSCTX_LOCAL_SERVER, IID_PPV_ARGS(&pDesktopWallpaper));
+            if (SUCCEEDED(hr)) {
                 UINT monitorCount = 0;
-                if (SUCCEEDED(pDesktopWallpaper->GetMonitorDevicePathCount(&monitorCount))) {
+                hr = pDesktopWallpaper->GetMonitorDevicePathCount(&monitorCount);
+                if (SUCCEEDED(hr)) {
                     if (screen < monitorCount) {
                         LPWSTR monitorId = nullptr;
-                        if (SUCCEEDED(pDesktopWallpaper->GetMonitorDevicePathAt(screen, &monitorId))) {
+                        hr = pDesktopWallpaper->GetMonitorDevicePathAt(screen, &monitorId);
+                        if (SUCCEEDED(hr)) {
                             LPWSTR wallpaperPath = nullptr;
-                            if (SUCCEEDED(pDesktopWallpaper->GetWallpaper(monitorId, &wallpaperPath))) {
+                            hr = pDesktopWallpaper->GetWallpaper(monitorId, &wallpaperPath);
+                            if (SUCCEEDED(hr)) {
                                 CoTaskMemFree(monitorId);
                                 const auto _path = new wchar_t[MAX_PATH];
                                 SecureZeroMemory(_path, sizeof(_path));
@@ -1502,38 +1587,59 @@ HRESULT am_GetWallpaperFilePath_p(const int screen, LPWSTR *result)
                                 return S_OK;
                             } else {
                                 CoTaskMemFree(monitorId);
+                                PRINT_HR_ERROR_MESSAGE(GetWallpaper, hr)
                             }
+                        } else {
+                            PRINT_HR_ERROR_MESSAGE(GetMonitorDevicePathAt, hr)
                         }
+                    } else {
+                        PRINT(L"The given screen ID is beyond total screen count.");
                     }
+                } else {
+                    PRINT_HR_ERROR_MESSAGE(GetMonitorDevicePathCount, hr)
                 }
+            } else {
+                PRINT_HR_ERROR_MESSAGE(CoCreateInstance, hr)
             }
             CoUninitialize();
+        } else {
+            PRINT_HR_ERROR_MESSAGE(CoInitialize, hr)
         }
     }
-    if (SUCCEEDED(CoInitialize(nullptr))) {
+    HRESULT hr = CoInitialize(nullptr);
+    if (SUCCEEDED(hr)) {
         CComPtr<IActiveDesktop> pActiveDesktop = nullptr;
-        if (SUCCEEDED(CoCreateInstance(CLSID_ActiveDesktop, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&pActiveDesktop)))) {
+        hr = CoCreateInstance(CLSID_ActiveDesktop, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&pActiveDesktop));
+        if (SUCCEEDED(hr)) {
             const auto wallpaperPath = new wchar_t[MAX_PATH];
             SecureZeroMemory(wallpaperPath, sizeof(wallpaperPath));
             // TODO: AD_GETWP_BMP, AD_GETWP_IMAGE, AD_GETWP_LAST_APPLIED. What's the difference?
-            if (SUCCEEDED(pActiveDesktop->GetWallpaper(wallpaperPath, MAX_PATH, AD_GETWP_LAST_APPLIED))) {
+            hr = pActiveDesktop->GetWallpaper(wallpaperPath, MAX_PATH, AD_GETWP_LAST_APPLIED);
+            if (SUCCEEDED(hr)) {
                 *result = wallpaperPath;
                 CoUninitialize();
                 return S_OK;
+            } else {
+                PRINT_HR_ERROR_MESSAGE(GetWallpaper, hr)
             }
+        } else {
+            PRINT_HR_ERROR_MESSAGE(CoCreateInstance, hr)
         }
         CoUninitialize();
+    } else {
+        PRINT_HR_ERROR_MESSAGE(CoInitialize, hr)
     }
     const auto wallpaperPath = new wchar_t[MAX_PATH];
     SecureZeroMemory(wallpaperPath, sizeof(wallpaperPath));
-    if (SystemParametersInfoW(SPI_GETDESKWALLPAPER, MAX_PATH, wallpaperPath, 0) != FALSE) {
-        *result = wallpaperPath;
-        return S_OK;
+    if (SystemParametersInfoW(SPI_GETDESKWALLPAPER, MAX_PATH, wallpaperPath, 0) == FALSE) {
+        PRINT_WIN32_ERROR_MESSAGE(SystemParametersInfoW)
+        delete [] wallpaperPath;
     }
+    *result = wallpaperPath;
     // todo
     //const QSettings registry(g_desktopRegistryKey, QSettings::NativeFormat);
     //return QImage(registry.value(QStringLiteral("WallPaper")).toString());
-    return E_FAIL;
+    return S_OK;
 }
 
 HRESULT am_GetDesktopBackgroundColor_p(COLORREF *result)
@@ -1542,17 +1648,26 @@ HRESULT am_GetDesktopBackgroundColor_p(COLORREF *result)
         return E_INVALIDARG;
     }
     if (g_am_IsWindows8OrGreater_p) {
-        if (SUCCEEDED(CoInitialize(nullptr))) {
+        HRESULT hr = CoInitialize(nullptr);
+        if (SUCCEEDED(hr)) {
             CComPtr<IDesktopWallpaper> pDesktopWallpaper = nullptr;
-            if (SUCCEEDED(CoCreateInstance(CLSID_DesktopWallpaper, nullptr, CLSCTX_LOCAL_SERVER, IID_PPV_ARGS(&pDesktopWallpaper)))) {
+            hr = CoCreateInstance(CLSID_DesktopWallpaper, nullptr, CLSCTX_LOCAL_SERVER, IID_PPV_ARGS(&pDesktopWallpaper));
+            if (SUCCEEDED(hr)) {
                 COLORREF color = RGB(0, 0, 0);
-                if (SUCCEEDED(pDesktopWallpaper->GetBackgroundColor(&color))) {
+                hr = pDesktopWallpaper->GetBackgroundColor(&color);
+                if (SUCCEEDED(hr)) {
                     *result = color;
                     CoUninitialize();
                     return S_OK;
+                } else {
+                    PRINT_HR_ERROR_MESSAGE(GetBackgroundColor, hr)
                 }
+            } else {
+                PRINT_HR_ERROR_MESSAGE(CoCreateInstance, hr)
             }
             CoUninitialize();
+        } else {
+            PRINT_HR_ERROR_MESSAGE(CoInitialize, hr)
         }
     }
     // TODO: Is there any other way to get the background color? Traditional Win32 API? Registry?
@@ -1567,11 +1682,14 @@ HRESULT am_GetWallpaperAspectStyle_p(const int screen, WallpaperAspectStyle *res
         return E_INVALIDARG;
     }
     if (g_am_IsWindows8OrGreater_p) {
-        if (SUCCEEDED(CoInitialize(nullptr))) {
+        HRESULT hr = CoInitialize(nullptr);
+        if (SUCCEEDED(hr)) {
             CComPtr<IDesktopWallpaper> pDesktopWallpaper = nullptr;
-            if (SUCCEEDED(CoCreateInstance(CLSID_DesktopWallpaper, nullptr, CLSCTX_LOCAL_SERVER, IID_PPV_ARGS(&pDesktopWallpaper)))) {
+            hr = CoCreateInstance(CLSID_DesktopWallpaper, nullptr, CLSCTX_LOCAL_SERVER, IID_PPV_ARGS(&pDesktopWallpaper));
+            if (SUCCEEDED(hr)) {
                 DESKTOP_WALLPAPER_POSITION position = DWPOS_FILL;
-                if (SUCCEEDED(pDesktopWallpaper->GetPosition(&position))) {
+                hr = pDesktopWallpaper->GetPosition(&position);
+                if (SUCCEEDED(hr)) {
                     switch (position) {
                     case DWPOS_CENTER:
                         *result = WallpaperAspectStyle::Central;
@@ -1594,18 +1712,27 @@ HRESULT am_GetWallpaperAspectStyle_p(const int screen, WallpaperAspectStyle *res
                     }
                     CoUninitialize();
                     return S_OK;
+                } else {
+                    PRINT_HR_ERROR_MESSAGE(GetPosition, hr)
                 }
+            } else {
+                PRINT_HR_ERROR_MESSAGE(CoCreateInstance, hr)
             }
             CoUninitialize();
+        } else {
+            PRINT_HR_ERROR_MESSAGE(CoInitialize, hr)
         }
     }
-    if (SUCCEEDED(CoInitialize(nullptr))) {
+    HRESULT hr = CoInitialize(nullptr);
+    if (SUCCEEDED(hr)) {
         CComPtr<IActiveDesktop> pActiveDesktop = nullptr;
-        if (SUCCEEDED(CoCreateInstance(CLSID_ActiveDesktop, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&pActiveDesktop)))) {
+        hr = CoCreateInstance(CLSID_ActiveDesktop, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&pActiveDesktop));
+        if (SUCCEEDED(hr)) {
             WALLPAPEROPT opt;
             SecureZeroMemory(&opt, sizeof(opt));
             opt.dwSize = sizeof(opt);
-            if (SUCCEEDED(pActiveDesktop->GetWallpaperOptions(&opt, 0))) {
+            hr = pActiveDesktop->GetWallpaperOptions(&opt, 0);
+            if (SUCCEEDED(hr)) {
                 switch (opt.dwStyle) {
                 case WPSTYLE_CENTER:
                     *result = WallpaperAspectStyle::Central;
@@ -1628,9 +1755,15 @@ HRESULT am_GetWallpaperAspectStyle_p(const int screen, WallpaperAspectStyle *res
                 }
                 CoUninitialize();
                 return S_OK;
+            } else {
+                PRINT_HR_ERROR_MESSAGE(GetWallpaperOptions, hr)
             }
+        } else {
+            PRINT_HR_ERROR_MESSAGE(CoCreateInstance, hr)
         }
         CoUninitialize();
+    } else {
+        PRINT_HR_ERROR_MESSAGE(CoInitialize, hr)
     }
     const HKEY rootKey = HKEY_CURRENT_USER;
     DWORD dwStyle = 0;
@@ -1676,12 +1809,19 @@ HRESULT am_GetWindowDpiAwareness_p(const HWND hWnd, DpiAwareness *result)
         if (awareness != DPI_AWARENESS_INVALID) {
             *result = static_cast<DpiAwareness>(awareness);
             return S_OK;
+        } else {
+            PRINT_WIN32_ERROR_MESSAGE(GetAwarenessFromDpiAwarenessContext)
         }
+    } else {
+        PRINT_WIN32_ERROR_MESSAGE(GetWindowDpiAwarenessContext)
     }
     PROCESS_DPI_AWARENESS awareness = PROCESS_DPI_UNAWARE;
-    if (SUCCEEDED(GetProcessDpiAwareness(nullptr, &awareness))) {
+    const HRESULT hr = GetProcessDpiAwareness(nullptr, &awareness);
+    if (SUCCEEDED(hr)) {
         *result = static_cast<DpiAwareness>(awareness);
         return S_OK;
+    } else {
+        PRINT_HR_ERROR_MESSAGE(GetProcessDpiAwareness, hr)
     }
     *result = ((IsProcessDPIAware() == FALSE) ? DpiAwareness::Unaware : DpiAwareness::System);
     return S_OK;
@@ -1697,33 +1837,43 @@ HRESULT am_SetWindowDpiAwareness_p(const HWND hWnd, const DpiAwareness awareness
         if (SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2) != FALSE) {
             return S_OK;
         }
+        PRINT_WIN32_ERROR_MESSAGE(SetProcessDpiAwarenessContext)
         return E_FAIL;
     }
     case DpiAwareness::PerMonitor: {
         if (SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE) != FALSE) {
             return S_OK;
         }
-        if (SUCCEEDED(SetProcessDpiAwareness(PROCESS_PER_MONITOR_DPI_AWARE))) {
+        PRINT_WIN32_ERROR_MESSAGE(SetProcessDpiAwarenessContext)
+        const HRESULT hr = SetProcessDpiAwareness(PROCESS_PER_MONITOR_DPI_AWARE);
+        if (SUCCEEDED(hr)) {
             return S_OK;
         }
+        PRINT_HR_ERROR_MESSAGE(SetProcessDpiAwareness, hr)
         return E_FAIL;
     }
     case DpiAwareness::System: {
         if (SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_SYSTEM_AWARE) != FALSE) {
             return S_OK;
         }
-        if (SUCCEEDED(SetProcessDpiAwareness(PROCESS_SYSTEM_DPI_AWARE))) {
+        PRINT_WIN32_ERROR_MESSAGE(SetProcessDpiAwarenessContext)
+        const HRESULT hr = SetProcessDpiAwareness(PROCESS_SYSTEM_DPI_AWARE);
+        if (SUCCEEDED(hr)) {
             return S_OK;
         }
+        PRINT_HR_ERROR_MESSAGE(SetProcessDpiAwareness, hr)
         return E_FAIL;
     }
     case DpiAwareness::Unaware: {
         if (SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_UNAWARE) != FALSE) {
             return S_OK;
         }
-        if (SUCCEEDED(SetProcessDpiAwareness(PROCESS_DPI_UNAWARE))) {
+        PRINT_WIN32_ERROR_MESSAGE(SetProcessDpiAwarenessContext)
+        const HRESULT hr = SetProcessDpiAwareness(PROCESS_DPI_UNAWARE);
+        if (SUCCEEDED(hr)) {
             return S_OK;
         }
+        PRINT_HR_ERROR_MESSAGE(SetProcessDpiAwareness, hr)
         return E_FAIL;
     }
     default:
@@ -2058,12 +2208,14 @@ HRESULT am_MultiToWide_p(LPCSTR in, const UINT codePage, LPWSTR *out)
                     PRINT_WIN32_ERROR_MESSAGE(FillRect)
                     break;
                 }
-                if (FAILED(BufferedPaintSetAlpha(buf, nullptr, 255))) {
-                    am_Print_p(L"WM_PAINT: BufferedPaintSetAlpha() failed.");
+                HRESULT hr = BufferedPaintSetAlpha(buf, nullptr, 255);
+                if (FAILED(hr)) {
+                    PRINT_HR_ERROR_MESSAGE(BufferedPaintSetAlpha, hr)
                     break;
                 }
-                if (FAILED(EndBufferedPaint(buf, TRUE))) {
-                    am_Print_p(L"WM_PAINT: EndBufferedPaint() failed.");
+                hr = EndBufferedPaint(buf, TRUE);
+                if (FAILED(hr)) {
+                    PRINT_HR_ERROR_MESSAGE(EndBufferedPaint, hr)
                     break;
                 }
             }
@@ -2095,7 +2247,7 @@ HRESULT am_MultiToWide_p(LPCSTR in, const UINT codePage, LPWSTR *out)
         if ((wParam == SIZE_MAXIMIZED) || (wParam == SIZE_RESTORED)
                 || (SUCCEEDED(am_IsFullScreened_p(hWnd, &full)) && full)) {
             if (FAILED(am_UpdateFrameMargins_p(hWnd, g_am_CurrentDpi_p))) {
-                am_Print_p(L"WM_SIZE: Failed to update frame margins.");
+                PRINT(L"WM_SIZE: Failed to update frame margins.")
                 break;
             }
         }
@@ -2162,7 +2314,7 @@ HRESULT am_MultiToWide_p(LPCSTR in, const UINT codePage, LPWSTR *out)
         // reason so we have to do it ourselves.
         if (wParam == HTCAPTION) {
             if (FAILED(am_OpenSystemMenu_p(hWnd, {GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)}))) {
-                am_Print_p(L"WM_NCRBUTTONUP: Failed to open the system menu.");
+                PRINT(L"WM_NCRBUTTONUP: Failed to open the system menu.")
                 break;
             }
         }
@@ -2182,7 +2334,7 @@ HRESULT am_MultiToWide_p(LPCSTR in, const UINT codePage, LPWSTR *out)
     case WM_DWMCOMPOSITIONCHANGED: {
         bool enabled = false;
         if (FAILED(am_IsCompositionEnabled_p(&enabled)) || !enabled) {
-            am_Print_p(L"This application can't continue running when DWM composition is disabled.", true);
+            PRINT(L"This application can't continue running when DWM composition is disabled.")
             std::exit(-1);
         }
     } break;
@@ -2204,10 +2356,10 @@ HRESULT am_MultiToWide_p(LPCSTR in, const UINT codePage, LPWSTR *out)
                 if (SUCCEEDED(am_SwitchAcrylicBrushTheme_p(systemTheme))) {
                     g_am_BrushTheme_p = SystemTheme::Auto;
                 } else {
-                    am_Print_p(L"Failed to switch acrylic brush theme.");
+                    PRINT(L"Failed to switch acrylic brush theme.")
                 }
             } else {
-                am_Print_p(L"Failed to retrieve system theme or high contrast mode is on.");
+                PRINT(L"Failed to retrieve system theme or high contrast mode is on.")
             }
         }
     }
@@ -2282,14 +2434,12 @@ HRESULT am_MultiToWide_p(LPCSTR in, const UINT codePage, LPWSTR *out)
 [[nodiscard]] static inline HRESULT am_RegisterMainWindowClass_p()
 {
     if (g_am_MainWindowAtom_p != 0) {
-        SAFE_RELEASE_RESOURCES
-        return E_INVALIDARG;
+        SAFE_RETURN
     }
 
     LPWSTR guid = nullptr;
     if (FAILED(am_GenerateGUID_p(&guid))) {
-        SAFE_RELEASE_RESOURCES
-        return E_FAIL;
+        SAFE_RETURN
     }
     g_am_MainWindowClassName_p = new wchar_t[MAX_PATH];
     SecureZeroMemory(g_am_MainWindowClassName_p, sizeof(g_am_MainWindowClassName_p));
@@ -2321,20 +2471,16 @@ HRESULT am_MultiToWide_p(LPCSTR in, const UINT codePage, LPWSTR *out)
 [[nodiscard]] static inline HRESULT am_RegisterDragBarWindowClass_p()
 {
     if (!g_am_IsWindows8OrGreater_p) {
-        am_Print_p(L"Drag bar window is only available on Windows 8 and onwards.");
-        SAFE_RELEASE_RESOURCES
-        return E_FAIL;
+        PRINT_AND_SAFE_RETURN(L"Drag bar window is only available on Windows 8 and onwards.")
     }
 
     if ((g_am_MainWindowAtom_p == 0) || (g_am_DragBarWindowAtom_p != 0)) {
-        SAFE_RELEASE_RESOURCES
-        return E_INVALIDARG;
+        SAFE_RETURN
     }
 
     LPWSTR guid = nullptr;
     if (FAILED(am_GenerateGUID_p(&guid))) {
-        SAFE_RELEASE_RESOURCES
-        return E_FAIL;
+        SAFE_RETURN
     }
     g_am_DragBarWindowClassName_p = new wchar_t[MAX_PATH];
     SecureZeroMemory(g_am_DragBarWindowClassName_p, sizeof(g_am_DragBarWindowClassName_p));
@@ -2366,8 +2512,7 @@ HRESULT am_MultiToWide_p(LPCSTR in, const UINT codePage, LPWSTR *out)
 [[nodiscard]] static inline HRESULT am_CreateMainWindow_p(const int x, const int y, const int w, const int h)
 {
     if ((g_am_MainWindowAtom_p == 0) || g_am_MainWindowHandle_p) {
-        SAFE_RELEASE_RESOURCES
-        return E_INVALIDARG;
+        SAFE_RETURN
     }
 
     g_am_MainWindowHandle_p = CreateWindowExW(0L,
@@ -2390,21 +2535,15 @@ HRESULT am_MultiToWide_p(LPCSTR in, const UINT codePage, LPWSTR *out)
     // Ensure DWM still draws the top frame by extending the top frame.
     // This also ensures our window still has the frame shadow drawn by DWM.
     if (FAILED(am_UpdateFrameMargins_p(g_am_MainWindowHandle_p, g_am_CurrentDpi_p))) {
-        am_Print_p(L"Failed to update main window's frame margins.");
-        SAFE_RELEASE_RESOURCES
-        return E_FAIL;
+        PRINT_AND_SAFE_RETURN(L"Failed to update main window's frame margins.")
     }
     // Force a WM_NCCALCSIZE processing to make the window become frameless immediately.
     if (FAILED(am_TriggerFrameChange_p(g_am_MainWindowHandle_p))) {
-        am_Print_p(L"Failed to trigger frame change event for main window.");
-        SAFE_RELEASE_RESOURCES
-        return E_FAIL;
+        PRINT_AND_SAFE_RETURN(L"Failed to trigger frame change event for main window.")
     }
     // Ensure our window still has window transitions.
     if (FAILED(am_SetWindowTransitionsEnabled_p(g_am_MainWindowHandle_p, true))) {
-        am_Print_p(L"Failed to enable window transitions for main window.");
-        SAFE_RELEASE_RESOURCES
-        return E_FAIL;
+        PRINT_AND_SAFE_RETURN(L"Failed to enable window transitions for main window.")
     }
 
     return S_OK;
@@ -2413,19 +2552,15 @@ HRESULT am_MultiToWide_p(LPCSTR in, const UINT codePage, LPWSTR *out)
 [[nodiscard]] static inline HRESULT am_CreateDragBarWindow_p()
 {
     if (!g_am_MainWindowHandle_p) {
-        SAFE_RELEASE_RESOURCES
-        return E_INVALIDARG;
+        SAFE_RETURN
     }
 
     // Please refer to the "IMPORTANT NOTE" section below.
     if (!g_am_IsWindows8OrGreater_p) {
-        am_Print_p(L"Drag bar window is only available on Windows 8 and onwards.");
-        SAFE_RELEASE_RESOURCES
-        return E_FAIL;
+        PRINT_AND_SAFE_RETURN(L"Drag bar window is only available on Windows 8 and onwards.")
     }
     if ((g_am_DragBarWindowAtom_p == 0) || g_am_DragBarWindowHandle_p) {
-        SAFE_RELEASE_RESOURCES
-        return E_INVALIDARG;
+        SAFE_RETURN
     }
 
     // The drag bar window is a child window of the top level window that is put
@@ -2458,8 +2593,7 @@ HRESULT am_MultiToWide_p(LPCSTR in, const UINT codePage, LPWSTR *out)
     }
     int tbh = 0;
     if (FAILED(am_GetTitleBarHeight_p(g_am_MainWindowHandle_p, g_am_CurrentDpi_p, &tbh))) {
-        SAFE_RELEASE_RESOURCES
-        return E_FAIL;
+        SAFE_RETURN
     }
     if (SetWindowPos(g_am_DragBarWindowHandle_p, HWND_TOP, 0, 0, rect.right,  tbh,
                  SWP_NOACTIVATE | SWP_SHOWWINDOW | SWP_NOOWNERZORDER) == FALSE) {
@@ -2472,30 +2606,22 @@ HRESULT am_MultiToWide_p(LPCSTR in, const UINT codePage, LPWSTR *out)
 [[nodiscard]] static inline HRESULT am_CreateXAMLIsland_p()
 {
     if (!g_am_MainWindowHandle_p) {
-        SAFE_RELEASE_RESOURCES
-        return E_INVALIDARG;
+        SAFE_RETURN
     }
 
     // XAML Island is only supported on Windows 10 19H1 and onwards.
     if (!g_am_IsXAMLIslandAvailable_p) {
-        am_Print_p(L"XAML Island is only supported on Windows 10 19H1 and onwards.");
-        SAFE_RELEASE_RESOURCES
-        return E_FAIL;
+        PRINT_AND_SAFE_RETURN(L"XAML Island is only supported on Windows 10 19H1 and onwards.")
     }
     SystemTheme systemTheme = SystemTheme::Invalid;
     if (FAILED(am_GetSystemTheme_p(&systemTheme))) {
-        SAFE_RELEASE_RESOURCES
-        return E_FAIL;
+        SAFE_RETURN
     }
     if (systemTheme == SystemTheme::Invalid) {
-        am_Print_p(L"Failed to retrieve system theme.");
-        SAFE_RELEASE_RESOURCES
-        return E_FAIL;
+        PRINT_AND_SAFE_RETURN(L"Failed to retrieve system theme.")
     }
     if (systemTheme == SystemTheme::HighContrast) {
-        am_Print_p(L"High contrast mode is on.");
-        SAFE_RELEASE_RESOURCES
-        return E_FAIL;
+        PRINT_AND_SAFE_RETURN(L"High contrast mode is on.")
     }
 
     winrt::init_apartment(winrt::apartment_type::single_threaded);
@@ -2504,16 +2630,12 @@ HRESULT am_MultiToWide_p(LPCSTR in, const UINT codePage, LPWSTR *out)
     g_am_XAMLSource_p = {};
     const auto interop = g_am_XAMLSource_p.as<IDesktopWindowXamlSourceNative>();
     if (!interop) {
-        am_Print_p(L"Failed to retrieve IDesktopWindowXamlSourceNative.");
-        SAFE_RELEASE_RESOURCES
-        return E_FAIL;
+        PRINT_AND_SAFE_RETURN(L"Failed to retrieve IDesktopWindowXamlSourceNative.")
     }
     winrt::check_hresult(interop->AttachToWindow(g_am_MainWindowHandle_p));
     winrt::check_hresult(interop->get_WindowHandle(&g_am_XAMLIslandWindowHandle_p));
     if (!g_am_XAMLIslandWindowHandle_p) {
-        am_Print_p(L"Failed to retrieve XAML Island window handle.");
-        SAFE_RELEASE_RESOURCES
-        return E_FAIL;
+        PRINT_AND_SAFE_RETURN(L"Failed to retrieve XAML Island window handle.")
     }
     // Update the XAML Island window size because initially it is 0x0.
     RECT rect = {0, 0, 0, 0};
@@ -2523,8 +2645,7 @@ HRESULT am_MultiToWide_p(LPCSTR in, const UINT codePage, LPWSTR *out)
     // Give enough space to our thin homemade top border.
     int borderThickness = 0;
     if (FAILED(am_GetWindowVisibleFrameBorderThickness_p(g_am_MainWindowHandle_p, g_am_CurrentDpi_p, &borderThickness))) {
-        SAFE_RELEASE_RESOURCES
-        return E_FAIL;
+        SAFE_RETURN
     }
     if (SetWindowPos(g_am_XAMLIslandWindowHandle_p, HWND_BOTTOM, 0,
                  borderThickness, rect.right, (rect.bottom - borderThickness),
@@ -2533,9 +2654,7 @@ HRESULT am_MultiToWide_p(LPCSTR in, const UINT codePage, LPWSTR *out)
     }
     g_am_BackgroundBrush_p = {};
     if (FAILED(am_SwitchAcrylicBrushTheme_p((systemTheme == SystemTheme::Auto) ? SystemTheme::Dark : systemTheme))) {
-        am_Print_p(L"Failed to change acrylic brush's theme.");
-        SAFE_RELEASE_RESOURCES
-        return E_FAIL;
+        PRINT_AND_SAFE_RETURN(L"Failed to change acrylic brush's theme.")
     }
     g_am_BrushTheme_p = SystemTheme::Auto;
     g_am_BackgroundBrush_p.BackgroundSource(winrt::Windows::UI::Xaml::Media::AcrylicBackgroundSource::HostBackdrop);
@@ -2562,23 +2681,19 @@ HRESULT am_MultiToWide_p(LPCSTR in, const UINT codePage, LPWSTR *out)
 [[nodiscard]] static inline HRESULT am_InitializeDirect2DInfrastructure_p()
 {
     if (!g_am_MainWindowHandle_p) {
-        SAFE_RELEASE_RESOURCES
-        return E_INVALIDARG;
+        SAFE_RETURN
     }
     const int screen = 0; // fixme: use the correct screen id.
     if (FAILED(am_GetWallpaperFilePath_p(screen, &g_am_WallpaperFilePath_p))) {
-        SAFE_RELEASE_RESOURCES
-        return E_FAIL;
+        SAFE_RETURN
     }
     COLORREF color = RGB(0, 0, 0);
     if (FAILED(am_GetDesktopBackgroundColor_p(&color))) {
-        SAFE_RELEASE_RESOURCES
-        return E_FAIL;
+        SAFE_RETURN
     }
     g_am_DesktopBackgroundColor_p = D2D1::ColorF(color);
     if (FAILED(am_GetWallpaperAspectStyle_p(screen, &g_am_WallpaperAspectStyle_p))) {
-        SAFE_RELEASE_RESOURCES
-        return E_FAIL;
+        SAFE_RETURN
     }
     // todo
     return E_FAIL;
@@ -2590,12 +2705,10 @@ HRESULT am_MultiToWide_p(LPCSTR in, const UINT codePage, LPWSTR *out)
         return E_FAIL;
     }
     if (FAILED(am_RegisterMainWindowClass_p())) {
-        am_Print_p(L"Failed to register main window class.", true);
-        return E_FAIL;
+        PRINT_AND_RETURN(L"Failed to register main window class.")
     }
     if (FAILED(am_CreateMainWindow_p(x, y, w, h))) {
-        am_Print_p(L"Failed to create main window.", true);
-        return E_FAIL;
+        PRINT_AND_RETURN(L"Failed to create main window.")
     }
     if (g_am_IsXAMLIslandAvailable_p) {
         if (SUCCEEDED(am_CreateXAMLIsland_p())) {
@@ -2604,23 +2717,20 @@ HRESULT am_MultiToWide_p(LPCSTR in, const UINT codePage, LPWSTR *out)
                     g_am_AcrylicManagerInitialized_p = true;
                     return S_OK;
                 } else {
-                    am_Print_p(L"Failed to create drag bar window.", true);
-                    return E_FAIL;
+                    PRINT_AND_RETURN(L"Failed to create drag bar window.")
                 }
             } else {
-                am_Print_p(L"Failed to register drag bar window class.", true);
-                return E_FAIL;
+                PRINT_AND_RETURN(L"Failed to register drag bar window class.")
             }
         } else {
-            am_Print_p(L"Failed to create XAML Island.", true);
-            return E_FAIL;
+            PRINT_AND_RETURN(L"Failed to create XAML Island.")
         }
     } else if (g_am_IsDirect2DAvailable_p) {
         if (SUCCEEDED(am_InitializeDirect2DInfrastructure_p())) {
             g_am_AcrylicManagerInitialized_p = true;
             return S_OK;
         } else {
-            return E_FAIL;
+            PRINT_AND_RETURN(L"Failed to initialize the Direct2D infrastructure.")
         }
     } else {
         // Just don't crash.
@@ -2682,14 +2792,12 @@ HRESULT am_GetVersion(LPWSTR *ver)
 HRESULT am_CreateWindow(const int x, const int y, const int w, const int h)
 {
     if (!g_am_IsWindows7OrGreater_p) {
-        am_Print_p(L"This application cannot be run on such old systems.", true);
-        return E_FAIL;
+        PRINT_AND_RETURN(L"This application cannot be run on such old systems.")
     }
 
     bool dwmComp = false;
     if (FAILED(am_IsCompositionEnabled_p(&dwmComp)) || !dwmComp) {
-        am_Print_p(L"This application could not be started when DWM composition is disabled.", true);
-        return E_FAIL;
+        PRINT_AND_RETURN(L"This application could not be started when DWM composition is disabled.")
     }
 
     return am_InitializeAcrylicManager_p(x, y, w, h);

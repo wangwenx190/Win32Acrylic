@@ -1,3 +1,5 @@
+set(CMAKE_CXX_STANDARD_LIBRARIES "kernel32" CACHE STRING "")
+
 set(SOURCES
     acrylicmanager_global.h
     runtimeobject.cpp
@@ -9,7 +11,8 @@ set(SOURCES
 
 if(BUILD_SHARED_LIBS)
     enable_language(RC)
-    list(APPEND SOURCES acrylicmanager.rc)
+    configure_file(acrylicmanager.rc.in ${PROJECT_BINARY_DIR}/acrylicmanager.rc @ONLY)
+    list(APPEND SOURCES ${PROJECT_BINARY_DIR}/acrylicmanager.rc)
 endif()
 
 add_library(${PROJECT_NAME} ${SOURCES})
@@ -32,6 +35,7 @@ target_compile_definitions(${PROJECT_NAME} PRIVATE
     _CRT_NON_CONFORMING_SWPRINTFS
     _CRT_SECURE_NO_WARNINGS
     ACRYLICMANAGER_BUILD_LIBRARY
+    ACRYLICMANAGER_VERSION_STR=L\"${PROJECT_VERSION}\"
 )
 unset(NTDDI_WIN10_19H1)
 

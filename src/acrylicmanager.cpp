@@ -114,6 +114,10 @@ EXTERN_C IMAGE_DOS_HEADER __ImageBase;
 #define GET_CURRENT_SCREEN(window) (MonitorFromWindow(window, MONITOR_DEFAULTTONEAREST))
 #endif
 
+#ifndef GET_DEVICE_PIXEL_RATIO
+#define GET_DEVICE_PIXEL_RATIO(dpi) (static_cast<double>(dpi) / static_cast<double>(USER_DEFAULT_SCREEN_DPI))
+#endif
+
 #ifndef DECLARE_UNUSED
 #define DECLARE_UNUSED(var) (static_cast<void>(var))
 #endif
@@ -257,15 +261,6 @@ static inline void am_Print_p(LPCWSTR text, const bool showUi = false, LPCWSTR t
     }
 }
 
-[[nodiscard]] static inline HRESULT am_GetDevicePixelRatio_p(const UINT dpi, double *dpr)
-{
-    if ((dpi == 0) || !dpr) {
-        return E_INVALIDARG;
-    }
-    *dpr = (static_cast<double>(dpi) / static_cast<double>(USER_DEFAULT_SCREEN_DPI));
-    return S_OK;
-}
-
 HRESULT am_GetWindowDpi_p(const HWND hWnd, UINT *result)
 {
     if (!hWnd || !result) {
@@ -344,11 +339,7 @@ HRESULT am_GetResizeBorderThickness_p(const bool x, const UINT dpi, int *thickne
     // There is no "SM_CYPADDEDBORDER".
     const int result = GetSystemMetricsForDpi(SM_CXPADDEDBORDER, dpi)
             + GetSystemMetricsForDpi((x ? SM_CXSIZEFRAME : SM_CYSIZEFRAME), dpi);
-    double dpr = 1.0;
-    if (FAILED(am_GetDevicePixelRatio_p(dpi, &dpr))) {
-        return E_FAIL;
-    }
-    const int preset = std::round(8.0 * dpr);
+    const int preset = std::round(8.0 * GET_DEVICE_PIXEL_RATIO(dpi));
     *thickness = ((result > 0) ? result : preset);
     return S_OK;
 }
@@ -359,11 +350,7 @@ HRESULT am_GetCaptionHeight_p(const UINT dpi, int *height)
         return E_INVALIDARG;
     }
     const int result = GetSystemMetricsForDpi(SM_CYCAPTION, dpi);
-    double dpr = 1.0;
-    if (FAILED(am_GetDevicePixelRatio_p(dpi, &dpr))) {
-        return E_FAIL;
-    }
-    const int preset = std::round(23.0 * dpr);
+    const int preset = std::round(23.0 * GET_DEVICE_PIXEL_RATIO(dpi));
     *height = ((result > 0) ? result : preset);
     return S_OK;
 }
@@ -387,12 +374,8 @@ HRESULT am_GetTitleBarHeight_p(const HWND hWnd, const UINT dpi, int *height)
         *height = (rbtY + cth);
         return S_OK;
     }
-    double dpr = 1.0;
-    if (SUCCEEDED(am_GetDevicePixelRatio_p(dpi, &dpr))) {
-        *height = std::round(31.0 * dpr);
-        return S_OK;
-    }
-    return E_FAIL;
+    *height = std::round(31.0 * GET_DEVICE_PIXEL_RATIO(dpi));
+    return S_OK;
 }
 
 [[nodiscard]] static inline HRESULT am_GetMonitorInfo_p(const HWND hWnd, MONITORINFO *result)
@@ -748,15 +731,11 @@ HRESULT am_GetWindowVisibleFrameBorderThickness_p(const HWND hWnd, const UINT dp
         *result = value;
         return S_OK;
     }
-    double dpr = 1.0;
-    if (FAILED(am_GetDevicePixelRatio_p(dpi, &dpr))) {
-        return E_FAIL;
-    }
     bool normal = false;
     if (FAILED(am_IsWindowNoState_p(hWnd, &normal))) {
         return E_FAIL;
     }
-    *result = (normal ? std::round(1.0 * dpr) : 0);
+    *result = (normal ? std::round(1.0 * GET_DEVICE_PIXEL_RATIO(dpi)) : 0);
     return S_OK;
 }
 

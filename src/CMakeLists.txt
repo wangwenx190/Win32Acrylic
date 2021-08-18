@@ -1,4 +1,4 @@
-set(CMAKE_CXX_STANDARD_LIBRARIES "kernel32" CACHE STRING "")
+set(CMAKE_CXX_STANDARD_LIBRARIES "kernel32.lib" CACHE STRING "" FORCE)
 
 set(SOURCES
     acrylicmanager_global.h

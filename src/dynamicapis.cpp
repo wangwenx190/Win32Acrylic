@@ -124,6 +124,27 @@ SetProcessDpiAwarenessContext(
 }
 
 /////////////////////////////////
+/////     Gdi32
+/////////////////////////////////
+
+int WINAPI
+GetDeviceCaps(
+    HDC hdc,
+    int index
+)
+{
+    ACRYLICMANAGER_TRY_EXECUTE_GDI_FUNCTION_RETURN(GetDeviceCaps, 0, hdc, index)
+}
+
+HGDIOBJ WINAPI
+GetStockObject(
+    int i
+)
+{
+    ACRYLICMANAGER_TRY_EXECUTE_GDI_FUNCTION_RETURN(GetStockObject, nullptr, i)
+}
+
+/////////////////////////////////
 /////     SHCore
 /////////////////////////////////
 

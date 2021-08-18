@@ -187,8 +187,8 @@ am_IsWindowActive(
 );
 
 [[nodiscard]] ACRYLICMANAGER_API HRESULT WINAPI
-am_FreeString(
-    _In_ LPWSTR str
+am_LocalFree(
+    _In_ void *mem
 );
 
 #if 0

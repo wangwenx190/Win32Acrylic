@@ -1373,13 +1373,12 @@ HRESULT am_GetColorizationArea_p(ColorizationArea *result)
     return S_OK;
 }
 
-HRESULT am_FreeString(LPWSTR str)
+HRESULT am_LocalFree(void *mem)
 {
-    if (!str) {
+    if (!mem) {
         return E_INVALIDARG;
     }
-    delete [] str;
-    str = nullptr;
+    free(mem);
     return S_OK;
 }
 

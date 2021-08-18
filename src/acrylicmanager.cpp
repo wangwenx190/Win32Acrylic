@@ -118,8 +118,8 @@ EXTERN_C IMAGE_DOS_HEADER __ImageBase;
 #define DECLARE_UNUSED(var) (static_cast<void>(var))
 #endif
 
-#ifndef PRINT_ERROR_MESSAGE
-#define PRINT_ERROR_MESSAGE(function) \
+#ifndef PRINT_WIN32_ERROR_MESSAGE
+#define PRINT_WIN32_ERROR_MESSAGE(function) \
 { \
     const DWORD __dwError = GetLastError(); \
     if (__dwError != ERROR_SUCCESS) { \
@@ -128,6 +128,16 @@ EXTERN_C IMAGE_DOS_HEADER __ImageBase;
             const HRESULT __hr_ = am_PrintErrorMessageFromHResult_p(L#function, __hr); \
             DECLARE_UNUSED(__hr_); \
         } \
+    } \
+}
+#endif
+
+#ifndef PRINT_HR_ERROR_MESSAGE
+#define PRINT_HR_ERROR_MESSAGE(function, hresult) \
+{ \
+    if (FAILED(hresult)) { \
+        const HRESULT __hr = am_PrintErrorMessageFromHResult_p(L#function, hresult); \
+        DECLARE_UNUSED(__hr); \
     } \
 }
 #endif
@@ -144,8 +154,8 @@ EXTERN_C IMAGE_DOS_HEADER __ImageBase;
 static const int g_am_AutoHideTaskbarThicknessPx_p = 2;
 static const int g_am_AutoHideTaskbarThicknessPy_p = g_am_AutoHideTaskbarThicknessPx_p;
 
-static LPCWSTR g_am_ForceOfficialAcrylicEnvVar_p = L"";
-static LPCWSTR g_am_ForceHomemadeAcrylicEnvVar_p = L"";
+static LPCWSTR g_am_ForceOfficialAcrylicEnvVar_p = L"ACRYLICMANAGER_FORCE_OFFICIAL_ACRYLIC";
+static LPCWSTR g_am_ForceHomemadeAcrylicEnvVar_p = L"ACRYLICMANAGER_FORCE_HOMEMADE_ACRYLIC";
 static LPCWSTR g_am_PersonalizeRegistryKey_p = LR"(Software\Microsoft\Windows\CurrentVersion\Themes\Personalize)";
 static LPCWSTR g_am_DWMRegistryKey_p = LR"(Software\Microsoft\Windows\DWM)";
 static LPCWSTR g_am_DesktopRegistryKey_p = LR"(Control Panel\Desktop)";
@@ -206,7 +216,15 @@ static const bool g_am_IsWindows10OrGreater_p = []{
 }();
 
 static const bool g_am_IsDirect2DAvailable_p = []{
-    return g_am_IsWindows8OrGreater_p;
+    bool force = false;
+    const auto buf = new wchar_t[20]; // 20 should be enough for it...
+    SecureZeroMemory(buf, sizeof(buf));
+    if (GetEnvironmentVariableW(g_am_ForceHomemadeAcrylicEnvVar_p, buf, sizeof(buf)) != 0) {
+        force = ((_wcsicmp(buf, L"True") == 0) || (_wcsicmp(buf, L"Yes") == 0)
+                 || (_wcsicmp(buf, L"On") == 0) || (_wcsicmp(buf, L"1") == 0));
+    }
+    delete [] buf;
+    return (g_am_IsWindows8OrGreater_p || force);
 }();
 
 static const bool g_am_IsDarkModeAvailable_p = []{
@@ -215,8 +233,17 @@ static const bool g_am_IsDarkModeAvailable_p = []{
 }();
 
 static const bool g_am_IsXAMLIslandAvailable_p = []{
+    bool force = false;
+    const auto buf = new wchar_t[20]; // 20 should be enough for it...
+    SecureZeroMemory(buf, sizeof(buf));
+    if (GetEnvironmentVariableW(g_am_ForceOfficialAcrylicEnvVar_p, buf, sizeof(buf)) != 0) {
+        force = ((_wcsicmp(buf, L"True") == 0) || (_wcsicmp(buf, L"Yes") == 0)
+                 || (_wcsicmp(buf, L"On") == 0) || (_wcsicmp(buf, L"1") == 0));
+    }
+    delete [] buf;
     bool result = false;
-    return (SUCCEEDED(am_CompareSystemVersion_p(WindowsVersion::Windows10_19H1, VersionCompare::GreaterOrEqual, &result)) && result);
+    const bool should = (SUCCEEDED(am_CompareSystemVersion_p(WindowsVersion::Windows10_19H1, VersionCompare::GreaterOrEqual, &result)) && result);
+    return (should || force);
 }();
 
 static inline void am_Print_p(LPCWSTR text, const bool showUi = false, LPCWSTR title = nullptr)
@@ -421,7 +448,7 @@ HRESULT am_GetScreenAvailableGeometry_p(const HWND hWnd, RECT *rect)
     }
     HKEY hKey = nullptr;
     if (RegOpenKeyExW(rootKey, subKey, 0, KEY_READ, &hKey) != ERROR_SUCCESS) {
-        PRINT_ERROR_MESSAGE(RegOpenKeyExW)
+        PRINT_WIN32_ERROR_MESSAGE(RegOpenKeyExW)
         return E_FAIL;
     }
     DWORD dwValue = 0;
@@ -430,10 +457,10 @@ HRESULT am_GetScreenAvailableGeometry_p(const HWND hWnd, RECT *rect)
     const bool success = (RegQueryValueExW(hKey, valueName, nullptr, &dwType,
                                 reinterpret_cast<LPBYTE>(&dwValue), &dwSize) == ERROR_SUCCESS);
     if (!success) {
-        PRINT_ERROR_MESSAGE(RegQueryValueExW)
+        PRINT_WIN32_ERROR_MESSAGE(RegQueryValueExW)
     }
     if (RegCloseKey(hKey) != ERROR_SUCCESS) {
-        PRINT_ERROR_MESSAGE(RegCloseKey)
+        PRINT_WIN32_ERROR_MESSAGE(RegCloseKey)
     }
     *result = dwValue;
     return S_OK;
@@ -1006,14 +1033,14 @@ HRESULT am_GetWindowVisibleFrameBorderThickness_p(const HWND hWnd, const UINT dp
     // Drag bar window
     if (g_am_DragBarWindowHandle_p) {
         if (DestroyWindow(g_am_DragBarWindowHandle_p) == FALSE) {
-            PRINT_ERROR_MESSAGE(DestroyWindow)
+            PRINT_WIN32_ERROR_MESSAGE(DestroyWindow)
         }
         g_am_DragBarWindowHandle_p = nullptr;
     }
     if (g_am_DragBarWindowAtom_p != 0) {
         if (g_am_DragBarWindowClassName_p) {
             if (UnregisterClassW(g_am_DragBarWindowClassName_p, HINST_THISCOMPONENT) == FALSE) {
-                PRINT_ERROR_MESSAGE(UnregisterClassW)
+                PRINT_WIN32_ERROR_MESSAGE(UnregisterClassW)
             }
             delete [] g_am_DragBarWindowClassName_p;
             g_am_DragBarWindowClassName_p = nullptr;
@@ -1024,14 +1051,14 @@ HRESULT am_GetWindowVisibleFrameBorderThickness_p(const HWND hWnd, const UINT dp
     // Main window
     if (g_am_MainWindowHandle_p) {
         if (DestroyWindow(g_am_MainWindowHandle_p) == FALSE) {
-            PRINT_ERROR_MESSAGE(DestroyWindow)
+            PRINT_WIN32_ERROR_MESSAGE(DestroyWindow)
         }
         g_am_MainWindowHandle_p = nullptr;
     }
     if (g_am_MainWindowAtom_p != 0) {
         if (g_am_MainWindowClassName_p) {
             if (UnregisterClassW(g_am_MainWindowClassName_p, HINST_THISCOMPONENT) == FALSE) {
-                PRINT_ERROR_MESSAGE(UnregisterClassW)
+                PRINT_WIN32_ERROR_MESSAGE(UnregisterClassW)
             }
             delete [] g_am_MainWindowClassName_p;
             g_am_MainWindowClassName_p = nullptr;
@@ -1238,7 +1265,7 @@ HRESULT am_IsHighContrastModeOn_p(bool *result)
     SecureZeroMemory(&hc, sizeof(hc));
     hc.cbSize = sizeof(hc);
     if (SystemParametersInfoW(SPI_GETHIGHCONTRAST, sizeof(hc), &hc, 0) == FALSE) {
-        PRINT_ERROR_MESSAGE(SystemParametersInfoW)
+        PRINT_WIN32_ERROR_MESSAGE(SystemParametersInfoW)
         return E_FAIL;
     }
     *result = (hc.dwFlags & HCF_HIGHCONTRASTON);
@@ -1260,12 +1287,12 @@ HRESULT am_SetWindowCompositionAttribute_p(const HWND hWnd, LPWINDOWCOMPOSITIONA
             tried = true;
             const HMODULE dll = LoadLibraryExW(L"User32.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
             if (!dll) {
-                PRINT_ERROR_MESSAGE(LoadLibraryExW)
+                PRINT_WIN32_ERROR_MESSAGE(LoadLibraryExW)
                 return E_FAIL;
             }
             func = reinterpret_cast<sig>(GetProcAddress(dll, "SetWindowCompositionAttribute"));
             if (!func) {
-                PRINT_ERROR_MESSAGE(GetProcAddress)
+                PRINT_WIN32_ERROR_MESSAGE(GetProcAddress)
                 return E_FAIL;
             }
         }
@@ -1796,7 +1823,7 @@ HRESULT am_MultibyteToWide_p(LPCSTR in, const UINT codePage, LPWSTR *out)
         const POINT globalPos = {GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)};
         POINT localPos = globalPos;
         if (ScreenToClient(hWnd, &localPos) == FALSE) {
-            PRINT_ERROR_MESSAGE(ScreenToClient)
+            PRINT_WIN32_ERROR_MESSAGE(ScreenToClient)
             break;
         }
         bool max = false, full = false, normal = false;
@@ -1896,7 +1923,7 @@ HRESULT am_MultibyteToWide_p(LPCSTR in, const UINT codePage, LPWSTR *out)
             PAINTSTRUCT ps = {};
             const HDC hdc = BeginPaint(hWnd, &ps);
             if (!hdc) {
-                PRINT_ERROR_MESSAGE(BeginPaint)
+                PRINT_WIN32_ERROR_MESSAGE(BeginPaint)
                 break;
             }
             // We removed the whole top part of the frame (see handling of
@@ -1927,7 +1954,7 @@ HRESULT am_MultibyteToWide_p(LPCSTR in, const UINT codePage, LPWSTR *out)
                 // BLACK_BRUSH to do this:
                 // https://docs.microsoft.com/en-us/windows/win32/dwm/customframe#extending-the-client-frame
                 if (FillRect(hdc, &rcPaint, GET_BLACK_BRUSH) == 0) {
-                    PRINT_ERROR_MESSAGE(FillRect)
+                    PRINT_WIN32_ERROR_MESSAGE(FillRect)
                     break;
                 }
             }
@@ -1944,12 +1971,12 @@ HRESULT am_MultibyteToWide_p(LPCSTR in, const UINT codePage, LPWSTR *out)
                 params.dwFlags = BPPF_NOCLIP | BPPF_ERASE;
                 const HPAINTBUFFER buf = BeginBufferedPaint(hdc, &rcPaint, BPBF_TOPDOWNDIB, &params, &opaqueDc);
                 if (!buf) {
-                    PRINT_ERROR_MESSAGE(BeginBufferedPaint)
+                    PRINT_WIN32_ERROR_MESSAGE(BeginBufferedPaint)
                     break;
                 }
                 if (FillRect(opaqueDc, &rcPaint,
                              reinterpret_cast<HBRUSH>(GetClassLongPtrW(hWnd, GCLP_HBRBACKGROUND))) == 0) {
-                    PRINT_ERROR_MESSAGE(FillRect)
+                    PRINT_WIN32_ERROR_MESSAGE(FillRect)
                     break;
                 }
                 if (FAILED(BufferedPaintSetAlpha(buf, nullptr, 255))) {
@@ -1962,7 +1989,7 @@ HRESULT am_MultibyteToWide_p(LPCSTR in, const UINT codePage, LPWSTR *out)
                 }
             }
             if (EndPaint(hWnd, &ps) == FALSE) {
-                PRINT_ERROR_MESSAGE(EndPaint)
+                PRINT_WIN32_ERROR_MESSAGE(EndPaint)
                 break;
             }
             return 0;
@@ -1978,7 +2005,7 @@ HRESULT am_MultibyteToWide_p(LPCSTR in, const UINT codePage, LPWSTR *out)
         const auto prcNewWindow = reinterpret_cast<LPRECT>(lParam);
         if (MoveWindow(hWnd, prcNewWindow->left, prcNewWindow->top,
                    GET_RECT_WIDTH(*prcNewWindow), GET_RECT_HEIGHT(*prcNewWindow), TRUE) == FALSE) {
-            PRINT_ERROR_MESSAGE(MoveWindow)
+            PRINT_WIN32_ERROR_MESSAGE(MoveWindow)
             break;
         }
         return 0;
@@ -2001,7 +2028,7 @@ HRESULT am_MultibyteToWide_p(LPCSTR in, const UINT codePage, LPWSTR *out)
                 const int height = (HIWORD(lParam) - borderThickness);
                 if (SetWindowPos(g_am_XAMLIslandWindowHandle_p, HWND_BOTTOM, 0, borderThickness,
                              width, height, flags) == FALSE) {
-                    PRINT_ERROR_MESSAGE(SetWindowPos)
+                    PRINT_WIN32_ERROR_MESSAGE(SetWindowPos)
                     break;
                 }
             }
@@ -2010,7 +2037,7 @@ HRESULT am_MultibyteToWide_p(LPCSTR in, const UINT codePage, LPWSTR *out)
             int tbh = 0;
             if (SUCCEEDED(am_GetTitleBarHeight_p(hWnd, g_am_CurrentDpi_p, &tbh))) {
                 if (SetWindowPos(g_am_DragBarWindowHandle_p, HWND_TOP, 0, 0, width, tbh, flags) == FALSE) {
-                    PRINT_ERROR_MESSAGE(SetWindowPos)
+                    PRINT_WIN32_ERROR_MESSAGE(SetWindowPos)
                     break;
                 }
             }
@@ -2085,22 +2112,22 @@ HRESULT am_MultibyteToWide_p(LPCSTR in, const UINT codePage, LPWSTR *out)
         const COLORREF color = (active ? RGB(0, 0, 0) : RGB(128, 128, 128));
         const HPEN hpen = CreatePen(PS_SOLID, 2, color);
         if (!hpen) {
-            PRINT_ERROR_MESSAGE(CreatePen)
+            PRINT_WIN32_ERROR_MESSAGE(CreatePen)
             break;
         }
         const HDC hdc = GetDC(hWnd);
         if (!hdc) {
-            PRINT_ERROR_MESSAGE(GetDC)
+            PRINT_WIN32_ERROR_MESSAGE(GetDC)
             break;
         }
         HGDIOBJ result = SelectObject(hdc, hpen);
         if (!result || (result == HGDI_ERROR)) {
-            PRINT_ERROR_MESSAGE(SelectObject)
+            PRINT_WIN32_ERROR_MESSAGE(SelectObject)
             break;
         }
         result = SelectObject(hdc, (HBRUSH)GetStockObject(NULL_BRUSH));
         if (!result || (result == HGDI_ERROR)) {
-            PRINT_ERROR_MESSAGE(SelectObject)
+            PRINT_WIN32_ERROR_MESSAGE(SelectObject)
             break;
         }
         SIZE ws = {};
@@ -2108,11 +2135,11 @@ HRESULT am_MultibyteToWide_p(LPCSTR in, const UINT codePage, LPWSTR *out)
             break;
         }
         if (Rectangle(hdc, 0, 0, ws.cx, ws.cy) == FALSE) {
-            PRINT_ERROR_MESSAGE(Rectangle)
+            PRINT_WIN32_ERROR_MESSAGE(Rectangle)
             break;
         }
         if (ReleaseDC(hWnd, hdc) == 0) {
-            PRINT_ERROR_MESSAGE(ReleaseDC)
+            PRINT_WIN32_ERROR_MESSAGE(ReleaseDC)
             break;
         }
     } break;
@@ -2195,7 +2222,7 @@ HRESULT am_MultibyteToWide_p(LPCSTR in, const UINT codePage, LPWSTR *out)
     {
         POINT pos = {GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)};
         if (ClientToScreen(hWnd, &pos) == FALSE) {
-            PRINT_ERROR_MESSAGE(ClientToScreen)
+            PRINT_WIN32_ERROR_MESSAGE(ClientToScreen)
             return 0;
         }
         const LPARAM newLParam = MAKELPARAM(pos.x, pos.y);
@@ -2242,7 +2269,7 @@ HRESULT am_MultibyteToWide_p(LPCSTR in, const UINT codePage, LPWSTR *out)
     g_am_MainWindowAtom_p = RegisterClassExW(&wcex);
 
     if (g_am_MainWindowAtom_p == 0) {
-        PRINT_ERROR_MESSAGE(RegisterClassExW)
+        PRINT_WIN32_ERROR_MESSAGE(RegisterClassExW)
         SAFE_RELEASE_RESOURCES
         return E_FAIL;
     }
@@ -2289,7 +2316,7 @@ HRESULT am_MultibyteToWide_p(LPCSTR in, const UINT codePage, LPWSTR *out)
     g_am_DragBarWindowAtom_p = RegisterClassExW(&wcex);
 
     if (g_am_DragBarWindowAtom_p == 0) {
-        PRINT_ERROR_MESSAGE(RegisterClassExW)
+        PRINT_WIN32_ERROR_MESSAGE(RegisterClassExW)
         SAFE_RELEASE_RESOURCES
         return E_FAIL;
     }
@@ -2314,7 +2341,7 @@ HRESULT am_MultibyteToWide_p(LPCSTR in, const UINT codePage, LPWSTR *out)
                                        nullptr, nullptr, HINST_THISCOMPONENT, nullptr);
 
     if (!g_am_MainWindowHandle_p) {
-        PRINT_ERROR_MESSAGE(CreateWindowExW)
+        PRINT_WIN32_ERROR_MESSAGE(CreateWindowExW)
         SAFE_RELEASE_RESOURCES
         return E_FAIL;
     }
@@ -2379,7 +2406,7 @@ HRESULT am_MultibyteToWide_p(LPCSTR in, const UINT codePage, LPWSTR *out)
                                           g_am_MainWindowHandle_p, nullptr, HINST_THISCOMPONENT, nullptr);
 
     if (!g_am_DragBarWindowHandle_p) {
-        PRINT_ERROR_MESSAGE(CreateWindowExW)
+        PRINT_WIN32_ERROR_MESSAGE(CreateWindowExW)
         SAFE_RELEASE_RESOURCES
         return E_FAIL;
     }

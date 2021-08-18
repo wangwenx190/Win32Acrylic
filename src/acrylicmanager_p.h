@@ -305,7 +305,7 @@ am_IsHighContrastModeOn_p(
 
 [[nodiscard]] ACRYLICMANAGER_API HRESULT WINAPI
 am_SetWindowCompositionAttribute_p(
-    _In_ const HWND hWnd,
+    _In_ const HWND                    hWnd,
     _In_ LPWINDOWCOMPOSITIONATTRIBDATA pwcad
 );
 

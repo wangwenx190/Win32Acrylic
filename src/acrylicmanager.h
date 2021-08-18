@@ -152,12 +152,12 @@ am_SetTintOpacity(
 
 [[nodiscard]] ACRYLICMANAGER_API HRESULT WINAPI
 am_GetTintLuminosityOpacity(
-    _Out_ double opacity
+    _Out_ double *opacity
 );
 
 [[nodiscard]] ACRYLICMANAGER_API HRESULT WINAPI
 am_SetTintLuminosityOpacity(
-    _In_ const double opacity
+    _In_ const double *opacity
 );
 
 [[nodiscard]] ACRYLICMANAGER_API HRESULT WINAPI

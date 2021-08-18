@@ -144,8 +144,12 @@ static HWND g_am_DragBarWindowHandle_p = nullptr;
 static UINT g_am_CurrentDpi_p = 0;
 static SystemTheme g_am_BrushTheme_p = SystemTheme::Invalid;
 static LPWSTR g_am_WallpaperFilePath_p = nullptr;
-static COLORREF g_am_DesktopBackgroundColor_p = RGB(0, 0, 0);
+static D2D1_COLOR_F g_am_DesktopBackgroundColor_p = D2D1::ColorF(D2D1::ColorF::Black);
 static WallpaperAspectStyle g_am_WallpaperAspectStyle_p = WallpaperAspectStyle::Invalid;
+static winrt::Windows::UI::Color g_am_TintColor_p = {};
+static double g_am_TintOpacity_p = 0.0;
+static std::optional<double> g_am_TintLuminosityOpacity_p = std::nullopt;
+static winrt::Windows::UI::Color g_am_FallbackColor_p = {};
 
 static winrt::Windows::UI::Xaml::Hosting::WindowsXamlManager g_am_XAMLManager_p = nullptr;
 static winrt::Windows::UI::Xaml::Hosting::DesktopWindowXamlSource g_am_XAMLSource_p = nullptr;
@@ -943,7 +947,7 @@ static inline void am_Cleanup_p()
         delete [] g_am_WallpaperFilePath_p;
         g_am_WallpaperFilePath_p = nullptr;
     }
-    g_am_DesktopBackgroundColor_p = RGB(0, 0, 0);
+    g_am_DesktopBackgroundColor_p = D2D1::ColorF(D2D1::ColorF::Black);
     g_am_WallpaperAspectStyle_p = WallpaperAspectStyle::Invalid;
 
     // XAML Island
@@ -2034,7 +2038,7 @@ am_CreateD2DBitmapBrushFromURI_p(
                 }
             }
             g_am_D2DRenderTarget_p->BeginDraw();
-            g_am_D2DRenderTarget_p->Clear(D2D1::ColorF(g_am_DesktopBackgroundColor_p));
+            g_am_D2DRenderTarget_p->Clear(g_am_DesktopBackgroundColor_p);
             g_am_D2DRenderTarget_p->DrawBitmap(g_am_D2DWallpaperBitmap_p, D2D1::RectF(0, 0, size.cx, size.cy));
             if (FAILED(g_am_D2DRenderTarget_p->EndDraw())) {
                 break;
@@ -2580,10 +2584,12 @@ am_CreateD2DBitmapBrushFromURI_p(
         am_Cleanup_p();
         return E_FAIL;
     }
-    if (FAILED(am_GetDesktopBackgroundColor_p(&g_am_DesktopBackgroundColor_p))) {
+    COLORREF color = RGB(0, 0, 0);
+    if (FAILED(am_GetDesktopBackgroundColor_p(&color))) {
         am_Cleanup_p();
         return E_FAIL;
     }
+    g_am_DesktopBackgroundColor_p = D2D1::ColorF(color);
     if (FAILED(am_GetWallpaperAspectStyle_p(screen, &g_am_WallpaperAspectStyle_p))) {
         am_Cleanup_p();
         return E_FAIL;

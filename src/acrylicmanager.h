@@ -51,6 +51,11 @@ EXTERN_C_START
 #endif
 
 [[nodiscard]] ACRYLICMANAGER_API HRESULT WINAPI
+am_GetVersion(
+    _Out_ LPWSTR *ver
+);
+
+[[nodiscard]] ACRYLICMANAGER_API HRESULT WINAPI
 am_CreateWindow(
     _In_ const int x = -1,
     _In_ const int y = -1,
@@ -179,6 +184,11 @@ am_EventLoopExec(
 [[nodiscard]] ACRYLICMANAGER_API HRESULT WINAPI
 am_IsWindowActive(
     _Out_ bool *active
+);
+
+[[nodiscard]] ACRYLICMANAGER_API HRESULT WINAPI
+am_FreeString(
+    _In_ LPWSTR str
 );
 
 #if 0

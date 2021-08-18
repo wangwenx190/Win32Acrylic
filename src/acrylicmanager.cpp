@@ -1321,23 +1321,13 @@ HRESULT am_GetColorizationArea_p(ColorizationArea *result)
     return S_OK;
 }
 
-HRESULT am_FreeStringA_p(void *mem)
+HRESULT am_FreeString(LPWSTR str)
 {
-    if (!mem) {
+    if (!str) {
         return E_INVALIDARG;
     }
-    delete [] static_cast<LPSTR>(mem);
-    mem = nullptr;
-    return S_OK;
-}
-
-HRESULT am_FreeStringW_p(void *mem)
-{
-    if (!mem) {
-        return E_INVALIDARG;
-    }
-    delete [] static_cast<LPWSTR>(mem);
-    mem = nullptr;
+    delete [] str;
+    str = nullptr;
     return S_OK;
 }
 
@@ -1582,6 +1572,33 @@ HRESULT am_GetWallpaperAspectStyle_p(const int screen, WallpaperAspectStyle *res
 HRESULT am_GetWindowDpiAwareness_p(const HWND hWnd, int *result)
 {
     if (!hWnd || !result) {
+        return E_INVALIDARG;
+    }
+    // todo
+    return E_FAIL;
+}
+
+HRESULT am_SetWindowDpiAwareness_p(const HWND hWnd, int awareness)
+{
+    if (!hWnd) {
+        return E_INVALIDARG;
+    }
+    // todo
+    return E_FAIL;
+}
+
+HRESULT am_WideToMultibyte_p(LPCWSTR in, const UINT codePage, LPSTR *out)
+{
+    if (!in || !out) {
+        return E_INVALIDARG;
+    }
+    // todo
+    return E_FAIL;
+}
+
+HRESULT am_MultibyteToWide_p(LPCSTR in, const UINT codePage, LPWSTR *out)
+{
+    if (!in || !out) {
         return E_INVALIDARG;
     }
     // todo
@@ -2668,6 +2685,18 @@ am_CreateD2DBitmapBrushFromURI_p(
 }
 
 // Public interface
+
+HRESULT am_GetVersion(LPWSTR *ver)
+{
+    if (!ver) {
+        return E_INVALIDARG;
+    }
+    const auto str = new wchar_t[10]; // 10 should be enough for a version string...
+    SecureZeroMemory(str, sizeof(str));
+    memcpy(str, ACRYLICMANAGER_VERSION_STR, wcslen(ACRYLICMANAGER_VERSION_STR));
+    *ver = str;
+    return S_OK;
+}
 
 HRESULT am_CreateWindow(const int x, const int y, const int w, const int h)
 {

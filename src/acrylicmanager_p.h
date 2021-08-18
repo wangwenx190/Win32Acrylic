@@ -328,16 +328,6 @@ am_GetColorizationArea_p(
 );
 
 [[nodiscard]] ACRYLICMANAGER_API HRESULT WINAPI
-am_FreeStringA_p(
-    _In_ void *mem
-);
-
-[[nodiscard]] ACRYLICMANAGER_API HRESULT WINAPI
-am_FreeStringW_p(
-    _In_ void *mem
-);
-
-[[nodiscard]] ACRYLICMANAGER_API HRESULT WINAPI
 am_GetWindowVisibleFrameBorderThickness_p(
     _In_ const HWND hWnd,
     _In_ const UINT dpi,
@@ -365,6 +355,26 @@ am_GetWallpaperAspectStyle_p(
 am_GetWindowDpiAwareness_p(
     _In_ const HWND hWnd,
     _Out_ int       *result
+);
+
+[[nodiscard]] ACRYLICMANAGER_API HRESULT WINAPI
+am_SetWindowDpiAwareness_p(
+    _In_ const HWND hWnd,
+    _In_ int        awareness
+);
+
+[[nodiscard]] ACRYLICMANAGER_API HRESULT WINAPI
+am_WideToMultibyte_p(
+    _In_ LPCWSTR    in,
+    _In_ const UINT codePage,
+    _Out_ LPSTR     *out
+);
+
+[[nodiscard]] ACRYLICMANAGER_API HRESULT WINAPI
+am_MultibyteToWide_p(
+    _In_ LPCSTR     in,
+    _In_ const UINT codePage,
+    _Out_ LPWSTR    *out
 );
 
 #ifdef __cplusplus

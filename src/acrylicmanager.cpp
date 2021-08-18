@@ -43,7 +43,10 @@
 #include <WinRT\Windows.UI.Xaml.Media.h>
 #include <Windows.UI.Xaml.Hosting.DesktopWindowXamlSource.h>
 
-#include <D2D1.h>
+#include <wrl\client.h>
+#include <DXGI1_2.h>
+#include <D3D11.h>
+#include <D2D1_2.h>
 #include <WinCodec.h>
 
 #ifndef HINST_THISCOMPONENT
@@ -91,33 +94,49 @@ EXTERN_C IMAGE_DOS_HEADER __ImageBase;
 #define GET_Y_LPARAM(lp) ((int)(short)HIWORD(lp))
 #endif
 
-#ifndef RECT_WIDTH
-#define RECT_WIDTH(rect) (std::abs((rect).right - (rect).left))
+#ifndef GET_RECT_WIDTH
+#define GET_RECT_WIDTH(rect) (std::abs((rect).right - (rect).left))
 #endif
 
-#ifndef RECT_HEIGHT
-#define RECT_HEIGHT(rect) (std::abs((rect).bottom - (rect).top))
+#ifndef GET_RECT_HEIGHT
+#define GET_RECT_HEIGHT(rect) (std::abs((rect).bottom - (rect).top))
 #endif
 
-#ifndef BLACK_BACKGROUND_BRUSH
-#define BLACK_BACKGROUND_BRUSH (reinterpret_cast<HBRUSH>(GetStockObject(BLACK_BRUSH)))
+#ifndef GET_RECT_SIZE
+#define GET_RECT_SIZE(rect) (SIZE{GET_RECT_WIDTH(rect), GET_RECT_HEIGHT(rect)})
 #endif
 
-#ifndef CURRENT_SCREEN
-#define CURRENT_SCREEN(window) (MonitorFromWindow(window, MONITOR_DEFAULTTONEAREST))
+#ifndef GET_BLACK_BRUSH
+#define GET_BLACK_BRUSH (reinterpret_cast<HBRUSH>(GetStockObject(BLACK_BRUSH)))
+#endif
+
+#ifndef GET_CURRENT_SCREEN
+#define GET_CURRENT_SCREEN(window) (MonitorFromWindow(window, MONITOR_DEFAULTTONEAREST))
+#endif
+
+#ifndef DECLARE_UNUSED
+#define DECLARE_UNUSED(var) (static_cast<void>(var))
 #endif
 
 #ifndef PRINT_ERROR_MESSAGE
 #define PRINT_ERROR_MESSAGE(function) \
 { \
-    const DWORD dwError = GetLastError(); \
-    if (dwError != ERROR_SUCCESS) { \
-        const HRESULT hr = HRESULT_FROM_WIN32(dwError); \
-        if (FAILED(hr)) { \
-            const HRESULT _hr = am_PrintErrorMessageFromHResult_p(L#function, hr); \
-            static_cast<void>(_hr); \
+    const DWORD __dwError = GetLastError(); \
+    if (__dwError != ERROR_SUCCESS) { \
+        const HRESULT __hr = HRESULT_FROM_WIN32(__dwError); \
+        if (FAILED(__hr)) { \
+            const HRESULT __hr_ = am_PrintErrorMessageFromHResult_p(L#function, __hr); \
+            DECLARE_UNUSED(__hr_); \
         } \
     } \
+}
+#endif
+
+#ifndef SAFE_RELEASE_RESOURCES
+#define SAFE_RELEASE_RESOURCES \
+{ \
+    const HRESULT __hr = am_Cleanup_p(); \
+    DECLARE_UNUSED(__hr); \
 }
 #endif
 
@@ -125,6 +144,8 @@ EXTERN_C IMAGE_DOS_HEADER __ImageBase;
 static const int g_am_AutoHideTaskbarThicknessPx_p = 2;
 static const int g_am_AutoHideTaskbarThicknessPy_p = g_am_AutoHideTaskbarThicknessPx_p;
 
+static LPCWSTR g_am_ForceOfficialAcrylicEnvVar_p = L"";
+static LPCWSTR g_am_ForceHomemadeAcrylicEnvVar_p = L"";
 static LPCWSTR g_am_PersonalizeRegistryKey_p = LR"(Software\Microsoft\Windows\CurrentVersion\Themes\Personalize)";
 static LPCWSTR g_am_DWMRegistryKey_p = LR"(Software\Microsoft\Windows\DWM)";
 static LPCWSTR g_am_DesktopRegistryKey_p = LR"(Control Panel\Desktop)";
@@ -136,6 +157,7 @@ static LPWSTR g_am_MainWindowClassName_p = nullptr;
 static LPWSTR g_am_DragBarWindowClassName_p = nullptr;
 static LPCWSTR g_am_MainWindowTitle_p = L"AcrylicManager Main Window";
 static LPCWSTR g_am_DragBarWindowTitle_p = nullptr;
+static bool g_am_AcrylicManagerInitialized_p = false;
 static ATOM g_am_MainWindowAtom_p = 0;
 static ATOM g_am_DragBarWindowAtom_p = 0;
 static HWND g_am_MainWindowHandle_p = nullptr;
@@ -156,10 +178,12 @@ static winrt::Windows::UI::Xaml::Hosting::DesktopWindowXamlSource g_am_XAMLSourc
 static winrt::Windows::UI::Xaml::Controls::Grid g_am_RootGrid_p = nullptr;
 static winrt::Windows::UI::Xaml::Media::AcrylicBrush g_am_BackgroundBrush_p = nullptr;
 
-static CComPtr<ID2D1Factory> g_am_D2DFactory_p = nullptr;
-static CComPtr<ID2D1HwndRenderTarget> g_am_D2DRenderTarget_p = nullptr;
-static CComPtr<ID2D1BitmapBrush> g_am_D2DBitmapBrush_p = nullptr;
-static CComPtr<ID2D1Bitmap> g_am_D2DWallpaperBitmap_p = nullptr;
+static Microsoft::WRL::ComPtr<ID2D1DeviceContext> g_am_D2DDeviceContext_p = nullptr;
+static Microsoft::WRL::ComPtr<ID2D1Factory2> g_am_D2DFactory2_p = nullptr;
+static Microsoft::WRL::ComPtr<ID2D1Device1> g_am_D2DDevice1_p = nullptr;
+static Microsoft::WRL::ComPtr<ID2D1DeviceContext1> g_am_D2DDeviceContext1_p = nullptr;
+static Microsoft::WRL::ComPtr<IDXGISwapChain1> g_am_SwapChain_p = nullptr;
+static Microsoft::WRL::ComPtr<ID2D1Bitmap1> g_am_D2DTargetBitmap_p = nullptr;
 
 static const bool g_am_IsWindows7OrGreater_p = []{
     bool result = false;
@@ -179,6 +203,10 @@ static const bool g_am_IsWindows8Point1OrGreater_p = []{
 static const bool g_am_IsWindows10OrGreater_p = []{
     bool result = false;
     return (SUCCEEDED(am_CompareSystemVersion_p(WindowsVersion::Windows10, VersionCompare::GreaterOrEqual, &result)) && result);
+}();
+
+static const bool g_am_IsDirect2DAvailable_p = []{
+    return g_am_IsWindows8OrGreater_p;
 }();
 
 static const bool g_am_IsDarkModeAvailable_p = []{
@@ -239,7 +267,7 @@ HRESULT am_GetWindowDpi_p(const HWND hWnd, UINT *result)
     }
     {
         UINT dpiX = 0, dpiY = 0;
-        if (SUCCEEDED(GetDpiForMonitor(CURRENT_SCREEN(hWnd), MDT_EFFECTIVE_DPI, &dpiX, &dpiY))) {
+        if (SUCCEEDED(GetDpiForMonitor(GET_CURRENT_SCREEN(hWnd), MDT_EFFECTIVE_DPI, &dpiX, &dpiY))) {
             if ((dpiX > 0) && (dpiY > 0)) {
                 *result = std::round(static_cast<double>(dpiX + dpiY) / 2.0);
                 return S_OK;
@@ -345,7 +373,7 @@ HRESULT am_GetTitleBarHeight_p(const HWND hWnd, const UINT dpi, int *height)
     if (!hWnd || !result) {
         return E_INVALIDARG;
     }
-    const HMONITOR mon = CURRENT_SCREEN(hWnd);
+    const HMONITOR mon = GET_CURRENT_SCREEN(hWnd);
     if (!mon) {
         return E_FAIL;
     }
@@ -754,7 +782,7 @@ HRESULT am_GetWindowVisibleFrameBorderThickness_p(const HWND hWnd, const UINT dp
             return E_FAIL;
         }
         if (MoveWindow(hWnd, rect.left, rect.top,
-                        RECT_WIDTH(rect), RECT_HEIGHT(rect), TRUE) != FALSE) {
+                        GET_RECT_WIDTH(rect), GET_RECT_HEIGHT(rect), TRUE) != FALSE) {
             return S_OK;
         }
     } else {
@@ -808,7 +836,7 @@ HRESULT am_GetWindowVisibleFrameBorderThickness_p(const HWND hWnd, const UINT dp
     if (FAILED(am_GetWindowGeometry_p(hWnd, &rect))) {
         return E_FAIL;
     }
-    *size = {RECT_WIDTH(rect), RECT_HEIGHT(rect)};
+    *size = GET_RECT_SIZE(rect);
     return S_OK;
 }
 
@@ -851,14 +879,14 @@ HRESULT am_GetWindowVisibleFrameBorderThickness_p(const HWND hWnd, const UINT dp
     if (GetWindowRect(hWnd, &windowRect) == FALSE) {
         return E_FAIL;
     }
-    const int windowWidth = RECT_WIDTH(windowRect);
-    const int windowHeight = RECT_HEIGHT(windowRect);
+    const int windowWidth = GET_RECT_WIDTH(windowRect);
+    const int windowHeight = GET_RECT_HEIGHT(windowRect);
     RECT screenRect = {};
     if (FAILED(am_GetScreenGeometry_p(hWnd, &screenRect))) {
         return E_FAIL;
     }
-    const int screenWidth = RECT_WIDTH(screenRect);
-    const int screenHeight = RECT_HEIGHT(screenRect);
+    const int screenWidth = GET_RECT_WIDTH(screenRect);
+    const int screenHeight = GET_RECT_HEIGHT(screenRect);
     const int newX = (screenWidth - windowWidth) / 2;
     const int newY = (screenHeight - windowHeight) / 2;
     if (MoveWindow(hWnd, newX, newY, windowWidth, windowHeight, TRUE) != FALSE) {
@@ -924,24 +952,32 @@ HRESULT am_GetWindowVisibleFrameBorderThickness_p(const HWND hWnd, const UINT dp
     return E_FAIL;
 }
 
-static inline void am_Cleanup_p()
+[[nodiscard]] static inline HRESULT am_Cleanup_p()
 {
     // Direct2D
-    if (g_am_D2DWallpaperBitmap_p) {
-        g_am_D2DWallpaperBitmap_p.Release();
-        g_am_D2DWallpaperBitmap_p = nullptr;
+    if (g_am_D2DDeviceContext_p) {
+        g_am_D2DDeviceContext_p->Release();
+        g_am_D2DDeviceContext_p = nullptr;
     }
-    if (g_am_D2DBitmapBrush_p) {
-        g_am_D2DBitmapBrush_p.Release();
-        g_am_D2DBitmapBrush_p = nullptr;
+    if (g_am_D2DFactory2_p) {
+        g_am_D2DFactory2_p->Release();
+        g_am_D2DFactory2_p = nullptr;
     }
-    if (g_am_D2DRenderTarget_p) {
-        g_am_D2DRenderTarget_p.Release();
-        g_am_D2DRenderTarget_p = nullptr;
+    if (g_am_D2DDevice1_p) {
+        g_am_D2DDevice1_p->Release();
+        g_am_D2DDevice1_p = nullptr;
     }
-    if (g_am_D2DFactory_p) {
-        g_am_D2DFactory_p.Release();
-        g_am_D2DFactory_p = nullptr;
+    if (g_am_D2DDeviceContext1_p) {
+        g_am_D2DDeviceContext1_p->Release();
+        g_am_D2DDeviceContext1_p = nullptr;
+    }
+    if (g_am_SwapChain_p) {
+        g_am_SwapChain_p->Release();
+        g_am_SwapChain_p = nullptr;
+    }
+    if (g_am_D2DTargetBitmap_p) {
+        g_am_D2DTargetBitmap_p->Release();
+        g_am_D2DTargetBitmap_p = nullptr;
     }
     if (g_am_WallpaperFilePath_p) {
         delete [] g_am_WallpaperFilePath_p;
@@ -961,6 +997,11 @@ static inline void am_Cleanup_p()
         g_am_XAMLManager_p.Close();
         g_am_XAMLManager_p = nullptr;
     }
+    g_am_BrushTheme_p = SystemTheme::Invalid;
+    g_am_TintColor_p = {};
+    g_am_TintOpacity_p = 0.0;
+    g_am_TintLuminosityOpacity_p = std::nullopt;
+    g_am_FallbackColor_p = {};
 
     // Drag bar window
     if (g_am_DragBarWindowHandle_p) {
@@ -997,10 +1038,11 @@ static inline void am_Cleanup_p()
         }
         g_am_MainWindowAtom_p = 0;
     }
-
-    // Misc
     g_am_CurrentDpi_p = 0;
-    g_am_BrushTheme_p = SystemTheme::Invalid;
+
+    g_am_AcrylicManagerInitialized_p = false;
+
+    return S_OK;
 }
 
 [[nodiscard]] static inline HRESULT am_GetTintColor_p(int *r, int *g, int *b, int *a)
@@ -1609,106 +1651,6 @@ HRESULT am_MultibyteToWide_p(LPCSTR in, const UINT codePage, LPWSTR *out)
     return E_FAIL;
 }
 
-// Direct2D
-
-[[nodiscard]] static inline HRESULT
-am_CreateD2DBitmapBrushFromURI_p(
-    ID2D1RenderTarget *pRenderTarget,
-    LPCWSTR           uri,
-    UINT              width,
-    UINT              height,
-    ID2D1Bitmap       **ppBitmap
-)
-{
-    if (!g_am_D2DRenderTarget_p || !pRenderTarget || !uri || (width <= 0) || (height <= 0) || !ppBitmap) {
-        return E_INVALIDARG;
-    }
-    CComPtr<IWICBitmapDecoder> pDecoder = nullptr;
-    CComPtr<IWICBitmapFrameDecode> pSource = nullptr;
-    CComPtr<IWICStream> pStream = nullptr;
-    CComPtr<IWICFormatConverter> pConverter = nullptr;
-    CComPtr<IWICBitmapScaler> pScalar = nullptr;
-    CComPtr<IWICImagingFactory> pIWICFactory = nullptr;
-    if (FAILED(CoInitialize(nullptr))) {
-        return E_FAIL;
-    }
-    if (SUCCEEDED(CoCreateInstance(CLSID_WICImagingFactory1, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&pIWICFactory)))) {
-        if (SUCCEEDED(pIWICFactory->CreateDecoderFromFilename(uri, nullptr, GENERIC_READ, WICDecodeMetadataCacheOnLoad, &pDecoder))) {
-            if (SUCCEEDED(pDecoder->GetFrame(0, &pSource))) {
-                if (SUCCEEDED(pIWICFactory->CreateFormatConverter(&pConverter))) {
-                    if (SUCCEEDED(pConverter->Initialize(pSource, GUID_WICPixelFormat32bppPBGRA, WICBitmapDitherTypeNone,
-                                                         nullptr, 0.0f, WICBitmapPaletteTypeMedianCut))) {
-                        if (SUCCEEDED(pRenderTarget->CreateBitmapFromWicBitmap(pConverter, nullptr, ppBitmap))) {
-                            if (SUCCEEDED(g_am_D2DRenderTarget_p->CreateBitmapBrush(*ppBitmap, &g_am_D2DBitmapBrush_p))) {
-                                CoUninitialize();
-                                return S_OK;
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-    CoUninitialize();
-    return E_FAIL;
-}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 [[nodiscard]] static inline LRESULT CALLBACK am_MainWindowProc_p(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
     bool systemThemeChanged = false;
@@ -1800,7 +1742,7 @@ am_CreateD2DBitmapBrushFromURI_p(
                     _abd.cbSize = sizeof(_abd);
                     _abd.hWnd = FindWindowW(L"Shell_TrayWnd", nullptr);
                     if (_abd.hWnd) {
-                        const HMONITOR windowMonitor = CURRENT_SCREEN(hWnd);
+                        const HMONITOR windowMonitor = GET_CURRENT_SCREEN(hWnd);
                         const HMONITOR taskbarMonitor = MonitorFromWindow(_abd.hWnd, MONITOR_DEFAULTTOPRIMARY);
                         if (taskbarMonitor == windowMonitor) {
                             SHAppBarMessage(ABM_GETTASKBARPOS, &_abd);
@@ -1984,7 +1926,7 @@ am_CreateD2DBitmapBrushFromURI_p(
                 // recommends to paint the area in black using the stock
                 // BLACK_BRUSH to do this:
                 // https://docs.microsoft.com/en-us/windows/win32/dwm/customframe#extending-the-client-frame
-                if (FillRect(hdc, &rcPaint, BLACK_BACKGROUND_BRUSH) == 0) {
+                if (FillRect(hdc, &rcPaint, GET_BLACK_BRUSH) == 0) {
                     PRINT_ERROR_MESSAGE(FillRect)
                     break;
                 }
@@ -2025,25 +1967,8 @@ am_CreateD2DBitmapBrushFromURI_p(
             }
             return 0;
         } else {
-            if (!g_am_D2DFactory_p || !g_am_D2DRenderTarget_p || !g_am_WallpaperFilePath_p) {
-                break;
-            }
-            SIZE size = {};
-            if (FAILED(am_GetWindowSize_p(hWnd, &size))) {
-                break;
-            }
-            if (!g_am_D2DWallpaperBitmap_p) {
-                if (FAILED(am_CreateD2DBitmapBrushFromURI_p(g_am_D2DRenderTarget_p, g_am_WallpaperFilePath_p, size.cx, size.cy, &g_am_D2DWallpaperBitmap_p))) {
-                    break;
-                }
-            }
-            g_am_D2DRenderTarget_p->BeginDraw();
-            g_am_D2DRenderTarget_p->Clear(g_am_DesktopBackgroundColor_p);
-            g_am_D2DRenderTarget_p->DrawBitmap(g_am_D2DWallpaperBitmap_p, D2D1::RectF(0, 0, size.cx, size.cy));
-            if (FAILED(g_am_D2DRenderTarget_p->EndDraw())) {
-                break;
-            }
-            return 0;
+            // todo
+            break;
         }
     } break;
     case WM_DPICHANGED: {
@@ -2052,7 +1977,7 @@ am_CreateD2DBitmapBrushFromURI_p(
         g_am_CurrentDpi_p = std::round((x + y) / 2.0);
         const auto prcNewWindow = reinterpret_cast<LPRECT>(lParam);
         if (MoveWindow(hWnd, prcNewWindow->left, prcNewWindow->top,
-                   RECT_WIDTH(*prcNewWindow), RECT_HEIGHT(*prcNewWindow), TRUE) == FALSE) {
+                   GET_RECT_WIDTH(*prcNewWindow), GET_RECT_HEIGHT(*prcNewWindow), TRUE) == FALSE) {
             PRINT_ERROR_MESSAGE(MoveWindow)
             break;
         }
@@ -2152,14 +2077,13 @@ am_CreateD2DBitmapBrushFromURI_p(
         }
     } break;
     case WM_ACTIVATE: {
-        break; // test
         if (g_am_IsWindows10OrGreater_p) {
             break;
         }
         const auto status = LOWORD(wParam);
         const bool active = ((status == WA_ACTIVE) || (status == WA_CLICKACTIVE));
         const COLORREF color = (active ? RGB(0, 0, 0) : RGB(128, 128, 128));
-        const HPEN hpen = CreatePen(PS_SOLID, 4, color);
+        const HPEN hpen = CreatePen(PS_SOLID, 2, color);
         if (!hpen) {
             PRINT_ERROR_MESSAGE(CreatePen)
             break;
@@ -2193,7 +2117,7 @@ am_CreateD2DBitmapBrushFromURI_p(
         }
     } break;
     case WM_CLOSE: {
-        am_Cleanup_p();
+        SAFE_RELEASE_RESOURCES
         return 0;
     }
     case WM_DESTROY: {
@@ -2288,13 +2212,13 @@ am_CreateD2DBitmapBrushFromURI_p(
 [[nodiscard]] static inline HRESULT am_RegisterMainWindowClass_p()
 {
     if (g_am_MainWindowAtom_p != 0) {
-        am_Cleanup_p();
+        SAFE_RELEASE_RESOURCES
         return E_INVALIDARG;
     }
 
     LPWSTR guid = nullptr;
     if (FAILED(am_GenerateGUID_p(&guid))) {
-        am_Cleanup_p();
+        SAFE_RELEASE_RESOURCES
         return E_FAIL;
     }
     g_am_MainWindowClassName_p = new wchar_t[MAX_PATH];
@@ -2319,7 +2243,7 @@ am_CreateD2DBitmapBrushFromURI_p(
 
     if (g_am_MainWindowAtom_p == 0) {
         PRINT_ERROR_MESSAGE(RegisterClassExW)
-        am_Cleanup_p();
+        SAFE_RELEASE_RESOURCES
         return E_FAIL;
     }
 
@@ -2330,18 +2254,18 @@ am_CreateD2DBitmapBrushFromURI_p(
 {
     if (!g_am_IsWindows8OrGreater_p) {
         am_Print_p(L"Drag bar window is only available on Windows 8 and onwards.");
-        am_Cleanup_p();
+        SAFE_RELEASE_RESOURCES
         return E_FAIL;
     }
 
     if ((g_am_MainWindowAtom_p == 0) || (g_am_DragBarWindowAtom_p != 0)) {
-        am_Cleanup_p();
+        SAFE_RELEASE_RESOURCES
         return E_INVALIDARG;
     }
 
     LPWSTR guid = nullptr;
     if (FAILED(am_GenerateGUID_p(&guid))) {
-        am_Cleanup_p();
+        SAFE_RELEASE_RESOURCES
         return E_FAIL;
     }
     g_am_DragBarWindowClassName_p = new wchar_t[MAX_PATH];
@@ -2359,14 +2283,14 @@ am_CreateD2DBitmapBrushFromURI_p(
     wcex.lpfnWndProc = am_DragBarWindowProc_p;
     wcex.hInstance = HINST_THISCOMPONENT;
     wcex.hCursor = LoadCursorW(nullptr, IDC_ARROW);
-    wcex.hbrBackground = BLACK_BACKGROUND_BRUSH;
+    wcex.hbrBackground = GET_BLACK_BRUSH;
     wcex.lpszClassName = g_am_DragBarWindowClassName_p;
 
     g_am_DragBarWindowAtom_p = RegisterClassExW(&wcex);
 
     if (g_am_DragBarWindowAtom_p == 0) {
         PRINT_ERROR_MESSAGE(RegisterClassExW)
-        am_Cleanup_p();
+        SAFE_RELEASE_RESOURCES
         return E_FAIL;
     }
 
@@ -2376,7 +2300,7 @@ am_CreateD2DBitmapBrushFromURI_p(
 [[nodiscard]] static inline HRESULT am_CreateMainWindow_p(const int x, const int y, const int w, const int h)
 {
     if ((g_am_MainWindowAtom_p == 0) || g_am_MainWindowHandle_p) {
-        am_Cleanup_p();
+        SAFE_RELEASE_RESOURCES
         return E_INVALIDARG;
     }
 
@@ -2391,7 +2315,7 @@ am_CreateD2DBitmapBrushFromURI_p(
 
     if (!g_am_MainWindowHandle_p) {
         PRINT_ERROR_MESSAGE(CreateWindowExW)
-        am_Cleanup_p();
+        SAFE_RELEASE_RESOURCES
         return E_FAIL;
     }
 
@@ -2403,19 +2327,19 @@ am_CreateD2DBitmapBrushFromURI_p(
     // This also ensures our window still has the frame shadow drawn by DWM.
     if (FAILED(am_UpdateFrameMargins_p(g_am_MainWindowHandle_p, g_am_CurrentDpi_p))) {
         am_Print_p(L"Failed to update main window's frame margins.");
-        am_Cleanup_p();
+        SAFE_RELEASE_RESOURCES
         return E_FAIL;
     }
     // Force a WM_NCCALCSIZE processing to make the window become frameless immediately.
     if (FAILED(am_TriggerFrameChange_p(g_am_MainWindowHandle_p))) {
         am_Print_p(L"Failed to trigger frame change event for main window.");
-        am_Cleanup_p();
+        SAFE_RELEASE_RESOURCES
         return E_FAIL;
     }
     // Ensure our window still has window transitions.
     if (FAILED(am_SetWindowTransitionsEnabled_p(g_am_MainWindowHandle_p, true))) {
         am_Print_p(L"Failed to enable window transitions for main window.");
-        am_Cleanup_p();
+        SAFE_RELEASE_RESOURCES
         return E_FAIL;
     }
 
@@ -2425,18 +2349,18 @@ am_CreateD2DBitmapBrushFromURI_p(
 [[nodiscard]] static inline HRESULT am_CreateDragBarWindow_p()
 {
     if (!g_am_MainWindowHandle_p) {
-        am_Cleanup_p();
+        SAFE_RELEASE_RESOURCES
         return E_INVALIDARG;
     }
 
     // Please refer to the "IMPORTANT NOTE" section below.
     if (!g_am_IsWindows8OrGreater_p) {
         am_Print_p(L"Drag bar window is only available on Windows 8 and onwards.");
-        am_Cleanup_p();
+        SAFE_RELEASE_RESOURCES
         return E_FAIL;
     }
     if ((g_am_DragBarWindowAtom_p == 0) || g_am_DragBarWindowHandle_p) {
-        am_Cleanup_p();
+        SAFE_RELEASE_RESOURCES
         return E_INVALIDARG;
     }
 
@@ -2456,7 +2380,7 @@ am_CreateD2DBitmapBrushFromURI_p(
 
     if (!g_am_DragBarWindowHandle_p) {
         PRINT_ERROR_MESSAGE(CreateWindowExW)
-        am_Cleanup_p();
+        SAFE_RELEASE_RESOURCES
         return E_FAIL;
     }
 
@@ -2464,25 +2388,25 @@ am_CreateD2DBitmapBrushFromURI_p(
     // or UpdateLayeredWindow().
     if (SetLayeredWindowAttributes(g_am_DragBarWindowHandle_p, RGB(0, 0, 0), 255, LWA_ALPHA) == FALSE) {
         am_Print_p(L"SetLayeredWindowAttributes() failed.");
-        am_Cleanup_p();
+        SAFE_RELEASE_RESOURCES
         return E_FAIL;
     }
 
     RECT rect = {0, 0, 0, 0};
     if (GetClientRect(g_am_MainWindowHandle_p, &rect) == FALSE) {
         am_Print_p(L"Failed to retrieve client rect of main window.");
-        am_Cleanup_p();
+        SAFE_RELEASE_RESOURCES
         return E_FAIL;
     }
     int tbh = 0;
     if (FAILED(am_GetTitleBarHeight_p(g_am_MainWindowHandle_p, g_am_CurrentDpi_p, &tbh))) {
-        am_Cleanup_p();
+        SAFE_RELEASE_RESOURCES
         return E_FAIL;
     }
     if (SetWindowPos(g_am_DragBarWindowHandle_p, HWND_TOP, 0, 0, rect.right,  tbh,
                  SWP_NOACTIVATE | SWP_SHOWWINDOW | SWP_NOOWNERZORDER) == FALSE) {
         am_Print_p(L"Failed to move drag bar window.");
-        am_Cleanup_p();
+        SAFE_RELEASE_RESOURCES
         return E_FAIL;
     }
 
@@ -2492,29 +2416,29 @@ am_CreateD2DBitmapBrushFromURI_p(
 [[nodiscard]] static inline HRESULT am_CreateXAMLIsland_p()
 {
     if (!g_am_MainWindowHandle_p) {
-        am_Cleanup_p();
+        SAFE_RELEASE_RESOURCES
         return E_INVALIDARG;
     }
 
     // XAML Island is only supported on Windows 10 19H1 and onwards.
     if (!g_am_IsXAMLIslandAvailable_p) {
         am_Print_p(L"XAML Island is only supported on Windows 10 19H1 and onwards.");
-        am_Cleanup_p();
+        SAFE_RELEASE_RESOURCES
         return E_FAIL;
     }
     SystemTheme systemTheme = SystemTheme::Invalid;
     if (FAILED(am_GetSystemTheme_p(&systemTheme))) {
-        am_Cleanup_p();
+        SAFE_RELEASE_RESOURCES
         return E_FAIL;
     }
     if (systemTheme == SystemTheme::Invalid) {
         am_Print_p(L"Failed to retrieve system theme.");
-        am_Cleanup_p();
+        SAFE_RELEASE_RESOURCES
         return E_FAIL;
     }
     if (systemTheme == SystemTheme::HighContrast) {
         am_Print_p(L"High contrast mode is on.");
-        am_Cleanup_p();
+        SAFE_RELEASE_RESOURCES
         return E_FAIL;
     }
 
@@ -2525,40 +2449,40 @@ am_CreateD2DBitmapBrushFromURI_p(
     const auto interop = g_am_XAMLSource_p.as<IDesktopWindowXamlSourceNative>();
     if (!interop) {
         am_Print_p(L"Failed to retrieve IDesktopWindowXamlSourceNative.");
-        am_Cleanup_p();
+        SAFE_RELEASE_RESOURCES
         return E_FAIL;
     }
     winrt::check_hresult(interop->AttachToWindow(g_am_MainWindowHandle_p));
     winrt::check_hresult(interop->get_WindowHandle(&g_am_XAMLIslandWindowHandle_p));
     if (!g_am_XAMLIslandWindowHandle_p) {
         am_Print_p(L"Failed to retrieve XAML Island window handle.");
-        am_Cleanup_p();
+        SAFE_RELEASE_RESOURCES
         return E_FAIL;
     }
     // Update the XAML Island window size because initially it is 0x0.
     RECT rect = {0, 0, 0, 0};
     if (GetClientRect(g_am_MainWindowHandle_p, &rect) == FALSE) {
         am_Print_p(L"Failed to retrieve client rect of main window.");
-        am_Cleanup_p();
+        SAFE_RELEASE_RESOURCES
         return E_FAIL;
     }
     // Give enough space to our thin homemade top border.
     int borderThickness = 0;
     if (FAILED(am_GetWindowVisibleFrameBorderThickness_p(g_am_MainWindowHandle_p, g_am_CurrentDpi_p, &borderThickness))) {
-        am_Cleanup_p();
+        SAFE_RELEASE_RESOURCES
         return E_FAIL;
     }
     if (SetWindowPos(g_am_XAMLIslandWindowHandle_p, HWND_BOTTOM, 0,
                  borderThickness, rect.right, (rect.bottom - borderThickness),
                      SWP_NOACTIVATE | SWP_SHOWWINDOW | SWP_NOOWNERZORDER) == FALSE) {
         am_Print_p(L"Failed to move XAML Island window.");
-        am_Cleanup_p();
+        SAFE_RELEASE_RESOURCES
         return E_FAIL;
     }
     g_am_BackgroundBrush_p = {};
     if (FAILED(am_SwitchAcrylicBrushTheme_p((systemTheme == SystemTheme::Auto) ? SystemTheme::Dark : systemTheme))) {
         am_Print_p(L"Failed to change acrylic brush's theme.");
-        am_Cleanup_p();
+        SAFE_RELEASE_RESOURCES
         return E_FAIL;
     }
     g_am_BrushTheme_p = SystemTheme::Auto;
@@ -2575,55 +2499,34 @@ am_CreateD2DBitmapBrushFromURI_p(
 
 [[nodiscard]] static inline HRESULT am_InitializeDirect2DInfrastructure_p()
 {
-    if (!g_am_MainWindowHandle_p || g_am_D2DFactory_p || g_am_D2DRenderTarget_p) {
-        am_Cleanup_p();
+    if (!g_am_MainWindowHandle_p) {
+        SAFE_RELEASE_RESOURCES
         return E_INVALIDARG;
     }
     const int screen = 0; // fixme: use the correct screen id.
     if (FAILED(am_GetWallpaperFilePath_p(screen, &g_am_WallpaperFilePath_p))) {
-        am_Cleanup_p();
+        SAFE_RELEASE_RESOURCES
         return E_FAIL;
     }
     COLORREF color = RGB(0, 0, 0);
     if (FAILED(am_GetDesktopBackgroundColor_p(&color))) {
-        am_Cleanup_p();
+        SAFE_RELEASE_RESOURCES
         return E_FAIL;
     }
     g_am_DesktopBackgroundColor_p = D2D1::ColorF(color);
     if (FAILED(am_GetWallpaperAspectStyle_p(screen, &g_am_WallpaperAspectStyle_p))) {
-        am_Cleanup_p();
+        SAFE_RELEASE_RESOURCES
         return E_FAIL;
     }
-    if (FAILED(D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED, &g_am_D2DFactory_p))) {
-        am_Cleanup_p();
-        return E_FAIL;
-    }
-    SIZE size = {};
-    if (FAILED(am_GetWindowSize_p(g_am_MainWindowHandle_p, &size))) {
-        am_Cleanup_p();
-        return E_FAIL;
-    }
-    if (FAILED(g_am_D2DFactory_p->CreateHwndRenderTarget({}, D2D1::HwndRenderTargetProperties(g_am_MainWindowHandle_p, D2D1::SizeU(size.cx, size.cy)), &g_am_D2DRenderTarget_p))) {
-        am_Cleanup_p();
-        return E_FAIL;
-    }
-#if 0
-    if (FAILED(am_CreateD2DBitmapBrushFromURI_p(g_am_D2DRenderTarget_p, g_am_WallpaperFilePath_p, size.cx, size.cy, &g_am_D2DWallpaperBitmap_p))) {
-        am_Cleanup_p();
-        return E_FAIL;
-    }
-#endif
-    return S_OK;
+    // todo
+    return E_FAIL;
 }
 
 [[nodiscard]] static inline HRESULT am_InitializeAcrylicManager_p(const int x, const int y, const int w, const int h)
 {
-    static bool tried = false;
-    if (tried) {
+    if (g_am_AcrylicManagerInitialized_p) {
         return E_FAIL;
     }
-    tried = true;
-
     if (FAILED(am_RegisterMainWindowClass_p())) {
         am_Print_p(L"Failed to register main window class.", true);
         return E_FAIL;
@@ -2632,27 +2535,37 @@ am_CreateD2DBitmapBrushFromURI_p(
         am_Print_p(L"Failed to create main window.", true);
         return E_FAIL;
     }
-    if (g_am_IsWindows10OrGreater_p) {
-        if (g_am_IsXAMLIslandAvailable_p) {
-            if (SUCCEEDED(am_CreateXAMLIsland_p())) {
-                if (SUCCEEDED(am_RegisterDragBarWindowClass_p())) {
-                    if (SUCCEEDED(am_CreateDragBarWindow_p())) {
-                        return S_OK;
-                    } else {
-                        am_Print_p(L"Failed to create drag bar window.", true);
-                        return E_FAIL;
-                    }
+    if (g_am_IsXAMLIslandAvailable_p) {
+        if (SUCCEEDED(am_CreateXAMLIsland_p())) {
+            if (SUCCEEDED(am_RegisterDragBarWindowClass_p())) {
+                if (SUCCEEDED(am_CreateDragBarWindow_p())) {
+                    g_am_AcrylicManagerInitialized_p = true;
+                    return S_OK;
                 } else {
-                    am_Print_p(L"Failed to register drag bar window class.", true);
+                    am_Print_p(L"Failed to create drag bar window.", true);
                     return E_FAIL;
                 }
             } else {
-                am_Print_p(L"Failed to create XAML Island.", true);
+                am_Print_p(L"Failed to register drag bar window class.", true);
                 return E_FAIL;
             }
+        } else {
+            am_Print_p(L"Failed to create XAML Island.", true);
+            return E_FAIL;
         }
+    } else if (g_am_IsDirect2DAvailable_p) {
+        if (SUCCEEDED(am_InitializeDirect2DInfrastructure_p())) {
+            g_am_AcrylicManagerInitialized_p = true;
+            return S_OK;
+        } else {
+            return E_FAIL;
+        }
+    } else {
+        // Just don't crash.
+        g_am_AcrylicManagerInitialized_p = true;
+        return S_OK;
     }
-    return am_InitializeDirect2DInfrastructure_p();
+    return E_FAIL;
 }
 
 [[nodiscard]] static inline HRESULT am_GetWindowHandle_p(HWND *result)
@@ -2762,8 +2675,7 @@ HRESULT am_SetWindowState(const WindowState state)
 
 HRESULT am_CloseWindow()
 {
-    am_Cleanup_p();
-    return S_OK;
+    return am_Cleanup_p();
 }
 
 HRESULT am_GetWindowHandle(HWND *result)

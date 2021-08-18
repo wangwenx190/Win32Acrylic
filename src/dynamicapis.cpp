@@ -79,6 +79,50 @@ AdjustWindowRectExForDpi(
     ACRYLICMANAGER_TRY_EXECUTE_USER_FUNCTION(AdjustWindowRectExForDpi, lpRect, dwStyle, bMenu, dwExStyle, dpi)
 }
 
+BOOL WINAPI
+SystemParametersInfoForDpi(
+    UINT  uiAction,
+    UINT  uiParam,
+    PVOID pvParam,
+    UINT  fWinIni,
+    UINT  dpi
+)
+{
+    ACRYLICMANAGER_TRY_EXECUTE_USER_FUNCTION(SystemParametersInfoForDpi, uiAction, uiParam, pvParam, fWinIni, dpi)
+}
+
+DPI_AWARENESS_CONTEXT WINAPI
+GetWindowDpiAwarenessContext(
+    HWND hWnd
+)
+{
+    ACRYLICMANAGER_TRY_EXECUTE_USER_PTR_FUNCTION(GetWindowDpiAwarenessContext, hWnd)
+}
+
+DPI_AWARENESS WINAPI
+GetAwarenessFromDpiAwarenessContext(
+    DPI_AWARENESS_CONTEXT value
+)
+{
+    ACRYLICMANAGER_TRY_EXECUTE_USER_FUNCTION_RETURN(GetAwarenessFromDpiAwarenessContext, DPI_AWARENESS_INVALID, value)
+}
+
+BOOL WINAPI
+EnableNonClientDpiScaling(
+    HWND hWnd
+)
+{
+    ACRYLICMANAGER_TRY_EXECUTE_USER_FUNCTION(EnableNonClientDpiScaling, hWnd)
+}
+
+BOOL WINAPI
+SetProcessDpiAwarenessContext(
+    DPI_AWARENESS_CONTEXT value
+)
+{
+    ACRYLICMANAGER_TRY_EXECUTE_USER_FUNCTION(SetProcessDpiAwarenessContext, value)
+}
+
 /////////////////////////////////
 /////     SHCore
 /////////////////////////////////
@@ -92,6 +136,23 @@ GetDpiForMonitor(
 )
 {
     ACRYLICMANAGER_TRY_EXECUTE_SHCORE_FUNCTION(GetDpiForMonitor, hMonitor, dpiType, dpiX, dpiY)
+}
+
+HRESULT WINAPI
+SetProcessDpiAwareness(
+    PROCESS_DPI_AWARENESS value
+)
+{
+    ACRYLICMANAGER_TRY_EXECUTE_SHCORE_FUNCTION(SetProcessDpiAwareness, value)
+}
+
+HRESULT WINAPI
+GetProcessDpiAwareness(
+    HANDLE hProcess,
+    PROCESS_DPI_AWARENESS *value
+)
+{
+    ACRYLICMANAGER_TRY_EXECUTE_SHCORE_FUNCTION(GetProcessDpiAwareness, hProcess, value)
 }
 
 /////////////////////////////////

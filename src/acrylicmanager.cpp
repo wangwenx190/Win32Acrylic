@@ -542,7 +542,7 @@ HRESULT am_SetWindowTransitionsEnabled_p(const HWND hWnd, const bool enable)
         return E_INVALIDARG;
     }
     const BOOL disabled = enable ? FALSE : TRUE;
-    return DwmSetWindowAttribute(hWnd, DWMWAEX_TRANSITIONS_FORCEDISABLED, &disabled, sizeof(disabled));
+    return DwmSetWindowAttribute(hWnd, static_cast<DWORD>(DwmWindowAttribute::TRANSITIONS_FORCEDISABLED), &disabled, sizeof(disabled));
 }
 
 HRESULT am_OpenSystemMenu_p(const HWND hWnd, const POINT pos)
@@ -727,7 +727,7 @@ HRESULT am_GetWindowVisibleFrameBorderThickness_p(const HWND hWnd, const UINT dp
         return E_INVALIDARG;
     }
     UINT value = 0;
-    if (SUCCEEDED(DwmGetWindowAttribute(hWnd, DWMWAEX_VISIBLE_FRAME_BORDER_THICKNESS, &value, sizeof(value)))) {
+    if (SUCCEEDED(DwmGetWindowAttribute(hWnd, static_cast<DWORD>(DwmWindowAttribute::VISIBLE_FRAME_BORDER_THICKNESS), &value, sizeof(value)))) {
         *result = value;
         return S_OK;
     }
@@ -1285,7 +1285,7 @@ HRESULT am_IsWindowTransitionsEnabled_p(const HWND hWnd, bool *result)
         return E_INVALIDARG;
     }
     BOOL disabled = FALSE;
-    if (FAILED(DwmGetWindowAttribute(hWnd, DWMWAEX_TRANSITIONS_FORCEDISABLED, &disabled, sizeof(disabled)))) {
+    if (FAILED(DwmGetWindowAttribute(hWnd, static_cast<DWORD>(DwmWindowAttribute::TRANSITIONS_FORCEDISABLED), &disabled, sizeof(disabled)))) {
         return E_FAIL;
     }
     *result = (disabled == FALSE);
@@ -1298,11 +1298,11 @@ HRESULT am_IsWindowUsingDarkFrame_p(const HWND hWnd, bool *result)
         return E_INVALIDARG;
     }
     BOOL enabled = FALSE;
-    if (SUCCEEDED(DwmGetWindowAttribute(hWnd, DWMWAEX_USE_IMMERSIVE_DARK_MODE_BEFORE_20H1, &enabled, sizeof(enabled)))) {
+    if (SUCCEEDED(DwmGetWindowAttribute(hWnd, static_cast<DWORD>(DwmWindowAttribute::USE_IMMERSIVE_DARK_MODE_BEFORE_20H1), &enabled, sizeof(enabled)))) {
         *result = (enabled != FALSE);
         return S_OK;
     }
-    if (SUCCEEDED(DwmGetWindowAttribute(hWnd, DWMWAEX_USE_IMMERSIVE_DARK_MODE, &enabled, sizeof(enabled)))) {
+    if (SUCCEEDED(DwmGetWindowAttribute(hWnd, static_cast<DWORD>(DwmWindowAttribute::USE_IMMERSIVE_DARK_MODE), &enabled, sizeof(enabled)))) {
         *result = (enabled != FALSE);
         return S_OK;
     }
@@ -1315,10 +1315,10 @@ HRESULT am_SetWindowDarkFrameEnabled_p(const HWND hWnd, const bool enable)
         return E_INVALIDARG;
     }
     const BOOL enabled = enable ? TRUE : FALSE;
-    if (SUCCEEDED(DwmSetWindowAttribute(hWnd, DWMWAEX_USE_IMMERSIVE_DARK_MODE_BEFORE_20H1, &enabled, sizeof(enabled)))) {
+    if (SUCCEEDED(DwmSetWindowAttribute(hWnd, static_cast<DWORD>(DwmWindowAttribute::USE_IMMERSIVE_DARK_MODE_BEFORE_20H1), &enabled, sizeof(enabled)))) {
         return S_OK;
     }
-    if (SUCCEEDED(DwmSetWindowAttribute(hWnd, DWMWAEX_USE_IMMERSIVE_DARK_MODE, &enabled, sizeof(enabled)))) {
+    if (SUCCEEDED(DwmSetWindowAttribute(hWnd, static_cast<DWORD>(DwmWindowAttribute::USE_IMMERSIVE_DARK_MODE), &enabled, sizeof(enabled)))) {
         return S_OK;
     }
     return E_FAIL;
@@ -1353,12 +1353,12 @@ HRESULT am_GetColorizationArea_p(ColorizationArea *result)
     if (FAILED(am_GetDWORDValueFromRegistry_p(rootKey, g_am_PersonalizeRegistryKey_p, valueName, &dwTheme))) {
         return E_FAIL;
     }
-    DWORD dwDWM = 0;
-    if (FAILED(am_GetDWORDValueFromRegistry_p(rootKey, g_am_DWMRegistryKey_p, valueName, &dwDWM))) {
+    DWORD dwDwm = 0;
+    if (FAILED(am_GetDWORDValueFromRegistry_p(rootKey, g_am_DWMRegistryKey_p, valueName, &dwDwm))) {
         return E_FAIL;
     }
     const bool theme = (dwTheme != 0);
-    const bool dwm = (dwDWM != 0);
+    const bool dwm = (dwDwm != 0);
     if (theme && dwm) {
         *result = ColorizationArea::All;
         return S_OK;
@@ -1621,44 +1621,100 @@ HRESULT am_GetWallpaperAspectStyle_p(const int screen, WallpaperAspectStyle *res
     return E_FAIL;
 }
 
-HRESULT am_GetWindowDpiAwareness_p(const HWND hWnd, int *result)
+HRESULT am_GetWindowDpiAwareness_p(const HWND hWnd, DpiAwareness *result)
 {
     if (!hWnd || !result) {
         return E_INVALIDARG;
     }
-    // todo
-    return E_FAIL;
+    const auto context = GetWindowDpiAwarenessContext(hWnd);
+    if (context) {
+        const auto awareness = GetAwarenessFromDpiAwarenessContext(context);
+        if (awareness != DPI_AWARENESS_INVALID) {
+            *result = static_cast<DpiAwareness>(awareness);
+            return S_OK;
+        }
+    }
+    PROCESS_DPI_AWARENESS awareness = PROCESS_DPI_UNAWARE;
+    if (SUCCEEDED(GetProcessDpiAwareness(nullptr, &awareness))) {
+        *result = static_cast<DpiAwareness>(awareness);
+        return S_OK;
+    }
+    *result = ((IsProcessDPIAware() == FALSE) ? DpiAwareness::Unaware : DpiAwareness::System);
+    return S_OK;
 }
 
-HRESULT am_SetWindowDpiAwareness_p(const HWND hWnd, int awareness)
+HRESULT am_SetWindowDpiAwareness_p(const HWND hWnd, const DpiAwareness awareness)
 {
     if (!hWnd) {
         return E_INVALIDARG;
     }
-    // todo
+    switch (awareness) {
+    case DpiAwareness::PerMonitorV2: {
+        if (SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2) != FALSE) {
+            return S_OK;
+        }
+        return E_FAIL;
+    }
+    case DpiAwareness::PerMonitor: {
+        if (SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE) != FALSE) {
+            return S_OK;
+        }
+        if (SUCCEEDED(SetProcessDpiAwareness(PROCESS_PER_MONITOR_DPI_AWARE))) {
+            return S_OK;
+        }
+        return E_FAIL;
+    }
+    case DpiAwareness::System: {
+        if (SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_SYSTEM_AWARE) != FALSE) {
+            return S_OK;
+        }
+        if (SUCCEEDED(SetProcessDpiAwareness(PROCESS_SYSTEM_DPI_AWARE))) {
+            return S_OK;
+        }
+        return E_FAIL;
+    }
+    case DpiAwareness::Unaware: {
+        if (SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_UNAWARE) != FALSE) {
+            return S_OK;
+        }
+        if (SUCCEEDED(SetProcessDpiAwareness(PROCESS_DPI_UNAWARE))) {
+            return S_OK;
+        }
+        return E_FAIL;
+    }
+    default:
+        break;
+    }
     return E_FAIL;
 }
 
-HRESULT am_WideToMultibyte_p(LPCWSTR in, const UINT codePage, LPSTR *out)
+HRESULT am_WideToMulti_p(LPCWSTR in, const UINT codePage, LPSTR *out)
 {
     if (!in || !out) {
         return E_INVALIDARG;
     }
-    // todo
-    return E_FAIL;
+    const int required = WideCharToMultiByte(codePage, 0, in, -1, nullptr, 0, nullptr, nullptr);
+    const auto result = new char[required];
+    WideCharToMultiByte(codePage, 0, in, -1, result, required, nullptr, nullptr);
+    *out = result;
+    return S_OK;
 }
 
-HRESULT am_MultibyteToWide_p(LPCSTR in, const UINT codePage, LPWSTR *out)
+HRESULT am_MultiToWide_p(LPCSTR in, const UINT codePage, LPWSTR *out)
 {
     if (!in || !out) {
         return E_INVALIDARG;
     }
-    // todo
-    return E_FAIL;
+    const int required = MultiByteToWideChar(codePage, 0, in, -1, nullptr, 0);
+    const auto result = new wchar_t[required];
+    MultiByteToWideChar(codePage, 0, in, -1, result, required);
+    *out = result;
+    return S_OK;
 }
 
 [[nodiscard]] static inline LRESULT CALLBACK am_MainWindowProc_p(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
+    bool wallpaperChanged = false;
     bool systemThemeChanged = false;
     switch (uMsg)
     {
@@ -1978,6 +2034,7 @@ HRESULT am_MultibyteToWide_p(LPCSTR in, const UINT codePage, LPWSTR *out)
         }
     } break;
     case WM_DPICHANGED: {
+        wallpaperChanged = true;
         const double x = LOWORD(wParam);
         const double y = HIWORD(wParam);
         g_am_CurrentDpi_p = std::round((x + y) / 2.0);
@@ -2067,6 +2124,9 @@ HRESULT am_MultibyteToWide_p(LPCSTR in, const UINT codePage, LPWSTR *out)
         }
     } break;
     case WM_SETTINGCHANGE: {
+        if (wParam == SPI_SETDESKWALLPAPER) {
+            wallpaperChanged = true;
+        }
         if ((wParam == 0) && (wcscmp(reinterpret_cast<LPCWSTR>(lParam), L"ImmersiveColorSet") == 0)) {
             systemThemeChanged = true;
         }
@@ -2080,46 +2140,6 @@ HRESULT am_MultibyteToWide_p(LPCSTR in, const UINT codePage, LPWSTR *out)
         if (FAILED(am_IsCompositionEnabled_p(&enabled)) || !enabled) {
             am_Print_p(L"This application can't continue running when DWM composition is disabled.", true);
             std::exit(-1);
-        }
-    } break;
-    case WM_ACTIVATE: {
-        if (g_am_IsWindows10OrGreater_p) {
-            break;
-        }
-        const auto status = LOWORD(wParam);
-        const bool active = ((status == WA_ACTIVE) || (status == WA_CLICKACTIVE));
-        const COLORREF color = (active ? RGB(0, 0, 0) : RGB(128, 128, 128));
-        const HPEN hpen = CreatePen(PS_SOLID, 2, color);
-        if (!hpen) {
-            PRINT_WIN32_ERROR_MESSAGE(CreatePen)
-            break;
-        }
-        const HDC hdc = GetDC(hWnd);
-        if (!hdc) {
-            PRINT_WIN32_ERROR_MESSAGE(GetDC)
-            break;
-        }
-        HGDIOBJ result = SelectObject(hdc, hpen);
-        if (!result || (result == HGDI_ERROR)) {
-            PRINT_WIN32_ERROR_MESSAGE(SelectObject)
-            break;
-        }
-        result = SelectObject(hdc, (HBRUSH)GetStockObject(NULL_BRUSH));
-        if (!result || (result == HGDI_ERROR)) {
-            PRINT_WIN32_ERROR_MESSAGE(SelectObject)
-            break;
-        }
-        SIZE ws = {};
-        if (FAILED(am_GetWindowSize_p(hWnd, &ws))) {
-            break;
-        }
-        if (Rectangle(hdc, 0, 0, ws.cx, ws.cy) == FALSE) {
-            PRINT_WIN32_ERROR_MESSAGE(Rectangle)
-            break;
-        }
-        if (ReleaseDC(hWnd, hdc) == 0) {
-            PRINT_WIN32_ERROR_MESSAGE(ReleaseDC)
-            break;
         }
     } break;
     case WM_CLOSE: {

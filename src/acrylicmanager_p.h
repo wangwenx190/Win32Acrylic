@@ -88,6 +88,31 @@ enum class WallpaperAspectStyle : int
     Span
 };
 
+enum class DpiAwareness : int
+{
+    Invalid = -1,
+    Unaware,
+    System,
+    PerMonitor,
+    PerMonitorV2
+};
+
+enum class DwmWindowAttribute : int
+{
+    TRANSITIONS_FORCEDISABLED = 3,            // [get/set] BOOL, Enable or disable window transitions.
+    CAPTION_BUTTON_BOUNDS = 5,                // [get] RECT, Bounds of the caption (titlebar) button area rectangle in window-relative space.
+    EXTENDED_FRAME_BOUNDS = 9,                // [get] RECT, Bounds of the extended frame rectangle in screen space.
+    EXCLUDED_FROM_PEEK = 12,                  // [get/set] BOOL, Exclude or include window from LivePreview.
+    USE_HOSTBACKDROPBRUSH = 17,               // [get/set] BOOL, Allows the use of host backdrop brushes for the window.
+    USE_IMMERSIVE_DARK_MODE_BEFORE_20H1 = 19, // [get/set] BOOL, Allows a window to either use the accent color, or dark, according to the user Color Mode preferences.
+    USE_IMMERSIVE_DARK_MODE = 20,             // [get/set] BOOL, The same as "DWMWA_USE_IMMERSIVE_DARK_MODE_BEFORE_20H1".
+    WINDOW_CORNER_PREFERENCE = 33,            // [get/set] WINDOW_CORNER_PREFERENCE, Controls the policy that rounds top-level window corners.
+    BORDER_COLOR = 34,                        // [get/set] COLORREF, Color of the thin border around a top-level window.
+    CAPTION_COLOR = 35,                       // [get/set] COLORREF, Color of the caption (titlebar).
+    TEXT_COLOR = 36,                          // [get/set] COLORREF, Color of the caption (titlebar) text.
+    VISIBLE_FRAME_BORDER_THICKNESS = 37       // [get] UINT, Width of the visible border around a thick frame window.
+};
+
 typedef enum _WINDOWCOMPOSITIONATTRIB
 {
     WCA_UNDEFINED = 0x0,
@@ -144,27 +169,6 @@ typedef struct ACRYLICMANAGER_API _ACCENT_POLICY
     COLORREF GradientColor;
     DWORD AnimationId;
 } ACCENT_POLICY, *PACCENT_POLICY, *LPACCENT_POLICY;
-
-typedef enum _DWMWINDOWATTRIBUTE_EX
-{
-    DWMWAEX_TRANSITIONS_FORCEDISABLED = 3,            // [get/set] BOOL, Enable or disable window transitions.
-    DWMWAEX_CAPTION_BUTTON_BOUNDS = 5,                // [get] RECT, Bounds of the caption (titlebar) button area rectangle in window-relative space.
-    DWMWAEX_EXTENDED_FRAME_BOUNDS = 9,                // [get] RECT, Bounds of the extended frame rectangle in screen space.
-    DWMWAEX_EXCLUDED_FROM_PEEK = 12,                  // [get/set] BOOL, Exclude or include window from LivePreview.
-    DWMWAEX_USE_HOSTBACKDROPBRUSH = 17,               // [get/set] BOOL, Allows the use of host backdrop brushes for the window.
-    DWMWAEX_USE_IMMERSIVE_DARK_MODE_BEFORE_20H1 = 19, // [get/set] BOOL, Allows a window to either use the accent color, or dark, according to the user Color Mode preferences.
-    DWMWAEX_USE_IMMERSIVE_DARK_MODE = 20,             // [get/set] BOOL, The same as "DWMWA_USE_IMMERSIVE_DARK_MODE_BEFORE_20H1".
-    DWMWAEX_WINDOW_CORNER_PREFERENCE = 33,            // [get/set] WINDOW_CORNER_PREFERENCE, Controls the policy that rounds top-level window corners.
-    DWMWAEX_BORDER_COLOR = 34,                        // [get/set] COLORREF, Color of the thin border around a top-level window.
-    DWMWAEX_CAPTION_COLOR = 35,                       // [get/set] COLORREF, Color of the caption (titlebar).
-    DWMWAEX_TEXT_COLOR = 36,                          // [get/set] COLORREF, Color of the caption (titlebar) text.
-    DWMWAEX_VISIBLE_FRAME_BORDER_THICKNESS = 37       // [get] UINT, Width of the visible border around a thick frame window.
-} DWMWINDOWATTRIBUTE_EX;
-
-typedef enum _MONITOR_DPI_TYPE_EX
-{
-    MDTEX_EFFECTIVE_DPI = 0
-} MONITOR_DPI_TYPE_EX;
 
 #ifdef __cplusplus
 EXTERN_C_START
@@ -353,25 +357,25 @@ am_GetWallpaperAspectStyle_p(
 
 [[nodiscard]] ACRYLICMANAGER_API HRESULT WINAPI
 am_GetWindowDpiAwareness_p(
-    _In_ const HWND hWnd,
-    _Out_ int       *result
+    _In_ const HWND    hWnd,
+    _Out_ DpiAwareness *result
 );
 
 [[nodiscard]] ACRYLICMANAGER_API HRESULT WINAPI
 am_SetWindowDpiAwareness_p(
-    _In_ const HWND hWnd,
-    _In_ int        awareness
+    _In_ const HWND         hWnd,
+    _In_ const DpiAwareness awareness
 );
 
 [[nodiscard]] ACRYLICMANAGER_API HRESULT WINAPI
-am_WideToMultibyte_p(
+am_WideToMulti_p(
     _In_ LPCWSTR    in,
     _In_ const UINT codePage,
     _Out_ LPSTR     *out
 );
 
 [[nodiscard]] ACRYLICMANAGER_API HRESULT WINAPI
-am_MultibyteToWide_p(
+am_MultiToWide_p(
     _In_ LPCSTR     in,
     _In_ const UINT codePage,
     _Out_ LPWSTR    *out

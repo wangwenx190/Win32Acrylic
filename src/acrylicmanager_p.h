@@ -381,6 +381,40 @@ am_MultiToWide_p(
     _Out_ LPWSTR    *out
 );
 
+[[nodiscard]] ACRYLICMANAGER_API HRESULT WINAPI
+am_GetStringFromEnvironmentVariable_p(
+    _In_ LPCWSTR name,
+    _Out_ LPWSTR *value
+);
+
+[[nodiscard]] ACRYLICMANAGER_API HRESULT WINAPI
+am_GetIntFromEnvironmentVariable_p(
+    _In_ LPCWSTR name,
+    _Out_ int    *value
+);
+
+[[nodiscard]] ACRYLICMANAGER_API HRESULT WINAPI
+am_GetBoolFromEnvironmentVariable_p(
+    _In_ LPCWSTR name,
+    _Out_ bool   *value
+);
+
+[[nodiscard]] ACRYLICMANAGER_API HRESULT WINAPI
+am_GetIntFromRegistry_p(
+    _In_ const HKEY rootKey,
+    _In_ LPCWSTR    subKey,
+    _In_ LPCWSTR    valueName,
+    _Out_ int       *value
+);
+
+[[nodiscard]] ACRYLICMANAGER_API HRESULT WINAPI
+am_GetStringFromRegistry_p(
+    _In_ const HKEY rootKey,
+    _In_ LPCWSTR    subKey,
+    _In_ LPCWSTR    valueName,
+    _Out_ LPWSTR    *value
+);
+
 #ifdef __cplusplus
 EXTERN_C_END
 #endif

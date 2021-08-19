@@ -147,15 +147,605 @@ static const bool g_am_IsXAMLIslandAvailable_p = []{
     return (should || force);
 }();
 
-[[nodiscard]] static inline HRESULT am_Print_p(LPCWSTR text, const bool showUi = false, LPCWSTR title = nullptr)
+[[nodiscard]] static inline HRESULT am_PrintHelper_p(LPCWSTR text, const bool showUi = false, LPCWSTR title = nullptr)
 {
     if (!text) {
         return E_INVALIDARG;
     }
     OutputDebugStringW(text);
     if (showUi) {
-        MessageBoxW(nullptr, text, (title ? title : L"Error"), MB_ICONERROR | MB_OK);
+        MessageBoxW(nullptr, text, (title ? title : L"AcrylicManager"), MB_ICONERROR | MB_OK);
     }
+    return S_OK;
+}
+
+[[nodiscard]] static inline HRESULT am_GetStringFromEnvironmentVariableHelper_p(LPCWSTR name, LPWSTR *result)
+{
+    if (!name || !result) {
+        return E_INVALIDARG;
+    }
+    const auto buf = new wchar_t[MAX_PATH];
+    SecureZeroMemory(buf, sizeof(buf));
+    if (GetEnvironmentVariableW(name, buf, sizeof(buf)) == 0) {
+        PRINT_WIN32_ERROR_MESSAGE(GetEnvironmentVariableW)
+        delete [] buf;
+        return E_FAIL;
+    }
+    *result = buf;
+    return S_OK;
+}
+
+[[nodiscard]] static inline HRESULT am_GetDWORDFromRegistryHelper_p(const HKEY rootKey, LPCWSTR subKey,
+                                                                 LPCWSTR valueName, DWORD *result)
+{
+    if (!rootKey || !subKey || !valueName || !result) {
+        return E_INVALIDARG;
+    }
+    HKEY hKey = nullptr;
+    if (RegOpenKeyExW(rootKey, subKey, 0, KEY_READ, &hKey) != ERROR_SUCCESS) {
+        PRINT_WIN32_ERROR_MESSAGE_AND_RETURN(RegOpenKeyExW)
+    }
+    DWORD dwValue = 0;
+    DWORD dwType = REG_DWORD;
+    DWORD dwSize = sizeof(dwValue);
+    const bool success = (RegQueryValueExW(hKey, valueName, nullptr, &dwType,
+                                reinterpret_cast<LPBYTE>(&dwValue), &dwSize) == ERROR_SUCCESS);
+    if (!success) {
+        PRINT_WIN32_ERROR_MESSAGE(RegQueryValueExW)
+    }
+    if (RegCloseKey(hKey) != ERROR_SUCCESS) {
+        PRINT_WIN32_ERROR_MESSAGE_AND_RETURN(RegCloseKey)
+    }
+    if (success) {
+        *result = dwValue;
+        return S_OK;
+    }
+    return E_FAIL;
+}
+
+[[nodiscard]] static inline HRESULT am_GetStringFromRegistryHelper_p(const HKEY rootKey, LPCWSTR subKey,
+                                                               LPCWSTR valueName, LPWSTR *result)
+{
+    if (!rootKey || !subKey || !valueName || !result) {
+        return E_INVALIDARG;
+    }
+    HKEY hKey = nullptr;
+    if (RegOpenKeyExW(rootKey, subKey, 0, KEY_READ, &hKey) != ERROR_SUCCESS) {
+        PRINT_WIN32_ERROR_MESSAGE_AND_RETURN(RegOpenKeyExW)
+    }
+    const auto buf = new wchar_t[MAX_PATH];
+    SecureZeroMemory(buf, sizeof(buf));
+    DWORD dwType = REG_SZ;
+    DWORD dwSize = sizeof(buf);
+    const bool success = (RegQueryValueExW(hKey, valueName, nullptr, &dwType,
+                                reinterpret_cast<LPBYTE>(buf), &dwSize) == ERROR_SUCCESS);
+    if (!success) {
+        PRINT_WIN32_ERROR_MESSAGE(RegQueryValueExW)
+        delete [] buf;
+    }
+    if (RegCloseKey(hKey) != ERROR_SUCCESS) {
+        PRINT_WIN32_ERROR_MESSAGE_AND_RETURN(RegCloseKey)
+    }
+    if (success) {
+        *result = buf;
+        return S_OK;
+    }
+    return E_FAIL;
+}
+
+[[nodiscard]] static inline HRESULT am_GetMonitorInfoHelper_p(const HWND hWnd, MONITORINFO *result)
+{
+    if (!hWnd || !result) {
+        return E_INVALIDARG;
+    }
+    const HMONITOR mon = GET_CURRENT_SCREEN(hWnd);
+    if (!mon) {
+        PRINT_WIN32_ERROR_MESSAGE_AND_RETURN(MonitorFromWindow)
+    }
+    MONITORINFO mi;
+    SecureZeroMemory(&mi, sizeof(mi));
+    mi.cbSize = sizeof(mi);
+    if (GetMonitorInfoW(mon, &mi) == FALSE) {
+        PRINT_WIN32_ERROR_MESSAGE_AND_RETURN(GetMonitorInfoW)
+    }
+    *result = mi;
+    return S_OK;
+}
+
+[[nodiscard]] static inline HRESULT am_UpdateFrameMarginsHelper_p(const HWND hWnd, const UINT dpi)
+{
+    if (!hWnd || (dpi == 0)) {
+        return E_INVALIDARG;
+    }
+    bool normal = false;
+    if (FAILED(am_IsWindowNoState_p(hWnd, &normal))) {
+        return E_FAIL;
+    }
+    int thickness = 0;
+    if (FAILED(am_GetWindowVisibleFrameBorderThickness_p(hWnd, dpi, &thickness))) {
+        return E_FAIL;
+    }
+    const LONG topFrameMargin = (normal ? thickness : 0);
+    // We removed the whole top part of the frame (see handling of
+    // WM_NCCALCSIZE) so the top border is missing now. We add it back here.
+    // Note #1: You might wonder why we don't remove just the title bar instead
+    //  of removing the whole top part of the frame and then adding the little
+    //  top border back. I tried to do this but it didn't work: DWM drew the
+    //  whole title bar anyways on top of the window. It seems that DWM only
+    //  wants to draw either nothing or the whole top part of the frame.
+    // Note #2: For some reason if you try to set the top margin to just the
+    //  top border height (what we want to do), then there is a transparency
+    //  bug when the window is inactive, so I've decided to add the whole top
+    //  part of the frame instead and then we will hide everything that we
+    //  don't need (that is, the whole thing but the little 1 pixel wide border
+    //  at the top) in the WM_PAINT handler. This eliminates the transparency
+    //  bug and it's what a lot of Win32 apps that customize the title bar do
+    //  so it should work fine.
+    const MARGINS margins = {0, 0, topFrameMargin, 0};
+    return DwmExtendFrameIntoClientArea(hWnd, &margins);
+}
+
+[[nodiscard]] static inline HRESULT am_ShowFullScreenHelper_p(const HWND hWnd, const bool enable)
+{
+    if (!hWnd) {
+        return E_INVALIDARG;
+    }
+    auto style = static_cast<DWORD>(GetWindowLongPtrW(hWnd, GWL_STYLE));
+    style &= ~(WS_OVERLAPPEDWINDOW); // fixme: check
+    style |= WS_POPUP;
+    SetWindowLongPtrW(hWnd, GWL_STYLE, style);
+    if (enable) {
+        // fixme: rethink
+        RECT rect = {};
+        if (FAILED(am_GetScreenGeometry_p(hWnd, &rect))) {
+            return E_FAIL;
+        }
+        if (MoveWindow(hWnd, rect.left, rect.top,
+                        GET_RECT_WIDTH(rect), GET_RECT_HEIGHT(rect), TRUE) == FALSE) {
+            PRINT_WIN32_ERROR_MESSAGE_AND_RETURN(MoveWindow)
+        }
+    } else {
+        // todo
+    }
+    return S_OK;
+}
+
+[[nodiscard]] static inline HRESULT am_GetSystemThemeHelper_p(SystemTheme *result)
+{
+    if (!result) {
+        return E_INVALIDARG;
+    }
+    bool highContrast = false;
+    if (FAILED(am_IsHighContrastModeOn_p(&highContrast))) {
+        return E_FAIL;
+    }
+    // Dark mode was first introduced in Windows 10 1607.
+    if (g_am_IsDarkModeAvailable_p) {
+        bool lightModeOn = false;
+        if (FAILED(am_ShouldAppsUseLightTheme_p(&lightModeOn))) {
+            if (FAILED(am_ShouldSystemUsesLightTheme_p(&lightModeOn))) {
+                return E_FAIL;
+            }
+        }
+        *result = (lightModeOn ? SystemTheme::Light : SystemTheme::Dark);
+        return S_OK;
+    }
+    return E_FAIL;
+}
+
+[[nodiscard]] static inline HRESULT am_GetWindowGeometryHelper_p(const HWND hWnd, RECT *result)
+{
+    if (!hWnd || !result) {
+        return E_INVALIDARG;
+    }
+    RECT rect = {0, 0, 0, 0};
+    if (GetWindowRect(hWnd, &rect) == FALSE) {
+        PRINT_WIN32_ERROR_MESSAGE_AND_RETURN(GetWindowRect)
+    }
+    *result = rect;
+    return S_OK;
+}
+
+[[nodiscard]] static inline HRESULT am_GetWindowSizeHelper_p(const HWND hWnd, SIZE *size)
+{
+    if (!hWnd || !size) {
+        return E_INVALIDARG;
+    }
+    RECT rect = {};
+    if (FAILED(am_GetWindowGeometryHelper_p(hWnd, &rect))) {
+        return E_FAIL;
+    }
+    *size = GET_RECT_SIZE(rect);
+    return S_OK;
+}
+
+[[nodiscard]] static inline HRESULT am_MoveWindowHelper_p(const HWND hWnd, const int x, const int y)
+{
+    if (!hWnd || (x <= 0) || (y <= 0)) {
+        return E_INVALIDARG;
+    }
+    SIZE size = {};
+    if (FAILED(am_GetWindowSizeHelper_p(hWnd, &size))) {
+        return E_FAIL;
+    }
+    if (MoveWindow(hWnd, x, y, size.cx, size.cy, TRUE) == FALSE) {
+        PRINT_WIN32_ERROR_MESSAGE_AND_RETURN(MoveWindow)
+    }
+    return S_OK;
+}
+
+[[nodiscard]] static inline HRESULT am_ResizeWindowHelper_p(const HWND hWnd, const int w, const int h)
+{
+    if (!hWnd || (w <= 0) || (h <= 0)) {
+        return E_INVALIDARG;
+    }
+    RECT rect = {};
+    if (FAILED(am_GetWindowGeometryHelper_p(hWnd, &rect))) {
+        return E_FAIL;
+    }
+    if (MoveWindow(hWnd, rect.left, rect.top, w, h, TRUE) == FALSE) {
+        PRINT_WIN32_ERROR_MESSAGE_AND_RETURN(MoveWindow)
+    }
+    return S_OK;
+}
+
+[[nodiscard]] static inline HRESULT am_CenterWindowHelper_p(const HWND hWnd)
+{
+    if (!hWnd) {
+        return E_INVALIDARG;
+    }
+    RECT windowRect = {0, 0, 0, 0};
+    if (GetWindowRect(hWnd, &windowRect) == FALSE) {
+        PRINT_WIN32_ERROR_MESSAGE_AND_RETURN(GetWindowRect)
+    }
+    const int windowWidth = GET_RECT_WIDTH(windowRect);
+    const int windowHeight = GET_RECT_HEIGHT(windowRect);
+    RECT screenRect = {};
+    if (FAILED(am_GetScreenGeometry_p(hWnd, &screenRect))) {
+        return E_FAIL;
+    }
+    const int screenWidth = GET_RECT_WIDTH(screenRect);
+    const int screenHeight = GET_RECT_HEIGHT(screenRect);
+    const int newX = (screenWidth - windowWidth) / 2;
+    const int newY = (screenHeight - windowHeight) / 2;
+    if (MoveWindow(hWnd, newX, newY, windowWidth, windowHeight, TRUE) == FALSE) {
+        PRINT_WIN32_ERROR_MESSAGE_AND_RETURN(MoveWindow)
+    }
+    return S_OK;
+}
+
+[[nodiscard]] static inline HRESULT am_GetWindowStateHelper_p(const HWND hWnd, WindowState *result)
+{
+    if (!hWnd || !result) {
+        return E_INVALIDARG;
+    }
+    bool state = false;
+    if (SUCCEEDED(am_IsFullScreened_p(hWnd, &state)) && state) {
+        *result = WindowState::FullScreened;
+        return S_OK;
+    } else if (SUCCEEDED(am_IsMaximized_p(hWnd, &state)) && state) {
+        *result = WindowState::Maximized;
+        return S_OK;
+    } else if (SUCCEEDED(am_IsMinimized_p(hWnd, &state)) && state) {
+        *result = WindowState::Minimized;
+        return S_OK;
+    } else if (SUCCEEDED(am_IsWindowNoState_p(hWnd, &state)) && state) {
+        *result = WindowState::Normal;
+        return S_OK;
+    } else if (SUCCEEDED(am_IsWindowVisible_p(hWnd, &state)) && state) {
+        *result = WindowState::Shown;
+        return S_OK;
+    } else if (SUCCEEDED(am_IsWindowVisible_p(hWnd, &state)) && !state) {
+        *result = WindowState::Hidden;
+        return S_OK;
+    }
+    return E_FAIL;
+}
+
+[[nodiscard]] static inline HRESULT am_SetWindowStateHelper_p(const HWND hWnd, const WindowState state)
+{
+    if (!hWnd) {
+        return E_INVALIDARG;
+    }
+    switch (state) {
+    case WindowState::Normal:
+        ShowWindow(hWnd, SW_NORMAL);
+        return S_OK;
+    case WindowState::Maximized:
+        ShowWindow(hWnd, SW_MAXIMIZE);
+        return S_OK;
+    case WindowState::Minimized:
+        ShowWindow(hWnd, SW_MINIMIZE);
+        return S_OK;
+    case WindowState::FullScreened:
+        return am_ShowFullScreenHelper_p(hWnd, true);
+    case WindowState::Hidden:
+        ShowWindow(hWnd, SW_HIDE);
+        return S_OK;
+    case WindowState::Shown:
+        ShowWindow(hWnd, SW_SHOW);
+        return S_OK;
+    default:
+        break;
+    }
+    return E_FAIL;
+}
+
+[[nodiscard]] static inline HRESULT am_CleanupHelper_p()
+{
+    // Direct2D
+    if (g_am_D2DDeviceContext_p) {
+        g_am_D2DDeviceContext_p->Release();
+        g_am_D2DDeviceContext_p = nullptr;
+    }
+    if (g_am_D2DFactory2_p) {
+        g_am_D2DFactory2_p->Release();
+        g_am_D2DFactory2_p = nullptr;
+    }
+    if (g_am_D2DDevice1_p) {
+        g_am_D2DDevice1_p->Release();
+        g_am_D2DDevice1_p = nullptr;
+    }
+    if (g_am_D2DDeviceContext1_p) {
+        g_am_D2DDeviceContext1_p->Release();
+        g_am_D2DDeviceContext1_p = nullptr;
+    }
+    if (g_am_SwapChain_p) {
+        g_am_SwapChain_p->Release();
+        g_am_SwapChain_p = nullptr;
+    }
+    if (g_am_D2DTargetBitmap_p) {
+        g_am_D2DTargetBitmap_p->Release();
+        g_am_D2DTargetBitmap_p = nullptr;
+    }
+    if (g_am_WallpaperFilePath_p) {
+        delete [] g_am_WallpaperFilePath_p;
+        g_am_WallpaperFilePath_p = nullptr;
+    }
+    g_am_DesktopBackgroundColor_p = D2D1::ColorF(D2D1::ColorF::Black);
+    g_am_WallpaperAspectStyle_p = WallpaperAspectStyle::Invalid;
+
+    // XAML Island
+    if (g_am_XAMLSource_p) {
+        g_am_XAMLSource_p.Close();
+        g_am_XAMLSource_p = nullptr;
+    }
+    g_am_RootGrid_p = nullptr;
+    g_am_BackgroundBrush_p = nullptr;
+    if (g_am_XAMLManager_p) {
+        g_am_XAMLManager_p.Close();
+        g_am_XAMLManager_p = nullptr;
+    }
+    g_am_BrushTheme_p = SystemTheme::Invalid;
+    g_am_TintColor_p = {};
+    g_am_TintOpacity_p = 0.0;
+    g_am_TintLuminosityOpacity_p = std::nullopt;
+    g_am_FallbackColor_p = {};
+
+    // Drag bar window
+    if (g_am_DragBarWindowHandle_p) {
+        if (DestroyWindow(g_am_DragBarWindowHandle_p) == FALSE) {
+            PRINT_WIN32_ERROR_MESSAGE(DestroyWindow)
+        }
+        g_am_DragBarWindowHandle_p = nullptr;
+    }
+    if (g_am_DragBarWindowAtom_p != 0) {
+        if (g_am_DragBarWindowClassName_p) {
+            if (UnregisterClassW(g_am_DragBarWindowClassName_p, HINST_THISCOMPONENT) == FALSE) {
+                PRINT_WIN32_ERROR_MESSAGE(UnregisterClassW)
+            }
+            delete [] g_am_DragBarWindowClassName_p;
+            g_am_DragBarWindowClassName_p = nullptr;
+        }
+        g_am_DragBarWindowAtom_p = 0;
+    }
+
+    // Main window
+    if (g_am_MainWindowHandle_p) {
+        if (DestroyWindow(g_am_MainWindowHandle_p) == FALSE) {
+            PRINT_WIN32_ERROR_MESSAGE(DestroyWindow)
+        }
+        g_am_MainWindowHandle_p = nullptr;
+    }
+    if (g_am_MainWindowAtom_p != 0) {
+        if (g_am_MainWindowClassName_p) {
+            if (UnregisterClassW(g_am_MainWindowClassName_p, HINST_THISCOMPONENT) == FALSE) {
+                PRINT_WIN32_ERROR_MESSAGE(UnregisterClassW)
+            }
+            delete [] g_am_MainWindowClassName_p;
+            g_am_MainWindowClassName_p = nullptr;
+        }
+        g_am_MainWindowAtom_p = 0;
+    }
+    g_am_CurrentDpi_p = 0;
+
+    g_am_AcrylicManagerInitialized_p = false;
+
+    return S_OK;
+}
+
+[[nodiscard]] static inline HRESULT am_GetTintColorHelper_p(int *r, int *g, int *b, int *a)
+{
+    if (!g_am_BackgroundBrush_p || !r || !g || !b || !a) {
+        return E_INVALIDARG;
+    }
+    GET_COLOR_COMPONENTS(g_am_TintColor_p, *r, *g, *b, *a)
+    return S_OK;
+}
+
+[[nodiscard]] static inline HRESULT am_SetTintColorHelper_p(const int r, const int g, const int b, const int a)
+{
+    if (!g_am_BackgroundBrush_p) {
+        return E_INVALIDARG;
+    }
+    winrt::Windows::UI::Color color = {};
+    MAKE_COLOR_FROM_COMPONENTS(color, r, g, b, a)
+    g_am_BackgroundBrush_p.TintColor(color);
+    g_am_TintColor_p = color;
+    return S_OK;
+}
+
+[[nodiscard]] static inline HRESULT am_GetTintOpacityHelper_p(double *result)
+{
+    if (!g_am_BackgroundBrush_p || !result) {
+        return E_INVALIDARG;
+    }
+    *result = g_am_TintOpacity_p;
+    return S_OK;
+}
+
+[[nodiscard]] static inline HRESULT am_SetTintOpacityHelper_p(const double opacity)
+{
+    if (!g_am_BackgroundBrush_p) {
+        return E_INVALIDARG;
+    }
+    const double value = std::clamp(opacity, 0.0, 1.0);
+    g_am_BackgroundBrush_p.TintOpacity(value);
+    g_am_TintOpacity_p = value;
+    return S_OK;
+}
+
+[[nodiscard]] static inline HRESULT am_GetTintLuminosityOpacityHelper_p(double *result)
+{
+    if (!g_am_BackgroundBrush_p || !result) {
+        return E_INVALIDARG;
+    }
+    if (g_am_TintLuminosityOpacity_p.has_value()) {
+        *result = g_am_TintLuminosityOpacity_p.value();
+    } else {
+        *result = -1.0;
+    }
+    return S_OK;
+}
+
+[[nodiscard]] static inline HRESULT am_SetTintLuminosityOpacityHelper_p(const double *opacity)
+{
+    if (!g_am_BackgroundBrush_p) {
+        return E_INVALIDARG;
+    }
+    if (opacity && (*opacity >= 0.0)) {
+        const double value = std::clamp(*opacity, 0.0, 1.0);
+        g_am_BackgroundBrush_p.TintLuminosityOpacity(value);
+        g_am_TintLuminosityOpacity_p = value;
+    } else {
+        g_am_BackgroundBrush_p.TintLuminosityOpacity(nullptr);
+        g_am_TintLuminosityOpacity_p = std::nullopt;
+    }
+    return S_OK;
+}
+
+[[nodiscard]] static inline HRESULT am_GetFallbackColorHelper_p(int *r, int *g, int *b, int *a)
+{
+    if (!g_am_BackgroundBrush_p || !r || !g || !b || !a) {
+        return E_INVALIDARG;
+    }
+    GET_COLOR_COMPONENTS(g_am_FallbackColor_p, *r, *g, *b, *a)
+    return S_OK;
+}
+
+[[nodiscard]] static inline HRESULT am_SetFallbackColorHelper_p(const int r, const int g, const int b, const int a)
+{
+    if (!g_am_BackgroundBrush_p) {
+        return E_INVALIDARG;
+    }
+    winrt::Windows::UI::Color color = {};
+    MAKE_COLOR_FROM_COMPONENTS(color, r, g, b, a)
+    g_am_BackgroundBrush_p.FallbackColor(color);
+    g_am_FallbackColor_p = color;
+    return S_OK;
+}
+
+[[nodiscard]] static inline HRESULT am_SwitchAcrylicBrushThemeHelper_p(const SystemTheme theme)
+{
+    if ((theme == SystemTheme::Invalid) || (theme == SystemTheme::HighContrast)) {
+        return E_INVALIDARG;
+    }
+    winrt::Windows::UI::Color tc = {};
+    double to = 0.0;
+    double tlo = 0.0;
+    winrt::Windows::UI::Color fbc = {};
+    if (theme == SystemTheme::Light) {
+        MAKE_COLOR_FROM_COMPONENTS(tc, 252, 252, 252, 255) // #FCFCFC
+        to = 0.0;
+        tlo = 0.85;
+        MAKE_COLOR_FROM_COMPONENTS(fbc, 249, 249, 249, 255) // #F9F9F9
+    } else {
+        MAKE_COLOR_FROM_COMPONENTS(tc, 44, 44, 44, 255) // #2C2C2C
+        to = 0.15;
+        tlo = 0.96;
+        MAKE_COLOR_FROM_COMPONENTS(fbc, 44, 44, 44, 255) // #2C2C2C
+    }
+    int r = 0, g = 0, b = 0, a = 0;
+    GET_COLOR_COMPONENTS(tc, r, g, b, a)
+    if (FAILED(am_SetTintColorHelper_p(r, g, b, a))) {
+        return E_FAIL;
+    }
+    if (FAILED(am_SetTintOpacityHelper_p(to))) {
+        return E_FAIL;
+    }
+    if (FAILED(am_SetTintLuminosityOpacityHelper_p(&tlo))) {
+        return E_FAIL;
+    }
+    GET_COLOR_COMPONENTS(fbc, r, g, b, a)
+    if (FAILED(am_SetFallbackColorHelper_p(r, g, b, a))) {
+        return E_FAIL;
+    }
+    g_am_BrushTheme_p = theme;
+    return S_OK;
+}
+
+[[nodiscard]] static inline HRESULT am_SetWindowGeometryHelper_p(const HWND hWnd, const int x, const int y, const int w, const int h)
+{
+    if (!hWnd || (x <= 0) || (y <= 0) || (w <= 0) || (h <= 0)) {
+        return E_INVALIDARG;
+    }
+    if (MoveWindow(hWnd, x, y, w, h, TRUE) == FALSE) {
+        PRINT_WIN32_ERROR_MESSAGE_AND_RETURN(MoveWindow)
+    }
+    return S_OK;
+}
+
+[[nodiscard]] static inline HRESULT am_IsWindowActiveHelper_p(const HWND hWnd, bool *result)
+{
+    if (!hWnd || !result) {
+        return E_INVALIDARG;
+    }
+    *result = (GetActiveWindow() == hWnd);
+    return S_OK;
+}
+
+[[nodiscard]] static inline HRESULT am_GetWindowHandleHelper_p(HWND *result)
+{
+    if (!result) {
+        return E_INVALIDARG;
+    }
+    *result = g_am_MainWindowHandle_p;
+    return S_OK;
+}
+
+[[nodiscard]] static inline HRESULT am_GetBrushThemeHelper_p(SystemTheme *result)
+{
+    if (!result) {
+        return E_INVALIDARG;
+    }
+    *result = g_am_BrushTheme_p;
+    return S_OK;
+}
+
+[[nodiscard]] static inline HRESULT am_MainWindowEventLoopHelper_p(int *result)
+{
+    if (!result || !g_am_MainWindowHandle_p) {
+        return E_INVALIDARG;
+    }
+
+    MSG msg = {};
+    while (GetMessageW(&msg, nullptr, 0, 0) != FALSE) {
+        TranslateMessage(&msg);
+        DispatchMessageW(&msg);
+    }
+
+    *result = static_cast<int>(msg.wParam);
+
     return S_OK;
 }
 
@@ -278,32 +868,13 @@ HRESULT am_GetTitleBarHeight_p(const HWND hWnd, const UINT dpi, int *height)
     return S_OK;
 }
 
-[[nodiscard]] static inline HRESULT am_GetMonitorInfo_p(const HWND hWnd, MONITORINFO *result)
-{
-    if (!hWnd || !result) {
-        return E_INVALIDARG;
-    }
-    const HMONITOR mon = GET_CURRENT_SCREEN(hWnd);
-    if (!mon) {
-        PRINT_WIN32_ERROR_MESSAGE_AND_RETURN(MonitorFromWindow)
-    }
-    MONITORINFO mi;
-    SecureZeroMemory(&mi, sizeof(mi));
-    mi.cbSize = sizeof(mi);
-    if (GetMonitorInfoW(mon, &mi) == FALSE) {
-        PRINT_WIN32_ERROR_MESSAGE_AND_RETURN(GetMonitorInfoW)
-    }
-    *result = mi;
-    return S_OK;
-}
-
 HRESULT am_GetScreenGeometry_p(const HWND hWnd, RECT *rect)
 {
     if (!hWnd || !rect) {
         return E_INVALIDARG;
     }
     MONITORINFO mi = {};
-    if (FAILED(am_GetMonitorInfo_p(hWnd, &mi))) {
+    if (FAILED(am_GetMonitorInfoHelper_p(hWnd, &mi))) {
         return E_FAIL;
     }
     *rect = mi.rcMonitor;
@@ -316,36 +887,10 @@ HRESULT am_GetScreenAvailableGeometry_p(const HWND hWnd, RECT *rect)
         return E_INVALIDARG;
     }
     MONITORINFO mi = {};
-    if (FAILED(am_GetMonitorInfo_p(hWnd, &mi))) {
+    if (FAILED(am_GetMonitorInfoHelper_p(hWnd, &mi))) {
         return E_FAIL;
     }
     *rect = mi.rcWork;
-    return S_OK;
-}
-
-[[nodiscard]] static inline HRESULT am_GetDWORDValueFromRegistry_p(const HKEY rootKey, LPCWSTR subKey,
-                                                                 LPCWSTR valueName, DWORD *result)
-{
-    if (!rootKey || !subKey || !valueName || !result) {
-        return E_INVALIDARG;
-    }
-    HKEY hKey = nullptr;
-    if (RegOpenKeyExW(rootKey, subKey, 0, KEY_READ, &hKey) != ERROR_SUCCESS) {
-        PRINT_WIN32_ERROR_MESSAGE_AND_RETURN(RegOpenKeyExW)
-    }
-    DWORD dwValue = 0;
-    DWORD dwType = REG_DWORD;
-    DWORD dwSize = sizeof(dwValue);
-    const bool success = (RegQueryValueExW(hKey, valueName, nullptr, &dwType,
-                                reinterpret_cast<LPBYTE>(&dwValue), &dwSize) == ERROR_SUCCESS);
-    if (!success) {
-        // todo: close key
-        PRINT_WIN32_ERROR_MESSAGE_AND_RETURN(RegQueryValueExW)
-    }
-    if (RegCloseKey(hKey) != ERROR_SUCCESS) {
-        PRINT_WIN32_ERROR_MESSAGE_AND_RETURN(RegCloseKey)
-    }
-    *result = dwValue;
     return S_OK;
 }
 
@@ -368,7 +913,7 @@ HRESULT am_IsCompositionEnabled_p(bool *result)
         PRINT_HR_ERROR_MESSAGE(DwmIsCompositionEnabled, hr)
     }
     DWORD dwmComp = 0;
-    if (SUCCEEDED(am_GetDWORDValueFromRegistry_p(HKEY_CURRENT_USER, g_am_DWMRegistryKey_p, L"Composition", &dwmComp))) {
+    if (SUCCEEDED(am_GetDWORDFromRegistryHelper_p(HKEY_CURRENT_USER, g_am_DWMRegistryKey_p, L"Composition", &dwmComp))) {
         *result = (dwmComp != 0);
         return S_OK;
     }
@@ -646,448 +1191,6 @@ HRESULT am_GetWindowVisibleFrameBorderThickness_p(const HWND hWnd, const UINT dp
     return S_OK;
 }
 
-[[nodiscard]] static inline HRESULT am_UpdateFrameMargins_p(const HWND hWnd, const UINT dpi)
-{
-    if (!hWnd || (dpi == 0)) {
-        return E_INVALIDARG;
-    }
-    bool normal = false;
-    if (FAILED(am_IsWindowNoState_p(hWnd, &normal))) {
-        return E_FAIL;
-    }
-    int thickness = 0;
-    if (FAILED(am_GetWindowVisibleFrameBorderThickness_p(hWnd, dpi, &thickness))) {
-        return E_FAIL;
-    }
-    const LONG topFrameMargin = (normal ? thickness : 0);
-    // We removed the whole top part of the frame (see handling of
-    // WM_NCCALCSIZE) so the top border is missing now. We add it back here.
-    // Note #1: You might wonder why we don't remove just the title bar instead
-    //  of removing the whole top part of the frame and then adding the little
-    //  top border back. I tried to do this but it didn't work: DWM drew the
-    //  whole title bar anyways on top of the window. It seems that DWM only
-    //  wants to draw either nothing or the whole top part of the frame.
-    // Note #2: For some reason if you try to set the top margin to just the
-    //  top border height (what we want to do), then there is a transparency
-    //  bug when the window is inactive, so I've decided to add the whole top
-    //  part of the frame instead and then we will hide everything that we
-    //  don't need (that is, the whole thing but the little 1 pixel wide border
-    //  at the top) in the WM_PAINT handler. This eliminates the transparency
-    //  bug and it's what a lot of Win32 apps that customize the title bar do
-    //  so it should work fine.
-    const MARGINS margins = {0, 0, topFrameMargin, 0};
-    return DwmExtendFrameIntoClientArea(hWnd, &margins);
-}
-
-[[nodiscard]] static inline HRESULT am_ShowFullScreen_p(const HWND hWnd, const bool enable)
-{
-    if (!hWnd) {
-        return E_INVALIDARG;
-    }
-    auto style = static_cast<DWORD>(GetWindowLongPtrW(hWnd, GWL_STYLE));
-    style &= ~(WS_OVERLAPPEDWINDOW); // fixme: check
-    style |= WS_POPUP;
-    SetWindowLongPtrW(hWnd, GWL_STYLE, style);
-    if (enable) {
-        // fixme: rethink
-        RECT rect = {};
-        if (FAILED(am_GetScreenGeometry_p(hWnd, &rect))) {
-            return E_FAIL;
-        }
-        if (MoveWindow(hWnd, rect.left, rect.top,
-                        GET_RECT_WIDTH(rect), GET_RECT_HEIGHT(rect), TRUE) == FALSE) {
-            PRINT_WIN32_ERROR_MESSAGE_AND_RETURN(MoveWindow)
-        }
-    } else {
-        // todo
-    }
-    return S_OK;
-}
-
-[[nodiscard]] static inline HRESULT am_GetSystemTheme_p(SystemTheme *result)
-{
-    if (!result) {
-        return E_INVALIDARG;
-    }
-    bool highContrast = false;
-    if (FAILED(am_IsHighContrastModeOn_p(&highContrast))) {
-        return E_FAIL;
-    }
-    // Dark mode was first introduced in Windows 10 1607.
-    if (g_am_IsDarkModeAvailable_p) {
-        bool lightModeOn = false;
-        if (FAILED(am_ShouldAppsUseLightTheme_p(&lightModeOn))) {
-            if (FAILED(am_ShouldSystemUsesLightTheme_p(&lightModeOn))) {
-                return E_FAIL;
-            }
-        }
-        *result = (lightModeOn ? SystemTheme::Light : SystemTheme::Dark);
-        return S_OK;
-    }
-    return E_FAIL;
-}
-
-[[nodiscard]] static inline HRESULT am_GetWindowGeometry_p(const HWND hWnd, RECT *result)
-{
-    if (!hWnd || !result) {
-        return E_INVALIDARG;
-    }
-    RECT rect = {0, 0, 0, 0};
-    if (GetWindowRect(hWnd, &rect) == FALSE) {
-        PRINT_WIN32_ERROR_MESSAGE_AND_RETURN(GetWindowRect)
-    }
-    *result = rect;
-    return S_OK;
-}
-
-[[nodiscard]] static inline HRESULT am_GetWindowSize_p(const HWND hWnd, SIZE *size)
-{
-    if (!hWnd || !size) {
-        return E_INVALIDARG;
-    }
-    RECT rect = {};
-    if (FAILED(am_GetWindowGeometry_p(hWnd, &rect))) {
-        return E_FAIL;
-    }
-    *size = GET_RECT_SIZE(rect);
-    return S_OK;
-}
-
-[[nodiscard]] static inline HRESULT am_MoveWindow_p(const HWND hWnd, const int x, const int y)
-{
-    if (!hWnd || (x <= 0) || (y <= 0)) {
-        return E_INVALIDARG;
-    }
-    SIZE size = {};
-    if (FAILED(am_GetWindowSize_p(hWnd, &size))) {
-        return E_FAIL;
-    }
-    if (MoveWindow(hWnd, x, y, size.cx, size.cy, TRUE) == FALSE) {
-        PRINT_WIN32_ERROR_MESSAGE_AND_RETURN(MoveWindow)
-    }
-    return S_OK;
-}
-
-[[nodiscard]] static inline HRESULT am_ResizeWindow_p(const HWND hWnd, const int w, const int h)
-{
-    if (!hWnd || (w <= 0) || (h <= 0)) {
-        return E_INVALIDARG;
-    }
-    RECT rect = {};
-    if (FAILED(am_GetWindowGeometry_p(hWnd, &rect))) {
-        return E_FAIL;
-    }
-    if (MoveWindow(hWnd, rect.left, rect.top, w, h, TRUE) == FALSE) {
-        PRINT_WIN32_ERROR_MESSAGE_AND_RETURN(MoveWindow)
-    }
-    return S_OK;
-}
-
-[[nodiscard]] static inline HRESULT am_CenterWindow_p(const HWND hWnd)
-{
-    if (!hWnd) {
-        return E_INVALIDARG;
-    }
-    RECT windowRect = {0, 0, 0, 0};
-    if (GetWindowRect(hWnd, &windowRect) == FALSE) {
-        PRINT_WIN32_ERROR_MESSAGE_AND_RETURN(GetWindowRect)
-    }
-    const int windowWidth = GET_RECT_WIDTH(windowRect);
-    const int windowHeight = GET_RECT_HEIGHT(windowRect);
-    RECT screenRect = {};
-    if (FAILED(am_GetScreenGeometry_p(hWnd, &screenRect))) {
-        return E_FAIL;
-    }
-    const int screenWidth = GET_RECT_WIDTH(screenRect);
-    const int screenHeight = GET_RECT_HEIGHT(screenRect);
-    const int newX = (screenWidth - windowWidth) / 2;
-    const int newY = (screenHeight - windowHeight) / 2;
-    if (MoveWindow(hWnd, newX, newY, windowWidth, windowHeight, TRUE) == FALSE) {
-        PRINT_WIN32_ERROR_MESSAGE_AND_RETURN(MoveWindow)
-    }
-    return S_OK;
-}
-
-[[nodiscard]] static inline HRESULT am_GetWindowState_p(const HWND hWnd, WindowState *result)
-{
-    if (!hWnd || !result) {
-        return E_INVALIDARG;
-    }
-    bool state = false;
-    if (SUCCEEDED(am_IsFullScreened_p(hWnd, &state)) && state) {
-        *result = WindowState::FullScreened;
-        return S_OK;
-    } else if (SUCCEEDED(am_IsMaximized_p(hWnd, &state)) && state) {
-        *result = WindowState::Maximized;
-        return S_OK;
-    } else if (SUCCEEDED(am_IsMinimized_p(hWnd, &state)) && state) {
-        *result = WindowState::Minimized;
-        return S_OK;
-    } else if (SUCCEEDED(am_IsWindowNoState_p(hWnd, &state)) && state) {
-        *result = WindowState::Normal;
-        return S_OK;
-    } else if (SUCCEEDED(am_IsWindowVisible_p(hWnd, &state)) && state) {
-        *result = WindowState::Shown;
-        return S_OK;
-    } else if (SUCCEEDED(am_IsWindowVisible_p(hWnd, &state)) && !state) {
-        *result = WindowState::Hidden;
-        return S_OK;
-    }
-    return E_FAIL;
-}
-
-[[nodiscard]] static inline HRESULT am_SetWindowState_p(const HWND hWnd, const WindowState state)
-{
-    if (!hWnd) {
-        return E_INVALIDARG;
-    }
-    switch (state) {
-    case WindowState::Normal:
-        ShowWindow(hWnd, SW_NORMAL);
-        return S_OK;
-    case WindowState::Maximized:
-        ShowWindow(hWnd, SW_MAXIMIZE);
-        return S_OK;
-    case WindowState::Minimized:
-        ShowWindow(hWnd, SW_MINIMIZE);
-        return S_OK;
-    case WindowState::FullScreened:
-        return am_ShowFullScreen_p(hWnd, true);
-    case WindowState::Hidden:
-        ShowWindow(hWnd, SW_HIDE);
-        return S_OK;
-    case WindowState::Shown:
-        ShowWindow(hWnd, SW_SHOW);
-        return S_OK;
-    default:
-        break;
-    }
-    return E_FAIL;
-}
-
-[[nodiscard]] static inline HRESULT am_Cleanup_p()
-{
-    // Direct2D
-    if (g_am_D2DDeviceContext_p) {
-        g_am_D2DDeviceContext_p->Release();
-        g_am_D2DDeviceContext_p = nullptr;
-    }
-    if (g_am_D2DFactory2_p) {
-        g_am_D2DFactory2_p->Release();
-        g_am_D2DFactory2_p = nullptr;
-    }
-    if (g_am_D2DDevice1_p) {
-        g_am_D2DDevice1_p->Release();
-        g_am_D2DDevice1_p = nullptr;
-    }
-    if (g_am_D2DDeviceContext1_p) {
-        g_am_D2DDeviceContext1_p->Release();
-        g_am_D2DDeviceContext1_p = nullptr;
-    }
-    if (g_am_SwapChain_p) {
-        g_am_SwapChain_p->Release();
-        g_am_SwapChain_p = nullptr;
-    }
-    if (g_am_D2DTargetBitmap_p) {
-        g_am_D2DTargetBitmap_p->Release();
-        g_am_D2DTargetBitmap_p = nullptr;
-    }
-    if (g_am_WallpaperFilePath_p) {
-        delete [] g_am_WallpaperFilePath_p;
-        g_am_WallpaperFilePath_p = nullptr;
-    }
-    g_am_DesktopBackgroundColor_p = D2D1::ColorF(D2D1::ColorF::Black);
-    g_am_WallpaperAspectStyle_p = WallpaperAspectStyle::Invalid;
-
-    // XAML Island
-    if (g_am_XAMLSource_p) {
-        g_am_XAMLSource_p.Close();
-        g_am_XAMLSource_p = nullptr;
-    }
-    g_am_RootGrid_p = nullptr;
-    g_am_BackgroundBrush_p = nullptr;
-    if (g_am_XAMLManager_p) {
-        g_am_XAMLManager_p.Close();
-        g_am_XAMLManager_p = nullptr;
-    }
-    g_am_BrushTheme_p = SystemTheme::Invalid;
-    g_am_TintColor_p = {};
-    g_am_TintOpacity_p = 0.0;
-    g_am_TintLuminosityOpacity_p = std::nullopt;
-    g_am_FallbackColor_p = {};
-
-    // Drag bar window
-    if (g_am_DragBarWindowHandle_p) {
-        if (DestroyWindow(g_am_DragBarWindowHandle_p) == FALSE) {
-            PRINT_WIN32_ERROR_MESSAGE(DestroyWindow)
-        }
-        g_am_DragBarWindowHandle_p = nullptr;
-    }
-    if (g_am_DragBarWindowAtom_p != 0) {
-        if (g_am_DragBarWindowClassName_p) {
-            if (UnregisterClassW(g_am_DragBarWindowClassName_p, HINST_THISCOMPONENT) == FALSE) {
-                PRINT_WIN32_ERROR_MESSAGE(UnregisterClassW)
-            }
-            delete [] g_am_DragBarWindowClassName_p;
-            g_am_DragBarWindowClassName_p = nullptr;
-        }
-        g_am_DragBarWindowAtom_p = 0;
-    }
-
-    // Main window
-    if (g_am_MainWindowHandle_p) {
-        if (DestroyWindow(g_am_MainWindowHandle_p) == FALSE) {
-            PRINT_WIN32_ERROR_MESSAGE(DestroyWindow)
-        }
-        g_am_MainWindowHandle_p = nullptr;
-    }
-    if (g_am_MainWindowAtom_p != 0) {
-        if (g_am_MainWindowClassName_p) {
-            if (UnregisterClassW(g_am_MainWindowClassName_p, HINST_THISCOMPONENT) == FALSE) {
-                PRINT_WIN32_ERROR_MESSAGE(UnregisterClassW)
-            }
-            delete [] g_am_MainWindowClassName_p;
-            g_am_MainWindowClassName_p = nullptr;
-        }
-        g_am_MainWindowAtom_p = 0;
-    }
-    g_am_CurrentDpi_p = 0;
-
-    g_am_AcrylicManagerInitialized_p = false;
-
-    return S_OK;
-}
-
-[[nodiscard]] static inline HRESULT am_GetTintColor_p(int *r, int *g, int *b, int *a)
-{
-    if (!g_am_BackgroundBrush_p || !r || !g || !b || !a) {
-        return E_INVALIDARG;
-    }
-    GET_COLOR_COMPONENTS(g_am_TintColor_p, *r, *g, *b, *a)
-    return S_OK;
-}
-
-[[nodiscard]] static inline HRESULT am_SetTintColor_p(const int r, const int g, const int b, const int a)
-{
-    if (!g_am_BackgroundBrush_p) {
-        return E_INVALIDARG;
-    }
-    winrt::Windows::UI::Color color = {};
-    MAKE_COLOR_FROM_COMPONENTS(color, r, g, b, a)
-    g_am_BackgroundBrush_p.TintColor(color);
-    g_am_TintColor_p = color;
-    return S_OK;
-}
-
-[[nodiscard]] static inline HRESULT am_GetTintOpacity_p(double *result)
-{
-    if (!g_am_BackgroundBrush_p || !result) {
-        return E_INVALIDARG;
-    }
-    *result = g_am_TintOpacity_p;
-    return S_OK;
-}
-
-[[nodiscard]] static inline HRESULT am_SetTintOpacity_p(const double opacity)
-{
-    if (!g_am_BackgroundBrush_p) {
-        return E_INVALIDARG;
-    }
-    const double value = std::clamp(opacity, 0.0, 1.0);
-    g_am_BackgroundBrush_p.TintOpacity(value);
-    g_am_TintOpacity_p = value;
-    return S_OK;
-}
-
-[[nodiscard]] static inline HRESULT am_GetTintLuminosityOpacity_p(double *result)
-{
-    if (!g_am_BackgroundBrush_p || !result) {
-        return E_INVALIDARG;
-    }
-    if (g_am_TintLuminosityOpacity_p.has_value()) {
-        *result = g_am_TintLuminosityOpacity_p.value();
-    } else {
-        *result = -1.0;
-    }
-    return S_OK;
-}
-
-[[nodiscard]] static inline HRESULT am_SetTintLuminosityOpacity_p(const double *opacity)
-{
-    if (!g_am_BackgroundBrush_p) {
-        return E_INVALIDARG;
-    }
-    if (opacity) {
-        const double value = std::clamp(*opacity, 0.0, 1.0);
-        g_am_BackgroundBrush_p.TintLuminosityOpacity(value);
-        g_am_TintLuminosityOpacity_p = value;
-    } else {
-        g_am_BackgroundBrush_p.TintLuminosityOpacity(nullptr);
-        g_am_TintLuminosityOpacity_p = std::nullopt;
-    }
-    return S_OK;
-}
-
-[[nodiscard]] static inline HRESULT am_GetFallbackColor_p(int *r, int *g, int *b, int *a)
-{
-    if (!g_am_BackgroundBrush_p || !r || !g || !b || !a) {
-        return E_INVALIDARG;
-    }
-    GET_COLOR_COMPONENTS(g_am_FallbackColor_p, *r, *g, *b, *a)
-    return S_OK;
-}
-
-[[nodiscard]] static inline HRESULT am_SetFallbackColor_p(const int r, const int g, const int b, const int a)
-{
-    if (!g_am_BackgroundBrush_p) {
-        return E_INVALIDARG;
-    }
-    winrt::Windows::UI::Color color = {};
-    MAKE_COLOR_FROM_COMPONENTS(color, r, g, b, a)
-    g_am_BackgroundBrush_p.FallbackColor(color);
-    g_am_FallbackColor_p = color;
-    return S_OK;
-}
-
-[[nodiscard]] static inline HRESULT am_SwitchAcrylicBrushTheme_p(const SystemTheme theme)
-{
-    if ((theme == SystemTheme::Invalid) || (theme == SystemTheme::HighContrast)) {
-        return E_INVALIDARG;
-    }
-    winrt::Windows::UI::Color tc = {};
-    double to = 0.0;
-    double tlo = 0.0;
-    winrt::Windows::UI::Color fbc = {};
-    if (theme == SystemTheme::Light) {
-        MAKE_COLOR_FROM_COMPONENTS(tc, 252, 252, 252, 255) // #FCFCFC
-        to = 0.0;
-        tlo = 0.85;
-        MAKE_COLOR_FROM_COMPONENTS(fbc, 249, 249, 249, 255) // #F9F9F9
-    } else {
-        MAKE_COLOR_FROM_COMPONENTS(tc, 44, 44, 44, 255) // #2C2C2C
-        to = 0.15;
-        tlo = 0.96;
-        MAKE_COLOR_FROM_COMPONENTS(fbc, 44, 44, 44, 255) // #2C2C2C
-    }
-    int r = 0, g = 0, b = 0, a = 0;
-    GET_COLOR_COMPONENTS(tc, r, g, b, a)
-    if (FAILED(am_SetTintColor_p(r, g, b, a))) {
-        return E_FAIL;
-    }
-    if (FAILED(am_SetTintOpacity_p(to))) {
-        return E_FAIL;
-    }
-    if (FAILED(am_SetTintLuminosityOpacity_p(&tlo))) {
-        return E_FAIL;
-    }
-    GET_COLOR_COMPONENTS(fbc, r, g, b, a)
-    if (FAILED(am_SetFallbackColor_p(r, g, b, a))) {
-        return E_FAIL;
-    }
-    g_am_BrushTheme_p = theme;
-    return S_OK;
-}
-
 HRESULT am_GenerateGUID_p(LPWSTR *result)
 {
     if (!result) {
@@ -1123,7 +1226,7 @@ HRESULT am_ShouldAppsUseLightTheme_p(bool *result)
         return E_INVALIDARG;
     }
     DWORD value = 0;
-    if (FAILED(am_GetDWORDValueFromRegistry_p(HKEY_CURRENT_USER, g_am_PersonalizeRegistryKey_p, L"AppsUseLightTheme", &value))) {
+    if (FAILED(am_GetDWORDFromRegistryHelper_p(HKEY_CURRENT_USER, g_am_PersonalizeRegistryKey_p, L"AppsUseLightTheme", &value))) {
         return E_FAIL;
     }
     *result = (value != 0);
@@ -1136,7 +1239,7 @@ HRESULT am_ShouldSystemUsesLightTheme_p(bool *result)
         return E_INVALIDARG;
     }
     DWORD value = 0;
-    if (FAILED(am_GetDWORDValueFromRegistry_p(HKEY_CURRENT_USER, g_am_PersonalizeRegistryKey_p, L"SystemUsesLightTheme", &value))) {
+    if (FAILED(am_GetDWORDFromRegistryHelper_p(HKEY_CURRENT_USER, g_am_PersonalizeRegistryKey_p, L"SystemUsesLightTheme", &value))) {
         return E_FAIL;
     }
     *result = (value != 0);
@@ -1277,11 +1380,11 @@ HRESULT am_GetColorizationArea_p(ColorizationArea *result)
     const HKEY rootKey = HKEY_CURRENT_USER;
     LPCWSTR valueName = L"ColorPrevalence";
     DWORD dwTheme = 0;
-    if (FAILED(am_GetDWORDValueFromRegistry_p(rootKey, g_am_PersonalizeRegistryKey_p, valueName, &dwTheme))) {
+    if (FAILED(am_GetDWORDFromRegistryHelper_p(rootKey, g_am_PersonalizeRegistryKey_p, valueName, &dwTheme))) {
         return E_FAIL;
     }
     DWORD dwDwm = 0;
-    if (FAILED(am_GetDWORDValueFromRegistry_p(rootKey, g_am_DWMRegistryKey_p, valueName, &dwDwm))) {
+    if (FAILED(am_GetDWORDFromRegistryHelper_p(rootKey, g_am_DWMRegistryKey_p, valueName, &dwDwm))) {
         return E_FAIL;
     }
     const bool theme = (dwTheme != 0);
@@ -1327,26 +1430,6 @@ HRESULT am_PrintErrorMessageFromHResult_p(LPCWSTR function, const HRESULT hr)
     LocalFree(lpMsgBuf);
     LocalFree(lpDisplayBuf);
 
-    return S_OK;
-}
-
-[[nodiscard]] static inline HRESULT am_SetWindowGeometry_p(const HWND hWnd, const int x, const int y, const int w, const int h)
-{
-    if (!hWnd || (x <= 0) || (y <= 0) || (w <= 0) || (h <= 0)) {
-        return E_INVALIDARG;
-    }
-    if (MoveWindow(hWnd, x, y, w, h, TRUE) == FALSE) {
-        PRINT_WIN32_ERROR_MESSAGE_AND_RETURN(MoveWindow)
-    }
-    return S_OK;
-}
-
-[[nodiscard]] static inline HRESULT am_IsWindowActive_p(const HWND hWnd, bool *result)
-{
-    if (!hWnd || !result) {
-        return E_INVALIDARG;
-    }
-    *result = (GetActiveWindow() == hWnd);
     return S_OK;
 }
 
@@ -1432,10 +1515,12 @@ HRESULT am_GetWallpaperFilePath_p(const int screen, LPWSTR *result)
         PRINT_WIN32_ERROR_MESSAGE(SystemParametersInfoW)
         delete [] wallpaperPath;
     }
-    // todo
-    //const QSettings registry(g_desktopRegistryKey, QSettings::NativeFormat);
-    //return QImage(registry.value(QStringLiteral("WallPaper")).toString());
-    return S_OK;
+    LPWSTR path = nullptr;
+    if (SUCCEEDED(am_GetStringFromRegistry_p(HKEY_CURRENT_USER, g_am_DesktopRegistryKey_p, L"WallPaper", &path))) {
+        *result = path;
+        return S_OK;
+    }
+    return E_FAIL;
 }
 
 HRESULT am_GetDesktopBackgroundColor_p(COLORREF *result)
@@ -1563,11 +1648,11 @@ HRESULT am_GetWallpaperAspectStyle_p(const int screen, WallpaperAspectStyle *res
     }
     const HKEY rootKey = HKEY_CURRENT_USER;
     DWORD dwStyle = 0;
-    if (SUCCEEDED(am_GetDWORDValueFromRegistry_p(rootKey, g_am_DesktopRegistryKey_p, L"WallpaperStyle", &dwStyle))) {
+    if (SUCCEEDED(am_GetDWORDFromRegistryHelper_p(rootKey, g_am_DesktopRegistryKey_p, L"WallpaperStyle", &dwStyle))) {
         switch (dwStyle) {
         case 0: {
             DWORD dwTile = 0;
-            if (SUCCEEDED(am_GetDWORDValueFromRegistry_p(rootKey, g_am_DesktopRegistryKey_p, L"TileWallpaper", &dwTile))
+            if (SUCCEEDED(am_GetDWORDFromRegistryHelper_p(rootKey, g_am_DesktopRegistryKey_p, L"TileWallpaper", &dwTile))
                     && (dwTile != 0)) {
                 *result = WallpaperAspectStyle::Tiled;
             } else {
@@ -1858,7 +1943,7 @@ HRESULT am_MultiToWide_p(LPCSTR in, const UINT codePage, LPWSTR *out)
         }
         const bool maxOrFull = (max || full);
         SIZE ws = {};
-        if (FAILED(am_GetWindowSize_p(hWnd, &ws))) {
+        if (FAILED(am_GetWindowSizeHelper_p(hWnd, &ws))) {
             break;
         }
         const LONG ww = ws.cx;
@@ -2042,7 +2127,7 @@ HRESULT am_MultiToWide_p(LPCSTR in, const UINT codePage, LPWSTR *out)
         bool full = false;
         if ((wParam == SIZE_MAXIMIZED) || (wParam == SIZE_RESTORED)
                 || (SUCCEEDED(am_IsFullScreened_p(hWnd, &full)) && full)) {
-            if (FAILED(am_UpdateFrameMargins_p(hWnd, g_am_CurrentDpi_p))) {
+            if (FAILED(am_UpdateFrameMarginsHelper_p(hWnd, g_am_CurrentDpi_p))) {
                 PRINT(L"WM_SIZE: Failed to update frame margins.")
                 break;
             }
@@ -2147,9 +2232,9 @@ HRESULT am_MultiToWide_p(LPCSTR in, const UINT codePage, LPWSTR *out)
     }
     if (g_am_BackgroundBrush_p && (g_am_BrushTheme_p == SystemTheme::Auto) && systemThemeChanged) {
         SystemTheme systemTheme = SystemTheme::Invalid;
-        if (SUCCEEDED(am_GetSystemTheme_p(&systemTheme))) {
+        if (SUCCEEDED(am_GetSystemThemeHelper_p(&systemTheme))) {
             if ((systemTheme != SystemTheme::Invalid) && (systemTheme != SystemTheme::HighContrast)) {
-                if (SUCCEEDED(am_SwitchAcrylicBrushTheme_p(systemTheme))) {
+                if (SUCCEEDED(am_SwitchAcrylicBrushThemeHelper_p(systemTheme))) {
                     g_am_BrushTheme_p = SystemTheme::Auto;
                 } else {
                     PRINT(L"Failed to switch acrylic brush theme.")
@@ -2227,7 +2312,7 @@ HRESULT am_MultiToWide_p(LPCSTR in, const UINT codePage, LPWSTR *out)
     return DefWindowProcW(hWnd, uMsg, wParam, lParam);
 }
 
-[[nodiscard]] static inline HRESULT am_RegisterMainWindowClass_p()
+[[nodiscard]] static inline HRESULT am_RegisterMainWindowClassHelper_p()
 {
     if (g_am_MainWindowAtom_p != 0) {
         SAFE_RETURN
@@ -2264,7 +2349,7 @@ HRESULT am_MultiToWide_p(LPCSTR in, const UINT codePage, LPWSTR *out)
     return S_OK;
 }
 
-[[nodiscard]] static inline HRESULT am_RegisterDragBarWindowClass_p()
+[[nodiscard]] static inline HRESULT am_RegisterDragBarWindowClassHelper_p()
 {
     if (!g_am_IsWindows8OrGreater_p) {
         PRINT_AND_SAFE_RETURN(L"Drag bar window is only available on Windows 8 and onwards.")
@@ -2305,7 +2390,7 @@ HRESULT am_MultiToWide_p(LPCSTR in, const UINT codePage, LPWSTR *out)
     return S_OK;
 }
 
-[[nodiscard]] static inline HRESULT am_CreateMainWindow_p(const int x, const int y, const int w, const int h)
+[[nodiscard]] static inline HRESULT am_CreateMainWindowHelper_p(const int x, const int y, const int w, const int h)
 {
     if ((g_am_MainWindowAtom_p == 0) || g_am_MainWindowHandle_p) {
         SAFE_RETURN
@@ -2330,7 +2415,7 @@ HRESULT am_MultiToWide_p(LPCSTR in, const UINT codePage, LPWSTR *out)
 
     // Ensure DWM still draws the top frame by extending the top frame.
     // This also ensures our window still has the frame shadow drawn by DWM.
-    if (FAILED(am_UpdateFrameMargins_p(g_am_MainWindowHandle_p, g_am_CurrentDpi_p))) {
+    if (FAILED(am_UpdateFrameMarginsHelper_p(g_am_MainWindowHandle_p, g_am_CurrentDpi_p))) {
         PRINT_AND_SAFE_RETURN(L"Failed to update main window's frame margins.")
     }
     // Force a WM_NCCALCSIZE processing to make the window become frameless immediately.
@@ -2345,7 +2430,7 @@ HRESULT am_MultiToWide_p(LPCSTR in, const UINT codePage, LPWSTR *out)
     return S_OK;
 }
 
-[[nodiscard]] static inline HRESULT am_CreateDragBarWindow_p()
+[[nodiscard]] static inline HRESULT am_CreateDragBarWindowHelper_p()
 {
     if (!g_am_MainWindowHandle_p) {
         SAFE_RETURN
@@ -2399,7 +2484,7 @@ HRESULT am_MultiToWide_p(LPCSTR in, const UINT codePage, LPWSTR *out)
     return S_OK;
 }
 
-[[nodiscard]] static inline HRESULT am_CreateXAMLIsland_p()
+[[nodiscard]] static inline HRESULT am_CreateXAMLIslandHelper_p()
 {
     if (!g_am_MainWindowHandle_p) {
         SAFE_RETURN
@@ -2410,7 +2495,7 @@ HRESULT am_MultiToWide_p(LPCSTR in, const UINT codePage, LPWSTR *out)
         PRINT_AND_SAFE_RETURN(L"XAML Island is only supported on Windows 10 19H1 and onwards.")
     }
     SystemTheme systemTheme = SystemTheme::Invalid;
-    if (FAILED(am_GetSystemTheme_p(&systemTheme))) {
+    if (FAILED(am_GetSystemThemeHelper_p(&systemTheme))) {
         SAFE_RETURN
     }
     if (systemTheme == SystemTheme::Invalid) {
@@ -2449,7 +2534,7 @@ HRESULT am_MultiToWide_p(LPCSTR in, const UINT codePage, LPWSTR *out)
         PRINT_WIN32_ERROR_MESSAGE_AND_SAFE_RETURN(SetWindowPos)
     }
     g_am_BackgroundBrush_p = {};
-    if (FAILED(am_SwitchAcrylicBrushTheme_p((systemTheme == SystemTheme::Auto) ? SystemTheme::Dark : systemTheme))) {
+    if (FAILED(am_SwitchAcrylicBrushThemeHelper_p((systemTheme == SystemTheme::Auto) ? SystemTheme::Dark : systemTheme))) {
         PRINT_AND_SAFE_RETURN(L"Failed to change acrylic brush's theme.")
     }
     g_am_BrushTheme_p = SystemTheme::Auto;
@@ -2474,7 +2559,7 @@ HRESULT am_MultiToWide_p(LPCSTR in, const UINT codePage, LPWSTR *out)
     return S_OK;
 }
 
-[[nodiscard]] static inline HRESULT am_InitializeDirect2DInfrastructure_p()
+[[nodiscard]] static inline HRESULT am_InitializeDirect2DInfrastructureHelper_p()
 {
     if (!g_am_MainWindowHandle_p) {
         SAFE_RETURN
@@ -2495,21 +2580,21 @@ HRESULT am_MultiToWide_p(LPCSTR in, const UINT codePage, LPWSTR *out)
     return E_FAIL;
 }
 
-[[nodiscard]] static inline HRESULT am_InitializeAcrylicManager_p(const int x, const int y, const int w, const int h)
+[[nodiscard]] static inline HRESULT am_InitializeAcrylicManagerHelper_p(const int x, const int y, const int w, const int h)
 {
     if (g_am_AcrylicManagerInitialized_p) {
         return E_FAIL;
     }
-    if (FAILED(am_RegisterMainWindowClass_p())) {
+    if (FAILED(am_RegisterMainWindowClassHelper_p())) {
         PRINT_AND_RETURN(L"Failed to register main window class.")
     }
-    if (FAILED(am_CreateMainWindow_p(x, y, w, h))) {
+    if (FAILED(am_CreateMainWindowHelper_p(x, y, w, h))) {
         PRINT_AND_RETURN(L"Failed to create main window.")
     }
     if (g_am_IsXAMLIslandAvailable_p) {
-        if (SUCCEEDED(am_CreateXAMLIsland_p())) {
-            if (SUCCEEDED(am_RegisterDragBarWindowClass_p())) {
-                if (SUCCEEDED(am_CreateDragBarWindow_p())) {
+        if (SUCCEEDED(am_CreateXAMLIslandHelper_p())) {
+            if (SUCCEEDED(am_RegisterDragBarWindowClassHelper_p())) {
+                if (SUCCEEDED(am_CreateDragBarWindowHelper_p())) {
                     g_am_AcrylicManagerInitialized_p = true;
                     return S_OK;
                 } else {
@@ -2522,7 +2607,7 @@ HRESULT am_MultiToWide_p(LPCSTR in, const UINT codePage, LPWSTR *out)
             PRINT_AND_RETURN(L"Failed to create XAML Island.")
         }
     } else if (g_am_IsDirect2DAvailable_p) {
-        if (SUCCEEDED(am_InitializeDirect2DInfrastructure_p())) {
+        if (SUCCEEDED(am_InitializeDirect2DInfrastructureHelper_p())) {
             g_am_AcrylicManagerInitialized_p = true;
             return S_OK;
         } else {
@@ -2534,41 +2619,6 @@ HRESULT am_MultiToWide_p(LPCSTR in, const UINT codePage, LPWSTR *out)
         return S_OK;
     }
     return E_FAIL;
-}
-
-[[nodiscard]] static inline HRESULT am_GetWindowHandle_p(HWND *result)
-{
-    if (!result) {
-        return E_INVALIDARG;
-    }
-    *result = g_am_MainWindowHandle_p;
-    return S_OK;
-}
-
-[[nodiscard]] static inline HRESULT am_GetBrushTheme_p(SystemTheme *result)
-{
-    if (!result) {
-        return E_INVALIDARG;
-    }
-    *result = g_am_BrushTheme_p;
-    return S_OK;
-}
-
-[[nodiscard]] static inline HRESULT am_MainWindowEventLoop_p(int *result)
-{
-    if (!result || !g_am_MainWindowHandle_p) {
-        return E_INVALIDARG;
-    }
-
-    MSG msg = {};
-    while (GetMessageW(&msg, nullptr, 0, 0) != FALSE) {
-        TranslateMessage(&msg);
-        DispatchMessageW(&msg);
-    }
-
-    *result = static_cast<int>(msg.wParam);
-
-    return S_OK;
 }
 
 // Public interface
@@ -2596,47 +2646,47 @@ HRESULT am_CreateWindow(const int x, const int y, const int w, const int h)
         PRINT_AND_RETURN(L"This application could not be started when DWM composition is disabled.")
     }
 
-    return am_InitializeAcrylicManager_p(x, y, w, h);
+    return am_InitializeAcrylicManagerHelper_p(x, y, w, h);
 }
 
 HRESULT am_GetWindowGeometry(RECT *result)
 {
-    return am_GetWindowGeometry_p(g_am_MainWindowHandle_p, result);
+    return am_GetWindowGeometryHelper_p(g_am_MainWindowHandle_p, result);
 }
 
 HRESULT am_SetWindowGeometry(const int x, const int y, const int w, const int h)
 {
-    return am_SetWindowGeometry_p(g_am_MainWindowHandle_p, x, y, w, h);
+    return am_SetWindowGeometryHelper_p(g_am_MainWindowHandle_p, x, y, w, h);
 }
 
 HRESULT am_MoveWindow(const int x, const int y)
 {
-    return am_MoveWindow_p(g_am_MainWindowHandle_p, x, y);
+    return am_MoveWindowHelper_p(g_am_MainWindowHandle_p, x, y);
 }
 
 HRESULT am_GetWindowSize(SIZE *result)
 {
-    return am_GetWindowSize_p(g_am_MainWindowHandle_p, result);
+    return am_GetWindowSizeHelper_p(g_am_MainWindowHandle_p, result);
 }
 
 HRESULT am_ResizeWindow(const int w, const int h)
 {
-    return am_ResizeWindow_p(g_am_MainWindowHandle_p, w, h);
+    return am_ResizeWindowHelper_p(g_am_MainWindowHandle_p, w, h);
 }
 
 HRESULT am_CenterWindow()
 {
-    return am_CenterWindow_p(g_am_MainWindowHandle_p);
+    return am_CenterWindowHelper_p(g_am_MainWindowHandle_p);
 }
 
 HRESULT am_GetWindowState(WindowState *result)
 {
-    return am_GetWindowState_p(g_am_MainWindowHandle_p, result);
+    return am_GetWindowStateHelper_p(g_am_MainWindowHandle_p, result);
 }
 
 HRESULT am_SetWindowState(const WindowState state)
 {
-    return am_SetWindowState_p(g_am_MainWindowHandle_p, state);
+    return am_SetWindowStateHelper_p(g_am_MainWindowHandle_p, state);
 }
 
 HRESULT am_CloseWindow()
@@ -2646,67 +2696,67 @@ HRESULT am_CloseWindow()
 
 HRESULT am_GetWindowHandle(HWND *result)
 {
-    return am_GetWindowHandle_p(result);
+    return am_GetWindowHandleHelper_p(result);
 }
 
 HRESULT am_GetBrushTheme(SystemTheme *result)
 {
-    return am_GetBrushTheme_p(result);
+    return am_GetBrushThemeHelper_p(result);
 }
 
 HRESULT am_SetBrushTheme(const SystemTheme theme)
 {
-    return am_SwitchAcrylicBrushTheme_p(theme);
+    return am_SwitchAcrylicBrushThemeHelper_p(theme);
 }
 
 HRESULT am_GetTintColor(int *r, int *g, int *b, int *a)
 {
-    return am_GetTintColor_p(r, g, b, a);
+    return am_GetTintColorHelper_p(r, g, b, a);
 }
 
 HRESULT am_SetTintColor(const int r, const int g, const int b, const int a)
 {
-    return am_SetTintColor_p(r, g, b, a);
+    return am_SetTintColorHelper_p(r, g, b, a);
 }
 
 HRESULT am_GetTintOpacity(double *opacity)
 {
-    return am_GetTintOpacity_p(opacity);
+    return am_GetTintOpacityHelper_p(opacity);
 }
 
 HRESULT am_SetTintOpacity(const double opacity)
 {
-    return am_SetTintOpacity_p(opacity);
+    return am_SetTintOpacityHelper_p(opacity);
 }
 
 HRESULT am_GetTintLuminosityOpacity(double *opacity)
 {
-    return am_GetTintLuminosityOpacity_p(opacity);
+    return am_GetTintLuminosityOpacityHelper_p(opacity);
 }
 
 HRESULT am_SetTintLuminosityOpacity(const double *opacity)
 {
-    return am_SetTintLuminosityOpacity_p(opacity);
+    return am_SetTintLuminosityOpacityHelper_p(opacity);
 }
 
 HRESULT am_GetFallbackColor(int *r, int *g, int *b, int *a)
 {
-    return am_GetFallbackColor_p(r, g, b, a);
+    return am_GetFallbackColorHelper_p(r, g, b, a);
 }
 
 HRESULT am_SetFallbackColor(const int r, const int g, const int b, const int a)
 {
-    return am_SetFallbackColor_p(r, g, b, a);
+    return am_SetFallbackColorHelper_p(r, g, b, a);
 }
 
 HRESULT am_EventLoopExec(int *result)
 {
-    return am_MainWindowEventLoop_p(result);
+    return am_MainWindowEventLoopHelper_p(result);
 }
 
 HRESULT am_IsWindowActive(bool *result)
 {
-    return am_IsWindowActive_p(g_am_MainWindowHandle_p, result);
+    return am_IsWindowActiveHelper_p(g_am_MainWindowHandle_p, result);
 }
 
 HRESULT am_FreeStringA(LPSTR str)
@@ -2740,7 +2790,7 @@ HRESULT am_CanUnloadDll(bool *result)
 
 HRESULT am_Release()
 {
-    return am_Cleanup_p();
+    return am_CleanupHelper_p();
 }
 
 // DLL entry point function

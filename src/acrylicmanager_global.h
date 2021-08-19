@@ -434,7 +434,7 @@ __PRINT_HR_ERROR_MESSAGE_FOOT
 #ifndef SAFE_RELEASE_RESOURCES
 #define SAFE_RELEASE_RESOURCES \
 { \
-    const HRESULT __hr = am_Cleanup_p(); \
+    const HRESULT __hr = am_CleanupHelper_p(); \
     DECLARE_UNUSED(__hr); \
 }
 #endif
@@ -470,7 +470,7 @@ __PRINT_HR_ERROR_MESSAGE_FOOT
 #ifndef PRINT
 #define PRINT(message) \
 { \
-    const HRESULT __hr = am_Print_p(message, true); \
+    const HRESULT __hr = am_PrintHelper_p(message, true); \
     DECLARE_UNUSED(__hr); \
 }
 #endif

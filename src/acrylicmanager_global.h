@@ -104,6 +104,8 @@
 #define WINVER NTDDI_WIN10_19H1
 #define _WIN32_WINNT NTDDI_WIN10_19H1
 
+#include <Windows.h>
+
 #ifndef ACRYLICMANAGER_TRY_EXECUTE_FUNCTION_PART1
 #define ACRYLICMANAGER_TRY_EXECUTE_FUNCTION_PART1(funcName) \
 static bool tried = false; \
@@ -281,8 +283,210 @@ ACRYLICMANAGER_TRY_EXECUTE_FUNCTION_CALL_FUNC_RETURN(__VA_ARGS__)
 #endif
 #endif
 
-#include <Windows.h>
-
 #ifndef ACRYLICMANAGER_VERSION_STR
 #define ACRYLICMANAGER_VERSION_STR L"1.0.0.0"
+#endif
+
+#ifndef HINST_THISCOMPONENT
+EXTERN_C IMAGE_DOS_HEADER __ImageBase;
+#define HINST_THISCOMPONENT (reinterpret_cast<HINSTANCE>(&__ImageBase))
+#endif
+
+#ifndef USER_DEFAULT_SCREEN_DPI
+#define USER_DEFAULT_SCREEN_DPI (96)
+#endif
+
+#ifndef SM_CXPADDEDBORDER
+#define SM_CXPADDEDBORDER (92)
+#endif
+
+#ifndef ABM_GETAUTOHIDEBAREX
+#define ABM_GETAUTOHIDEBAREX (0x0000000b)
+#endif
+
+#ifndef WM_DWMCOMPOSITIONCHANGED
+#define WM_DWMCOMPOSITIONCHANGED (0x031E)
+#endif
+
+#ifndef WM_DWMCOLORIZATIONCOLORCHANGED
+#define WM_DWMCOLORIZATIONCOLORCHANGED (0x0320)
+#endif
+
+#ifndef WM_DPICHANGED
+#define WM_DPICHANGED (0x02E0)
+#endif
+
+#ifndef IsMaximized
+#define IsMaximized(window) (IsZoomed(window))
+#endif
+
+#ifndef IsMinimized
+#define IsMinimized(window) (IsIconic(window))
+#endif
+
+#ifndef GET_X_LPARAM
+#define GET_X_LPARAM(lp) ((int)(short)LOWORD(lp))
+#endif
+
+#ifndef GET_Y_LPARAM
+#define GET_Y_LPARAM(lp) ((int)(short)HIWORD(lp))
+#endif
+
+#ifndef GET_RECT_WIDTH
+#define GET_RECT_WIDTH(rect) (std::abs((rect).right - (rect).left))
+#endif
+
+#ifndef GET_RECT_HEIGHT
+#define GET_RECT_HEIGHT(rect) (std::abs((rect).bottom - (rect).top))
+#endif
+
+#ifndef GET_RECT_SIZE
+#define GET_RECT_SIZE(rect) (SIZE{GET_RECT_WIDTH(rect), GET_RECT_HEIGHT(rect)})
+#endif
+
+#ifndef GET_BLACK_BRUSH
+#define GET_BLACK_BRUSH (reinterpret_cast<HBRUSH>(GetStockObject(BLACK_BRUSH)))
+#endif
+
+#ifndef GET_CURRENT_SCREEN
+#define GET_CURRENT_SCREEN(window) (MonitorFromWindow(window, MONITOR_DEFAULTTONEAREST))
+#endif
+
+#ifndef GET_DEVICE_PIXEL_RATIO
+#define GET_DEVICE_PIXEL_RATIO(dpi) ((dpi > 0) ? (static_cast<double>(dpi) / static_cast<double>(USER_DEFAULT_SCREEN_DPI)) : 1.0)
+#endif
+
+#ifndef DECLARE_UNUSED
+#define DECLARE_UNUSED(var) (static_cast<void>(var))
+#endif
+
+#ifndef __PRINT_WIN32_ERROR_MESSAGE_HEAD
+#define __PRINT_WIN32_ERROR_MESSAGE_HEAD(function) \
+{ \
+    const HRESULT __hr = HRESULT_FROM_WIN32(GetLastError()); \
+    if (FAILED(__hr)) { \
+        const HRESULT __hr_ = am_PrintErrorMessageFromHResult_p(L#function, __hr); \
+        DECLARE_UNUSED(__hr_); \
+    }
+#endif
+
+#ifndef __PRINT_WIN32_ERROR_MESSAGE_FOOT
+#define __PRINT_WIN32_ERROR_MESSAGE_FOOT \
+}
+#endif
+
+#ifndef PRINT_WIN32_ERROR_MESSAGE_AND_RETURN
+#define PRINT_WIN32_ERROR_MESSAGE_AND_RETURN(function) \
+__PRINT_WIN32_ERROR_MESSAGE_HEAD(function) \
+return __hr; \
+__PRINT_WIN32_ERROR_MESSAGE_FOOT
+#endif
+
+#ifndef PRINT_WIN32_ERROR_MESSAGE_AND_SAFE_RETURN
+#define PRINT_WIN32_ERROR_MESSAGE_AND_SAFE_RETURN(function) \
+__PRINT_WIN32_ERROR_MESSAGE_HEAD(function) \
+SAFE_RELEASE_RESOURCES \
+return __hr; \
+__PRINT_WIN32_ERROR_MESSAGE_FOOT
+#endif
+
+#ifndef PRINT_WIN32_ERROR_MESSAGE
+#define PRINT_WIN32_ERROR_MESSAGE(function) \
+__PRINT_WIN32_ERROR_MESSAGE_HEAD(function) \
+__PRINT_WIN32_ERROR_MESSAGE_FOOT
+#endif
+
+#ifndef __PRINT_HR_ERROR_MESSAGE_HEAD
+#define __PRINT_HR_ERROR_MESSAGE_HEAD(function, hresult) \
+{ \
+    if (FAILED(hresult)) { \
+        const HRESULT __hr = am_PrintErrorMessageFromHResult_p(L#function, hresult); \
+        DECLARE_UNUSED(__hr); \
+    }
+#endif
+
+#ifndef __PRINT_HR_ERROR_MESSAGE_FOOT
+#define __PRINT_HR_ERROR_MESSAGE_FOOT \
+}
+#endif
+
+#ifndef PRINT_HR_ERROR_MESSAGE
+#define PRINT_HR_ERROR_MESSAGE(function, hresult) \
+__PRINT_HR_ERROR_MESSAGE_HEAD(function, hresult) \
+__PRINT_HR_ERROR_MESSAGE_FOOT
+#endif
+
+#ifndef PRINT_HR_ERROR_MESSAGE_AND_RETURN
+#define PRINT_HR_ERROR_MESSAGE_AND_RETURN(function, hresult) \
+__PRINT_HR_ERROR_MESSAGE_HEAD(function, hresult) \
+return hresult; \
+__PRINT_HR_ERROR_MESSAGE_FOOT
+#endif
+
+#ifndef PRINT_HR_ERROR_MESSAGE_AND_SAFE_RETURN
+#define PRINT_HR_ERROR_MESSAGE_AND_SAFE_RETURN(function, hresult) \
+__PRINT_HR_ERROR_MESSAGE_HEAD(function, hresult) \
+SAFE_RELEASE_RESOURCES \
+return hresult; \
+__PRINT_HR_ERROR_MESSAGE_FOOT
+#endif
+
+#ifndef SAFE_RELEASE_RESOURCES
+#define SAFE_RELEASE_RESOURCES \
+{ \
+    const HRESULT __hr = am_Cleanup_p(); \
+    DECLARE_UNUSED(__hr); \
+}
+#endif
+
+#ifndef GET_COLOR_COMPONENTS
+#define GET_COLOR_COMPONENTS(color, r, g, b, a) \
+{ \
+    r = std::clamp(static_cast<int>((color).R), 0, 255); \
+    g = std::clamp(static_cast<int>((color).G), 0, 255); \
+    b = std::clamp(static_cast<int>((color).B), 0, 255); \
+    a = std::clamp(static_cast<int>((color).A), 0, 255); \
+}
+#endif
+
+#ifndef MAKE_COLOR_FROM_COMPONENTS
+#define MAKE_COLOR_FROM_COMPONENTS(color, r, g, b, a) \
+{ \
+    (color).R = static_cast<uint8_t>(std::clamp(r, 0, 255)); \
+    (color).G = static_cast<uint8_t>(std::clamp(g, 0, 255)); \
+    (color).B = static_cast<uint8_t>(std::clamp(b, 0, 255)); \
+    (color).A = static_cast<uint8_t>(std::clamp(a, 0, 255)); \
+}
+#endif
+
+#ifndef SAFE_RETURN
+#define SAFE_RETURN \
+{ \
+    SAFE_RELEASE_RESOURCES \
+    return E_FAIL; \
+}
+#endif
+
+#ifndef PRINT
+#define PRINT(message) \
+{ \
+    const HRESULT __hr = am_Print_p(message, true); \
+    DECLARE_UNUSED(__hr); \
+}
+#endif
+
+#ifndef PRINT_AND_RETURN
+#define PRINT_AND_RETURN(message) \
+{ \
+    PRINT(message) \
+    return E_FAIL; \
+}
+#endif
+
+#ifndef PRINT_AND_SAFE_RETURN
+#define PRINT_AND_SAFE_RETURN(message) \
+{ \
+    PRINT(message) \
+    SAFE_RETURN \
+}
 #endif

@@ -49,213 +49,6 @@
 #include <D2D1_2.h>
 #include <WinCodec.h>
 
-#ifndef HINST_THISCOMPONENT
-EXTERN_C IMAGE_DOS_HEADER __ImageBase;
-#define HINST_THISCOMPONENT (reinterpret_cast<HINSTANCE>(&__ImageBase))
-#endif
-
-#ifndef USER_DEFAULT_SCREEN_DPI
-#define USER_DEFAULT_SCREEN_DPI (96)
-#endif
-
-#ifndef SM_CXPADDEDBORDER
-#define SM_CXPADDEDBORDER (92)
-#endif
-
-#ifndef ABM_GETAUTOHIDEBAREX
-#define ABM_GETAUTOHIDEBAREX (0x0000000b)
-#endif
-
-#ifndef WM_DWMCOMPOSITIONCHANGED
-#define WM_DWMCOMPOSITIONCHANGED (0x031E)
-#endif
-
-#ifndef WM_DWMCOLORIZATIONCOLORCHANGED
-#define WM_DWMCOLORIZATIONCOLORCHANGED (0x0320)
-#endif
-
-#ifndef WM_DPICHANGED
-#define WM_DPICHANGED (0x02E0)
-#endif
-
-#ifndef IsMaximized
-#define IsMaximized(window) (IsZoomed(window))
-#endif
-
-#ifndef IsMinimized
-#define IsMinimized(window) (IsIconic(window))
-#endif
-
-#ifndef GET_X_LPARAM
-#define GET_X_LPARAM(lp) ((int)(short)LOWORD(lp))
-#endif
-
-#ifndef GET_Y_LPARAM
-#define GET_Y_LPARAM(lp) ((int)(short)HIWORD(lp))
-#endif
-
-#ifndef GET_RECT_WIDTH
-#define GET_RECT_WIDTH(rect) (std::abs((rect).right - (rect).left))
-#endif
-
-#ifndef GET_RECT_HEIGHT
-#define GET_RECT_HEIGHT(rect) (std::abs((rect).bottom - (rect).top))
-#endif
-
-#ifndef GET_RECT_SIZE
-#define GET_RECT_SIZE(rect) (SIZE{GET_RECT_WIDTH(rect), GET_RECT_HEIGHT(rect)})
-#endif
-
-#ifndef GET_BLACK_BRUSH
-#define GET_BLACK_BRUSH (reinterpret_cast<HBRUSH>(GetStockObject(BLACK_BRUSH)))
-#endif
-
-#ifndef GET_CURRENT_SCREEN
-#define GET_CURRENT_SCREEN(window) (MonitorFromWindow(window, MONITOR_DEFAULTTONEAREST))
-#endif
-
-#ifndef GET_DEVICE_PIXEL_RATIO
-#define GET_DEVICE_PIXEL_RATIO(dpi) ((dpi > 0) ? (static_cast<double>(dpi) / static_cast<double>(USER_DEFAULT_SCREEN_DPI)) : 1.0)
-#endif
-
-#ifndef DECLARE_UNUSED
-#define DECLARE_UNUSED(var) (static_cast<void>(var))
-#endif
-
-#ifndef __PRINT_WIN32_ERROR_MESSAGE_HEAD
-#define __PRINT_WIN32_ERROR_MESSAGE_HEAD(function) \
-{ \
-    const DWORD __dwError = GetLastError(); \
-    if (__dwError != ERROR_SUCCESS) { \
-        const HRESULT __hr = HRESULT_FROM_WIN32(__dwError); \
-        if (FAILED(__hr)) { \
-            const HRESULT __hr_ = am_PrintErrorMessageFromHResult_p(L#function, __hr); \
-            DECLARE_UNUSED(__hr_);
-#endif
-
-#ifndef __PRINT_WIN32_ERROR_MESSAGE_FOOT
-#define __PRINT_WIN32_ERROR_MESSAGE_FOOT \
-        } \
-    } \
-}
-#endif
-
-#ifndef PRINT_WIN32_ERROR_MESSAGE_AND_RETURN
-#define PRINT_WIN32_ERROR_MESSAGE_AND_RETURN(function) \
-__PRINT_WIN32_ERROR_MESSAGE_HEAD(function) \
-return __hr; \
-__PRINT_WIN32_ERROR_MESSAGE_FOOT
-#endif
-
-#ifndef PRINT_WIN32_ERROR_MESSAGE_AND_SAFE_RETURN
-#define PRINT_WIN32_ERROR_MESSAGE_AND_SAFE_RETURN(function) \
-__PRINT_WIN32_ERROR_MESSAGE_HEAD(function) \
-SAFE_RELEASE_RESOURCES \
-return __hr; \
-__PRINT_WIN32_ERROR_MESSAGE_FOOT
-#endif
-
-#ifndef PRINT_WIN32_ERROR_MESSAGE
-#define PRINT_WIN32_ERROR_MESSAGE(function) \
-__PRINT_WIN32_ERROR_MESSAGE_HEAD(function) \
-__PRINT_WIN32_ERROR_MESSAGE_FOOT
-#endif
-
-#ifndef __PRINT_HR_ERROR_MESSAGE_HEAD
-#define __PRINT_HR_ERROR_MESSAGE_HEAD(function, hresult) \
-{ \
-    if (FAILED(hresult)) { \
-        const HRESULT __hr = am_PrintErrorMessageFromHResult_p(L#function, hresult); \
-        DECLARE_UNUSED(__hr);
-#endif
-
-#ifndef __PRINT_HR_ERROR_MESSAGE_FOOT
-#define __PRINT_HR_ERROR_MESSAGE_FOOT \
-    } \
-}
-#endif
-
-#ifndef PRINT_HR_ERROR_MESSAGE
-#define PRINT_HR_ERROR_MESSAGE(function, hresult) \
-__PRINT_HR_ERROR_MESSAGE_HEAD(function, hresult) \
-__PRINT_HR_ERROR_MESSAGE_FOOT
-#endif
-
-#ifndef PRINT_HR_ERROR_MESSAGE_AND_RETURN
-#define PRINT_HR_ERROR_MESSAGE_AND_RETURN(function, hresult) \
-__PRINT_HR_ERROR_MESSAGE_HEAD(function, hresult) \
-return hresult; \
-__PRINT_HR_ERROR_MESSAGE_FOOT
-#endif
-
-#ifndef PRINT_HR_ERROR_MESSAGE_AND_SAFE_RETURN
-#define PRINT_HR_ERROR_MESSAGE_AND_SAFE_RETURN(function, hresult) \
-__PRINT_HR_ERROR_MESSAGE_HEAD(function, hresult) \
-SAFE_RELEASE_RESOURCES \
-return hresult; \
-__PRINT_HR_ERROR_MESSAGE_FOOT
-#endif
-
-#ifndef SAFE_RELEASE_RESOURCES
-#define SAFE_RELEASE_RESOURCES \
-{ \
-    const HRESULT __hr = am_Cleanup_p(); \
-    DECLARE_UNUSED(__hr); \
-}
-#endif
-
-#ifndef GET_COLOR_COMPONENTS
-#define GET_COLOR_COMPONENTS(color, r, g, b, a) \
-{ \
-    r = std::clamp(static_cast<int>((color).R), 0, 255); \
-    g = std::clamp(static_cast<int>((color).G), 0, 255); \
-    b = std::clamp(static_cast<int>((color).B), 0, 255); \
-    a = std::clamp(static_cast<int>((color).A), 0, 255); \
-}
-#endif
-
-#ifndef MAKE_COLOR_FROM_COMPONENTS
-#define MAKE_COLOR_FROM_COMPONENTS(color, r, g, b, a) \
-{ \
-    (color).R = static_cast<uint8_t>(std::clamp(r, 0, 255)); \
-    (color).G = static_cast<uint8_t>(std::clamp(g, 0, 255)); \
-    (color).B = static_cast<uint8_t>(std::clamp(b, 0, 255)); \
-    (color).A = static_cast<uint8_t>(std::clamp(a, 0, 255)); \
-}
-#endif
-
-#ifndef SAFE_RETURN
-#define SAFE_RETURN \
-{ \
-    SAFE_RELEASE_RESOURCES \
-    return E_FAIL; \
-}
-#endif
-
-#ifndef PRINT
-#define PRINT(message) \
-{ \
-    const HRESULT __hr = am_Print_p(message, true); \
-    DECLARE_UNUSED(__hr); \
-}
-#endif
-
-#ifndef PRINT_AND_RETURN
-#define PRINT_AND_RETURN(message) \
-{ \
-    PRINT(message) \
-    return E_FAIL; \
-}
-#endif
-
-#ifndef PRINT_AND_SAFE_RETURN
-#define PRINT_AND_SAFE_RETURN(message) \
-{ \
-    PRINT(message) \
-    SAFE_RETURN \
-}
-#endif
-
 // The thickness of an auto-hide taskbar in pixels.
 static const int g_am_AutoHideTaskbarThicknessPx_p = 2;
 static const int g_am_AutoHideTaskbarThicknessPy_p = g_am_AutoHideTaskbarThicknessPx_p;
@@ -328,7 +121,7 @@ static const bool g_am_IsDirect2DAvailable_p = []{
     if (GetEnvironmentVariableW(g_am_ForceHomemadeAcrylicEnvVar_p, buf, sizeof(buf)) != 0) {
         force = ((_wcsicmp(buf, L"True") == 0) || (_wcsicmp(buf, L"Yes") == 0)
                  || (_wcsicmp(buf, L"Enable") == 0) || (_wcsicmp(buf, L"Enabled") == 0)
-                 || (_wcsicmp(buf, L"On") == 0) || (_wcsicmp(buf, L"1") == 0));
+                 || (_wcsicmp(buf, L"On") == 0) || (_wcsicmp(buf, L"0") != 0));
     }
     delete [] buf;
     return (g_am_IsWindows8OrGreater_p || force);
@@ -346,7 +139,7 @@ static const bool g_am_IsXAMLIslandAvailable_p = []{
     if (GetEnvironmentVariableW(g_am_ForceOfficialAcrylicEnvVar_p, buf, sizeof(buf)) != 0) {
         force = ((_wcsicmp(buf, L"True") == 0) || (_wcsicmp(buf, L"Yes") == 0)
                  || (_wcsicmp(buf, L"Enable") == 0) || (_wcsicmp(buf, L"Enabled") == 0)
-                 || (_wcsicmp(buf, L"On") == 0) || (_wcsicmp(buf, L"1") == 0));
+                 || (_wcsicmp(buf, L"On") == 0) || (_wcsicmp(buf, L"0") != 0));
     }
     delete [] buf;
     bool result = false;
@@ -841,7 +634,9 @@ HRESULT am_GetWindowVisibleFrameBorderThickness_p(const HWND hWnd, const UINT dp
         *result = value;
         return S_OK;
     } else {
-        PRINT_HR_ERROR_MESSAGE(DwmGetWindowAttribute, hr)
+        // We just eat this error because this enum value was introduced in a very
+        // late Windows 10 version, so querying it's value will always result in
+        // a "parameter error" (code: 87) on systems before that value was introduced.
     }
     bool normal = false;
     if (FAILED(am_IsWindowNoState_p(hWnd, &normal))) {
@@ -1414,14 +1209,18 @@ HRESULT am_IsWindowUsingDarkFrame_p(const HWND hWnd, bool *result)
         *result = (enabled != FALSE);
         return S_OK;
     } else {
-        PRINT_HR_ERROR_MESSAGE(DwmGetWindowAttribute, hr)
+        // We just eat this error because this enum value was introduced in a very
+        // late Windows 10 version, so querying it's value will always result in
+        // a "parameter error" (code: 87) on systems before that value was introduced.
     }
     hr = DwmGetWindowAttribute(hWnd, static_cast<DWORD>(DwmWindowAttribute::USE_IMMERSIVE_DARK_MODE), &enabled, sizeof(enabled));
     if (SUCCEEDED(hr)) {
         *result = (enabled != FALSE);
         return S_OK;
     } else {
-        PRINT_HR_ERROR_MESSAGE(DwmGetWindowAttribute, hr)
+        // We just eat this error because this enum value was introduced in a very
+        // late Windows 10 version, so querying it's value will always result in
+        // a "parameter error" (code: 87) on systems before that value was introduced.
     }
     return E_FAIL;
 }
@@ -1436,13 +1235,17 @@ HRESULT am_SetWindowDarkFrameEnabled_p(const HWND hWnd, const bool enable)
     if (SUCCEEDED(hr)) {
         return S_OK;
     } else {
-        PRINT_HR_ERROR_MESSAGE(DwmSetWindowAttribute, hr)
+        // We just eat this error because this enum value was introduced in a very
+        // late Windows 10 version, so changing it's value will always result in
+        // a "parameter error" (code: 87) on systems before that value was introduced.
     }
     hr = DwmSetWindowAttribute(hWnd, static_cast<DWORD>(DwmWindowAttribute::USE_IMMERSIVE_DARK_MODE), &enabled, sizeof(enabled));
     if (SUCCEEDED(hr)) {
         return S_OK;
     } else {
-        PRINT_HR_ERROR_MESSAGE(DwmSetWindowAttribute, hr)
+        // We just eat this error because this enum value was introduced in a very
+        // late Windows 10 version, so changing it's value will always result in
+        // a "parameter error" (code: 87) on systems before that value was introduced.
     }
     return E_FAIL;
 }
@@ -1494,15 +1297,6 @@ HRESULT am_GetColorizationArea_p(ColorizationArea *result)
         return S_OK;
     }
     *result = ColorizationArea::None;
-    return S_OK;
-}
-
-HRESULT am_LocalFree(void *mem)
-{
-    if (!mem) {
-        return E_INVALIDARG;
-    }
-    free(mem);
     return S_OK;
 }
 
@@ -1631,11 +1425,13 @@ HRESULT am_GetWallpaperFilePath_p(const int screen, LPWSTR *result)
     }
     const auto wallpaperPath = new wchar_t[MAX_PATH];
     SecureZeroMemory(wallpaperPath, sizeof(wallpaperPath));
-    if (SystemParametersInfoW(SPI_GETDESKWALLPAPER, MAX_PATH, wallpaperPath, 0) == FALSE) {
+    if (SystemParametersInfoW(SPI_GETDESKWALLPAPER, MAX_PATH, wallpaperPath, 0) != FALSE) {
+        *result = wallpaperPath;
+        return S_OK;
+    } else {
         PRINT_WIN32_ERROR_MESSAGE(SystemParametersInfoW)
         delete [] wallpaperPath;
     }
-    *result = wallpaperPath;
     // todo
     //const QSettings registry(g_desktopRegistryKey, QSettings::NativeFormat);
     //return QImage(registry.value(QStringLiteral("WallPaper")).toString());
@@ -2845,7 +2641,7 @@ HRESULT am_SetWindowState(const WindowState state)
 
 HRESULT am_CloseWindow()
 {
-    return am_Cleanup_p();
+    return am_Release();
 }
 
 HRESULT am_GetWindowHandle(HWND *result)
@@ -2911,6 +2707,40 @@ HRESULT am_EventLoopExec(int *result)
 HRESULT am_IsWindowActive(bool *result)
 {
     return am_IsWindowActive_p(g_am_MainWindowHandle_p, result);
+}
+
+HRESULT am_FreeStringA(LPSTR str)
+{
+    if (!str) {
+        return E_INVALIDARG;
+    }
+    delete [] str;
+    str = nullptr;
+    return S_OK;
+}
+
+HRESULT am_FreeStringW(LPWSTR str)
+{
+    if (!str) {
+        return E_INVALIDARG;
+    }
+    delete [] str;
+    str = nullptr;
+    return S_OK;
+}
+
+HRESULT am_CanUnloadDll(bool *result)
+{
+    if (!result) {
+        return E_INVALIDARG;
+    }
+    *result = !g_am_AcrylicManagerInitialized_p;
+    return S_OK;
+}
+
+HRESULT am_Release()
+{
+    return am_Cleanup_p();
 }
 
 // DLL entry point function

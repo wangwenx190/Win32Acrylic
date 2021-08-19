@@ -8,12 +8,8 @@ set(SOURCES
 
 add_executable(Demo WIN32 ${SOURCES})
 
-target_link_libraries(Demo PRIVATE
-    wangwenx190::AcrylicManager
-)
-
 if(MSVC)
-    target_compile_options(Demo PRIVATE /utf-8 /await:strict /permissive-)
+    target_compile_options(Demo PRIVATE /utf-8 /permissive-)
     if(CMAKE_BUILD_TYPE STREQUAL "Debug")
         target_compile_options(Demo PRIVATE /JMC)
     else()

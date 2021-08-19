@@ -187,9 +187,22 @@ am_IsWindowActive(
 );
 
 [[nodiscard]] ACRYLICMANAGER_API HRESULT WINAPI
-am_LocalFree(
-    _In_ void *mem
+am_FreeStringA(
+    _In_ LPSTR str
 );
+
+[[nodiscard]] ACRYLICMANAGER_API HRESULT WINAPI
+am_FreeStringW(
+    _In_ LPWSTR str
+);
+
+[[nodiscard]] ACRYLICMANAGER_API HRESULT WINAPI
+am_CanUnloadDll(
+    _Out_ bool *result
+);
+
+[[nodiscard]] ACRYLICMANAGER_API HRESULT WINAPI
+am_Release();
 
 #if 0
 [[nodiscard]] ACRYLICMANAGER_API HRESULT WINAPI

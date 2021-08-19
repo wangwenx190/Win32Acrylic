@@ -22,7 +22,32 @@
  * SOFTWARE.
  */
 
-#include "acrylicmanager.h"
+#include <Windows.h>
+
+static LPCWSTR g_applicationName = L"AcrylicManager Demo Application";
+
+using am_GetVersion_ptr = HRESULT(WINAPI *)(LPWSTR *);
+using am_FreeStringW_ptr = HRESULT(WINAPI *)(LPWSTR);
+using am_CreateWindow_ptr = HRESULT(WINAPI *)();
+using am_CenterWindow_ptr = HRESULT(WINAPI *)();
+using am_SetWindowState_ptr = HRESULT(WINAPI *)(const WindowState);
+using am_EventLoopExec_ptr = HRESULT(WINAPI *)(int *);
+using am_CanUnloadDll_ptr = HRESULT(WINAPI *)(bool *);
+using am_Release_ptr = HRESULT(WINAPI *)();
+
+static am_GetVersion_ptr am_GetVersion_pfn = nullptr;
+static am_FreeStringW_ptr am_FreeStringW_pfn = nullptr;
+static am_CreateWindow_ptr am_CreateWindow_pfn = nullptr;
+static am_CenterWindow_ptr am_CenterWindow_pfn = nullptr;
+static am_SetWindowState_ptr am_SetWindowState_pfn = nullptr;
+static am_EventLoopExec_ptr am_EventLoopExec_pfn = nullptr;
+static am_CanUnloadDll_ptr am_CanUnloadDll_pfn = nullptr;
+static am_Release_ptr am_Release_pfn = nullptr;
+
+[[nodiscard]] static inline bool InitializeAcrylicManagerLibrary()
+{
+
+}
 
 EXTERN_C int APIENTRY
 wWinMain(
@@ -37,11 +62,16 @@ wWinMain(
     UNREFERENCED_PARAMETER(lpCmdLine);
     UNREFERENCED_PARAMETER(nCmdShow);
 
-    if (SUCCEEDED(am_CreateWindow())) {
-        if (SUCCEEDED(am_CenterWindow())) {
-            if (SUCCEEDED(am_SetWindowState(WindowState::Shown))) {
+    if (!InitializeAcrylicManagerLibrary()) {
+        MessageBoxW(nullptr, L"Failed to initialize AcrylicManager library.", g_applicationName, MB_ICONERROR | MB_OK);
+        return -1;
+    }
+
+    if (SUCCEEDED(am_CreateWindow_pfn())) {
+        if (SUCCEEDED(am_CenterWindow_pfn())) {
+            if (SUCCEEDED(am_SetWindowState_pfn(WindowState::Shown))) {
                 int result = -1;
-                if (SUCCEEDED(am_EventLoopExec(&result))) {
+                if (SUCCEEDED(am_EventLoopExec_pfn(&result))) {
                     return result;
                 }
             }

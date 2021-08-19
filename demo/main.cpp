@@ -26,11 +26,13 @@
 
 static LPCWSTR g_applicationName = L"AcrylicManager Demo Application";
 
+static const int WindowState_Shown = 5;
+
 using am_GetVersion_ptr = HRESULT(WINAPI *)(LPWSTR *);
 using am_FreeStringW_ptr = HRESULT(WINAPI *)(LPWSTR);
 using am_CreateWindow_ptr = HRESULT(WINAPI *)();
 using am_CenterWindow_ptr = HRESULT(WINAPI *)();
-using am_SetWindowState_ptr = HRESULT(WINAPI *)(const WindowState);
+using am_SetWindowState_ptr = HRESULT(WINAPI *)(const int);
 using am_EventLoopExec_ptr = HRESULT(WINAPI *)(int *);
 using am_CanUnloadDll_ptr = HRESULT(WINAPI *)(bool *);
 using am_Release_ptr = HRESULT(WINAPI *)();
@@ -46,7 +48,60 @@ static am_Release_ptr am_Release_pfn = nullptr;
 
 [[nodiscard]] static inline bool InitializeAcrylicManagerLibrary()
 {
-
+    static bool tried = false;
+    if (tried) {
+        return false;
+    }
+    tried = true;
+    static HMODULE dll = LoadLibraryExW(L"AcrylicManager.dll", nullptr, LOAD_LIBRARY_SEARCH_APPLICATION_DIR);
+    if (!dll) {
+        dll = LoadLibraryExW(L"AcrylicManagerd.dll", nullptr, LOAD_LIBRARY_SEARCH_APPLICATION_DIR);
+        if (!dll) {
+            OutputDebugStringW(L"Failed to load AcrylicManager library.");
+            return false;
+        }
+    }
+    am_GetVersion_pfn = reinterpret_cast<am_GetVersion_ptr>(GetProcAddress(dll, "am_GetVersion"));
+    if (!am_GetVersion_pfn) {
+        OutputDebugStringW(L"Failed to resolve am_GetVersion().");
+        return false;
+    }
+    am_FreeStringW_pfn = reinterpret_cast<am_FreeStringW_ptr>(GetProcAddress(dll, "am_FreeStringW"));
+    if (!am_FreeStringW_pfn) {
+        OutputDebugStringW(L"Failed to resolve am_FreeStringW().");
+        return false;
+    }
+    am_CreateWindow_pfn = reinterpret_cast<am_CreateWindow_ptr>(GetProcAddress(dll, "am_CreateWindow"));
+    if (!am_CreateWindow_pfn) {
+        OutputDebugStringW(L"Failed to resolve am_CreateWindow().");
+        return false;
+    }
+    am_CenterWindow_pfn = reinterpret_cast<am_CenterWindow_ptr>(GetProcAddress(dll, "am_CenterWindow"));
+    if (!am_CenterWindow_pfn) {
+        OutputDebugStringW(L"Failed to resolve am_CenterWindow().");
+        return false;
+    }
+    am_SetWindowState_pfn = reinterpret_cast<am_SetWindowState_ptr>(GetProcAddress(dll, "am_SetWindowState"));
+    if (!am_SetWindowState_pfn) {
+        OutputDebugStringW(L"Failed to resolve am_SetWindowState().");
+        return false;
+    }
+    am_EventLoopExec_pfn = reinterpret_cast<am_EventLoopExec_ptr>(GetProcAddress(dll, "am_EventLoopExec"));
+    if (!am_EventLoopExec_pfn) {
+        OutputDebugStringW(L"Failed to resolve am_EventLoopExec().");
+        return false;
+    }
+    am_CanUnloadDll_pfn = reinterpret_cast<am_CanUnloadDll_ptr>(GetProcAddress(dll, "am_CanUnloadDll"));
+    if (!am_CanUnloadDll_pfn) {
+        OutputDebugStringW(L"Failed to resolve am_CanUnloadDll().");
+        return false;
+    }
+    am_Release_pfn = reinterpret_cast<am_Release_ptr>(GetProcAddress(dll, "am_Release"));
+    if (!am_Release_pfn) {
+        OutputDebugStringW(L"Failed to resolve am_Release().");
+        return false;
+    }
+    return true;
 }
 
 EXTERN_C int APIENTRY
@@ -67,9 +122,20 @@ wWinMain(
         return -1;
     }
 
+    LPWSTR ver = nullptr;
+    if (SUCCEEDED(am_GetVersion_pfn(&ver))) {
+        const auto str = new wchar_t[MAX_PATH];
+        SecureZeroMemory(str, sizeof(str));
+        wcscat(str, L"AcrylicManager version: ");
+        wcscat(str, ver);
+        OutputDebugStringW(str);
+        delete [] str;
+        am_FreeStringW_pfn(ver);
+    }
+
     if (SUCCEEDED(am_CreateWindow_pfn())) {
         if (SUCCEEDED(am_CenterWindow_pfn())) {
-            if (SUCCEEDED(am_SetWindowState_pfn(WindowState::Shown))) {
+            if (SUCCEEDED(am_SetWindowState_pfn(WindowState_Shown))) {
                 int result = -1;
                 if (SUCCEEDED(am_EventLoopExec_pfn(&result))) {
                     return result;

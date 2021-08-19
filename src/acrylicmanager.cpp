@@ -49,6 +49,18 @@
 #include <D2D1_2.h>
 #include <WinCodec.h>
 
+#ifndef ABM_GETAUTOHIDEBAREX
+#define ABM_GETAUTOHIDEBAREX (0x0000000b)
+#endif
+
+#ifndef WM_DWMCOMPOSITIONCHANGED
+#define WM_DWMCOMPOSITIONCHANGED (0x031E)
+#endif
+
+#ifndef WM_DWMCOLORIZATIONCOLORCHANGED
+#define WM_DWMCOLORIZATIONCOLORCHANGED (0x0320)
+#endif
+
 // The thickness of an auto-hide taskbar in pixels.
 static const int g_am_AutoHideTaskbarThicknessPx_p = 2;
 static const int g_am_AutoHideTaskbarThicknessPy_p = g_am_AutoHideTaskbarThicknessPx_p;
@@ -116,15 +128,8 @@ static const bool g_am_IsWindows10OrGreater_p = []{
 
 static const bool g_am_IsDirect2DAvailable_p = []{
     bool force = false;
-    const auto buf = new wchar_t[20]; // 20 should be enough for it...
-    SecureZeroMemory(buf, sizeof(buf));
-    if (GetEnvironmentVariableW(g_am_ForceHomemadeAcrylicEnvVar_p, buf, sizeof(buf)) != 0) {
-        force = ((_wcsicmp(buf, L"True") == 0) || (_wcsicmp(buf, L"Yes") == 0)
-                 || (_wcsicmp(buf, L"Enable") == 0) || (_wcsicmp(buf, L"Enabled") == 0)
-                 || (_wcsicmp(buf, L"On") == 0) || (_wcsicmp(buf, L"0") != 0));
-    }
-    delete [] buf;
-    return (g_am_IsWindows8OrGreater_p || force);
+    return (g_am_IsWindows8OrGreater_p
+            || (SUCCEEDED(am_GetBoolFromEnvironmentVariable_p(g_am_ForceHomemadeAcrylicEnvVar_p, &force)) && force));
 }();
 
 static const bool g_am_IsDarkModeAvailable_p = []{
@@ -133,19 +138,14 @@ static const bool g_am_IsDarkModeAvailable_p = []{
 }();
 
 static const bool g_am_IsXAMLIslandAvailable_p = []{
-    bool force = false;
-    const auto buf = new wchar_t[20]; // 20 should be enough for it...
-    SecureZeroMemory(buf, sizeof(buf));
-    if (GetEnvironmentVariableW(g_am_ForceOfficialAcrylicEnvVar_p, buf, sizeof(buf)) != 0) {
-        force = ((_wcsicmp(buf, L"True") == 0) || (_wcsicmp(buf, L"Yes") == 0)
-                 || (_wcsicmp(buf, L"Enable") == 0) || (_wcsicmp(buf, L"Enabled") == 0)
-                 || (_wcsicmp(buf, L"On") == 0) || (_wcsicmp(buf, L"0") != 0));
-    }
-    delete [] buf;
-    bool result = false;
-    const bool should = (SUCCEEDED(am_CompareSystemVersion_p(WindowsVersion::Windows10_19H1, VersionCompare::GreaterOrEqual, &result)) && result);
-    return (should || force);
+    bool result = false, force = false;
+    return ((SUCCEEDED(am_CompareSystemVersion_p(WindowsVersion::Windows10_19H1, VersionCompare::GreaterOrEqual, &result)) && result)
+            || (SUCCEEDED(am_GetBoolFromEnvironmentVariable_p(g_am_ForceOfficialAcrylicEnvVar_p, &force)) && force));
 }();
+
+/////////////////////////////////
+/////     Helper functions
+/////////////////////////////////
 
 [[nodiscard]] static inline HRESULT am_PrintHelper_p(LPCWSTR text, const bool showUi = false, LPCWSTR title = nullptr)
 {
@@ -167,7 +167,7 @@ static const bool g_am_IsXAMLIslandAvailable_p = []{
     const auto buf = new wchar_t[MAX_PATH];
     SecureZeroMemory(buf, sizeof(buf));
     if (GetEnvironmentVariableW(name, buf, sizeof(buf)) == 0) {
-        PRINT_WIN32_ERROR_MESSAGE(GetEnvironmentVariableW)
+        // We eat this error because the given environment variable may not exist.
         delete [] buf;
         return E_FAIL;
     }
@@ -191,7 +191,7 @@ static const bool g_am_IsXAMLIslandAvailable_p = []{
     const bool success = (RegQueryValueExW(hKey, valueName, nullptr, &dwType,
                                 reinterpret_cast<LPBYTE>(&dwValue), &dwSize) == ERROR_SUCCESS);
     if (!success) {
-        PRINT_WIN32_ERROR_MESSAGE(RegQueryValueExW)
+        // We eat this error because the given registry key and value may not exist.
     }
     if (RegCloseKey(hKey) != ERROR_SUCCESS) {
         PRINT_WIN32_ERROR_MESSAGE_AND_RETURN(RegCloseKey)
@@ -220,7 +220,7 @@ static const bool g_am_IsXAMLIslandAvailable_p = []{
     const bool success = (RegQueryValueExW(hKey, valueName, nullptr, &dwType,
                                 reinterpret_cast<LPBYTE>(buf), &dwSize) == ERROR_SUCCESS);
     if (!success) {
-        PRINT_WIN32_ERROR_MESSAGE(RegQueryValueExW)
+        // We eat this error because the given registry key and value may not exist.
         delete [] buf;
     }
     if (RegCloseKey(hKey) != ERROR_SUCCESS) {
@@ -748,6 +748,844 @@ static const bool g_am_IsXAMLIslandAvailable_p = []{
 
     return S_OK;
 }
+
+[[nodiscard]] static inline LRESULT CALLBACK am_MainWindowProcHelper_p(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
+{
+    bool wallpaperChanged = false;
+    bool systemThemeChanged = false;
+    switch (uMsg)
+    {
+    case WM_NCCALCSIZE: {
+        if (!wParam) {
+            return 0;
+        }
+        const auto clientRect = &(reinterpret_cast<LPNCCALCSIZE_PARAMS>(lParam)->rgrc[0]);
+        if (g_am_IsWindows10OrGreater_p) {
+            // Store the original top before the default window proc applies the default frame.
+            const LONG originalTop = clientRect->top;
+            // Apply the default frame
+            const LRESULT ret = DefWindowProcW(hWnd, uMsg, wParam, lParam);
+            if (ret != 0) {
+                return ret;
+            }
+            // Re-apply the original top from before the size of the default frame was applied.
+            clientRect->top = originalTop;
+        }
+        // We don't need this correction when we're fullscreen. We will
+        // have the WS_POPUP size, so we don't have to worry about
+        // borders, and the default frame will be fine.
+        bool nonClientAreaExists = false;
+        bool max = false, full = false;
+        if ((SUCCEEDED(am_IsMaximized_p(hWnd, &max)) && max)
+                && (SUCCEEDED(am_IsFullScreened_p(hWnd, &full)) && !full)) {
+            // When a window is maximized, its size is actually a little bit more
+            // than the monitor's work area. The window is positioned and sized in
+            // such a way that the resize handles are outside of the monitor and
+            // then the window is clipped to the monitor so that the resize handle
+            // do not appear because you don't need them (because you can't resize
+            // a window when it's maximized unless you restore it).
+            int rbtY = 0;
+            if (SUCCEEDED(am_GetResizeBorderThickness_p(false, g_am_CurrentDpi_p, &rbtY))) {
+                clientRect->top += rbtY;
+                if (!g_am_IsWindows10OrGreater_p) {
+                    clientRect->bottom -= rbtY;
+                    int rbtX = 0;
+                    if (SUCCEEDED(am_GetResizeBorderThickness_p(true, g_am_CurrentDpi_p, &rbtX))) {
+                        clientRect->left += rbtX;
+                        clientRect->right -= rbtX;
+                    }
+                }
+            }
+            nonClientAreaExists = true;
+        }
+        // Attempt to detect if there's an autohide taskbar, and if
+        // there is, reduce our size a bit on the side with the taskbar,
+        // so the user can still mouse-over the taskbar to reveal it.
+        // Make sure to use MONITOR_DEFAULTTONEAREST, so that this will
+        // still find the right monitor even when we're restoring from
+        // minimized.
+        if (max || full) {
+            APPBARDATA abd;
+            SecureZeroMemory(&abd, sizeof(abd));
+            abd.cbSize = sizeof(abd);
+            // First, check if we have an auto-hide taskbar at all:
+            if (SHAppBarMessage(ABM_GETSTATE, &abd) & ABS_AUTOHIDE) {
+                bool top = false, bottom = false, left = false, right = false;
+                // Due to "ABM_GETAUTOHIDEBAREX" only has effect since Windows 8.1,
+                // we have to use another way to judge the edge of the auto-hide taskbar
+                // when the application is running on Windows 7 or Windows 8.
+                if (g_am_IsWindows8Point1OrGreater_p) {
+                    RECT screenRect = {};
+                    if (SUCCEEDED(am_GetScreenGeometry_p(hWnd, &screenRect))) {
+                        // This helper can be used to determine if there's a
+                        // auto-hide taskbar on the given edge of the monitor
+                        // we're currently on.
+                        const auto hasAutohideTaskbar = [&screenRect](const UINT edge) -> bool {
+                            APPBARDATA abd2;
+                            SecureZeroMemory(&abd2, sizeof(abd2));
+                            abd2.cbSize = sizeof(abd2);
+                            abd2.uEdge = edge;
+                            abd2.rc = screenRect;
+                            return (reinterpret_cast<HWND>(SHAppBarMessage(ABM_GETAUTOHIDEBAREX, &abd2)) != nullptr);
+                        };
+                        top = hasAutohideTaskbar(ABE_TOP);
+                        bottom = hasAutohideTaskbar(ABE_BOTTOM);
+                        left = hasAutohideTaskbar(ABE_LEFT);
+                        right = hasAutohideTaskbar(ABE_RIGHT);
+                    }
+                } else {
+                    // The following code is copied from Mozilla Firefox with some modifications.
+                    int edge = -1;
+                    APPBARDATA _abd;
+                    SecureZeroMemory(&_abd, sizeof(_abd));
+                    _abd.cbSize = sizeof(_abd);
+                    _abd.hWnd = FindWindowW(L"Shell_TrayWnd", nullptr);
+                    if (_abd.hWnd) {
+                        const HMONITOR windowMonitor = GET_CURRENT_SCREEN(hWnd);
+                        const HMONITOR taskbarMonitor = MonitorFromWindow(_abd.hWnd, MONITOR_DEFAULTTOPRIMARY);
+                        if (taskbarMonitor == windowMonitor) {
+                            SHAppBarMessage(ABM_GETTASKBARPOS, &_abd);
+                            edge = _abd.uEdge;
+                        }
+                    }
+                    top = (edge == ABE_TOP);
+                    bottom = (edge == ABE_BOTTOM);
+                    left = (edge == ABE_LEFT);
+                    right = (edge == ABE_RIGHT);
+                }
+                // If there's a taskbar on any side of the monitor, reduce
+                // our size a little bit on that edge.
+                // Note to future code archeologists:
+                // This doesn't seem to work for fullscreen on the primary
+                // display. However, testing a bunch of other apps with
+                // fullscreen modes and an auto-hiding taskbar has
+                // shown that _none_ of them reveal the taskbar from
+                // fullscreen mode. This includes Edge, Firefox, Chrome,
+                // Sublime Text, PowerPoint - none seemed to support this.
+                // This does however work fine for maximized.
+                if (top) {
+                    // Peculiarly, when we're fullscreen,
+                    clientRect->top += g_am_AutoHideTaskbarThicknessPy_p;
+                    nonClientAreaExists = true;
+                } else if (bottom) {
+                    clientRect->bottom -= g_am_AutoHideTaskbarThicknessPy_p;
+                    nonClientAreaExists = true;
+                } else if (left) {
+                    clientRect->left += g_am_AutoHideTaskbarThicknessPx_p;
+                    nonClientAreaExists = true;
+                } else if (right) {
+                    clientRect->right -= g_am_AutoHideTaskbarThicknessPx_p;
+                    nonClientAreaExists = true;
+                }
+            }
+        }
+        // If the window bounds change, we're going to relayout and repaint
+        // anyway. Returning WVR_REDRAW avoids an extra paint before that of
+        // the old client pixels in the (now wrong) location, and thus makes
+        // actions like resizing a window from the left edge look slightly
+        // less broken.
+        //
+        // We cannot return WVR_REDRAW when there is nonclient area, or
+        // Windows exhibits bugs where client pixels and child HWNDs are
+        // mispositioned by the width/height of the upper-left nonclient
+        // area.
+        return nonClientAreaExists ? 0 : WVR_REDRAW;
+    }
+    case WM_NCHITTEST: {
+        const POINT globalPos = {GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)};
+        POINT localPos = globalPos;
+        if (ScreenToClient(hWnd, &localPos) == FALSE) {
+            PRINT_WIN32_ERROR_MESSAGE(ScreenToClient)
+            break;
+        }
+        bool max = false, full = false, normal = false;
+        if (FAILED(am_IsMaximized_p(hWnd, &max)) || FAILED(am_IsFullScreened_p(hWnd, &full))
+                || FAILED(am_IsWindowNoState_p(hWnd, &normal))) {
+            break;
+        }
+        const bool maxOrFull = (max || full);
+        SIZE ws = {};
+        if (FAILED(am_GetWindowSizeHelper_p(hWnd, &ws))) {
+            break;
+        }
+        const LONG ww = ws.cx;
+        int rbtX = 0, rbtY = 0, cth = 0;
+        if (FAILED(am_GetResizeBorderThickness_p(true, g_am_CurrentDpi_p, &rbtX))
+                || FAILED(am_GetResizeBorderThickness_p(false, g_am_CurrentDpi_p, &rbtY))
+                || FAILED(am_GetCaptionHeight_p(g_am_CurrentDpi_p, &cth))) {
+            break;
+        }
+        const bool hitTestVisible = /*am_IsHitTestVisibleInChrome_p(hWnd)*/false; // todo
+        bool isTitleBar = false;
+        if (maxOrFull) {
+            isTitleBar = ((localPos.y >= 0) && (localPos.y <= cth)
+                          && (localPos.x >= 0) && (localPos.x <= ww)
+                          && !hitTestVisible);
+        } else if (normal) {
+            isTitleBar = ((localPos.y > rbtY) && (localPos.y <= (rbtY + cth))
+                          && (localPos.x > rbtX) && (localPos.x < (ww - rbtX))
+                          && !hitTestVisible);
+        }
+        const bool isTop = (normal ? (localPos.y <= rbtY) : false);
+        if (g_am_IsWindows10OrGreater_p) {
+            // This will handle the left, right and bottom parts of the frame
+            // because we didn't change them.
+            const LRESULT originalRet = DefWindowProcW(hWnd, uMsg, wParam, lParam);
+            if (originalRet != HTCLIENT) {
+                return originalRet;
+            }
+            // At this point, we know that the cursor is inside the client area
+            // so it has to be either the little border at the top of our custom
+            // title bar or the drag bar. Apparently, it must be the drag bar or
+            // the little border at the top which the user can use to move or
+            // resize the window.
+            if (isTop) {
+                return HTTOP;
+            }
+            if (isTitleBar) {
+                return HTCAPTION;
+            }
+            return HTCLIENT;
+        } else {
+            if (maxOrFull) {
+                if (isTitleBar) {
+                    return HTCAPTION;
+                }
+                return HTCLIENT;
+            }
+            const LONG wh = ws.cy;
+            const bool isBottom = (normal ? (localPos.y >= (wh - rbtY)) : false);
+            // Make the border a little wider to let the user easy to resize on corners.
+            const double factor = (normal ? ((isTop || isBottom) ? 2.0 : 1.0) : 0.0);
+            const bool isLeft = (normal ? (localPos.x <= std::round(static_cast<double>(rbtX) * factor)) : false);
+            const bool isRight = (normal ? (localPos.x >= (ww - std::round(static_cast<double>(rbtX) * factor))) : false);
+            if (isTop) {
+                if (isLeft) {
+                    return HTTOPLEFT;
+                }
+                if (isRight) {
+                    return HTTOPRIGHT;
+                }
+                return HTTOP;
+            }
+            if (isBottom) {
+                if (isLeft) {
+                    return HTBOTTOMLEFT;
+                }
+                if (isRight) {
+                    return HTBOTTOMRIGHT;
+                }
+                return HTBOTTOM;
+            }
+            if (isLeft) {
+                return HTLEFT;
+            }
+            if (isRight) {
+                return HTRIGHT;
+            }
+            if (isTitleBar) {
+                return HTCAPTION;
+            }
+            return HTCLIENT;
+        }
+        return HTNOWHERE;
+    }
+    case WM_PAINT: {
+        if (g_am_IsWindows10OrGreater_p) {
+            PAINTSTRUCT ps = {};
+            const HDC hdc = BeginPaint(hWnd, &ps);
+            if (!hdc) {
+                PRINT_WIN32_ERROR_MESSAGE(BeginPaint)
+                break;
+            }
+            // We removed the whole top part of the frame (see handling of
+            // WM_NCCALCSIZE) so the top border is missing now. We add it back here.
+            // Note #1: You might wonder why we don't remove just the title bar instead
+            //  of removing the whole top part of the frame and then adding the little
+            //  top border back. I tried to do this but it didn't work: DWM drew the
+            //  whole title bar anyways on top of the window. It seems that DWM only
+            //  wants to draw either nothing or the whole top part of the frame.
+            // Note #2: For some reason if you try to set the top margin to just the
+            //  top border height (what we want to do), then there is a transparency
+            //  bug when the window is inactive, so I've decided to add the whole top
+            //  part of the frame instead and then we will hide everything that we
+            //  don't need (that is, the whole thing but the little 1 pixel wide border
+            //  at the top) in the WM_PAINT handler. This eliminates the transparency
+            //  bug and it's what a lot of Win32 apps that customize the title bar do
+            //  so it should work fine.
+            int borderThickness = 0;
+            if (FAILED(am_GetWindowVisibleFrameBorderThickness_p(hWnd, g_am_CurrentDpi_p, &borderThickness))) {
+                break;
+            }
+            if (ps.rcPaint.top < borderThickness) {
+                RECT rcPaint = ps.rcPaint;
+                rcPaint.bottom = borderThickness;
+                // To show the original top border, we have to paint on top
+                // of it with the alpha component set to 0. This page
+                // recommends to paint the area in black using the stock
+                // BLACK_BRUSH to do this:
+                // https://docs.microsoft.com/en-us/windows/win32/dwm/customframe#extending-the-client-frame
+                if (FillRect(hdc, &rcPaint, GET_BLACK_BRUSH) == 0) {
+                    PRINT_WIN32_ERROR_MESSAGE(FillRect)
+                    break;
+                }
+            }
+            if (ps.rcPaint.bottom > borderThickness) {
+                RECT rcPaint = ps.rcPaint;
+                rcPaint.top = borderThickness;
+                // To hide the original title bar, we have to paint on top
+                // of it with the alpha component set to 255. This is a hack
+                // to do it with GDI. See updateFrameMargins() for more information.
+                HDC opaqueDc = nullptr;
+                BP_PAINTPARAMS params;
+                SecureZeroMemory(&params, sizeof(params));
+                params.cbSize = sizeof(params);
+                params.dwFlags = BPPF_NOCLIP | BPPF_ERASE;
+                const HPAINTBUFFER buf = BeginBufferedPaint(hdc, &rcPaint, BPBF_TOPDOWNDIB, &params, &opaqueDc);
+                if (!buf) {
+                    PRINT_WIN32_ERROR_MESSAGE(BeginBufferedPaint)
+                    break;
+                }
+                if (FillRect(opaqueDc, &rcPaint,
+                             reinterpret_cast<HBRUSH>(GetClassLongPtrW(hWnd, GCLP_HBRBACKGROUND))) == 0) {
+                    PRINT_WIN32_ERROR_MESSAGE(FillRect)
+                    break;
+                }
+                HRESULT hr = BufferedPaintSetAlpha(buf, nullptr, 255);
+                if (FAILED(hr)) {
+                    PRINT_HR_ERROR_MESSAGE(BufferedPaintSetAlpha, hr)
+                    break;
+                }
+                hr = EndBufferedPaint(buf, TRUE);
+                if (FAILED(hr)) {
+                    PRINT_HR_ERROR_MESSAGE(EndBufferedPaint, hr)
+                    break;
+                }
+            }
+            if (EndPaint(hWnd, &ps) == FALSE) {
+                PRINT_WIN32_ERROR_MESSAGE(EndPaint)
+                break;
+            }
+            return 0;
+        } else {
+            // todo
+            break;
+        }
+    } break;
+    case WM_DPICHANGED: {
+        wallpaperChanged = true;
+        const double x = LOWORD(wParam);
+        const double y = HIWORD(wParam);
+        g_am_CurrentDpi_p = std::round((x + y) / 2.0);
+        const auto prcNewWindow = reinterpret_cast<LPRECT>(lParam);
+        if (MoveWindow(hWnd, prcNewWindow->left, prcNewWindow->top,
+                   GET_RECT_WIDTH(*prcNewWindow), GET_RECT_HEIGHT(*prcNewWindow), TRUE) == FALSE) {
+            PRINT_WIN32_ERROR_MESSAGE(MoveWindow)
+            break;
+        }
+        return 0;
+    } break;
+    case WM_SIZE: {
+        bool full = false;
+        if ((wParam == SIZE_MAXIMIZED) || (wParam == SIZE_RESTORED)
+                || (SUCCEEDED(am_IsFullScreened_p(hWnd, &full)) && full)) {
+            if (FAILED(am_UpdateFrameMarginsHelper_p(hWnd, g_am_CurrentDpi_p))) {
+                PRINT(L"WM_SIZE: Failed to update frame margins.")
+                break;
+            }
+        }
+        const auto width = LOWORD(lParam);
+        const UINT flags = SWP_NOACTIVATE | SWP_SHOWWINDOW | SWP_NOOWNERZORDER;
+        if (g_am_XAMLIslandWindowHandle_p) {
+            // Give enough space to our thin homemade top border.
+            int borderThickness = 0;
+            if (SUCCEEDED(am_GetWindowVisibleFrameBorderThickness_p(hWnd, g_am_CurrentDpi_p, &borderThickness))) {
+                const int height = (HIWORD(lParam) - borderThickness);
+                if (SetWindowPos(g_am_XAMLIslandWindowHandle_p, HWND_BOTTOM, 0, borderThickness,
+                             width, height, flags) == FALSE) {
+                    PRINT_WIN32_ERROR_MESSAGE(SetWindowPos)
+                    break;
+                }
+            }
+        }
+        if (g_am_DragBarWindowHandle_p) {
+            int tbh = 0;
+            if (SUCCEEDED(am_GetTitleBarHeight_p(hWnd, g_am_CurrentDpi_p, &tbh))) {
+                if (SetWindowPos(g_am_DragBarWindowHandle_p, HWND_TOP, 0, 0, width, tbh, flags) == FALSE) {
+                    PRINT_WIN32_ERROR_MESSAGE(SetWindowPos)
+                    break;
+                }
+            }
+        }
+    } break;
+    case WM_SETFOCUS: {
+        if (g_am_XAMLIslandWindowHandle_p) {
+            // Send focus to the XAML Island child window.
+            SetFocus(g_am_XAMLIslandWindowHandle_p);
+            return 0;
+        }
+    } break;
+    case WM_SETCURSOR: {
+        if (LOWORD(lParam) == HTCLIENT) {
+            // Get the cursor position from the _last message_ and not from
+            // `GetCursorPos` (which returns the cursor position _at the
+            // moment_) because if we're lagging behind the cursor's position,
+            // we still want to get the cursor position that was associated
+            // with that message at the time it was sent to handle the message
+            // correctly.
+            const LRESULT hitTestResult = SendMessageW(hWnd, WM_NCHITTEST, 0, GetMessagePos());
+            if (hitTestResult == HTTOP) {
+                // We have to set the vertical resize cursor manually on
+                // the top resize handle because Windows thinks that the
+                // cursor is on the client area because it asked the asked
+                // the drag window with `WM_NCHITTEST` and it returned
+                // `HTCLIENT`.
+                // We don't want to modify the drag window's `WM_NCHITTEST`
+                // handling to return `HTTOP` because otherwise, the system
+                // would resize the drag window instead of the top level
+                // window!
+                SetCursor(LoadCursorW(nullptr, IDC_SIZENS));
+            } else {
+                // Reset cursor
+                SetCursor(LoadCursorW(nullptr, IDC_ARROW));
+            }
+            return TRUE;
+        }
+    } break;
+    case WM_NCRBUTTONUP: {
+        // The `DefWindowProc` function doesn't open the system menu for some
+        // reason so we have to do it ourselves.
+        if (wParam == HTCAPTION) {
+            if (FAILED(am_OpenSystemMenu_p(hWnd, {GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)}))) {
+                PRINT(L"WM_NCRBUTTONUP: Failed to open the system menu.")
+                break;
+            }
+        }
+    } break;
+    case WM_SETTINGCHANGE: {
+        if (wParam == SPI_SETDESKWALLPAPER) {
+            wallpaperChanged = true;
+        }
+        if ((wParam == 0) && (wcscmp(reinterpret_cast<LPCWSTR>(lParam), L"ImmersiveColorSet") == 0)) {
+            systemThemeChanged = true;
+        }
+    } break;
+    case WM_THEMECHANGED:
+    case WM_DWMCOLORIZATIONCOLORCHANGED:
+        systemThemeChanged = true;
+        break;
+    case WM_DWMCOMPOSITIONCHANGED: {
+        bool enabled = false;
+        if (FAILED(am_IsCompositionEnabled_p(&enabled)) || !enabled) {
+            PRINT(L"This application can't continue running when DWM composition is disabled.")
+            std::exit(-1);
+        }
+    } break;
+    case WM_CLOSE: {
+        SAFE_RELEASE_RESOURCES
+        return 0;
+    }
+    case WM_DESTROY: {
+        PostQuitMessage(0);
+        return 0;
+    }
+    default:
+        break;
+    }
+    if (g_am_BackgroundBrush_p && (g_am_BrushTheme_p == SystemTheme::Auto) && systemThemeChanged) {
+        SystemTheme systemTheme = SystemTheme::Invalid;
+        if (SUCCEEDED(am_GetSystemThemeHelper_p(&systemTheme))) {
+            if ((systemTheme != SystemTheme::Invalid) && (systemTheme != SystemTheme::HighContrast)) {
+                if (SUCCEEDED(am_SwitchAcrylicBrushThemeHelper_p(systemTheme))) {
+                    g_am_BrushTheme_p = SystemTheme::Auto;
+                } else {
+                    PRINT(L"Failed to switch acrylic brush theme.")
+                }
+            } else {
+                PRINT(L"Failed to retrieve system theme or high contrast mode is on.")
+            }
+        }
+    }
+    return DefWindowProcW(hWnd, uMsg, wParam, lParam);
+}
+
+[[nodiscard]] static inline LRESULT CALLBACK am_DragBarWindowProcHelper_p(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
+{
+    std::optional<UINT> nonClientMessage = std::nullopt;
+
+    switch (uMsg)
+    {
+    // Translate WM_* messages on the window to WM_NC* on the top level window.
+    case WM_LBUTTONDOWN:
+        nonClientMessage = WM_NCLBUTTONDOWN;
+        break;
+    case WM_LBUTTONUP:
+        nonClientMessage = WM_NCLBUTTONUP;
+        break;
+    case WM_LBUTTONDBLCLK:
+        nonClientMessage = WM_NCLBUTTONDBLCLK;
+        break;
+    case WM_MBUTTONDOWN:
+        nonClientMessage = WM_NCMBUTTONDOWN;
+        break;
+    case WM_MBUTTONUP:
+        nonClientMessage = WM_NCMBUTTONUP;
+        break;
+    case WM_MBUTTONDBLCLK:
+        nonClientMessage = WM_NCMBUTTONDBLCLK;
+        break;
+    case WM_RBUTTONDOWN:
+        nonClientMessage = WM_NCRBUTTONDOWN;
+        break;
+    case WM_RBUTTONUP:
+        nonClientMessage = WM_NCRBUTTONUP;
+        break;
+    case WM_RBUTTONDBLCLK:
+        nonClientMessage = WM_NCRBUTTONDBLCLK;
+        break;
+    case WM_XBUTTONDOWN:
+        nonClientMessage = WM_NCXBUTTONDOWN;
+        break;
+    case WM_XBUTTONUP:
+        nonClientMessage = WM_NCXBUTTONUP;
+        break;
+    case WM_XBUTTONDBLCLK:
+        nonClientMessage = WM_NCXBUTTONDBLCLK;
+        break;
+    default:
+        break;
+    }
+
+    if (nonClientMessage.has_value() && g_am_MainWindowHandle_p)
+    {
+        POINT pos = {GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)};
+        if (ClientToScreen(hWnd, &pos) == FALSE) {
+            PRINT_WIN32_ERROR_MESSAGE(ClientToScreen)
+            return 0;
+        }
+        const LPARAM newLParam = MAKELPARAM(pos.x, pos.y);
+        // Hit test the parent window at the screen coordinates the user clicked in the drag input sink window,
+        // then pass that click through as an NC click in that location.
+        const LRESULT hitTestResult = SendMessageW(g_am_MainWindowHandle_p, WM_NCHITTEST, 0, newLParam);
+        SendMessageW(g_am_MainWindowHandle_p, nonClientMessage.value(), hitTestResult, newLParam);
+        return 0;
+    }
+
+    return DefWindowProcW(hWnd, uMsg, wParam, lParam);
+}
+
+[[nodiscard]] static inline HRESULT am_RegisterMainWindowClassHelper_p()
+{
+    if (g_am_MainWindowAtom_p != 0) {
+        SAFE_RETURN
+    }
+
+    LPWSTR guid = nullptr;
+    if (FAILED(am_GenerateGUID_p(&guid))) {
+        SAFE_RETURN
+    }
+    g_am_MainWindowClassName_p = new wchar_t[MAX_PATH];
+    SecureZeroMemory(g_am_MainWindowClassName_p, sizeof(g_am_MainWindowClassName_p));
+    wcscat(g_am_MainWindowClassName_p, g_am_WindowClassNamePrefix_p);
+    wcscat(g_am_MainWindowClassName_p, guid);
+    delete [] guid;
+    wcscat(g_am_MainWindowClassName_p, g_am_MainWindowClassNameSuffix_p);
+
+    WNDCLASSEXW wcex;
+    SecureZeroMemory(&wcex, sizeof(wcex));
+    wcex.cbSize = sizeof(wcex);
+
+    wcex.style = CS_HREDRAW | CS_VREDRAW;
+    wcex.lpfnWndProc = am_MainWindowProcHelper_p;
+    wcex.hInstance = HINST_THISCOMPONENT;
+    wcex.hCursor = LoadCursorW(nullptr, IDC_ARROW);
+    wcex.hbrBackground = reinterpret_cast<HBRUSH>(COLOR_WINDOW + 1);
+    wcex.lpszClassName = g_am_MainWindowClassName_p;
+
+    g_am_MainWindowAtom_p = RegisterClassExW(&wcex);
+
+    if (g_am_MainWindowAtom_p == 0) {
+        PRINT_WIN32_ERROR_MESSAGE_AND_SAFE_RETURN(RegisterClassExW)
+    }
+
+    return S_OK;
+}
+
+[[nodiscard]] static inline HRESULT am_RegisterDragBarWindowClassHelper_p()
+{
+    if (!g_am_IsWindows8OrGreater_p) {
+        PRINT_AND_SAFE_RETURN(L"Drag bar window is only available on Windows 8 and onwards.")
+    }
+
+    if ((g_am_MainWindowAtom_p == 0) || (g_am_DragBarWindowAtom_p != 0)) {
+        SAFE_RETURN
+    }
+
+    LPWSTR guid = nullptr;
+    if (FAILED(am_GenerateGUID_p(&guid))) {
+        SAFE_RETURN
+    }
+    g_am_DragBarWindowClassName_p = new wchar_t[MAX_PATH];
+    SecureZeroMemory(g_am_DragBarWindowClassName_p, sizeof(g_am_DragBarWindowClassName_p));
+    wcscat(g_am_DragBarWindowClassName_p, g_am_WindowClassNamePrefix_p);
+    wcscat(g_am_DragBarWindowClassName_p, guid);
+    delete [] guid;
+    wcscat(g_am_DragBarWindowClassName_p, g_am_DragBarWindowClassNameSuffix_p);
+
+    WNDCLASSEXW wcex;
+    SecureZeroMemory(&wcex, sizeof(wcex));
+    wcex.cbSize = sizeof(wcex);
+
+    wcex.style = CS_HREDRAW | CS_VREDRAW | CS_DBLCLKS;
+    wcex.lpfnWndProc = am_DragBarWindowProcHelper_p;
+    wcex.hInstance = HINST_THISCOMPONENT;
+    wcex.hCursor = LoadCursorW(nullptr, IDC_ARROW);
+    wcex.hbrBackground = GET_BLACK_BRUSH;
+    wcex.lpszClassName = g_am_DragBarWindowClassName_p;
+
+    g_am_DragBarWindowAtom_p = RegisterClassExW(&wcex);
+
+    if (g_am_DragBarWindowAtom_p == 0) {
+        PRINT_WIN32_ERROR_MESSAGE_AND_SAFE_RETURN(RegisterClassExW)
+    }
+
+    return S_OK;
+}
+
+[[nodiscard]] static inline HRESULT am_CreateMainWindowHelper_p(const int x, const int y, const int w, const int h)
+{
+    if ((g_am_MainWindowAtom_p == 0) || g_am_MainWindowHandle_p) {
+        SAFE_RETURN
+    }
+
+    g_am_MainWindowHandle_p = CreateWindowExW(0L,
+                                       g_am_MainWindowClassName_p, g_am_MainWindowTitle_p,
+                                       WS_OVERLAPPEDWINDOW,
+                                       ((x > 0) ? x : CW_USEDEFAULT),
+                                       ((y > 0) ? y : CW_USEDEFAULT),
+                                       ((w > 0) ? w : CW_USEDEFAULT),
+                                       ((h > 0) ? h : CW_USEDEFAULT),
+                                       nullptr, nullptr, HINST_THISCOMPONENT, nullptr);
+
+    if (!g_am_MainWindowHandle_p) {
+        PRINT_WIN32_ERROR_MESSAGE_AND_SAFE_RETURN(CreateWindowExW)
+    }
+
+    if (FAILED(am_GetWindowDpi_p(g_am_MainWindowHandle_p, &g_am_CurrentDpi_p)) || (g_am_CurrentDpi_p == 0)) {
+        g_am_CurrentDpi_p = USER_DEFAULT_SCREEN_DPI;
+    }
+
+    // Ensure DWM still draws the top frame by extending the top frame.
+    // This also ensures our window still has the frame shadow drawn by DWM.
+    if (FAILED(am_UpdateFrameMarginsHelper_p(g_am_MainWindowHandle_p, g_am_CurrentDpi_p))) {
+        PRINT_AND_SAFE_RETURN(L"Failed to update main window's frame margins.")
+    }
+    // Force a WM_NCCALCSIZE processing to make the window become frameless immediately.
+    if (FAILED(am_TriggerFrameChange_p(g_am_MainWindowHandle_p))) {
+        PRINT_AND_SAFE_RETURN(L"Failed to trigger frame change event for main window.")
+    }
+    // Ensure our window still has window transitions.
+    if (FAILED(am_SetWindowTransitionsEnabled_p(g_am_MainWindowHandle_p, true))) {
+        PRINT_AND_SAFE_RETURN(L"Failed to enable window transitions for main window.")
+    }
+
+    return S_OK;
+}
+
+[[nodiscard]] static inline HRESULT am_CreateDragBarWindowHelper_p()
+{
+    if (!g_am_MainWindowHandle_p) {
+        SAFE_RETURN
+    }
+
+    // Please refer to the "IMPORTANT NOTE" section below.
+    if (!g_am_IsWindows8OrGreater_p) {
+        PRINT_AND_SAFE_RETURN(L"Drag bar window is only available on Windows 8 and onwards.")
+    }
+    if ((g_am_DragBarWindowAtom_p == 0) || g_am_DragBarWindowHandle_p) {
+        SAFE_RETURN
+    }
+
+    // The drag bar window is a child window of the top level window that is put
+    // right on top of the drag bar. The XAML island window "steals" our mouse
+    // messages which makes it hard to implement a custom drag area. By putting
+    // a window on top of it, we prevent it from "stealing" the mouse messages.
+    //
+    // IMPORTANT NOTE: The WS_EX_LAYERED style is supported for both top-level
+    // windows and child windows since Windows 8. Previous Windows versions support
+    // WS_EX_LAYERED only for top-level windows.
+    g_am_DragBarWindowHandle_p = CreateWindowExW(WS_EX_LAYERED | WS_EX_NOREDIRECTIONBITMAP,
+                                          g_am_DragBarWindowClassName_p, g_am_DragBarWindowTitle_p,
+                                          WS_CHILD,
+                                          CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
+                                          g_am_MainWindowHandle_p, nullptr, HINST_THISCOMPONENT, nullptr);
+
+    if (!g_am_DragBarWindowHandle_p) {
+        PRINT_WIN32_ERROR_MESSAGE_AND_SAFE_RETURN(CreateWindowExW)
+    }
+
+    // Layered window won't be visible until we call SetLayeredWindowAttributes()
+    // or UpdateLayeredWindow().
+    if (SetLayeredWindowAttributes(g_am_DragBarWindowHandle_p, RGB(0, 0, 0), 255, LWA_ALPHA) == FALSE) {
+        PRINT_WIN32_ERROR_MESSAGE_AND_SAFE_RETURN(SetLayeredWindowAttributes)
+    }
+
+    RECT rect = {0, 0, 0, 0};
+    if (GetClientRect(g_am_MainWindowHandle_p, &rect) == FALSE) {
+        PRINT_WIN32_ERROR_MESSAGE_AND_SAFE_RETURN(GetClientRect)
+    }
+    int tbh = 0;
+    if (FAILED(am_GetTitleBarHeight_p(g_am_MainWindowHandle_p, g_am_CurrentDpi_p, &tbh))) {
+        SAFE_RETURN
+    }
+    if (SetWindowPos(g_am_DragBarWindowHandle_p, HWND_TOP, 0, 0, rect.right,  tbh,
+                 SWP_NOACTIVATE | SWP_SHOWWINDOW | SWP_NOOWNERZORDER) == FALSE) {
+        PRINT_WIN32_ERROR_MESSAGE_AND_SAFE_RETURN(SetWindowPos)
+    }
+
+    return S_OK;
+}
+
+[[nodiscard]] static inline HRESULT am_CreateXAMLIslandHelper_p()
+{
+    if (!g_am_MainWindowHandle_p) {
+        SAFE_RETURN
+    }
+
+    // XAML Island is only supported on Windows 10 19H1 and onwards.
+    if (!g_am_IsXAMLIslandAvailable_p) {
+        PRINT_AND_SAFE_RETURN(L"XAML Island is only supported on Windows 10 19H1 and onwards.")
+    }
+    SystemTheme systemTheme = SystemTheme::Invalid;
+    if (FAILED(am_GetSystemThemeHelper_p(&systemTheme))) {
+        SAFE_RETURN
+    }
+    if (systemTheme == SystemTheme::Invalid) {
+        PRINT_AND_SAFE_RETURN(L"Failed to retrieve system theme.")
+    }
+    if (systemTheme == SystemTheme::HighContrast) {
+        PRINT_AND_SAFE_RETURN(L"High contrast mode is on.")
+    }
+
+    winrt::init_apartment(winrt::apartment_type::single_threaded);
+    g_am_XAMLManager_p = winrt::Windows::UI::Xaml::Hosting::WindowsXamlManager::InitializeForCurrentThread();
+
+    g_am_XAMLSource_p = {};
+    const auto interop = g_am_XAMLSource_p.as<IDesktopWindowXamlSourceNative>();
+    if (!interop) {
+        PRINT_AND_SAFE_RETURN(L"Failed to retrieve IDesktopWindowXamlSourceNative.")
+    }
+    winrt::check_hresult(interop->AttachToWindow(g_am_MainWindowHandle_p));
+    winrt::check_hresult(interop->get_WindowHandle(&g_am_XAMLIslandWindowHandle_p));
+    if (!g_am_XAMLIslandWindowHandle_p) {
+        PRINT_AND_SAFE_RETURN(L"Failed to retrieve XAML Island window handle.")
+    }
+    // Update the XAML Island window size because initially it is 0x0.
+    RECT rect = {0, 0, 0, 0};
+    if (GetClientRect(g_am_MainWindowHandle_p, &rect) == FALSE) {
+        PRINT_WIN32_ERROR_MESSAGE_AND_SAFE_RETURN(GetClientRect)
+    }
+    // Give enough space to our thin homemade top border.
+    int borderThickness = 0;
+    if (FAILED(am_GetWindowVisibleFrameBorderThickness_p(g_am_MainWindowHandle_p, g_am_CurrentDpi_p, &borderThickness))) {
+        SAFE_RETURN
+    }
+    if (SetWindowPos(g_am_XAMLIslandWindowHandle_p, HWND_BOTTOM, 0,
+                 borderThickness, rect.right, (rect.bottom - borderThickness),
+                     SWP_NOACTIVATE | SWP_SHOWWINDOW | SWP_NOOWNERZORDER) == FALSE) {
+        PRINT_WIN32_ERROR_MESSAGE_AND_SAFE_RETURN(SetWindowPos)
+    }
+    g_am_BackgroundBrush_p = {};
+    if (FAILED(am_SwitchAcrylicBrushThemeHelper_p((systemTheme == SystemTheme::Auto) ? SystemTheme::Dark : systemTheme))) {
+        PRINT_AND_SAFE_RETURN(L"Failed to change acrylic brush's theme.")
+    }
+    g_am_BrushTheme_p = SystemTheme::Auto;
+    g_am_BackgroundBrush_p.BackgroundSource(winrt::Windows::UI::Xaml::Media::AcrylicBackgroundSource::HostBackdrop);
+    g_am_RootGrid_p = {};
+    g_am_RootGrid_p.Background(g_am_BackgroundBrush_p);
+    //g_am_RootGrid_p.Children().Clear();
+    //g_am_RootGrid_p.Children().Append(/* some UWP control */);
+    //g_am_RootGrid_p.UpdateLayout();
+    g_am_XAMLSource_p.Content(g_am_RootGrid_p);
+
+    // Retrieve initial parameters of the acrylic brush.
+    g_am_TintColor_p = g_am_BackgroundBrush_p.TintColor();
+    g_am_TintOpacity_p = g_am_BackgroundBrush_p.TintOpacity();
+    if (g_am_BackgroundBrush_p.TintLuminosityOpacity()) {
+        g_am_TintLuminosityOpacity_p = g_am_BackgroundBrush_p.TintLuminosityOpacity().GetDouble();
+    } else {
+        g_am_TintLuminosityOpacity_p = std::nullopt;
+    }
+    g_am_FallbackColor_p = g_am_BackgroundBrush_p.FallbackColor();
+
+    return S_OK;
+}
+
+[[nodiscard]] static inline HRESULT am_InitializeDirect2DInfrastructureHelper_p()
+{
+    if (!g_am_MainWindowHandle_p) {
+        SAFE_RETURN
+    }
+    const int screen = 0; // fixme: use the correct screen id.
+    if (FAILED(am_GetWallpaperFilePath_p(screen, &g_am_WallpaperFilePath_p))) {
+        SAFE_RETURN
+    }
+    COLORREF color = RGB(0, 0, 0);
+    if (FAILED(am_GetDesktopBackgroundColor_p(&color))) {
+        SAFE_RETURN
+    }
+    g_am_DesktopBackgroundColor_p = D2D1::ColorF(color);
+    if (FAILED(am_GetWallpaperAspectStyle_p(screen, &g_am_WallpaperAspectStyle_p))) {
+        SAFE_RETURN
+    }
+    // todo
+    return E_FAIL;
+}
+
+[[nodiscard]] static inline HRESULT am_InitializeAcrylicManagerHelper_p(const int x, const int y, const int w, const int h)
+{
+    if (g_am_AcrylicManagerInitialized_p) {
+        return E_FAIL;
+    }
+    if (FAILED(am_RegisterMainWindowClassHelper_p())) {
+        PRINT_AND_RETURN(L"Failed to register main window class.")
+    }
+    if (FAILED(am_CreateMainWindowHelper_p(x, y, w, h))) {
+        PRINT_AND_RETURN(L"Failed to create main window.")
+    }
+    if (g_am_IsXAMLIslandAvailable_p) {
+        if (SUCCEEDED(am_CreateXAMLIslandHelper_p())) {
+            if (SUCCEEDED(am_RegisterDragBarWindowClassHelper_p())) {
+                if (SUCCEEDED(am_CreateDragBarWindowHelper_p())) {
+                    g_am_AcrylicManagerInitialized_p = true;
+                    return S_OK;
+                } else {
+                    PRINT_AND_RETURN(L"Failed to create drag bar window.")
+                }
+            } else {
+                PRINT_AND_RETURN(L"Failed to register drag bar window class.")
+            }
+        } else {
+            PRINT_AND_RETURN(L"Failed to create XAML Island.")
+        }
+    } else if (g_am_IsDirect2DAvailable_p) {
+        if (SUCCEEDED(am_InitializeDirect2DInfrastructureHelper_p())) {
+            g_am_AcrylicManagerInitialized_p = true;
+            return S_OK;
+        } else {
+            PRINT_AND_RETURN(L"Failed to initialize the Direct2D infrastructure.")
+        }
+    } else {
+        // Just don't crash.
+        g_am_AcrylicManagerInitialized_p = true;
+        return S_OK;
+    }
+    return E_FAIL;
+}
+
+/////////////////////////////////
+/////     Private interface
+/////////////////////////////////
 
 HRESULT am_GetWindowDpi_p(const HWND hWnd, UINT *result)
 {
@@ -1787,848 +2625,81 @@ HRESULT am_MultiToWide_p(LPCSTR in, const UINT codePage, LPWSTR *out)
     return S_OK;
 }
 
-[[nodiscard]] static inline LRESULT CALLBACK am_MainWindowProc_p(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
+HRESULT am_GetStringFromEnvironmentVariable_p(LPCWSTR name, LPWSTR *value)
 {
-    bool wallpaperChanged = false;
-    bool systemThemeChanged = false;
-    switch (uMsg)
-    {
-    case WM_NCCALCSIZE: {
-        if (!wParam) {
-            return 0;
-        }
-        const auto clientRect = &(reinterpret_cast<LPNCCALCSIZE_PARAMS>(lParam)->rgrc[0]);
-        if (g_am_IsWindows10OrGreater_p) {
-            // Store the original top before the default window proc applies the default frame.
-            const LONG originalTop = clientRect->top;
-            // Apply the default frame
-            const LRESULT ret = DefWindowProcW(hWnd, uMsg, wParam, lParam);
-            if (ret != 0) {
-                return ret;
-            }
-            // Re-apply the original top from before the size of the default frame was applied.
-            clientRect->top = originalTop;
-        }
-        // We don't need this correction when we're fullscreen. We will
-        // have the WS_POPUP size, so we don't have to worry about
-        // borders, and the default frame will be fine.
-        bool nonClientAreaExists = false;
-        bool max = false, full = false;
-        if ((SUCCEEDED(am_IsMaximized_p(hWnd, &max)) && max)
-                && (SUCCEEDED(am_IsFullScreened_p(hWnd, &full)) && !full)) {
-            // When a window is maximized, its size is actually a little bit more
-            // than the monitor's work area. The window is positioned and sized in
-            // such a way that the resize handles are outside of the monitor and
-            // then the window is clipped to the monitor so that the resize handle
-            // do not appear because you don't need them (because you can't resize
-            // a window when it's maximized unless you restore it).
-            int rbtY = 0;
-            if (SUCCEEDED(am_GetResizeBorderThickness_p(false, g_am_CurrentDpi_p, &rbtY))) {
-                clientRect->top += rbtY;
-                if (!g_am_IsWindows10OrGreater_p) {
-                    clientRect->bottom -= rbtY;
-                    int rbtX = 0;
-                    if (SUCCEEDED(am_GetResizeBorderThickness_p(true, g_am_CurrentDpi_p, &rbtX))) {
-                        clientRect->left += rbtX;
-                        clientRect->right -= rbtX;
-                    }
-                }
-            }
-            nonClientAreaExists = true;
-        }
-        // Attempt to detect if there's an autohide taskbar, and if
-        // there is, reduce our size a bit on the side with the taskbar,
-        // so the user can still mouse-over the taskbar to reveal it.
-        // Make sure to use MONITOR_DEFAULTTONEAREST, so that this will
-        // still find the right monitor even when we're restoring from
-        // minimized.
-        if (max || full) {
-            APPBARDATA abd;
-            SecureZeroMemory(&abd, sizeof(abd));
-            abd.cbSize = sizeof(abd);
-            // First, check if we have an auto-hide taskbar at all:
-            if (SHAppBarMessage(ABM_GETSTATE, &abd) & ABS_AUTOHIDE) {
-                bool top = false, bottom = false, left = false, right = false;
-                // Due to "ABM_GETAUTOHIDEBAREX" only has effect since Windows 8.1,
-                // we have to use another way to judge the edge of the auto-hide taskbar
-                // when the application is running on Windows 7 or Windows 8.
-                if (g_am_IsWindows8Point1OrGreater_p) {
-                    RECT screenRect = {};
-                    if (SUCCEEDED(am_GetScreenGeometry_p(hWnd, &screenRect))) {
-                        // This helper can be used to determine if there's a
-                        // auto-hide taskbar on the given edge of the monitor
-                        // we're currently on.
-                        const auto hasAutohideTaskbar = [&screenRect](const UINT edge) -> bool {
-                            APPBARDATA abd2;
-                            SecureZeroMemory(&abd2, sizeof(abd2));
-                            abd2.cbSize = sizeof(abd2);
-                            abd2.uEdge = edge;
-                            abd2.rc = screenRect;
-                            return (reinterpret_cast<HWND>(SHAppBarMessage(ABM_GETAUTOHIDEBAREX, &abd2)) != nullptr);
-                        };
-                        top = hasAutohideTaskbar(ABE_TOP);
-                        bottom = hasAutohideTaskbar(ABE_BOTTOM);
-                        left = hasAutohideTaskbar(ABE_LEFT);
-                        right = hasAutohideTaskbar(ABE_RIGHT);
-                    }
-                } else {
-                    // The following code is copied from Mozilla Firefox with some modifications.
-                    int edge = -1;
-                    APPBARDATA _abd;
-                    SecureZeroMemory(&_abd, sizeof(_abd));
-                    _abd.cbSize = sizeof(_abd);
-                    _abd.hWnd = FindWindowW(L"Shell_TrayWnd", nullptr);
-                    if (_abd.hWnd) {
-                        const HMONITOR windowMonitor = GET_CURRENT_SCREEN(hWnd);
-                        const HMONITOR taskbarMonitor = MonitorFromWindow(_abd.hWnd, MONITOR_DEFAULTTOPRIMARY);
-                        if (taskbarMonitor == windowMonitor) {
-                            SHAppBarMessage(ABM_GETTASKBARPOS, &_abd);
-                            edge = _abd.uEdge;
-                        }
-                    }
-                    top = (edge == ABE_TOP);
-                    bottom = (edge == ABE_BOTTOM);
-                    left = (edge == ABE_LEFT);
-                    right = (edge == ABE_RIGHT);
-                }
-                // If there's a taskbar on any side of the monitor, reduce
-                // our size a little bit on that edge.
-                // Note to future code archeologists:
-                // This doesn't seem to work for fullscreen on the primary
-                // display. However, testing a bunch of other apps with
-                // fullscreen modes and an auto-hiding taskbar has
-                // shown that _none_ of them reveal the taskbar from
-                // fullscreen mode. This includes Edge, Firefox, Chrome,
-                // Sublime Text, PowerPoint - none seemed to support this.
-                // This does however work fine for maximized.
-                if (top) {
-                    // Peculiarly, when we're fullscreen,
-                    clientRect->top += g_am_AutoHideTaskbarThicknessPy_p;
-                    nonClientAreaExists = true;
-                } else if (bottom) {
-                    clientRect->bottom -= g_am_AutoHideTaskbarThicknessPy_p;
-                    nonClientAreaExists = true;
-                } else if (left) {
-                    clientRect->left += g_am_AutoHideTaskbarThicknessPx_p;
-                    nonClientAreaExists = true;
-                } else if (right) {
-                    clientRect->right -= g_am_AutoHideTaskbarThicknessPx_p;
-                    nonClientAreaExists = true;
-                }
-            }
-        }
-        // If the window bounds change, we're going to relayout and repaint
-        // anyway. Returning WVR_REDRAW avoids an extra paint before that of
-        // the old client pixels in the (now wrong) location, and thus makes
-        // actions like resizing a window from the left edge look slightly
-        // less broken.
-        //
-        // We cannot return WVR_REDRAW when there is nonclient area, or
-        // Windows exhibits bugs where client pixels and child HWNDs are
-        // mispositioned by the width/height of the upper-left nonclient
-        // area.
-        return nonClientAreaExists ? 0 : WVR_REDRAW;
+    if (!name || !value) {
+        return E_INVALIDARG;
     }
-    case WM_NCHITTEST: {
-        const POINT globalPos = {GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)};
-        POINT localPos = globalPos;
-        if (ScreenToClient(hWnd, &localPos) == FALSE) {
-            PRINT_WIN32_ERROR_MESSAGE(ScreenToClient)
-            break;
-        }
-        bool max = false, full = false, normal = false;
-        if (FAILED(am_IsMaximized_p(hWnd, &max)) || FAILED(am_IsFullScreened_p(hWnd, &full))
-                || FAILED(am_IsWindowNoState_p(hWnd, &normal))) {
-            break;
-        }
-        const bool maxOrFull = (max || full);
-        SIZE ws = {};
-        if (FAILED(am_GetWindowSizeHelper_p(hWnd, &ws))) {
-            break;
-        }
-        const LONG ww = ws.cx;
-        int rbtX = 0, rbtY = 0, cth = 0;
-        if (FAILED(am_GetResizeBorderThickness_p(true, g_am_CurrentDpi_p, &rbtX))
-                || FAILED(am_GetResizeBorderThickness_p(false, g_am_CurrentDpi_p, &rbtY))
-                || FAILED(am_GetCaptionHeight_p(g_am_CurrentDpi_p, &cth))) {
-            break;
-        }
-        const bool hitTestVisible = /*am_IsHitTestVisibleInChrome_p(hWnd)*/false; // todo
-        bool isTitleBar = false;
-        if (maxOrFull) {
-            isTitleBar = ((localPos.y >= 0) && (localPos.y <= cth)
-                          && (localPos.x >= 0) && (localPos.x <= ww)
-                          && !hitTestVisible);
-        } else if (normal) {
-            isTitleBar = ((localPos.y > rbtY) && (localPos.y <= (rbtY + cth))
-                          && (localPos.x > rbtX) && (localPos.x < (ww - rbtX))
-                          && !hitTestVisible);
-        }
-        const bool isTop = (normal ? (localPos.y <= rbtY) : false);
-        if (g_am_IsWindows10OrGreater_p) {
-            // This will handle the left, right and bottom parts of the frame
-            // because we didn't change them.
-            const LRESULT originalRet = DefWindowProcW(hWnd, uMsg, wParam, lParam);
-            if (originalRet != HTCLIENT) {
-                return originalRet;
-            }
-            // At this point, we know that the cursor is inside the client area
-            // so it has to be either the little border at the top of our custom
-            // title bar or the drag bar. Apparently, it must be the drag bar or
-            // the little border at the top which the user can use to move or
-            // resize the window.
-            if (isTop) {
-                return HTTOP;
-            }
-            if (isTitleBar) {
-                return HTCAPTION;
-            }
-            return HTCLIENT;
-        } else {
-            if (maxOrFull) {
-                if (isTitleBar) {
-                    return HTCAPTION;
-                }
-                return HTCLIENT;
-            }
-            const LONG wh = ws.cy;
-            const bool isBottom = (normal ? (localPos.y >= (wh - rbtY)) : false);
-            // Make the border a little wider to let the user easy to resize on corners.
-            const double factor = (normal ? ((isTop || isBottom) ? 2.0 : 1.0) : 0.0);
-            const bool isLeft = (normal ? (localPos.x <= std::round(static_cast<double>(rbtX) * factor)) : false);
-            const bool isRight = (normal ? (localPos.x >= (ww - std::round(static_cast<double>(rbtX) * factor))) : false);
-            if (isTop) {
-                if (isLeft) {
-                    return HTTOPLEFT;
-                }
-                if (isRight) {
-                    return HTTOPRIGHT;
-                }
-                return HTTOP;
-            }
-            if (isBottom) {
-                if (isLeft) {
-                    return HTBOTTOMLEFT;
-                }
-                if (isRight) {
-                    return HTBOTTOMRIGHT;
-                }
-                return HTBOTTOM;
-            }
-            if (isLeft) {
-                return HTLEFT;
-            }
-            if (isRight) {
-                return HTRIGHT;
-            }
-            if (isTitleBar) {
-                return HTCAPTION;
-            }
-            return HTCLIENT;
-        }
-        return HTNOWHERE;
-    }
-    case WM_PAINT: {
-        if (g_am_IsWindows10OrGreater_p) {
-            PAINTSTRUCT ps = {};
-            const HDC hdc = BeginPaint(hWnd, &ps);
-            if (!hdc) {
-                PRINT_WIN32_ERROR_MESSAGE(BeginPaint)
-                break;
-            }
-            // We removed the whole top part of the frame (see handling of
-            // WM_NCCALCSIZE) so the top border is missing now. We add it back here.
-            // Note #1: You might wonder why we don't remove just the title bar instead
-            //  of removing the whole top part of the frame and then adding the little
-            //  top border back. I tried to do this but it didn't work: DWM drew the
-            //  whole title bar anyways on top of the window. It seems that DWM only
-            //  wants to draw either nothing or the whole top part of the frame.
-            // Note #2: For some reason if you try to set the top margin to just the
-            //  top border height (what we want to do), then there is a transparency
-            //  bug when the window is inactive, so I've decided to add the whole top
-            //  part of the frame instead and then we will hide everything that we
-            //  don't need (that is, the whole thing but the little 1 pixel wide border
-            //  at the top) in the WM_PAINT handler. This eliminates the transparency
-            //  bug and it's what a lot of Win32 apps that customize the title bar do
-            //  so it should work fine.
-            int borderThickness = 0;
-            if (FAILED(am_GetWindowVisibleFrameBorderThickness_p(hWnd, g_am_CurrentDpi_p, &borderThickness))) {
-                break;
-            }
-            if (ps.rcPaint.top < borderThickness) {
-                RECT rcPaint = ps.rcPaint;
-                rcPaint.bottom = borderThickness;
-                // To show the original top border, we have to paint on top
-                // of it with the alpha component set to 0. This page
-                // recommends to paint the area in black using the stock
-                // BLACK_BRUSH to do this:
-                // https://docs.microsoft.com/en-us/windows/win32/dwm/customframe#extending-the-client-frame
-                if (FillRect(hdc, &rcPaint, GET_BLACK_BRUSH) == 0) {
-                    PRINT_WIN32_ERROR_MESSAGE(FillRect)
-                    break;
-                }
-            }
-            if (ps.rcPaint.bottom > borderThickness) {
-                RECT rcPaint = ps.rcPaint;
-                rcPaint.top = borderThickness;
-                // To hide the original title bar, we have to paint on top
-                // of it with the alpha component set to 255. This is a hack
-                // to do it with GDI. See updateFrameMargins() for more information.
-                HDC opaqueDc = nullptr;
-                BP_PAINTPARAMS params;
-                SecureZeroMemory(&params, sizeof(params));
-                params.cbSize = sizeof(params);
-                params.dwFlags = BPPF_NOCLIP | BPPF_ERASE;
-                const HPAINTBUFFER buf = BeginBufferedPaint(hdc, &rcPaint, BPBF_TOPDOWNDIB, &params, &opaqueDc);
-                if (!buf) {
-                    PRINT_WIN32_ERROR_MESSAGE(BeginBufferedPaint)
-                    break;
-                }
-                if (FillRect(opaqueDc, &rcPaint,
-                             reinterpret_cast<HBRUSH>(GetClassLongPtrW(hWnd, GCLP_HBRBACKGROUND))) == 0) {
-                    PRINT_WIN32_ERROR_MESSAGE(FillRect)
-                    break;
-                }
-                HRESULT hr = BufferedPaintSetAlpha(buf, nullptr, 255);
-                if (FAILED(hr)) {
-                    PRINT_HR_ERROR_MESSAGE(BufferedPaintSetAlpha, hr)
-                    break;
-                }
-                hr = EndBufferedPaint(buf, TRUE);
-                if (FAILED(hr)) {
-                    PRINT_HR_ERROR_MESSAGE(EndBufferedPaint, hr)
-                    break;
-                }
-            }
-            if (EndPaint(hWnd, &ps) == FALSE) {
-                PRINT_WIN32_ERROR_MESSAGE(EndPaint)
-                break;
-            }
-            return 0;
-        } else {
-            // todo
-            break;
-        }
-    } break;
-    case WM_DPICHANGED: {
-        wallpaperChanged = true;
-        const double x = LOWORD(wParam);
-        const double y = HIWORD(wParam);
-        g_am_CurrentDpi_p = std::round((x + y) / 2.0);
-        const auto prcNewWindow = reinterpret_cast<LPRECT>(lParam);
-        if (MoveWindow(hWnd, prcNewWindow->left, prcNewWindow->top,
-                   GET_RECT_WIDTH(*prcNewWindow), GET_RECT_HEIGHT(*prcNewWindow), TRUE) == FALSE) {
-            PRINT_WIN32_ERROR_MESSAGE(MoveWindow)
-            break;
-        }
-        return 0;
-    } break;
-    case WM_SIZE: {
-        bool full = false;
-        if ((wParam == SIZE_MAXIMIZED) || (wParam == SIZE_RESTORED)
-                || (SUCCEEDED(am_IsFullScreened_p(hWnd, &full)) && full)) {
-            if (FAILED(am_UpdateFrameMarginsHelper_p(hWnd, g_am_CurrentDpi_p))) {
-                PRINT(L"WM_SIZE: Failed to update frame margins.")
-                break;
-            }
-        }
-        const auto width = LOWORD(lParam);
-        const UINT flags = SWP_NOACTIVATE | SWP_SHOWWINDOW | SWP_NOOWNERZORDER;
-        if (g_am_XAMLIslandWindowHandle_p) {
-            // Give enough space to our thin homemade top border.
-            int borderThickness = 0;
-            if (SUCCEEDED(am_GetWindowVisibleFrameBorderThickness_p(hWnd, g_am_CurrentDpi_p, &borderThickness))) {
-                const int height = (HIWORD(lParam) - borderThickness);
-                if (SetWindowPos(g_am_XAMLIslandWindowHandle_p, HWND_BOTTOM, 0, borderThickness,
-                             width, height, flags) == FALSE) {
-                    PRINT_WIN32_ERROR_MESSAGE(SetWindowPos)
-                    break;
-                }
-            }
-        }
-        if (g_am_DragBarWindowHandle_p) {
-            int tbh = 0;
-            if (SUCCEEDED(am_GetTitleBarHeight_p(hWnd, g_am_CurrentDpi_p, &tbh))) {
-                if (SetWindowPos(g_am_DragBarWindowHandle_p, HWND_TOP, 0, 0, width, tbh, flags) == FALSE) {
-                    PRINT_WIN32_ERROR_MESSAGE(SetWindowPos)
-                    break;
-                }
-            }
-        }
-    } break;
-    case WM_SETFOCUS: {
-        if (g_am_XAMLIslandWindowHandle_p) {
-            // Send focus to the XAML Island child window.
-            SetFocus(g_am_XAMLIslandWindowHandle_p);
-            return 0;
-        }
-    } break;
-    case WM_SETCURSOR: {
-        if (LOWORD(lParam) == HTCLIENT) {
-            // Get the cursor position from the _last message_ and not from
-            // `GetCursorPos` (which returns the cursor position _at the
-            // moment_) because if we're lagging behind the cursor's position,
-            // we still want to get the cursor position that was associated
-            // with that message at the time it was sent to handle the message
-            // correctly.
-            const LRESULT hitTestResult = SendMessageW(hWnd, WM_NCHITTEST, 0, GetMessagePos());
-            if (hitTestResult == HTTOP) {
-                // We have to set the vertical resize cursor manually on
-                // the top resize handle because Windows thinks that the
-                // cursor is on the client area because it asked the asked
-                // the drag window with `WM_NCHITTEST` and it returned
-                // `HTCLIENT`.
-                // We don't want to modify the drag window's `WM_NCHITTEST`
-                // handling to return `HTTOP` because otherwise, the system
-                // would resize the drag window instead of the top level
-                // window!
-                SetCursor(LoadCursorW(nullptr, IDC_SIZENS));
-            } else {
-                // Reset cursor
-                SetCursor(LoadCursorW(nullptr, IDC_ARROW));
-            }
-            return TRUE;
-        }
-    } break;
-    case WM_NCRBUTTONUP: {
-        // The `DefWindowProc` function doesn't open the system menu for some
-        // reason so we have to do it ourselves.
-        if (wParam == HTCAPTION) {
-            if (FAILED(am_OpenSystemMenu_p(hWnd, {GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)}))) {
-                PRINT(L"WM_NCRBUTTONUP: Failed to open the system menu.")
-                break;
-            }
-        }
-    } break;
-    case WM_SETTINGCHANGE: {
-        if (wParam == SPI_SETDESKWALLPAPER) {
-            wallpaperChanged = true;
-        }
-        if ((wParam == 0) && (wcscmp(reinterpret_cast<LPCWSTR>(lParam), L"ImmersiveColorSet") == 0)) {
-            systemThemeChanged = true;
-        }
-    } break;
-    case WM_THEMECHANGED:
-    case WM_DWMCOLORIZATIONCOLORCHANGED:
-        systemThemeChanged = true;
-        break;
-    case WM_DWMCOMPOSITIONCHANGED: {
-        bool enabled = false;
-        if (FAILED(am_IsCompositionEnabled_p(&enabled)) || !enabled) {
-            PRINT(L"This application can't continue running when DWM composition is disabled.")
-            std::exit(-1);
-        }
-    } break;
-    case WM_CLOSE: {
-        SAFE_RELEASE_RESOURCES
-        return 0;
-    }
-    case WM_DESTROY: {
-        PostQuitMessage(0);
-        return 0;
-    }
-    default:
-        break;
-    }
-    if (g_am_BackgroundBrush_p && (g_am_BrushTheme_p == SystemTheme::Auto) && systemThemeChanged) {
-        SystemTheme systemTheme = SystemTheme::Invalid;
-        if (SUCCEEDED(am_GetSystemThemeHelper_p(&systemTheme))) {
-            if ((systemTheme != SystemTheme::Invalid) && (systemTheme != SystemTheme::HighContrast)) {
-                if (SUCCEEDED(am_SwitchAcrylicBrushThemeHelper_p(systemTheme))) {
-                    g_am_BrushTheme_p = SystemTheme::Auto;
-                } else {
-                    PRINT(L"Failed to switch acrylic brush theme.")
-                }
-            } else {
-                PRINT(L"Failed to retrieve system theme or high contrast mode is on.")
-            }
-        }
-    }
-    return DefWindowProcW(hWnd, uMsg, wParam, lParam);
+    return am_GetStringFromEnvironmentVariableHelper_p(name, value);
 }
 
-[[nodiscard]] static inline LRESULT CALLBACK am_DragBarWindowProc_p(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
+HRESULT am_GetIntFromEnvironmentVariable_p(LPCWSTR name, int *value)
 {
-    std::optional<UINT> nonClientMessage = std::nullopt;
-
-    switch (uMsg)
-    {
-    // Translate WM_* messages on the window to WM_NC* on the top level window.
-    case WM_LBUTTONDOWN:
-        nonClientMessage = WM_NCLBUTTONDOWN;
-        break;
-    case WM_LBUTTONUP:
-        nonClientMessage = WM_NCLBUTTONUP;
-        break;
-    case WM_LBUTTONDBLCLK:
-        nonClientMessage = WM_NCLBUTTONDBLCLK;
-        break;
-    case WM_MBUTTONDOWN:
-        nonClientMessage = WM_NCMBUTTONDOWN;
-        break;
-    case WM_MBUTTONUP:
-        nonClientMessage = WM_NCMBUTTONUP;
-        break;
-    case WM_MBUTTONDBLCLK:
-        nonClientMessage = WM_NCMBUTTONDBLCLK;
-        break;
-    case WM_RBUTTONDOWN:
-        nonClientMessage = WM_NCRBUTTONDOWN;
-        break;
-    case WM_RBUTTONUP:
-        nonClientMessage = WM_NCRBUTTONUP;
-        break;
-    case WM_RBUTTONDBLCLK:
-        nonClientMessage = WM_NCRBUTTONDBLCLK;
-        break;
-    case WM_XBUTTONDOWN:
-        nonClientMessage = WM_NCXBUTTONDOWN;
-        break;
-    case WM_XBUTTONUP:
-        nonClientMessage = WM_NCXBUTTONUP;
-        break;
-    case WM_XBUTTONDBLCLK:
-        nonClientMessage = WM_NCXBUTTONDBLCLK;
-        break;
-    default:
-        break;
+    if (!name || !value) {
+        return E_INVALIDARG;
     }
-
-    if (nonClientMessage.has_value() && g_am_MainWindowHandle_p)
-    {
-        POINT pos = {GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)};
-        if (ClientToScreen(hWnd, &pos) == FALSE) {
-            PRINT_WIN32_ERROR_MESSAGE(ClientToScreen)
-            return 0;
-        }
-        const LPARAM newLParam = MAKELPARAM(pos.x, pos.y);
-        // Hit test the parent window at the screen coordinates the user clicked in the drag input sink window,
-        // then pass that click through as an NC click in that location.
-        const LRESULT hitTestResult = SendMessageW(g_am_MainWindowHandle_p, WM_NCHITTEST, 0, newLParam);
-        SendMessageW(g_am_MainWindowHandle_p, nonClientMessage.value(), hitTestResult, newLParam);
-        return 0;
-    }
-
-    return DefWindowProcW(hWnd, uMsg, wParam, lParam);
-}
-
-[[nodiscard]] static inline HRESULT am_RegisterMainWindowClassHelper_p()
-{
-    if (g_am_MainWindowAtom_p != 0) {
-        SAFE_RETURN
-    }
-
-    LPWSTR guid = nullptr;
-    if (FAILED(am_GenerateGUID_p(&guid))) {
-        SAFE_RETURN
-    }
-    g_am_MainWindowClassName_p = new wchar_t[MAX_PATH];
-    SecureZeroMemory(g_am_MainWindowClassName_p, sizeof(g_am_MainWindowClassName_p));
-    wcscat(g_am_MainWindowClassName_p, g_am_WindowClassNamePrefix_p);
-    wcscat(g_am_MainWindowClassName_p, guid);
-    delete [] guid;
-    wcscat(g_am_MainWindowClassName_p, g_am_MainWindowClassNameSuffix_p);
-
-    WNDCLASSEXW wcex;
-    SecureZeroMemory(&wcex, sizeof(wcex));
-    wcex.cbSize = sizeof(wcex);
-
-    wcex.style = CS_HREDRAW | CS_VREDRAW;
-    wcex.lpfnWndProc = am_MainWindowProc_p;
-    wcex.hInstance = HINST_THISCOMPONENT;
-    wcex.hCursor = LoadCursorW(nullptr, IDC_ARROW);
-    wcex.hbrBackground = reinterpret_cast<HBRUSH>(COLOR_WINDOW + 1);
-    wcex.lpszClassName = g_am_MainWindowClassName_p;
-
-    g_am_MainWindowAtom_p = RegisterClassExW(&wcex);
-
-    if (g_am_MainWindowAtom_p == 0) {
-        PRINT_WIN32_ERROR_MESSAGE_AND_SAFE_RETURN(RegisterClassExW)
-    }
-
-    return S_OK;
-}
-
-[[nodiscard]] static inline HRESULT am_RegisterDragBarWindowClassHelper_p()
-{
-    if (!g_am_IsWindows8OrGreater_p) {
-        PRINT_AND_SAFE_RETURN(L"Drag bar window is only available on Windows 8 and onwards.")
-    }
-
-    if ((g_am_MainWindowAtom_p == 0) || (g_am_DragBarWindowAtom_p != 0)) {
-        SAFE_RETURN
-    }
-
-    LPWSTR guid = nullptr;
-    if (FAILED(am_GenerateGUID_p(&guid))) {
-        SAFE_RETURN
-    }
-    g_am_DragBarWindowClassName_p = new wchar_t[MAX_PATH];
-    SecureZeroMemory(g_am_DragBarWindowClassName_p, sizeof(g_am_DragBarWindowClassName_p));
-    wcscat(g_am_DragBarWindowClassName_p, g_am_WindowClassNamePrefix_p);
-    wcscat(g_am_DragBarWindowClassName_p, guid);
-    delete [] guid;
-    wcscat(g_am_DragBarWindowClassName_p, g_am_DragBarWindowClassNameSuffix_p);
-
-    WNDCLASSEXW wcex;
-    SecureZeroMemory(&wcex, sizeof(wcex));
-    wcex.cbSize = sizeof(wcex);
-
-    wcex.style = CS_HREDRAW | CS_VREDRAW | CS_DBLCLKS;
-    wcex.lpfnWndProc = am_DragBarWindowProc_p;
-    wcex.hInstance = HINST_THISCOMPONENT;
-    wcex.hCursor = LoadCursorW(nullptr, IDC_ARROW);
-    wcex.hbrBackground = GET_BLACK_BRUSH;
-    wcex.lpszClassName = g_am_DragBarWindowClassName_p;
-
-    g_am_DragBarWindowAtom_p = RegisterClassExW(&wcex);
-
-    if (g_am_DragBarWindowAtom_p == 0) {
-        PRINT_WIN32_ERROR_MESSAGE_AND_SAFE_RETURN(RegisterClassExW)
-    }
-
-    return S_OK;
-}
-
-[[nodiscard]] static inline HRESULT am_CreateMainWindowHelper_p(const int x, const int y, const int w, const int h)
-{
-    if ((g_am_MainWindowAtom_p == 0) || g_am_MainWindowHandle_p) {
-        SAFE_RETURN
-    }
-
-    g_am_MainWindowHandle_p = CreateWindowExW(0L,
-                                       g_am_MainWindowClassName_p, g_am_MainWindowTitle_p,
-                                       WS_OVERLAPPEDWINDOW,
-                                       ((x > 0) ? x : CW_USEDEFAULT),
-                                       ((y > 0) ? y : CW_USEDEFAULT),
-                                       ((w > 0) ? w : CW_USEDEFAULT),
-                                       ((h > 0) ? h : CW_USEDEFAULT),
-                                       nullptr, nullptr, HINST_THISCOMPONENT, nullptr);
-
-    if (!g_am_MainWindowHandle_p) {
-        PRINT_WIN32_ERROR_MESSAGE_AND_SAFE_RETURN(CreateWindowExW)
-    }
-
-    if (FAILED(am_GetWindowDpi_p(g_am_MainWindowHandle_p, &g_am_CurrentDpi_p)) || (g_am_CurrentDpi_p == 0)) {
-        g_am_CurrentDpi_p = USER_DEFAULT_SCREEN_DPI;
-    }
-
-    // Ensure DWM still draws the top frame by extending the top frame.
-    // This also ensures our window still has the frame shadow drawn by DWM.
-    if (FAILED(am_UpdateFrameMarginsHelper_p(g_am_MainWindowHandle_p, g_am_CurrentDpi_p))) {
-        PRINT_AND_SAFE_RETURN(L"Failed to update main window's frame margins.")
-    }
-    // Force a WM_NCCALCSIZE processing to make the window become frameless immediately.
-    if (FAILED(am_TriggerFrameChange_p(g_am_MainWindowHandle_p))) {
-        PRINT_AND_SAFE_RETURN(L"Failed to trigger frame change event for main window.")
-    }
-    // Ensure our window still has window transitions.
-    if (FAILED(am_SetWindowTransitionsEnabled_p(g_am_MainWindowHandle_p, true))) {
-        PRINT_AND_SAFE_RETURN(L"Failed to enable window transitions for main window.")
-    }
-
-    return S_OK;
-}
-
-[[nodiscard]] static inline HRESULT am_CreateDragBarWindowHelper_p()
-{
-    if (!g_am_MainWindowHandle_p) {
-        SAFE_RETURN
-    }
-
-    // Please refer to the "IMPORTANT NOTE" section below.
-    if (!g_am_IsWindows8OrGreater_p) {
-        PRINT_AND_SAFE_RETURN(L"Drag bar window is only available on Windows 8 and onwards.")
-    }
-    if ((g_am_DragBarWindowAtom_p == 0) || g_am_DragBarWindowHandle_p) {
-        SAFE_RETURN
-    }
-
-    // The drag bar window is a child window of the top level window that is put
-    // right on top of the drag bar. The XAML island window "steals" our mouse
-    // messages which makes it hard to implement a custom drag area. By putting
-    // a window on top of it, we prevent it from "stealing" the mouse messages.
-    //
-    // IMPORTANT NOTE: The WS_EX_LAYERED style is supported for both top-level
-    // windows and child windows since Windows 8. Previous Windows versions support
-    // WS_EX_LAYERED only for top-level windows.
-    g_am_DragBarWindowHandle_p = CreateWindowExW(WS_EX_LAYERED | WS_EX_NOREDIRECTIONBITMAP,
-                                          g_am_DragBarWindowClassName_p, g_am_DragBarWindowTitle_p,
-                                          WS_CHILD,
-                                          CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
-                                          g_am_MainWindowHandle_p, nullptr, HINST_THISCOMPONENT, nullptr);
-
-    if (!g_am_DragBarWindowHandle_p) {
-        PRINT_WIN32_ERROR_MESSAGE_AND_SAFE_RETURN(CreateWindowExW)
-    }
-
-    // Layered window won't be visible until we call SetLayeredWindowAttributes()
-    // or UpdateLayeredWindow().
-    if (SetLayeredWindowAttributes(g_am_DragBarWindowHandle_p, RGB(0, 0, 0), 255, LWA_ALPHA) == FALSE) {
-        PRINT_WIN32_ERROR_MESSAGE_AND_SAFE_RETURN(SetLayeredWindowAttributes)
-    }
-
-    RECT rect = {0, 0, 0, 0};
-    if (GetClientRect(g_am_MainWindowHandle_p, &rect) == FALSE) {
-        PRINT_WIN32_ERROR_MESSAGE_AND_SAFE_RETURN(GetClientRect)
-    }
-    int tbh = 0;
-    if (FAILED(am_GetTitleBarHeight_p(g_am_MainWindowHandle_p, g_am_CurrentDpi_p, &tbh))) {
-        SAFE_RETURN
-    }
-    if (SetWindowPos(g_am_DragBarWindowHandle_p, HWND_TOP, 0, 0, rect.right,  tbh,
-                 SWP_NOACTIVATE | SWP_SHOWWINDOW | SWP_NOOWNERZORDER) == FALSE) {
-        PRINT_WIN32_ERROR_MESSAGE_AND_SAFE_RETURN(SetWindowPos)
-    }
-
-    return S_OK;
-}
-
-[[nodiscard]] static inline HRESULT am_CreateXAMLIslandHelper_p()
-{
-    if (!g_am_MainWindowHandle_p) {
-        SAFE_RETURN
-    }
-
-    // XAML Island is only supported on Windows 10 19H1 and onwards.
-    if (!g_am_IsXAMLIslandAvailable_p) {
-        PRINT_AND_SAFE_RETURN(L"XAML Island is only supported on Windows 10 19H1 and onwards.")
-    }
-    SystemTheme systemTheme = SystemTheme::Invalid;
-    if (FAILED(am_GetSystemThemeHelper_p(&systemTheme))) {
-        SAFE_RETURN
-    }
-    if (systemTheme == SystemTheme::Invalid) {
-        PRINT_AND_SAFE_RETURN(L"Failed to retrieve system theme.")
-    }
-    if (systemTheme == SystemTheme::HighContrast) {
-        PRINT_AND_SAFE_RETURN(L"High contrast mode is on.")
-    }
-
-    winrt::init_apartment(winrt::apartment_type::single_threaded);
-    g_am_XAMLManager_p = winrt::Windows::UI::Xaml::Hosting::WindowsXamlManager::InitializeForCurrentThread();
-
-    g_am_XAMLSource_p = {};
-    const auto interop = g_am_XAMLSource_p.as<IDesktopWindowXamlSourceNative>();
-    if (!interop) {
-        PRINT_AND_SAFE_RETURN(L"Failed to retrieve IDesktopWindowXamlSourceNative.")
-    }
-    winrt::check_hresult(interop->AttachToWindow(g_am_MainWindowHandle_p));
-    winrt::check_hresult(interop->get_WindowHandle(&g_am_XAMLIslandWindowHandle_p));
-    if (!g_am_XAMLIslandWindowHandle_p) {
-        PRINT_AND_SAFE_RETURN(L"Failed to retrieve XAML Island window handle.")
-    }
-    // Update the XAML Island window size because initially it is 0x0.
-    RECT rect = {0, 0, 0, 0};
-    if (GetClientRect(g_am_MainWindowHandle_p, &rect) == FALSE) {
-        PRINT_WIN32_ERROR_MESSAGE_AND_SAFE_RETURN(GetClientRect)
-    }
-    // Give enough space to our thin homemade top border.
-    int borderThickness = 0;
-    if (FAILED(am_GetWindowVisibleFrameBorderThickness_p(g_am_MainWindowHandle_p, g_am_CurrentDpi_p, &borderThickness))) {
-        SAFE_RETURN
-    }
-    if (SetWindowPos(g_am_XAMLIslandWindowHandle_p, HWND_BOTTOM, 0,
-                 borderThickness, rect.right, (rect.bottom - borderThickness),
-                     SWP_NOACTIVATE | SWP_SHOWWINDOW | SWP_NOOWNERZORDER) == FALSE) {
-        PRINT_WIN32_ERROR_MESSAGE_AND_SAFE_RETURN(SetWindowPos)
-    }
-    g_am_BackgroundBrush_p = {};
-    if (FAILED(am_SwitchAcrylicBrushThemeHelper_p((systemTheme == SystemTheme::Auto) ? SystemTheme::Dark : systemTheme))) {
-        PRINT_AND_SAFE_RETURN(L"Failed to change acrylic brush's theme.")
-    }
-    g_am_BrushTheme_p = SystemTheme::Auto;
-    g_am_BackgroundBrush_p.BackgroundSource(winrt::Windows::UI::Xaml::Media::AcrylicBackgroundSource::HostBackdrop);
-    g_am_RootGrid_p = {};
-    g_am_RootGrid_p.Background(g_am_BackgroundBrush_p);
-    //g_am_RootGrid_p.Children().Clear();
-    //g_am_RootGrid_p.Children().Append(/* some UWP control */);
-    //g_am_RootGrid_p.UpdateLayout();
-    g_am_XAMLSource_p.Content(g_am_RootGrid_p);
-
-    // Retrieve initial parameters of the acrylic brush.
-    g_am_TintColor_p = g_am_BackgroundBrush_p.TintColor();
-    g_am_TintOpacity_p = g_am_BackgroundBrush_p.TintOpacity();
-    if (g_am_BackgroundBrush_p.TintLuminosityOpacity()) {
-        g_am_TintLuminosityOpacity_p = g_am_BackgroundBrush_p.TintLuminosityOpacity().GetDouble();
-    } else {
-        g_am_TintLuminosityOpacity_p = std::nullopt;
-    }
-    g_am_FallbackColor_p = g_am_BackgroundBrush_p.FallbackColor();
-
-    return S_OK;
-}
-
-[[nodiscard]] static inline HRESULT am_InitializeDirect2DInfrastructureHelper_p()
-{
-    if (!g_am_MainWindowHandle_p) {
-        SAFE_RETURN
-    }
-    const int screen = 0; // fixme: use the correct screen id.
-    if (FAILED(am_GetWallpaperFilePath_p(screen, &g_am_WallpaperFilePath_p))) {
-        SAFE_RETURN
-    }
-    COLORREF color = RGB(0, 0, 0);
-    if (FAILED(am_GetDesktopBackgroundColor_p(&color))) {
-        SAFE_RETURN
-    }
-    g_am_DesktopBackgroundColor_p = D2D1::ColorF(color);
-    if (FAILED(am_GetWallpaperAspectStyle_p(screen, &g_am_WallpaperAspectStyle_p))) {
-        SAFE_RETURN
-    }
-    // todo
-    return E_FAIL;
-}
-
-[[nodiscard]] static inline HRESULT am_InitializeAcrylicManagerHelper_p(const int x, const int y, const int w, const int h)
-{
-    if (g_am_AcrylicManagerInitialized_p) {
-        return E_FAIL;
-    }
-    if (FAILED(am_RegisterMainWindowClassHelper_p())) {
-        PRINT_AND_RETURN(L"Failed to register main window class.")
-    }
-    if (FAILED(am_CreateMainWindowHelper_p(x, y, w, h))) {
-        PRINT_AND_RETURN(L"Failed to create main window.")
-    }
-    if (g_am_IsXAMLIslandAvailable_p) {
-        if (SUCCEEDED(am_CreateXAMLIslandHelper_p())) {
-            if (SUCCEEDED(am_RegisterDragBarWindowClassHelper_p())) {
-                if (SUCCEEDED(am_CreateDragBarWindowHelper_p())) {
-                    g_am_AcrylicManagerInitialized_p = true;
-                    return S_OK;
-                } else {
-                    PRINT_AND_RETURN(L"Failed to create drag bar window.")
-                }
-            } else {
-                PRINT_AND_RETURN(L"Failed to register drag bar window class.")
-            }
-        } else {
-            PRINT_AND_RETURN(L"Failed to create XAML Island.")
-        }
-    } else if (g_am_IsDirect2DAvailable_p) {
-        if (SUCCEEDED(am_InitializeDirect2DInfrastructureHelper_p())) {
-            g_am_AcrylicManagerInitialized_p = true;
-            return S_OK;
-        } else {
-            PRINT_AND_RETURN(L"Failed to initialize the Direct2D infrastructure.")
-        }
-    } else {
-        // Just don't crash.
-        g_am_AcrylicManagerInitialized_p = true;
+    LPWSTR str = nullptr;
+    if (SUCCEEDED(am_GetStringFromEnvironmentVariableHelper_p(name, &str))) {
+        *value = _wtoi(str);
+        delete [] str;
         return S_OK;
     }
     return E_FAIL;
 }
 
-// Public interface
+HRESULT am_GetBoolFromEnvironmentVariable_p(LPCWSTR name, bool *value)
+{
+    if (!name || !value) {
+        return E_INVALIDARG;
+    }
+    LPWSTR str = nullptr;
+    if (SUCCEEDED(am_GetStringFromEnvironmentVariableHelper_p(name, &str))) {
+        *value = ((_wcsicmp(str, L"True") == 0) || (_wcsicmp(str, L"Yes") == 0)
+                  || (_wcsicmp(str, L"Enable") == 0) || (_wcsicmp(str, L"Enabled") == 0)
+                  || (_wcsicmp(str, L"On") == 0) || (_wcsicmp(str, L"0") != 0));
+        delete [] str;
+        return S_OK;
+    }
+    return E_FAIL;
+}
+
+HRESULT am_GetIntFromRegistry_p(const HKEY rootKey, LPCWSTR subKey, LPCWSTR valueName, int *value)
+{
+    if (!rootKey || !subKey || !valueName || !value) {
+        return E_INVALIDARG;
+    }
+    DWORD dwValue = 0;
+    if (SUCCEEDED(am_GetDWORDFromRegistryHelper_p(rootKey, subKey, valueName, &dwValue))) {
+        const auto result = static_cast<int>(dwValue);
+        *value = result;
+        return S_OK;
+    }
+    return E_FAIL;
+}
+
+HRESULT am_GetStringFromRegistry_p(const HKEY rootKey, LPCWSTR subKey, LPCWSTR valueName, LPWSTR *value)
+{
+    if (!rootKey || !subKey || !valueName || !value) {
+        return E_INVALIDARG;
+    }
+    LPWSTR str = nullptr;
+    if (SUCCEEDED(am_GetStringFromRegistryHelper_p(rootKey, subKey, valueName, &str))) {
+        *value = str;
+        return S_OK;
+    }
+    return E_FAIL;
+}
+
+/////////////////////////////////
+/////     Public interface
+/////////////////////////////////
 
 HRESULT am_GetVersion(LPWSTR *ver)
 {
     if (!ver) {
         return E_INVALIDARG;
     }
-    const auto str = new wchar_t[10]; // 10 should be enough for a version string...
+    const auto str = new wchar_t[20]; // 20 should be enough for a version string...
     SecureZeroMemory(str, sizeof(str));
     memcpy(str, ACRYLICMANAGER_VERSION_STR, wcslen(ACRYLICMANAGER_VERSION_STR));
     *ver = str;
@@ -2793,7 +2864,9 @@ HRESULT am_Release()
     return am_CleanupHelper_p();
 }
 
-// DLL entry point function
+/////////////////////////////////
+/////     DLL entry point
+/////////////////////////////////
 
 #ifndef ACRYLICMANAGER_STATIC
 BOOL APIENTRY

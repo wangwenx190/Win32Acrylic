@@ -8,6 +8,14 @@ set(SOURCES
 
 add_executable(Demo WIN32 ${SOURCES})
 
+target_link_libraries(Demo PRIVATE
+    user32
+)
+
+target_compile_definitions(Demo PRIVATE
+    _CRT_SECURE_NO_WARNINGS
+)
+
 if(MSVC)
     target_compile_options(Demo PRIVATE /utf-8 /permissive-)
     if(CMAKE_BUILD_TYPE STREQUAL "Debug")

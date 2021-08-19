@@ -204,6 +204,19 @@ am_CanUnloadDll(
 [[nodiscard]] ACRYLICMANAGER_API HRESULT WINAPI
 am_Release();
 
+[[nodiscard]] ACRYLICMANAGER_API HRESULT WINAPI
+am_SetHostWindow(
+    _In_ const HWND hWnd
+);
+
+[[nodiscard]] ACRYLICMANAGER_API HRESULT WINAPI
+am_GetHostWindow(
+    _Out_ HWND *result
+);
+
+[[nodiscard]] ACRYLICMANAGER_API HRESULT WINAPI
+am_RemoveHostWindow();
+
 #if 0
 [[nodiscard]] ACRYLICMANAGER_API HRESULT WINAPI
 am_GetTitleBarHeight(

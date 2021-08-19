@@ -61,6 +61,10 @@
 #define WM_DWMCOLORIZATIONCOLORCHANGED (0x0320)
 #endif
 
+/////////////////////////////////
+/////     Global variables
+/////////////////////////////////
+
 // The thickness of an auto-hide taskbar in pixels.
 static const int g_am_AutoHideTaskbarThicknessPx_p = 2;
 static const int g_am_AutoHideTaskbarThicknessPy_p = g_am_AutoHideTaskbarThicknessPx_p;
@@ -85,6 +89,8 @@ static HWND g_am_MainWindowHandle_p = nullptr;
 static HWND g_am_XAMLIslandWindowHandle_p = nullptr;
 static HWND g_am_DragBarWindowHandle_p = nullptr;
 static UINT g_am_CurrentDpi_p = 0;
+static HWND g_am_HostWindowHandle_p = nullptr;
+static WNDPROC g_am_HostWindowProc_p = nullptr;
 static SystemTheme g_am_BrushTheme_p = SystemTheme::Invalid;
 static LPWSTR g_am_WallpaperFilePath_p = nullptr;
 static D2D1_COLOR_F g_am_DesktopBackgroundColor_p = D2D1::ColorF(D2D1::ColorF::Black);
@@ -103,7 +109,7 @@ static Microsoft::WRL::ComPtr<ID2D1DeviceContext> g_am_D2DDeviceContext_p = null
 static Microsoft::WRL::ComPtr<ID2D1Factory2> g_am_D2DFactory2_p = nullptr;
 static Microsoft::WRL::ComPtr<ID2D1Device1> g_am_D2DDevice1_p = nullptr;
 static Microsoft::WRL::ComPtr<ID2D1DeviceContext1> g_am_D2DDeviceContext1_p = nullptr;
-static Microsoft::WRL::ComPtr<IDXGISwapChain1> g_am_SwapChain_p = nullptr;
+static Microsoft::WRL::ComPtr<IDXGISwapChain1> g_am_DXGISwapChain_p = nullptr;
 static Microsoft::WRL::ComPtr<ID2D1Bitmap1> g_am_D2DTargetBitmap_p = nullptr;
 
 static const bool g_am_IsWindows7OrGreater_p = []{
@@ -473,6 +479,13 @@ static const bool g_am_IsXAMLIslandAvailable_p = []{
 
 [[nodiscard]] static inline HRESULT am_CleanupHelper_p()
 {
+    // Host window
+    if (g_am_HostWindowHandle_p && g_am_HostWindowProc_p) {
+        SetWindowLongPtrW(g_am_HostWindowHandle_p, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(g_am_HostWindowProc_p));
+        g_am_HostWindowProc_p = nullptr;
+        g_am_HostWindowHandle_p = nullptr;
+    }
+
     // Direct2D
     if (g_am_D2DDeviceContext_p) {
         g_am_D2DDeviceContext_p->Release();
@@ -490,9 +503,9 @@ static const bool g_am_IsXAMLIslandAvailable_p = []{
         g_am_D2DDeviceContext1_p->Release();
         g_am_D2DDeviceContext1_p = nullptr;
     }
-    if (g_am_SwapChain_p) {
-        g_am_SwapChain_p->Release();
-        g_am_SwapChain_p = nullptr;
+    if (g_am_DXGISwapChain_p) {
+        g_am_DXGISwapChain_p->Release();
+        g_am_DXGISwapChain_p = nullptr;
     }
     if (g_am_D2DTargetBitmap_p) {
         g_am_D2DTargetBitmap_p->Release();
@@ -753,6 +766,7 @@ static const bool g_am_IsXAMLIslandAvailable_p = []{
 {
     bool wallpaperChanged = false;
     bool systemThemeChanged = false;
+
     switch (uMsg)
     {
     case WM_NCCALCSIZE: {
@@ -1192,6 +1206,7 @@ static const bool g_am_IsXAMLIslandAvailable_p = []{
     default:
         break;
     }
+
     if (g_am_BackgroundBrush_p && (g_am_BrushTheme_p == SystemTheme::Auto) && systemThemeChanged) {
         SystemTheme systemTheme = SystemTheme::Invalid;
         if (SUCCEEDED(am_GetSystemThemeHelper_p(&systemTheme))) {
@@ -1206,6 +1221,7 @@ static const bool g_am_IsXAMLIslandAvailable_p = []{
             }
         }
     }
+
     return DefWindowProcW(hWnd, uMsg, wParam, lParam);
 }
 
@@ -1272,6 +1288,44 @@ static const bool g_am_IsXAMLIslandAvailable_p = []{
     }
 
     return DefWindowProcW(hWnd, uMsg, wParam, lParam);
+}
+
+[[nodiscard]] static inline LRESULT CALLBACK am_HookWindowProcHelper_p(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
+{
+    const auto getOriginalResult = [hWnd, uMsg, wParam, lParam]() {
+        return CallWindowProcW(g_am_HostWindowProc_p, hWnd, uMsg, wParam, lParam);
+    };
+
+    if (!g_am_MainWindowHandle_p) {
+        if (g_am_HostWindowProc_p) {
+            return getOriginalResult();
+        } else {
+            return DefWindowProcW(hWnd, uMsg, wParam, lParam);
+        }
+    }
+
+    switch (uMsg) {
+    case WM_WINDOWPOSCHANGED: {
+        const auto newPos = reinterpret_cast<LPWINDOWPOS>(lParam);
+        // We'll also get the "WM_WINDOWPOSCHANGED" message if the Z order of our window changes.
+        // So we have to make sure the background window's Z order is updated in time as well.
+        if (SetWindowPos(g_am_MainWindowHandle_p, hWnd,
+                         newPos->x, newPos->y, newPos->cx, newPos->cy,
+                         SWP_NOACTIVATE | SWP_NOOWNERZORDER) == FALSE) {
+            PRINT_WIN32_ERROR_MESSAGE(SetWindowPos)
+        }
+    } break;
+    case WM_ACTIVATE: {
+        // todo
+    } break;
+    case WM_CLOSE: {
+        SendMessageW(g_am_MainWindowHandle_p, WM_CLOSE, 0, 0);
+    } break;
+    default:
+        break;
+    }
+
+    return getOriginalResult();
 }
 
 [[nodiscard]] static inline HRESULT am_RegisterMainWindowClassHelper_p()
@@ -1581,6 +1635,110 @@ static const bool g_am_IsXAMLIslandAvailable_p = []{
         return S_OK;
     }
     return E_FAIL;
+}
+
+[[nodiscard]] static inline HRESULT am_InstallHostWindowHookHelper_p(const HWND hWnd, const bool enable)
+{
+    if (!g_am_MainWindowHandle_p || !hWnd || g_am_HostWindowHandle_p || g_am_HostWindowProc_p) {
+        return E_INVALIDARG;
+    }
+    const auto exStyle = static_cast<DWORD>(GetWindowLongPtrW(g_am_MainWindowHandle_p, GWL_EXSTYLE));
+    if (enable) {
+        const auto hostWndProc = reinterpret_cast<WNDPROC>(GetWindowLongPtrW(hWnd, GWLP_WNDPROC));
+        if (!hostWndProc) {
+            return E_FAIL;
+        }
+        if (SetWindowLongPtrW(hWnd, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(am_HookWindowProcHelper_p)) == 0) {
+            return E_FAIL;
+        }
+        if (SetWindowLongPtrW(g_am_MainWindowHandle_p, GWL_EXSTYLE, static_cast<LONG_PTR>(exStyle | WS_EX_NOACTIVATE)) == 0) {
+            return E_FAIL;
+        }
+        g_am_HostWindowHandle_p = hWnd;
+        g_am_HostWindowProc_p = hostWndProc;
+    } else {
+        if (SetWindowLongPtrW(g_am_MainWindowHandle_p, GWL_EXSTYLE, static_cast<LONG_PTR>(exStyle & ~WS_EX_NOACTIVATE)) == 0) {
+            return E_FAIL;
+        }
+        if (SetWindowLongPtrW(hWnd, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(g_am_HostWindowProc_p)) == 0) {
+            return E_FAIL;
+        }
+        g_am_HostWindowProc_p = nullptr;
+        g_am_HostWindowHandle_p = nullptr;
+    }
+    return S_OK;
+}
+
+[[nodiscard]] static inline HRESULT am_GetLibraryVersion_p(LPWSTR *ver)
+{
+    if (!ver) {
+        return E_INVALIDARG;
+    }
+    const auto str = new wchar_t[20]; // 20 should be enough for a version string...
+    SecureZeroMemory(str, sizeof(str));
+    wcscat(str, ACRYLICMANAGER_VERSION_STR);
+    *ver = str;
+    return S_OK;
+}
+
+[[nodiscard]] static inline HRESULT am_CreateAcrylicWindow_p(const int x, const int y, const int w, const int h)
+{
+    if (!g_am_IsWindows7OrGreater_p) {
+        PRINT_AND_RETURN(L"This application cannot be run on such old systems.")
+    }
+
+    bool dwmComp = false;
+    if (FAILED(am_IsCompositionEnabled_p(&dwmComp)) || !dwmComp) {
+        PRINT_AND_RETURN(L"This application could not be started when DWM composition is disabled.")
+    }
+
+    return am_InitializeAcrylicManagerHelper_p(x, y, w, h);
+}
+
+[[nodiscard]] static inline HRESULT am_LocalFreeA_p(LPSTR str)
+{
+    if (!str) {
+        return E_INVALIDARG;
+    }
+    delete [] str;
+    str = nullptr;
+    return S_OK;
+}
+
+[[nodiscard]] static inline HRESULT am_LocalFreeW_p(LPWSTR str)
+{
+    if (!str) {
+        return E_INVALIDARG;
+    }
+    delete [] str;
+    str = nullptr;
+    return S_OK;
+}
+
+[[nodiscard]] static inline HRESULT am_CanUnloadDll_p(bool *result)
+{
+    if (!result) {
+        return E_INVALIDARG;
+    }
+    *result = !g_am_AcrylicManagerInitialized_p;
+    return S_OK;
+}
+
+[[nodiscard]] static inline HRESULT am_GetHostWindow_p(HWND *result)
+{
+    if (!result) {
+        return E_INVALIDARG;
+    }
+    *result = g_am_HostWindowHandle_p;
+    return S_OK;
+}
+
+[[nodiscard]] static inline HRESULT am_RemoveHostWindow_p()
+{
+    if (!g_am_HostWindowHandle_p || !g_am_HostWindowProc_p || !g_am_MainWindowHandle_p) {
+        return E_INVALIDARG;
+    }
+    return am_InstallHostWindowHookHelper_p(g_am_HostWindowHandle_p, false);
 }
 
 /////////////////////////////////
@@ -2690,34 +2848,36 @@ HRESULT am_GetStringFromRegistry_p(const HKEY rootKey, LPCWSTR subKey, LPCWSTR v
     return E_FAIL;
 }
 
+HRESULT am_IsWindowBackgroundTranslucent_p(const HWND hWnd, bool *result)
+{
+    if (!hWnd || !result) {
+        return E_INVALIDARG;
+    }
+    // todo
+    return E_FAIL;
+}
+
+HRESULT am_SetWindowTranslucentBackgroundEnabled_p(const HWND hWnd, const bool enable)
+{
+    if (!hWnd) {
+        return E_INVALIDARG;
+    }
+    // todo
+    return E_FAIL;
+}
+
 /////////////////////////////////
 /////     Public interface
 /////////////////////////////////
 
 HRESULT am_GetVersion(LPWSTR *ver)
 {
-    if (!ver) {
-        return E_INVALIDARG;
-    }
-    const auto str = new wchar_t[20]; // 20 should be enough for a version string...
-    SecureZeroMemory(str, sizeof(str));
-    wcscat(str, ACRYLICMANAGER_VERSION_STR);
-    *ver = str;
-    return S_OK;
+    return am_GetLibraryVersion_p(ver);
 }
 
 HRESULT am_CreateWindow(const int x, const int y, const int w, const int h)
 {
-    if (!g_am_IsWindows7OrGreater_p) {
-        PRINT_AND_RETURN(L"This application cannot be run on such old systems.")
-    }
-
-    bool dwmComp = false;
-    if (FAILED(am_IsCompositionEnabled_p(&dwmComp)) || !dwmComp) {
-        PRINT_AND_RETURN(L"This application could not be started when DWM composition is disabled.")
-    }
-
-    return am_InitializeAcrylicManagerHelper_p(x, y, w, h);
+    return am_CreateAcrylicWindow_p(x, y, w, h);
 }
 
 HRESULT am_GetWindowGeometry(RECT *result)
@@ -2832,36 +2992,37 @@ HRESULT am_IsWindowActive(bool *result)
 
 HRESULT am_FreeStringA(LPSTR str)
 {
-    if (!str) {
-        return E_INVALIDARG;
-    }
-    delete [] str;
-    str = nullptr;
-    return S_OK;
+    return am_LocalFreeA_p(str);
 }
 
 HRESULT am_FreeStringW(LPWSTR str)
 {
-    if (!str) {
-        return E_INVALIDARG;
-    }
-    delete [] str;
-    str = nullptr;
-    return S_OK;
+    return am_LocalFreeW_p(str);
 }
 
 HRESULT am_CanUnloadDll(bool *result)
 {
-    if (!result) {
-        return E_INVALIDARG;
-    }
-    *result = !g_am_AcrylicManagerInitialized_p;
-    return S_OK;
+    return am_CanUnloadDll_p(result);
 }
 
 HRESULT am_Release()
 {
     return am_CleanupHelper_p();
+}
+
+HRESULT am_SetHostWindow(const HWND hWnd)
+{
+    return am_InstallHostWindowHookHelper_p(hWnd, true);
+}
+
+HRESULT am_GetHostWindow(HWND *result)
+{
+    return am_GetHostWindow_p(result);
+}
+
+HRESULT am_RemoveHostWindow()
+{
+    return am_RemoveHostWindow_p();
 }
 
 /////////////////////////////////

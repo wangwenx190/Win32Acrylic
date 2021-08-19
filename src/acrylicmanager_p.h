@@ -415,6 +415,18 @@ am_GetStringFromRegistry_p(
     _Out_ LPWSTR    *value
 );
 
+[[nodiscard]] ACRYLICMANAGER_API HRESULT WINAPI
+am_IsWindowBackgroundTranslucent_p(
+    _In_ const HWND hWnd,
+    _Out_ bool      *result
+);
+
+[[nodiscard]] ACRYLICMANAGER_API HRESULT WINAPI
+am_SetWindowTranslucentBackgroundEnabled_p(
+    _In_ const HWND hWnd,
+    _In_ const bool enable
+);
+
 #ifdef __cplusplus
 EXTERN_C_END
 #endif

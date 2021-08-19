@@ -30,7 +30,7 @@ static const int WindowState_Shown = 5;
 
 using am_GetVersion_ptr = HRESULT(WINAPI *)(LPWSTR *);
 using am_FreeStringW_ptr = HRESULT(WINAPI *)(LPWSTR);
-using am_CreateWindow_ptr = HRESULT(WINAPI *)();
+using am_CreateWindow_ptr = HRESULT(WINAPI *)(const int, const int, const int, const int);
 using am_CenterWindow_ptr = HRESULT(WINAPI *)();
 using am_SetWindowState_ptr = HRESULT(WINAPI *)(const int);
 using am_EventLoopExec_ptr = HRESULT(WINAPI *)(int *);
@@ -133,7 +133,7 @@ wWinMain(
         am_FreeStringW_pfn(ver);
     }
 
-    if (SUCCEEDED(am_CreateWindow_pfn())) {
+    if (SUCCEEDED(am_CreateWindow_pfn(-1, -1, -1, -1))) {
         if (SUCCEEDED(am_CenterWindow_pfn())) {
             if (SUCCEEDED(am_SetWindowState_pfn(WindowState_Shown))) {
                 int result = -1;

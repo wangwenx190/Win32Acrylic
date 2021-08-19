@@ -2295,7 +2295,7 @@ HRESULT am_GetWallpaperFilePath_p(const int screen, LPWSTR *result)
                                 CoTaskMemFree(monitorId);
                                 const auto _path = new wchar_t[MAX_PATH];
                                 SecureZeroMemory(_path, sizeof(_path));
-                                memcpy(_path, wallpaperPath, wcslen(wallpaperPath));
+                                wcscat(_path, wallpaperPath);
                                 *result = _path;
                                 CoTaskMemFree(wallpaperPath);
                                 CoUninitialize();
@@ -2701,7 +2701,7 @@ HRESULT am_GetVersion(LPWSTR *ver)
     }
     const auto str = new wchar_t[20]; // 20 should be enough for a version string...
     SecureZeroMemory(str, sizeof(str));
-    memcpy(str, ACRYLICMANAGER_VERSION_STR, wcslen(ACRYLICMANAGER_VERSION_STR));
+    wcscat(str, ACRYLICMANAGER_VERSION_STR);
     *ver = str;
     return S_OK;
 }

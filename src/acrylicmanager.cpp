@@ -1293,15 +1293,15 @@ static const bool g_am_IsXAMLIslandAvailable_p = []{
 [[nodiscard]] static inline LRESULT CALLBACK am_HookWindowProcHelper_p(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
     const auto getOriginalResult = [hWnd, uMsg, wParam, lParam]() {
-        return CallWindowProcW(g_am_HostWindowProc_p, hWnd, uMsg, wParam, lParam);
-    };
-
-    if (!g_am_MainWindowHandle_p) {
         if (g_am_HostWindowProc_p) {
-            return getOriginalResult();
+            return CallWindowProcW(g_am_HostWindowProc_p, hWnd, uMsg, wParam, lParam);
         } else {
             return DefWindowProcW(hWnd, uMsg, wParam, lParam);
         }
+    };
+
+    if (!g_am_MainWindowHandle_p) {
+        return getOriginalResult();
     }
 
     switch (uMsg) {

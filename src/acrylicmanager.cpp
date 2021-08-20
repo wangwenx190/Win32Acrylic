@@ -2930,17 +2930,17 @@ HRESULT am_GetSystemSymbolAddress_p(LPCWSTR library, LPCWSTR function, FARPROC *
     if (!module) {
         PRINT_WIN32_ERROR_MESSAGE_AND_RETURN(LoadLibraryExW)
     }
-    LPSTR funcNameAnsi = nullptr;
-    if (FAILED(am_WideToMulti_p(function, CP_UTF8, &funcNameAnsi))) {
+    LPSTR funcNameA = nullptr;
+    if (FAILED(am_WideToMulti_p(function, CP_UTF8, &funcNameA))) {
         return E_FAIL;
     }
-    const auto addr = GetProcAddress(module, funcNameAnsi);
+    const auto addr = GetProcAddress(module, funcNameA);
     if (addr) {
         *address = addr;
     } else {
         PRINT_WIN32_ERROR_MESSAGE(GetProcAddress)
     }
-    delete [] funcNameAnsi;
+    delete [] funcNameA;
     return (addr ? S_OK : E_FAIL);
 }
 

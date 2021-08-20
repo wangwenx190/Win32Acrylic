@@ -39,6 +39,7 @@ using am_CreateWindow_ptr = HRESULT(WINAPI *)(const int, const int, const int, c
 using am_CenterWindow_ptr = HRESULT(WINAPI *)();
 using am_SetWindowState_ptr = HRESULT(WINAPI *)(const int);
 using am_SetHostWindow_ptr = HRESULT(WINAPI *)(const HWND);
+using am_SetWindowTranslucentBackgroundEnabled_ptr = HRESULT(WINAPI *)(const HWND, const bool);
 using am_EventLoopExec_ptr = HRESULT(WINAPI *)(int *);
 using am_CanUnloadDll_ptr = HRESULT(WINAPI *)(bool *);
 using am_Release_ptr = HRESULT(WINAPI *)();
@@ -49,6 +50,7 @@ static am_CreateWindow_ptr am_CreateWindow_pfn = nullptr;
 static am_CenterWindow_ptr am_CenterWindow_pfn = nullptr;
 static am_SetWindowState_ptr am_SetWindowState_pfn = nullptr;
 static am_SetHostWindow_ptr am_SetHostWindow_pfn = nullptr;
+static am_SetWindowTranslucentBackgroundEnabled_ptr am_SetWindowTranslucentBackgroundEnabled_pfn = nullptr;
 static am_EventLoopExec_ptr am_EventLoopExec_pfn = nullptr;
 static am_CanUnloadDll_ptr am_CanUnloadDll_pfn = nullptr;
 static am_Release_ptr am_Release_pfn = nullptr;
@@ -118,6 +120,11 @@ static inline LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPAR
     am_SetHostWindow_pfn = reinterpret_cast<am_SetHostWindow_ptr>(GetProcAddress(dll, "am_SetHostWindow"));
     if (!am_SetHostWindow_pfn) {
         OutputDebugStringW(L"Failed to resolve am_SetHostWindow().");
+        return false;
+    }
+    am_SetWindowTranslucentBackgroundEnabled_pfn = reinterpret_cast<am_SetWindowTranslucentBackgroundEnabled_ptr>(GetProcAddress(dll, "am_SetWindowTranslucentBackgroundEnabled_p"));
+    if (!am_SetWindowTranslucentBackgroundEnabled_pfn) {
+        OutputDebugStringW(L"Failed to resolve am_SetWindowTranslucentBackgroundEnabled_p().");
         return false;
     }
     am_EventLoopExec_pfn = reinterpret_cast<am_EventLoopExec_ptr>(GetProcAddress(dll, "am_EventLoopExec"));
@@ -205,6 +212,7 @@ wWinMain(
     }
 
     if (SUCCEEDED(am_CreateWindow_pfn(rect.left, rect.top, std::abs(rect.right - rect.left), std::abs(rect.bottom - rect.top)))) {
+        am_SetWindowTranslucentBackgroundEnabled_pfn(g_window, true);
         am_SetWindowState_pfn(WindowState_Shown);
         am_SetHostWindow_pfn(g_window);
     }

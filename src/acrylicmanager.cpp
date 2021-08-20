@@ -1645,15 +1645,23 @@ static const bool g_am_IsXAMLIslandAvailable_p = []{
     if (enable) {
         const auto hostWndProc = reinterpret_cast<WNDPROC>(GetWindowLongPtrW(hWnd, GWLP_WNDPROC));
         if (!hostWndProc) {
-            return E_FAIL;
+            PRINT_WIN32_ERROR_MESSAGE_AND_RETURN(GetWindowLongPtrW)
         }
-        SetWindowLongPtrW(hWnd, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(am_HookWindowProcHelper_p));
-        SetWindowLongPtrW(g_am_MainWindowHandle_p, GWL_EXSTYLE, static_cast<LONG_PTR>(exStyle | WS_EX_NOACTIVATE));
+        if (SetWindowLongPtrW(hWnd, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(am_HookWindowProcHelper_p)) == 0) {
+            PRINT_WIN32_ERROR_MESSAGE_AND_RETURN(SetWindowLongPtrW)
+        }
+        if (SetWindowLongPtrW(g_am_MainWindowHandle_p, GWL_EXSTYLE, static_cast<LONG_PTR>(exStyle | WS_EX_NOACTIVATE)) == 0) {
+            PRINT_WIN32_ERROR_MESSAGE_AND_RETURN(SetWindowLongPtrW)
+        }
         g_am_HostWindowHandle_p = hWnd;
         g_am_HostWindowProc_p = hostWndProc;
     } else {
-        SetWindowLongPtrW(g_am_MainWindowHandle_p, GWL_EXSTYLE, static_cast<LONG_PTR>(exStyle & ~WS_EX_NOACTIVATE));
-        SetWindowLongPtrW(hWnd, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(g_am_HostWindowProc_p));
+        if (SetWindowLongPtrW(g_am_MainWindowHandle_p, GWL_EXSTYLE, static_cast<LONG_PTR>(exStyle & ~WS_EX_NOACTIVATE)) == 0) {
+            PRINT_WIN32_ERROR_MESSAGE_AND_RETURN(SetWindowLongPtrW)
+        }
+        if (SetWindowLongPtrW(hWnd, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(g_am_HostWindowProc_p)) == 0) {
+            PRINT_WIN32_ERROR_MESSAGE_AND_RETURN(SetWindowLongPtrW)
+        }
         g_am_HostWindowProc_p = nullptr;
         g_am_HostWindowHandle_p = nullptr;
     }
@@ -2841,8 +2849,19 @@ HRESULT am_IsWindowBackgroundTranslucent_p(const HWND hWnd, bool *result)
     if (!hWnd || !result) {
         return E_INVALIDARG;
     }
-    // todo
-    return E_FAIL;
+    BOOL enabled = FALSE;
+    if (SUCCEEDED(DwmGetWindowAttribute(hWnd, static_cast<DWORD>(DwmWindowAttribute::USE_HOSTBACKDROPBRUSH), &enabled, sizeof(enabled)))) {
+        *result = (enabled != FALSE);
+        return S_OK;
+    } else {
+        // We just eat this error because this enum value was introduced in a very
+        // late Windows 10 version, so querying it's value will always result in
+        // a "parameter error" (code: 87) on systems before that value was introduced.
+    }
+    // todo: GetWindowCompositionAttribute()
+    const DWORD exStyle = GetWindowLongPtrW(hWnd, GWL_EXSTYLE);
+    *result = (exStyle & WS_EX_LAYERED);
+    return S_OK;
 }
 
 HRESULT am_SetWindowTranslucentBackgroundEnabled_p(const HWND hWnd, const bool enable)
@@ -2850,8 +2869,56 @@ HRESULT am_SetWindowTranslucentBackgroundEnabled_p(const HWND hWnd, const bool e
     if (!hWnd) {
         return E_INVALIDARG;
     }
-    // todo
-    return E_FAIL;
+    const BOOL enabled = enable ? TRUE : FALSE;
+    if (SUCCEEDED(DwmSetWindowAttribute(hWnd, static_cast<DWORD>(DwmWindowAttribute::USE_HOSTBACKDROPBRUSH), &enabled, sizeof(enabled)))) {
+        return S_OK;
+    } else {
+        // We just eat this error because this enum value was introduced in a very
+        // late Windows 10 version, so changing it's value will always result in
+        // a "parameter error" (code: 87) on systems before that value was introduced.
+    }
+    ACCENT_POLICY policy;
+    SecureZeroMemory(&policy, sizeof(policy));
+    policy.AccentState = enable ? ACCENT_ENABLE_HOSTBACKDROP : ACCENT_DISABLED;
+    WINDOWCOMPOSITIONATTRIBDATA data = {};
+    data.Attrib = WCA_ACCENT_POLICY;
+    data.pvData = &policy;
+    data.cbData = sizeof(policy);
+    if (SUCCEEDED(am_SetWindowCompositionAttribute_p(hWnd, &data))) {
+        return S_OK;
+    } else {
+        // We just eat this error because this enum value was introduced in a very
+        // late Windows 10 version, so changing it's value will always result in
+        // a "parameter error" (code: 87) on systems before that value was introduced.
+        policy.AccentState = enable ? ACCENT_INVALID_STATE : ACCENT_DISABLED;
+        if (SUCCEEDED(am_SetWindowCompositionAttribute_p(hWnd, &data))) {
+            return S_OK;
+        } else {
+            // We just eat this error because this enum value was introduced in a very
+            // late Windows 10 version, so changing it's value will always result in
+            // a "parameter error" (code: 87) on systems before that value was introduced.
+        }
+    }
+    const DWORD exStyle = GetWindowLongPtrW(hWnd, GWL_EXSTYLE);
+    const COLORREF colorKey = RGB(0, 0, 0);
+    const BYTE alpha = enable ? 0 : 255;
+    if (!enable) {
+        if (!(exStyle & WS_EX_LAYERED)) {
+            PRINT_AND_RETURN(L"Can't change alpha channel for non-layered window.")
+        }
+        if (SetLayeredWindowAttributes(hWnd, colorKey, alpha, LWA_COLORKEY) == FALSE) {
+            PRINT_WIN32_ERROR_MESSAGE_AND_RETURN(SetLayeredWindowAttributes)
+        }
+    }
+    if (SetWindowLongPtrW(hWnd, GWL_EXSTYLE, (enable ? (exStyle | WS_EX_LAYERED) : (exStyle & ~WS_EX_LAYERED))) == 0) {
+        PRINT_WIN32_ERROR_MESSAGE_AND_RETURN(SetWindowLongPtrW)
+    }
+    if (enable) {
+        if (SetLayeredWindowAttributes(hWnd, colorKey, alpha, LWA_COLORKEY) == FALSE) {
+            PRINT_WIN32_ERROR_MESSAGE_AND_RETURN(SetLayeredWindowAttributes)
+        }
+    }
+    return S_OK;
 }
 
 /////////////////////////////////

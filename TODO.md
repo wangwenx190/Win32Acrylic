@@ -3,4 +3,3 @@
 - 添加mica模式
 - 程序退出时释放所有已加载的dll
 - 在win10 19h1之前的系统上用d2d模糊壁纸
-- 参考qt在winrt模式下如何loadlibrary

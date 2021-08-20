@@ -2273,6 +2273,8 @@ HRESULT am_SetWindowCompositionAttribute_p(const HWND hWnd, LPWINDOWCOMPOSITIONA
             if (!dll) {
                 PRINT_WIN32_ERROR_MESSAGE_AND_RETURN(LoadLibraryExW)
             }
+            FARPROC addr = nullptr;
+            if (FAILED(am_))
             func = reinterpret_cast<sig>(GetProcAddress(dll, "SetWindowCompositionAttribute"));
             if (!func) {
                 PRINT_WIN32_ERROR_MESSAGE_AND_RETURN(GetProcAddress)
@@ -2918,6 +2920,27 @@ HRESULT am_SetWindowTranslucentBackgroundEnabled_p(const HWND hWnd, const bool e
             PRINT_WIN32_ERROR_MESSAGE_AND_RETURN(SetLayeredWindowAttributes)
         }
     }
+    return S_OK;
+}
+
+HRESULT am_GetSystemSymbolAddress_p(LPCWSTR library, LPCWSTR function, FARPROC *address)
+{
+    if (!library || !function || !address) {
+        return E_INVALIDARG;
+    }
+    const auto module = LoadLibraryExW(library, nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
+    if (!module) {
+        return E_FAIL;
+    }
+    LPSTR funcNameAnsi = nullptr;
+    if (FAILED(am_WideToMulti_p(function, CP_UTF8, &funcNameAnsi))) {
+        return E_FAIL;
+    }
+    const auto addr = GetProcAddress(module, funcNameAnsi);
+    if (!addr) {
+        return E_FAIL;
+    }
+    *address = addr;
     return S_OK;
 }
 

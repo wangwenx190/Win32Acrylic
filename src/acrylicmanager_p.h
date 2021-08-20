@@ -427,6 +427,13 @@ am_SetWindowTranslucentBackgroundEnabled_p(
     _In_ const bool enable
 );
 
+[[nodiscard]] ACRYLICMANAGER_API HRESULT WINAPI
+am_GetSystemSymbolAddress_p(
+    _In_ LPCWSTR  library,
+    _In_ LPCWSTR  function,
+    _Out_ FARPROC *address
+);
+
 #ifdef __cplusplus
 EXTERN_C_END
 #endif

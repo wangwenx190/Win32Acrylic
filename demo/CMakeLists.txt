@@ -1,31 +1,53 @@
 enable_language(RC)
 
-set(SOURCES
+set(SOURCES_COMMON
     demo.manifest
     demo.rc
     am_apis.hpp
-    main.cpp
 )
 
-add_executable(Demo WIN32 ${SOURCES})
+set(SOURCES_SIMPLE
+    ${SOURCES_COMMON}
+    simple.cpp
+)
 
-target_link_libraries(Demo PRIVATE
+set(SOURCES_HOSTWINDOW
+    ${SOURCES_COMMON}
+    hostwindow.cpp
+)
+
+add_executable(Demo_Simple WIN32 ${SOURCES_SIMPLE})
+add_executable(Demo_HostWindow WIN32 ${SOURCES_HOSTWINDOW})
+
+target_link_libraries(Demo_HostWindow PRIVATE
     user32
 )
 
-target_compile_definitions(Demo PRIVATE
+set(DEFINITIONS_COMMON
     UNICODE
     _UNICODE
     WIN32_LEAN_AND_MEAN
     _CRT_SECURE_NO_WARNINGS
 )
 
+target_compile_definitions(Demo_Simple PRIVATE
+    ${DEFINITIONS_COMMON}
+)
+target_compile_definitions(Demo_HostWindow PRIVATE
+    ${DEFINITIONS_COMMON}
+)
+
 if(MSVC)
-    target_compile_options(Demo PRIVATE /utf-8 /permissive-)
+    set(COMPILE_OPTIONS_COMMON /utf-8 /permissive-)
+    set(LINK_OPTIONS_COMMON)
     if(CMAKE_BUILD_TYPE STREQUAL "Debug")
-        target_compile_options(Demo PRIVATE /JMC)
+        set(COMPILE_OPTIONS_COMMON ${COMPILE_OPTIONS_COMMON} /JMC)
     else()
-        target_compile_options(Demo PRIVATE /guard:cf)
-        target_link_options(Demo PRIVATE /GUARD:CF)
+        set(COMPILE_OPTIONS_COMMON ${COMPILE_OPTIONS_COMMON} /guard:cf)
+        set(LINK_OPTIONS_COMMON ${LINK_OPTIONS_COMMON} /GUARD:CF)
     endif()
+    target_compile_options(Demo_Simple PRIVATE ${COMPILE_OPTIONS_COMMON})
+    target_compile_options(Demo_HostWindow PRIVATE ${COMPILE_OPTIONS_COMMON})
+    target_link_options(Demo_Simple PRIVATE ${LINK_OPTIONS_COMMON})
+    target_link_options(Demo_HostWindow PRIVATE ${LINK_OPTIONS_COMMON})
 endif()

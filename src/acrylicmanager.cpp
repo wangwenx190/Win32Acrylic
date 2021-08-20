@@ -2406,22 +2406,19 @@ HRESULT am_PrintErrorMessageFromHResult_p(LPCWSTR function, const HRESULT hr)
         return S_OK;
     }
 
-    LPVOID lpMsgBuf = nullptr;
-    LPVOID lpDisplayBuf = nullptr;
-
     const DWORD dwError = HRESULT_CODE(hr);
+    LPWSTR buf = nullptr;
 
     FormatMessageW(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
-        nullptr, dwError, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), reinterpret_cast<LPWSTR>(&lpMsgBuf), 0, nullptr);
+        nullptr, dwError, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), buf, 0, nullptr);
 
-    lpDisplayBuf = reinterpret_cast<LPVOID>(LocalAlloc(LMEM_ZEROINIT,
-        (wcslen(reinterpret_cast<LPCWSTR>(lpMsgBuf)) + wcslen(reinterpret_cast<LPCWSTR>(function)) + 40) * sizeof(wchar_t)));
-    swprintf_s(reinterpret_cast<LPWSTR>(lpDisplayBuf), LocalSize(lpDisplayBuf) / sizeof(wchar_t),
-               L"%s failed with error %d: %s", function, dwError, reinterpret_cast<LPCWSTR>(lpMsgBuf));
-    PRINT(reinterpret_cast<LPCWSTR>(lpDisplayBuf))
+    const auto str = new wchar_t[200];
+    SecureZeroMemory(str, sizeof(str));
+    swprintf(str, L"%s failed with error %d: %s", function, dwError, buf);
+    PRINT(str)
 
-    LocalFree(lpMsgBuf);
-    LocalFree(lpDisplayBuf);
+    LocalFree(buf);
+    delete [] str;
 
     return S_OK;
 }

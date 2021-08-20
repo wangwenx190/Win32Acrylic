@@ -54,7 +54,7 @@ static am_Release_ptr am_Release_pfn = nullptr;
         return false;
     }
     tried = true;
-    static HMODULE dll = LoadLibraryExW(L"AcrylicManager.dll", nullptr, LOAD_LIBRARY_SEARCH_APPLICATION_DIR);
+    HMODULE dll = LoadLibraryExW(L"AcrylicManager.dll", nullptr, LOAD_LIBRARY_SEARCH_APPLICATION_DIR);
     if (!dll) {
         dll = LoadLibraryExW(L"AcrylicManagerd.dll", nullptr, LOAD_LIBRARY_SEARCH_APPLICATION_DIR);
         if (!dll) {
@@ -138,7 +138,6 @@ wWinMain(
     if (SUCCEEDED(am_CreateWindow_pfn(-1, -1, -1, -1))) {
         if (SUCCEEDED(am_CenterWindow_pfn())) {
             if (SUCCEEDED(am_SetWindowState_pfn(WindowState_Shown))) {
-                int result = -1;
                 am_EventLoopExec_pfn(&result);
             }
         }

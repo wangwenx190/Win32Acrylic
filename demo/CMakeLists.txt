@@ -13,6 +13,9 @@ target_link_libraries(Demo PRIVATE
 )
 
 target_compile_definitions(Demo PRIVATE
+    UNICODE
+    _UNICODE
+    WIN32_LEAN_AND_MEAN
     _CRT_SECURE_NO_WARNINGS
 )
 

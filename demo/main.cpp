@@ -24,16 +24,21 @@
 
 #include <Windows.h>
 #include <cstdio>
+#include <cmath>
 
-static LPCWSTR g_applicationName = L"AcrylicManager Demo Application";
-
+static LPCWSTR g_windowClass = L"AcrylicManagerDemoApplicationWindowClass";
+static LPCWSTR g_windowTitle = L"AcrylicManager Demo Application";
 static const int WindowState_Shown = 5;
+
+static HINSTANCE g_instance = nullptr;
+static HWND g_window = nullptr;
 
 using am_GetVersion_ptr = HRESULT(WINAPI *)(LPWSTR *);
 using am_FreeStringW_ptr = HRESULT(WINAPI *)(LPWSTR);
 using am_CreateWindow_ptr = HRESULT(WINAPI *)(const int, const int, const int, const int);
 using am_CenterWindow_ptr = HRESULT(WINAPI *)();
 using am_SetWindowState_ptr = HRESULT(WINAPI *)(const int);
+using am_SetHostWindow_ptr = HRESULT(WINAPI *)(const HWND);
 using am_EventLoopExec_ptr = HRESULT(WINAPI *)(int *);
 using am_CanUnloadDll_ptr = HRESULT(WINAPI *)(bool *);
 using am_Release_ptr = HRESULT(WINAPI *)();
@@ -43,9 +48,32 @@ static am_FreeStringW_ptr am_FreeStringW_pfn = nullptr;
 static am_CreateWindow_ptr am_CreateWindow_pfn = nullptr;
 static am_CenterWindow_ptr am_CenterWindow_pfn = nullptr;
 static am_SetWindowState_ptr am_SetWindowState_pfn = nullptr;
+static am_SetHostWindow_ptr am_SetHostWindow_pfn = nullptr;
 static am_EventLoopExec_ptr am_EventLoopExec_pfn = nullptr;
 static am_CanUnloadDll_ptr am_CanUnloadDll_pfn = nullptr;
 static am_Release_ptr am_Release_pfn = nullptr;
+
+static inline LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
+{
+    switch (uMsg)
+    {
+    case WM_PAINT: {
+        PAINTSTRUCT ps = {};
+        const HDC hdc = BeginPaint(hWnd, &ps);
+        EndPaint(hWnd, &ps);
+        return 0;
+    }
+    case WM_CLOSE:
+        DestroyWindow(g_window);
+        return 0;
+    case WM_DESTROY:
+        PostQuitMessage(0);
+        return 0;
+    default:
+        break;
+    }
+    return DefWindowProcW(hWnd, uMsg, wParam, lParam);
+}
 
 [[nodiscard]] static inline bool InitializeAcrylicManagerLibrary()
 {
@@ -87,6 +115,11 @@ static am_Release_ptr am_Release_pfn = nullptr;
         OutputDebugStringW(L"Failed to resolve am_SetWindowState().");
         return false;
     }
+    am_SetHostWindow_pfn = reinterpret_cast<am_SetHostWindow_ptr>(GetProcAddress(dll, "am_SetHostWindow"));
+    if (!am_SetHostWindow_pfn) {
+        OutputDebugStringW(L"Failed to resolve am_SetHostWindow().");
+        return false;
+    }
     am_EventLoopExec_pfn = reinterpret_cast<am_EventLoopExec_ptr>(GetProcAddress(dll, "am_EventLoopExec"));
     if (!am_EventLoopExec_pfn) {
         OutputDebugStringW(L"Failed to resolve am_EventLoopExec().");
@@ -113,13 +146,13 @@ wWinMain(
     _In_ int           nCmdShow
 )
 {
-    UNREFERENCED_PARAMETER(hInstance);
     UNREFERENCED_PARAMETER(hPrevInstance);
     UNREFERENCED_PARAMETER(lpCmdLine);
-    UNREFERENCED_PARAMETER(nCmdShow);
+
+    g_instance = hInstance;
 
     if (!InitializeAcrylicManagerLibrary()) {
-        MessageBoxW(nullptr, L"Failed to initialize AcrylicManager library.", g_applicationName, MB_ICONERROR | MB_OK);
+        MessageBoxW(nullptr, L"Failed to initialize AcrylicManager library.", g_windowTitle, MB_ICONERROR | MB_OK);
         return -1;
     }
 
@@ -133,17 +166,57 @@ wWinMain(
         am_FreeStringW_pfn(ver);
     }
 
-    int result = -1;
+    WNDCLASSEXW wcex;
+    SecureZeroMemory(&wcex, sizeof(wcex));
+    wcex.cbSize = sizeof(wcex);
+    wcex.style = CS_HREDRAW | CS_VREDRAW;
+    wcex.lpfnWndProc = WndProc;
+    wcex.hInstance = hInstance;
+    wcex.hIcon = LoadIconW(hInstance, MAKEINTRESOURCEW(101));
+    wcex.hCursor = LoadCursorW(nullptr, IDC_ARROW);
+    wcex.hbrBackground = reinterpret_cast<HBRUSH>(COLOR_WINDOW + 1);
+    wcex.lpszClassName = g_windowClass;
 
-    if (SUCCEEDED(am_CreateWindow_pfn(-1, -1, -1, -1))) {
-        if (SUCCEEDED(am_CenterWindow_pfn())) {
-            if (SUCCEEDED(am_SetWindowState_pfn(WindowState_Shown))) {
-                am_EventLoopExec_pfn(&result);
-            }
-        }
+    if (RegisterClassExW(&wcex) == 0) {
+        MessageBoxW(nullptr, L"Failed to register demo application window class.", g_windowTitle, MB_ICONERROR | MB_OK);
+        return -1;
+    }
+
+    g_window = CreateWindowExW(0L,
+                               g_windowClass, g_windowTitle,
+                               WS_OVERLAPPEDWINDOW,
+                               CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
+                               nullptr, nullptr, hInstance, nullptr);
+    if (!g_window) {
+        MessageBoxW(nullptr, L"Failed to create demo application window.", g_windowTitle, MB_ICONERROR | MB_OK);
+        return -1;
+    }
+
+    ShowWindow(g_window, nCmdShow);
+    if (UpdateWindow(g_window) == FALSE) {
+        MessageBoxW(nullptr, L"Failed to update demo application window.", g_windowTitle, MB_ICONERROR | MB_OK);
+        return -1;
+    }
+
+    RECT rect = {0, 0, 0, 0};
+    if (GetWindowRect(g_window, &rect) == FALSE) {
+        MessageBoxW(nullptr, L"Failed to retrieve demo application window rect.", g_windowTitle, MB_ICONERROR | MB_OK);
+        return -1;
+    }
+
+    if (SUCCEEDED(am_CreateWindow_pfn(rect.left, rect.top, std::abs(rect.right - rect.left), std::abs(rect.bottom - rect.top)))) {
+        am_SetWindowState_pfn(WindowState_Shown);
+        am_SetHostWindow_pfn(g_window);
+    }
+
+    MSG msg = {};
+
+    while (GetMessageW(&msg, nullptr, 0, 0) != FALSE) {
+        TranslateMessage(&msg);
+        DispatchMessageW(&msg);
     }
 
     am_Release_pfn();
 
-    return result;
+    return static_cast<int>(msg.wParam);
 }

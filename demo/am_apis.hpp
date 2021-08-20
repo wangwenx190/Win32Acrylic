@@ -24,6 +24,8 @@
 
 #pragma once
 
+#include <Windows.h>
+
 static LPCWSTR g_acrylicManagerDllName = L"AcrylicManager.dll";
 static LPCWSTR g_acrylicManagerDllNameDebug = L"AcrylicManagerd.dll";
 

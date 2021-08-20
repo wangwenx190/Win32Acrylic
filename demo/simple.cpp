@@ -23,6 +23,7 @@
  */
 
 #include <Windows.h>
+#include <cstdio>
 #include "am_apis.hpp"
 
 EXTERN_C int APIENTRY

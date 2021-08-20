@@ -1192,7 +1192,7 @@ static const bool g_am_IsXAMLIslandAvailable_p = []{
     case WM_DWMCOMPOSITIONCHANGED: {
         bool enabled = false;
         if (FAILED(am_IsCompositionEnabled_p(&enabled)) || !enabled) {
-            PRINT(L"This application can't continue running when DWM composition is disabled.")
+            PRINT(L"AcrylicManager won't be functional when DWM composition is disabled.")
             std::exit(-1);
         }
     } break;
@@ -1218,8 +1218,10 @@ static const bool g_am_IsXAMLIslandAvailable_p = []{
                     PRINT(L"Failed to switch acrylic brush theme.")
                 }
             } else {
-                PRINT(L"Failed to retrieve system theme or high contrast mode is on.")
+                PRINT(L"The system theme is not valid or high contrast mode is on.")
             }
+        } else {
+            PRINT(L"Failed to retrieve the system theme.")
         }
     }
 
@@ -1332,12 +1334,12 @@ static const bool g_am_IsXAMLIslandAvailable_p = []{
 [[nodiscard]] static inline HRESULT am_RegisterMainWindowClassHelper_p()
 {
     if (g_am_MainWindowAtom_p != 0) {
-        SAFE_RETURN
+        PRINT_AND_SAFE_RETURN(L"The main window class has been registered already.")
     }
 
     LPWSTR guid = nullptr;
     if (FAILED(am_GenerateGUID_p(&guid))) {
-        SAFE_RETURN
+        PRINT_AND_SAFE_RETURN(L"Failed to generate a GUID for main window class.")
     }
     g_am_MainWindowClassName_p = new wchar_t[MAX_PATH];
     SecureZeroMemory(g_am_MainWindowClassName_p, sizeof(g_am_MainWindowClassName_p));
@@ -1371,12 +1373,13 @@ static const bool g_am_IsXAMLIslandAvailable_p = []{
     }
 
     if ((g_am_MainWindowAtom_p == 0) || (g_am_DragBarWindowAtom_p != 0)) {
-        SAFE_RETURN
+        PRINT_AND_SAFE_RETURN(L"The main window class has not been registered or "
+                               "the drag bar window class has been registered already.")
     }
 
     LPWSTR guid = nullptr;
     if (FAILED(am_GenerateGUID_p(&guid))) {
-        SAFE_RETURN
+        PRINT_AND_SAFE_RETURN(L"Failed to generate a GUID for drag bar window class.")
     }
     g_am_DragBarWindowClassName_p = new wchar_t[MAX_PATH];
     SecureZeroMemory(g_am_DragBarWindowClassName_p, sizeof(g_am_DragBarWindowClassName_p));
@@ -1406,7 +1409,8 @@ static const bool g_am_IsXAMLIslandAvailable_p = []{
 [[nodiscard]] static inline HRESULT am_CreateMainWindowHelper_p(const int x, const int y, const int w, const int h)
 {
     if ((g_am_MainWindowAtom_p == 0) || g_am_MainWindowHandle_p) {
-        SAFE_RETURN
+        PRINT_AND_SAFE_RETURN(L"The main window class has not been registered or "
+                               "the main window has been created already.")
     }
 
     g_am_MainWindowHandle_p = CreateWindowExW(0L,
@@ -1446,7 +1450,7 @@ static const bool g_am_IsXAMLIslandAvailable_p = []{
 [[nodiscard]] static inline HRESULT am_CreateDragBarWindowHelper_p()
 {
     if (!g_am_MainWindowHandle_p) {
-        SAFE_RETURN
+        PRINT_AND_SAFE_RETURN(L"The main window has not been created.")
     }
 
     // Please refer to the "IMPORTANT NOTE" section below.
@@ -1454,7 +1458,8 @@ static const bool g_am_IsXAMLIslandAvailable_p = []{
         PRINT_AND_SAFE_RETURN(L"Drag bar window is only available on Windows 8 and onwards.")
     }
     if ((g_am_DragBarWindowAtom_p == 0) || g_am_DragBarWindowHandle_p) {
-        SAFE_RETURN
+        PRINT_AND_SAFE_RETURN(L"The drag bar window class has not been registered or "
+                               "the drag bar window has been created already.")
     }
 
     // The drag bar window is a child window of the top level window that is put
@@ -1487,7 +1492,7 @@ static const bool g_am_IsXAMLIslandAvailable_p = []{
     }
     int tbh = 0;
     if (FAILED(am_GetTitleBarHeight_p(g_am_MainWindowHandle_p, g_am_CurrentDpi_p, &tbh))) {
-        SAFE_RETURN
+        PRINT_AND_SAFE_RETURN(L"Failed to retrieve the title bar height.")
     }
     if (SetWindowPos(g_am_DragBarWindowHandle_p, HWND_TOP, 0, 0, rect.right,  tbh,
                  SWP_NOACTIVATE | SWP_SHOWWINDOW | SWP_NOOWNERZORDER) == FALSE) {
@@ -1500,7 +1505,7 @@ static const bool g_am_IsXAMLIslandAvailable_p = []{
 [[nodiscard]] static inline HRESULT am_CreateXAMLIslandHelper_p()
 {
     if (!g_am_MainWindowHandle_p) {
-        SAFE_RETURN
+        PRINT_AND_SAFE_RETURN(L"The main window has not been created.")
     }
 
     // XAML Island is only supported on Windows 10 19H1 and onwards.
@@ -1508,14 +1513,11 @@ static const bool g_am_IsXAMLIslandAvailable_p = []{
         PRINT_AND_SAFE_RETURN(L"XAML Island is only supported on Windows 10 19H1 and onwards.")
     }
     SystemTheme systemTheme = SystemTheme::Invalid;
-    if (FAILED(am_GetSystemThemeHelper_p(&systemTheme))) {
-        SAFE_RETURN
-    }
-    if (systemTheme == SystemTheme::Invalid) {
-        PRINT_AND_SAFE_RETURN(L"Failed to retrieve system theme.")
+    if (FAILED(am_GetSystemThemeHelper_p(&systemTheme)) || (systemTheme == SystemTheme::Invalid)) {
+        PRINT_AND_SAFE_RETURN(L"Failed to retrieve the system theme.")
     }
     if (systemTheme == SystemTheme::HighContrast) {
-        PRINT_AND_SAFE_RETURN(L"High contrast mode is on.")
+        PRINT_AND_SAFE_RETURN(L"AcrylicManager won't be functional when high contrast mode is on.")
     }
 
     winrt::init_apartment(winrt::apartment_type::single_threaded);
@@ -1539,7 +1541,7 @@ static const bool g_am_IsXAMLIslandAvailable_p = []{
     // Give enough space to our thin homemade top border.
     int borderThickness = 0;
     if (FAILED(am_GetWindowVisibleFrameBorderThickness_p(g_am_MainWindowHandle_p, g_am_CurrentDpi_p, &borderThickness))) {
-        SAFE_RETURN
+        PRINT_AND_SAFE_RETURN(L"Failed to retrieve the window visible frame border thickness.")
     }
     if (SetWindowPos(g_am_XAMLIslandWindowHandle_p, HWND_BOTTOM, 0,
                  borderThickness, rect.right, (rect.bottom - borderThickness),
@@ -1681,12 +1683,12 @@ static const bool g_am_IsXAMLIslandAvailable_p = []{
 [[nodiscard]] static inline HRESULT am_CreateAcrylicWindow_p(const int x, const int y, const int w, const int h)
 {
     if (!g_am_IsWindows7OrGreater_p) {
-        PRINT_AND_RETURN(L"This application cannot be run on such old systems.")
+        PRINT_AND_RETURN(L"AcrylicManager won't be functional on such old systems.")
     }
 
     bool dwmComp = false;
     if (FAILED(am_IsCompositionEnabled_p(&dwmComp)) || !dwmComp) {
-        PRINT_AND_RETURN(L"This application could not be started when DWM composition is disabled.")
+        PRINT_AND_RETURN(L"AcrylicManager won't be functional when DWM composition is disabled.")
     }
 
     return am_InitializeAcrylicManagerHelper_p(x, y, w, h);

@@ -69,8 +69,9 @@
 static const int g_am_AutoHideTaskbarThicknessPx_p = 2;
 static const int g_am_AutoHideTaskbarThicknessPy_p = g_am_AutoHideTaskbarThicknessPx_p;
 
-static LPCWSTR g_am_ForceOfficialAcrylicEnvVar_p = L"ACRYLICMANAGER_FORCE_OFFICIAL_ACRYLIC";
-static LPCWSTR g_am_ForceHomemadeAcrylicEnvVar_p = L"ACRYLICMANAGER_FORCE_HOMEMADE_ACRYLIC";
+static LPCWSTR g_am_ForceOfficialBlurEnvVar_p = L"ACRYLICMANAGER_FORCE_OFFICIAL_BLUR";
+static LPCWSTR g_am_ForceXAMLIslandEnvVar_p = L"ACRYLICMANAGER_FORCE_XAML_ISLAND";
+static LPCWSTR g_am_ForceDirect2DEnvVar_p = L"ACRYLICMANAGER_FORCE_DIRECT2D";
 static LPCWSTR g_am_PersonalizeRegistryKey_p = LR"(Software\Microsoft\Windows\CurrentVersion\Themes\Personalize)";
 static LPCWSTR g_am_DWMRegistryKey_p = LR"(Software\Microsoft\Windows\DWM)";
 static LPCWSTR g_am_DesktopRegistryKey_p = LR"(Control Panel\Desktop)";
@@ -135,7 +136,7 @@ static const bool g_am_IsWindows10OrGreater_p = []{
 static const bool g_am_IsDirect2DAvailable_p = []{
     bool force = false;
     return (g_am_IsWindows8OrGreater_p
-            || (SUCCEEDED(am_GetBoolFromEnvironmentVariable_p(g_am_ForceHomemadeAcrylicEnvVar_p, &force)) && force));
+            || (SUCCEEDED(am_GetBoolFromEnvironmentVariable_p(g_am_ForceDirect2DEnvVar_p, &force)) && force));
 }();
 
 static const bool g_am_IsDarkModeAvailable_p = []{
@@ -146,7 +147,7 @@ static const bool g_am_IsDarkModeAvailable_p = []{
 static const bool g_am_IsXAMLIslandAvailable_p = []{
     bool result = false, force = false;
     return ((SUCCEEDED(am_CompareSystemVersion_p(WindowsVersion::Windows10_19H1, VersionCompare::GreaterOrEqual, &result)) && result)
-            || (SUCCEEDED(am_GetBoolFromEnvironmentVariable_p(g_am_ForceOfficialAcrylicEnvVar_p, &force)) && force));
+            || (SUCCEEDED(am_GetBoolFromEnvironmentVariable_p(g_am_ForceXAMLIslandEnvVar_p, &force)) && force));
 }();
 
 /////////////////////////////////
@@ -1340,10 +1341,8 @@ static const bool g_am_IsXAMLIslandAvailable_p = []{
     }
     g_am_MainWindowClassName_p = new wchar_t[MAX_PATH];
     SecureZeroMemory(g_am_MainWindowClassName_p, sizeof(g_am_MainWindowClassName_p));
-    wcscat(g_am_MainWindowClassName_p, g_am_WindowClassNamePrefix_p);
-    wcscat(g_am_MainWindowClassName_p, guid);
+    swprintf(g_am_MainWindowClassName_p, L"%s%s%s", g_am_WindowClassNamePrefix_p, guid, g_am_MainWindowClassNameSuffix_p);
     delete [] guid;
-    wcscat(g_am_MainWindowClassName_p, g_am_MainWindowClassNameSuffix_p);
 
     WNDCLASSEXW wcex;
     SecureZeroMemory(&wcex, sizeof(wcex));
@@ -1381,10 +1380,8 @@ static const bool g_am_IsXAMLIslandAvailable_p = []{
     }
     g_am_DragBarWindowClassName_p = new wchar_t[MAX_PATH];
     SecureZeroMemory(g_am_DragBarWindowClassName_p, sizeof(g_am_DragBarWindowClassName_p));
-    wcscat(g_am_DragBarWindowClassName_p, g_am_WindowClassNamePrefix_p);
-    wcscat(g_am_DragBarWindowClassName_p, guid);
+    swprintf(g_am_DragBarWindowClassName_p, L"%s%s%s", g_am_WindowClassNamePrefix_p, guid, g_am_DragBarWindowClassNameSuffix_p);
     delete [] guid;
-    wcscat(g_am_DragBarWindowClassName_p, g_am_DragBarWindowClassNameSuffix_p);
 
     WNDCLASSEXW wcex;
     SecureZeroMemory(&wcex, sizeof(wcex));
@@ -1676,7 +1673,7 @@ static const bool g_am_IsXAMLIslandAvailable_p = []{
     }
     const auto str = new wchar_t[20]; // 20 should be enough for a version string...
     SecureZeroMemory(str, sizeof(str));
-    wcscat(str, ACRYLICMANAGER_VERSION_STR);
+    wcscpy(str, ACRYLICMANAGER_VERSION_STR);
     *ver = str;
     return S_OK;
 }
@@ -2206,9 +2203,9 @@ HRESULT am_GenerateGUID_p(LPWSTR *result)
     const auto buf = new wchar_t[MAX_PATH];
     SecureZeroMemory(buf, sizeof(buf));
     if (StringFromGUID2(guid, buf, MAX_PATH) == 0) {
+        delete [] buf;
         PRINT_WIN32_ERROR_MESSAGE(StringFromGUID2)
         CoUninitialize();
-        delete [] buf;
         return E_FAIL;
     }
     CoUninitialize();
@@ -2453,7 +2450,7 @@ HRESULT am_GetWallpaperFilePath_p(const int screen, LPWSTR *result)
                                 CoTaskMemFree(monitorId);
                                 const auto _path = new wchar_t[MAX_PATH];
                                 SecureZeroMemory(_path, sizeof(_path));
-                                wcscat(_path, wallpaperPath);
+                                wcscpy(_path, wallpaperPath);
                                 *result = _path;
                                 CoTaskMemFree(wallpaperPath);
                                 CoUninitialize();

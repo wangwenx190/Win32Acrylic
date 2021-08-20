@@ -23,6 +23,7 @@
  */
 
 #include <Windows.h>
+#include <cstdio>
 
 static LPCWSTR g_applicationName = L"AcrylicManager Demo Application";
 
@@ -126,23 +127,24 @@ wWinMain(
     if (SUCCEEDED(am_GetVersion_pfn(&ver))) {
         const auto str = new wchar_t[MAX_PATH];
         SecureZeroMemory(str, sizeof(str));
-        wcscat(str, L"AcrylicManager version: ");
-        wcscat(str, ver);
+        swprintf(str, L"AcrylicManager version: %s", ver);
         OutputDebugStringW(str);
         delete [] str;
         am_FreeStringW_pfn(ver);
     }
 
+    int result = -1;
+
     if (SUCCEEDED(am_CreateWindow_pfn(-1, -1, -1, -1))) {
         if (SUCCEEDED(am_CenterWindow_pfn())) {
             if (SUCCEEDED(am_SetWindowState_pfn(WindowState_Shown))) {
                 int result = -1;
-                if (SUCCEEDED(am_EventLoopExec_pfn(&result))) {
-                    return result;
-                }
+                am_EventLoopExec_pfn(&result);
             }
         }
     }
 
-    return -1;
+    am_Release_pfn();
+
+    return result;
 }

@@ -24,6 +24,7 @@
 
 #include "acrylicmanager.h"
 #include "acrylicmanager_p.h"
+#include "resource.h"
 
 #include <shobjidl_core.h>
 #include <wininet.h>
@@ -1354,6 +1355,8 @@ static const bool g_am_IsXAMLIslandAvailable_p = []{
     wcex.lpfnWndProc = am_MainWindowProcHelper_p;
     wcex.hInstance = HINST_THISCOMPONENT;
     wcex.hCursor = LoadCursorW(nullptr, IDC_ARROW);
+    wcex.hIcon = LoadIconW(HINST_THISCOMPONENT, MAKEINTRESOURCEW(IDI_DEFAULTICON));
+    wcex.hIconSm = LoadIconW(HINST_THISCOMPONENT, MAKEINTRESOURCEW(IDI_DEFAULTICONSM));
     wcex.hbrBackground = reinterpret_cast<HBRUSH>(COLOR_WINDOW + 1);
     wcex.lpszClassName = g_am_MainWindowClassName_p;
 

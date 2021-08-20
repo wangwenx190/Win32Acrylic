@@ -25,35 +25,13 @@
 #include <Windows.h>
 #include <cstdio>
 #include <cmath>
+#include "am_apis.hpp"
 
 static LPCWSTR g_windowClass = L"AcrylicManagerDemoApplicationWindowClass";
 static LPCWSTR g_windowTitle = L"AcrylicManager Demo Application";
-static const int WindowState_Shown = 5;
 
 static HINSTANCE g_instance = nullptr;
 static HWND g_window = nullptr;
-
-using am_GetVersion_ptr = HRESULT(WINAPI *)(LPWSTR *);
-using am_FreeStringW_ptr = HRESULT(WINAPI *)(LPWSTR);
-using am_CreateWindow_ptr = HRESULT(WINAPI *)(const int, const int, const int, const int);
-using am_CenterWindow_ptr = HRESULT(WINAPI *)();
-using am_SetWindowState_ptr = HRESULT(WINAPI *)(const int);
-using am_SetHostWindow_ptr = HRESULT(WINAPI *)(const HWND);
-using am_SetWindowTranslucentBackgroundEnabled_ptr = HRESULT(WINAPI *)(const HWND, const bool);
-using am_EventLoopExec_ptr = HRESULT(WINAPI *)(int *);
-using am_CanUnloadDll_ptr = HRESULT(WINAPI *)(bool *);
-using am_Release_ptr = HRESULT(WINAPI *)();
-
-static am_GetVersion_ptr am_GetVersion_pfn = nullptr;
-static am_FreeStringW_ptr am_FreeStringW_pfn = nullptr;
-static am_CreateWindow_ptr am_CreateWindow_pfn = nullptr;
-static am_CenterWindow_ptr am_CenterWindow_pfn = nullptr;
-static am_SetWindowState_ptr am_SetWindowState_pfn = nullptr;
-static am_SetHostWindow_ptr am_SetHostWindow_pfn = nullptr;
-static am_SetWindowTranslucentBackgroundEnabled_ptr am_SetWindowTranslucentBackgroundEnabled_pfn = nullptr;
-static am_EventLoopExec_ptr am_EventLoopExec_pfn = nullptr;
-static am_CanUnloadDll_ptr am_CanUnloadDll_pfn = nullptr;
-static am_Release_ptr am_Release_pfn = nullptr;
 
 static inline LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
@@ -77,74 +55,6 @@ static inline LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPAR
     return DefWindowProcW(hWnd, uMsg, wParam, lParam);
 }
 
-[[nodiscard]] static inline bool InitializeAcrylicManagerLibrary()
-{
-    static bool tried = false;
-    if (tried) {
-        return false;
-    }
-    tried = true;
-    HMODULE dll = LoadLibraryExW(L"AcrylicManager.dll", nullptr, LOAD_LIBRARY_SEARCH_APPLICATION_DIR);
-    if (!dll) {
-        dll = LoadLibraryExW(L"AcrylicManagerd.dll", nullptr, LOAD_LIBRARY_SEARCH_APPLICATION_DIR);
-        if (!dll) {
-            OutputDebugStringW(L"Failed to load AcrylicManager library.");
-            return false;
-        }
-    }
-    am_GetVersion_pfn = reinterpret_cast<am_GetVersion_ptr>(GetProcAddress(dll, "am_GetVersion"));
-    if (!am_GetVersion_pfn) {
-        OutputDebugStringW(L"Failed to resolve am_GetVersion().");
-        return false;
-    }
-    am_FreeStringW_pfn = reinterpret_cast<am_FreeStringW_ptr>(GetProcAddress(dll, "am_FreeStringW"));
-    if (!am_FreeStringW_pfn) {
-        OutputDebugStringW(L"Failed to resolve am_FreeStringW().");
-        return false;
-    }
-    am_CreateWindow_pfn = reinterpret_cast<am_CreateWindow_ptr>(GetProcAddress(dll, "am_CreateWindow"));
-    if (!am_CreateWindow_pfn) {
-        OutputDebugStringW(L"Failed to resolve am_CreateWindow().");
-        return false;
-    }
-    am_CenterWindow_pfn = reinterpret_cast<am_CenterWindow_ptr>(GetProcAddress(dll, "am_CenterWindow"));
-    if (!am_CenterWindow_pfn) {
-        OutputDebugStringW(L"Failed to resolve am_CenterWindow().");
-        return false;
-    }
-    am_SetWindowState_pfn = reinterpret_cast<am_SetWindowState_ptr>(GetProcAddress(dll, "am_SetWindowState"));
-    if (!am_SetWindowState_pfn) {
-        OutputDebugStringW(L"Failed to resolve am_SetWindowState().");
-        return false;
-    }
-    am_SetHostWindow_pfn = reinterpret_cast<am_SetHostWindow_ptr>(GetProcAddress(dll, "am_SetHostWindow"));
-    if (!am_SetHostWindow_pfn) {
-        OutputDebugStringW(L"Failed to resolve am_SetHostWindow().");
-        return false;
-    }
-    am_SetWindowTranslucentBackgroundEnabled_pfn = reinterpret_cast<am_SetWindowTranslucentBackgroundEnabled_ptr>(GetProcAddress(dll, "am_SetWindowTranslucentBackgroundEnabled_p"));
-    if (!am_SetWindowTranslucentBackgroundEnabled_pfn) {
-        OutputDebugStringW(L"Failed to resolve am_SetWindowTranslucentBackgroundEnabled_p().");
-        return false;
-    }
-    am_EventLoopExec_pfn = reinterpret_cast<am_EventLoopExec_ptr>(GetProcAddress(dll, "am_EventLoopExec"));
-    if (!am_EventLoopExec_pfn) {
-        OutputDebugStringW(L"Failed to resolve am_EventLoopExec().");
-        return false;
-    }
-    am_CanUnloadDll_pfn = reinterpret_cast<am_CanUnloadDll_ptr>(GetProcAddress(dll, "am_CanUnloadDll"));
-    if (!am_CanUnloadDll_pfn) {
-        OutputDebugStringW(L"Failed to resolve am_CanUnloadDll().");
-        return false;
-    }
-    am_Release_pfn = reinterpret_cast<am_Release_ptr>(GetProcAddress(dll, "am_Release"));
-    if (!am_Release_pfn) {
-        OutputDebugStringW(L"Failed to resolve am_Release().");
-        return false;
-    }
-    return true;
-}
-
 EXTERN_C int APIENTRY
 wWinMain(
     _In_ HINSTANCE     hInstance,
@@ -164,13 +74,13 @@ wWinMain(
     }
 
     LPWSTR ver = nullptr;
-    if (SUCCEEDED(am_GetVersion_pfn(&ver))) {
+    if (SUCCEEDED(am_GetVersion(&ver))) {
         const auto str = new wchar_t[MAX_PATH];
         SecureZeroMemory(str, sizeof(str));
         swprintf(str, L"AcrylicManager version: %s", ver);
         OutputDebugStringW(str);
+        am_FreeStringW(ver);
         delete [] str;
-        am_FreeStringW_pfn(ver);
     }
 
     WNDCLASSEXW wcex;
@@ -211,10 +121,10 @@ wWinMain(
         return -1;
     }
 
-    if (SUCCEEDED(am_CreateWindow_pfn(rect.left, rect.top, std::abs(rect.right - rect.left), std::abs(rect.bottom - rect.top)))) {
-        am_SetWindowTranslucentBackgroundEnabled_pfn(g_window, true);
-        am_SetWindowState_pfn(WindowState_Shown);
-        am_SetHostWindow_pfn(g_window);
+    if (SUCCEEDED(am_CreateWindow(rect.left, rect.top, std::abs(rect.right - rect.left), std::abs(rect.bottom - rect.top)))) {
+        am_SetWindowTranslucentBackgroundEnabled(g_window, true);
+        am_SetWindowState(g_am_WindowState_Shown);
+        am_SetHostWindow(g_window);
     }
 
     MSG msg = {};
@@ -224,7 +134,7 @@ wWinMain(
         DispatchMessageW(&msg);
     }
 
-    am_Release_pfn();
+    am_Release();
 
     return static_cast<int>(msg.wParam);
 }

@@ -3,6 +3,7 @@ enable_language(RC)
 set(SOURCES
     demo.manifest
     demo.rc
+    am_apis.hpp
     main.cpp
 )
 

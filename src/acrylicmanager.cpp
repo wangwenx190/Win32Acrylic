@@ -2205,9 +2205,9 @@ HRESULT am_GenerateGUID_p(LPWSTR *result)
     const auto buf = new wchar_t[MAX_PATH];
     SecureZeroMemory(buf, sizeof(buf));
     if (StringFromGUID2(guid, buf, MAX_PATH) == 0) {
-        delete [] buf;
         PRINT_WIN32_ERROR_MESSAGE(StringFromGUID2)
         CoUninitialize();
+        delete [] buf;
         return E_FAIL;
     }
     CoUninitialize();
@@ -2269,15 +2269,13 @@ HRESULT am_SetWindowCompositionAttribute_p(const HWND hWnd, LPWINDOWCOMPOSITIONA
             return E_FAIL;
         } else {
             tried = true;
-            const HMODULE dll = LoadLibraryExW(L"User32.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
-            if (!dll) {
-                PRINT_WIN32_ERROR_MESSAGE_AND_RETURN(LoadLibraryExW)
-            }
             FARPROC addr = nullptr;
-            if (FAILED(am_))
-            func = reinterpret_cast<sig>(GetProcAddress(dll, "SetWindowCompositionAttribute"));
+            if (FAILED(am_GetSystemSymbolAddress_p(L"User32.dll", L"SetWindowCompositionAttribute", &addr))) {
+                return E_FAIL;
+            }
+            func = reinterpret_cast<sig>(addr);
             if (!func) {
-                PRINT_WIN32_ERROR_MESSAGE_AND_RETURN(GetProcAddress)
+                return E_FAIL;
             }
         }
     }
@@ -2930,18 +2928,20 @@ HRESULT am_GetSystemSymbolAddress_p(LPCWSTR library, LPCWSTR function, FARPROC *
     }
     const auto module = LoadLibraryExW(library, nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
     if (!module) {
-        return E_FAIL;
+        PRINT_WIN32_ERROR_MESSAGE_AND_RETURN(LoadLibraryExW)
     }
     LPSTR funcNameAnsi = nullptr;
     if (FAILED(am_WideToMulti_p(function, CP_UTF8, &funcNameAnsi))) {
         return E_FAIL;
     }
     const auto addr = GetProcAddress(module, funcNameAnsi);
-    if (!addr) {
-        return E_FAIL;
+    if (addr) {
+        *address = addr;
+    } else {
+        PRINT_WIN32_ERROR_MESSAGE(GetProcAddress)
     }
-    *address = addr;
-    return S_OK;
+    delete [] funcNameAnsi;
+    return (addr ? S_OK : E_FAIL);
 }
 
 /////////////////////////////////

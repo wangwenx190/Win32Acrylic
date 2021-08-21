@@ -754,9 +754,19 @@ static const bool g_am_IsXAMLIslandAvailable_p = []{
     }
 
     MSG msg = {};
+
     while (GetMessageW(&msg, nullptr, 0, 0) != FALSE) {
-        TranslateMessage(&msg);
-        DispatchMessageW(&msg);
+        BOOL filtered = FALSE;
+        if (g_am_XAMLSource_p) {
+            const auto interop = g_am_XAMLSource_p.as<IDesktopWindowXamlSourceNative2>();
+            if (interop) {
+                winrt::check_hresult(interop->PreTranslateMessage(&msg, &filtered));
+            }
+        }
+        if (filtered == FALSE) {
+            TranslateMessage(&msg);
+            DispatchMessageW(&msg);
+        }
     }
 
     *result = static_cast<int>(msg.wParam);

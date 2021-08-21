@@ -30,6 +30,7 @@
 #include <UxTheme.h>
 #include <DwmApi.h>
 #include <D2D1.h>
+#include <D3D11.h>
 
 #ifdef __cplusplus
 EXTERN_C_START
@@ -336,6 +337,23 @@ D2D1CreateFactory(
         }
     }
     return func(factoryType, riid, pFactoryOptions, ppIFactory);
+}
+
+HRESULT WINAPI
+D3D11CreateDevice(
+    IDXGIAdapter            *pAdapter,
+    D3D_DRIVER_TYPE         DriverType,
+    HMODULE                 Software,
+    UINT                    Flags,
+    const D3D_FEATURE_LEVEL *pFeatureLevels,
+    UINT                    FeatureLevels,
+    UINT                    SDKVersion,
+    ID3D11Device            **ppDevice,
+    D3D_FEATURE_LEVEL       *pFeatureLevel,
+    ID3D11DeviceContext     **ppImmediateContext
+)
+{
+    ACRYLICMANAGER_TRY_EXECUTE_D3D_FUNCTION(D3D11CreateDevice, pAdapter, DriverType, Software, Flags, pFeatureLevels, FeatureLevels, SDKVersion, ppDevice, pFeatureLevel, ppImmediateContext)
 }
 
 #ifdef __cplusplus

@@ -107,12 +107,12 @@ static winrt::Windows::UI::Xaml::Hosting::DesktopWindowXamlSource g_am_XAMLSourc
 static winrt::Windows::UI::Xaml::Controls::Grid g_am_RootGrid_p = nullptr;
 static winrt::Windows::UI::Xaml::Media::AcrylicBrush g_am_BackgroundBrush_p = nullptr;
 
-static Microsoft::WRL::ComPtr<ID2D1DeviceContext> g_am_D2DDeviceContext_p = nullptr;
-static Microsoft::WRL::ComPtr<ID2D1Factory2> g_am_D2DFactory2_p = nullptr;
-static Microsoft::WRL::ComPtr<ID2D1Device1> g_am_D2DDevice1_p = nullptr;
-static Microsoft::WRL::ComPtr<ID2D1DeviceContext1> g_am_D2DDeviceContext1_p = nullptr;
-static Microsoft::WRL::ComPtr<IDXGISwapChain1> g_am_DXGISwapChain_p = nullptr;
+static Microsoft::WRL::ComPtr<ID2D1Factory2> g_am_D2DFactory_p = nullptr;
+static Microsoft::WRL::ComPtr<ID2D1Device1> g_am_D2DDevice_p = nullptr;
+static Microsoft::WRL::ComPtr<ID2D1DeviceContext1> g_am_D2DContext_p = nullptr;
+static Microsoft::WRL::ComPtr<IDXGISwapChain1> g_am_SwapChain_p = nullptr;
 static Microsoft::WRL::ComPtr<ID2D1Bitmap1> g_am_D2DTargetBitmap_p = nullptr;
+static D3D_FEATURE_LEVEL g_am_D3DFeatureLevel_p = D3D_FEATURE_LEVEL_1_0_CORE;
 
 static const bool g_am_IsWindows7OrGreater_p = []{
     bool result = false;
@@ -489,25 +489,21 @@ static const bool g_am_IsXAMLIslandAvailable_p = []{
     }
 
     // Direct2D
-    if (g_am_D2DDeviceContext_p) {
-        g_am_D2DDeviceContext_p->Release();
-        g_am_D2DDeviceContext_p = nullptr;
+    if (g_am_D2DContext_p) {
+        g_am_D2DContext_p->Release();
+        g_am_D2DContext_p = nullptr;
     }
-    if (g_am_D2DFactory2_p) {
-        g_am_D2DFactory2_p->Release();
-        g_am_D2DFactory2_p = nullptr;
+    if (g_am_D2DFactory_p) {
+        g_am_D2DFactory_p->Release();
+        g_am_D2DFactory_p = nullptr;
     }
-    if (g_am_D2DDevice1_p) {
-        g_am_D2DDevice1_p->Release();
-        g_am_D2DDevice1_p = nullptr;
+    if (g_am_D2DDevice_p) {
+        g_am_D2DDevice_p->Release();
+        g_am_D2DDevice_p = nullptr;
     }
-    if (g_am_D2DDeviceContext1_p) {
-        g_am_D2DDeviceContext1_p->Release();
-        g_am_D2DDeviceContext1_p = nullptr;
-    }
-    if (g_am_DXGISwapChain_p) {
-        g_am_DXGISwapChain_p->Release();
-        g_am_DXGISwapChain_p = nullptr;
+    if (g_am_SwapChain_p) {
+        g_am_SwapChain_p->Release();
+        g_am_SwapChain_p = nullptr;
     }
     if (g_am_D2DTargetBitmap_p) {
         g_am_D2DTargetBitmap_p->Release();
@@ -519,6 +515,7 @@ static const bool g_am_IsXAMLIslandAvailable_p = []{
     }
     g_am_DesktopBackgroundColor_p = D2D1::ColorF(D2D1::ColorF::Black);
     g_am_WallpaperAspectStyle_p = WallpaperAspectStyle::Invalid;
+    g_am_D3DFeatureLevel_p = D3D_FEATURE_LEVEL_1_0_CORE;
 
     // XAML Island
     if (g_am_XAMLSource_p) {
@@ -1590,22 +1587,123 @@ static const bool g_am_IsXAMLIslandAvailable_p = []{
 [[nodiscard]] static inline HRESULT am_InitializeDirect2DInfrastructureHelper_p()
 {
     if (!g_am_MainWindowHandle_p) {
-        SAFE_RETURN
+        PRINT_AND_SAFE_RETURN(L"The main window has not been created.")
     }
     const int screen = 0; // fixme: use the correct screen id.
     if (FAILED(am_GetWallpaperFilePath_p(screen, &g_am_WallpaperFilePath_p))) {
-        SAFE_RETURN
+        PRINT_AND_SAFE_RETURN(L"Failed to retrieve the wallpaper file path.")
     }
     COLORREF color = RGB(0, 0, 0);
     if (FAILED(am_GetDesktopBackgroundColor_p(&color))) {
-        SAFE_RETURN
+        PRINT_AND_SAFE_RETURN(L"Failed to retrieve the desktop background color.")
     }
     g_am_DesktopBackgroundColor_p = D2D1::ColorF(color);
     if (FAILED(am_GetWallpaperAspectStyle_p(screen, &g_am_WallpaperAspectStyle_p))) {
-        SAFE_RETURN
+        PRINT_AND_SAFE_RETURN(L"Failed to retrieve the wallpaper aspect style.")
     }
-    // todo
-    return E_FAIL;
+    D2D1_FACTORY_OPTIONS options;
+    SecureZeroMemory(&options, sizeof(options));
+    HRESULT hr = D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED, IID_ID2D1Factory2,
+                                   &options, &g_am_D2DFactory_p);
+    if (FAILED(hr)) {
+        PRINT_HR_ERROR_MESSAGE_AND_SAFE_RETURN(D2D1CreateFactory, hr)
+    }
+    // This flag adds support for surfaces with a different color channel ordering than the API default.
+    // You need it for compatibility with Direct2D.
+    const UINT creationFlags = D3D11_CREATE_DEVICE_BGRA_SUPPORT;
+    // This array defines the set of DirectX hardware feature levels this app supports.
+    // The ordering is important and you should preserve it.
+    // Don't forget to declare your app's minimum required feature level in its
+    // description. All apps are assumed to support 9.1 unless otherwise stated.
+    const D3D_FEATURE_LEVEL featureLevels[] = {
+        D3D_FEATURE_LEVEL_11_1,
+        D3D_FEATURE_LEVEL_11_0,
+        D3D_FEATURE_LEVEL_10_1,
+        D3D_FEATURE_LEVEL_10_0,
+        D3D_FEATURE_LEVEL_9_3,
+        D3D_FEATURE_LEVEL_9_2,
+        D3D_FEATURE_LEVEL_9_1
+    };
+    // Create the DX11 API device object, and get a corresponding context.
+    Microsoft::WRL::ComPtr<ID3D11Device> device = nullptr;
+    Microsoft::WRL::ComPtr<ID3D11DeviceContext> context = nullptr;
+    hr = D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr, creationFlags,
+                           featureLevels, ARRAYSIZE(featureLevels), D3D11_SDK_VERSION, &device,
+                           &g_am_D3DFeatureLevel_p, &context);
+    if (FAILED(hr)) {
+        PRINT_HR_ERROR_MESSAGE_AND_SAFE_RETURN(D3D11CreateDevice, hr)
+    }
+    Microsoft::WRL::ComPtr<IDXGIDevice1> dxgiDevice = nullptr;
+    // Obtain the underlying DXGI device of the Direct3D11 device
+    hr = device.As(&dxgiDevice);
+    if (FAILED(hr)) {
+        PRINT_HR_ERROR_MESSAGE_AND_SAFE_RETURN(As, hr)
+    }
+    hr = g_am_D2DFactory_p->CreateDevice(dxgiDevice.Get(), &g_am_D2DDevice_p);
+    if (FAILED(hr)) {
+        PRINT_HR_ERROR_MESSAGE_AND_SAFE_RETURN(CreateDevice, hr)
+    }
+    hr = g_am_D2DDevice_p->CreateDeviceContext(D2D1_DEVICE_CONTEXT_OPTIONS_NONE, &g_am_D2DContext_p);
+    if (FAILED(hr)) {
+        PRINT_HR_ERROR_MESSAGE_AND_SAFE_RETURN(CreateDeviceContext, hr)
+    }
+    // Selecing a target
+    DXGI_SWAP_CHAIN_DESC1 swapChainDesc;
+    SecureZeroMemory(&swapChainDesc, sizeof(swapChainDesc));
+    swapChainDesc.Width = 0;
+    swapChainDesc.Height = 0;
+    swapChainDesc.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
+    swapChainDesc.Stereo = FALSE;
+    swapChainDesc.SampleDesc.Count = 1;
+    swapChainDesc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
+    swapChainDesc.BufferCount = 2;
+    swapChainDesc.Scaling = DXGI_SCALING_NONE;
+    swapChainDesc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL;
+
+    Microsoft::WRL::ComPtr<IDXGIAdapter> dxgiAdapter = nullptr;
+    hr = dxgiDevice->GetAdapter(&dxgiAdapter);
+    if (FAILED(hr)) {
+        PRINT_HR_ERROR_MESSAGE_AND_SAFE_RETURN(GetAdapter, hr)
+    }
+
+    Microsoft::WRL::ComPtr<IDXGIFactory2> dxgiFactory = nullptr;
+    hr = dxgiAdapter->GetParent(IID_PPV_ARGS(&dxgiFactory));
+    if (FAILED(hr)) {
+        PRINT_HR_ERROR_MESSAGE_AND_SAFE_RETURN(GetParent, hr)
+    }
+    hr = dxgiFactory->CreateSwapChainForHwnd(device.Get(), g_am_MainWindowHandle_p, &swapChainDesc,
+                                        nullptr, nullptr, &g_am_SwapChain_p);
+    if (FAILED(hr)) {
+        PRINT_HR_ERROR_MESSAGE_AND_SAFE_RETURN(CreateSwapChainForHwnd, hr)
+    }
+
+    hr = dxgiDevice->SetMaximumFrameLatency(1);
+    if (FAILED(hr)) {
+        PRINT_HR_ERROR_MESSAGE_AND_SAFE_RETURN(SetMaximumFrameLatency, hr)
+    }
+
+    Microsoft::WRL::ComPtr<ID3D11Texture2D> backBuffer = nullptr;
+    hr = g_am_SwapChain_p->GetBuffer(0, IID_PPV_ARGS(&backBuffer));
+    if (FAILED(hr)) {
+        PRINT_HR_ERROR_MESSAGE_AND_SAFE_RETURN(GetBuffer, hr)
+    }
+
+    const D2D1_BITMAP_PROPERTIES1 bitmapProperties =
+            D2D1::BitmapProperties1(D2D1_BITMAP_OPTIONS_TARGET | D2D1_BITMAP_OPTIONS_CANNOT_DRAW,
+                                    D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_IGNORE));
+
+    Microsoft::WRL::ComPtr<IDXGISurface> dxgiBackBuffer = nullptr;
+    hr = g_am_SwapChain_p->GetBuffer(0, IID_PPV_ARGS(&dxgiBackBuffer));
+    if (FAILED(hr)) {
+        PRINT_HR_ERROR_MESSAGE_AND_SAFE_RETURN(GetBuffer, hr)
+    }
+    hr = g_am_D2DContext_p->CreateBitmapFromDxgiSurface(dxgiBackBuffer.Get(), &bitmapProperties,
+                                                   &g_am_D2DTargetBitmap_p);
+    if (FAILED(hr)) {
+        PRINT_HR_ERROR_MESSAGE_AND_SAFE_RETURN(CreateBitmapFromDxgiSurface, hr)
+    }
+    g_am_D2DContext_p->SetTarget(g_am_D2DTargetBitmap_p.Get());
+    return S_OK;
 }
 
 [[nodiscard]] static inline HRESULT am_InitializeAcrylicManagerHelper_p(const int x, const int y, const int w, const int h)

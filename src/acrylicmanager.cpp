@@ -26,17 +26,14 @@
 #include "acrylicmanager_p.h"
 #include "resource.h"
 
-#include <shobjidl_core.h>
 #include <wininet.h>
-#include <shlobj_core.h>
-
+#include <ShlObj_Core.h>
 #include <ShellApi.h>
 #include <ShellScalingApi.h>
 #include <UxTheme.h>
 #include <DwmApi.h>
 
 #include <Unknwn.h>
-
 #include <WinRT\Windows.Foundation.Collections.h>
 #include <WinRT\Windows.UI.Xaml.Hosting.h>
 #include <WinRT\Windows.UI.Xaml.Controls.h>
@@ -2210,7 +2207,7 @@ HRESULT am_GetWindowDpi_p(const HWND hWnd, UINT *result)
     }
     {
         UINT dpiX = 0, dpiY = 0;
-        if (SUCCEEDED(GetDpiForMonitor(GET_CURRENT_SCREEN(hWnd), MDT_EFFECTIVE_DPI, &dpiX, &dpiY))) {
+        if (SUCCEEDED(GetDpiForMonitor(GET_CURRENT_SCREEN(hWnd), static_cast<MONITOR_DPI_TYPE>(MonitorDpiType::EFFECTIVE_DPI), &dpiX, &dpiY))) {
             if ((dpiX > 0) && (dpiY > 0)) {
                 *result = std::round(static_cast<double>(dpiX + dpiY) / 2.0);
                 return S_OK;
@@ -3383,6 +3380,8 @@ HRESULT am_GetSystemSymbolAddress_p(LPCWSTR library, LPCWSTR function, FARPROC *
         return E_INVALIDARG;
     }
 #if WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_DESKTOP)
+    const auto module = LoadLibraryExW(library, nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
+#else
     static bool tried = false;
     using sig = decltype(&::LoadLibraryExW);
     static sig func = nullptr;
@@ -3407,15 +3406,10 @@ HRESULT am_GetSystemSymbolAddress_p(LPCWSTR library, LPCWSTR function, FARPROC *
         }
     }
     const auto module = func(library, nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
+#endif
     if (!module) {
         PRINT_WIN32_ERROR_MESSAGE_AND_RETURN(LoadLibraryExW)
     }
-#else
-    const auto module = LoadPackagedLibrary(library, 0);
-    if (!module) {
-        PRINT_WIN32_ERROR_MESSAGE_AND_RETURN(LoadPackagedLibrary)
-    }
-#endif
     LPSTR funcNameA = nullptr;
     if (FAILED(am_WideToMulti_p(function, CP_UTF8, &funcNameA))) {
         return E_FAIL;

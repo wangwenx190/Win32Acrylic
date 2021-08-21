@@ -113,6 +113,12 @@ enum class DwmWindowAttribute : int
     VISIBLE_FRAME_BORDER_THICKNESS = 37       // [get] UINT, Width of the visible border around a thick frame window.
 };
 
+enum class MonitorDpiType : int
+{
+    EFFECTIVE_DPI = 0,
+    DEFAULT = EFFECTIVE_DPI
+};
+
 typedef enum _WINDOWCOMPOSITIONATTRIB
 {
     WCA_UNDEFINED = 0x0,
@@ -447,6 +453,12 @@ am_SetOfficialBlurEnabled_p(
 am_IsOfficialBlurEnabled_p(
     _In_ const HWND hWnd,
     _Out_ bool      *result
+);
+
+[[nodiscard]] ACRYLICMANAGER_API HRESULT WINAPI
+am_GetWindowClientSize_p(
+    _In_ const HWND hWnd,
+    _Out_ SIZE      *result
 );
 
 #ifdef __cplusplus

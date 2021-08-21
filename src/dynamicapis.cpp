@@ -128,6 +128,480 @@ SetProcessDpiAwarenessContext(
     ACRYLICMANAGER_TRY_EXECUTE_USER_FUNCTION(SetProcessDpiAwarenessContext, value)
 }
 
+BOOL WINAPI
+GetMessageW(
+    LPMSG lpMsg,
+    HWND  hWnd,
+    UINT  wMsgFilterMin,
+    UINT  wMsgFilterMax
+)
+{
+    ACRYLICMANAGER_TRY_EXECUTE_USER_FUNCTION(GetMessageW, lpMsg, hWnd, wMsgFilterMin, wMsgFilterMax)
+}
+
+BOOL WINAPI
+TranslateMessage(
+    const MSG *lpMsg
+)
+{
+    ACRYLICMANAGER_TRY_EXECUTE_USER_FUNCTION(TranslateMessage, lpMsg)
+}
+
+LRESULT WINAPI
+DispatchMessageW(
+    const MSG *lpMsg
+)
+{
+    ACRYLICMANAGER_TRY_EXECUTE_USER_INT_FUNCTION(DispatchMessageW, lpMsg)
+}
+
+DWORD WINAPI
+GetMessagePos()
+{
+    ACRYLICMANAGER_TRY_EXECUTE_USER_INT_FUNCTION(GetMessagePos)
+}
+
+LRESULT WINAPI
+SendMessageW(
+    HWND   hWnd,
+    UINT   Msg,
+    WPARAM wParam,
+    LPARAM lParam
+)
+{
+    ACRYLICMANAGER_TRY_EXECUTE_USER_INT_FUNCTION(SendMessageW, hWnd, Msg, wParam, lParam)
+}
+
+BOOL WINAPI
+PostMessageW(
+    HWND   hWnd,
+    UINT   Msg,
+    WPARAM wParam,
+    LPARAM lParam
+)
+{
+    ACRYLICMANAGER_TRY_EXECUTE_USER_FUNCTION(PostMessageW, hWnd, Msg, wParam, lParam)
+}
+
+LRESULT CALLBACK
+DefWindowProcW(
+    HWND   hWnd,
+    UINT   Msg,
+    WPARAM wParam,
+    LPARAM lParam
+)
+{
+    ACRYLICMANAGER_TRY_EXECUTE_USER_INT_FUNCTION(DefWindowProcW, hWnd, Msg, wParam, lParam)
+}
+
+void WINAPI
+PostQuitMessage(
+    int nExitCode
+)
+{
+    ACRYLICMANAGER_TRY_EXECUTE_USER_VOID_FUNCTION(PostQuitMessage, nExitCode)
+}
+
+LRESULT WINAPI
+CallWindowProcW(
+    WNDPROC lpPrevWndFunc,
+    HWND    hWnd,
+    UINT    Msg,
+    WPARAM  wParam,
+    LPARAM  lParam
+)
+{
+    ACRYLICMANAGER_TRY_EXECUTE_USER_INT_FUNCTION(CallWindowProcW, lpPrevWndFunc, hWnd, Msg, wParam, lParam)
+}
+
+BOOL WINAPI
+UnregisterClassW(
+    LPCWSTR   lpClassName,
+    HINSTANCE hInstance
+)
+{
+    ACRYLICMANAGER_TRY_EXECUTE_USER_FUNCTION(UnregisterClassW, lpClassName, hInstance)
+}
+
+ATOM WINAPI
+RegisterClassExW(
+    const WNDCLASSEXW *unnamedParam
+)
+{
+    ACRYLICMANAGER_TRY_EXECUTE_USER_INT_FUNCTION(RegisterClassExW, unnamedParam)
+}
+
+HWND WINAPI
+CreateWindowExW(
+    DWORD     dwExStyle,
+    LPCWSTR   lpClassName,
+    LPCWSTR   lpWindowName,
+    DWORD     dwStyle,
+    int       X,
+    int       Y,
+    int       nWidth,
+    int       nHeight,
+    HWND      hWndParent,
+    HMENU     hMenu,
+    HINSTANCE hInstance,
+    LPVOID    lpParam
+)
+{
+    ACRYLICMANAGER_TRY_EXECUTE_USER_PTR_FUNCTION(CreateWindowExW, dwExStyle, lpClassName, lpWindowName, dwStyle, X, Y, nWidth, nHeight, hWndParent, hMenu, hInstance, lpParam)
+}
+
+BOOL WINAPI
+DestroyWindow(
+    HWND hWnd
+)
+{
+    ACRYLICMANAGER_TRY_EXECUTE_USER_FUNCTION(DestroyWindow, hWnd)
+}
+
+BOOL WINAPI
+ShowWindow(
+    HWND hWnd,
+    int  nCmdShow
+)
+{
+    ACRYLICMANAGER_TRY_EXECUTE_USER_FUNCTION(ShowWindow, hWnd, nCmdShow)
+}
+
+BOOL WINAPI
+SetLayeredWindowAttributes(
+    HWND     hWnd,
+    COLORREF crKey,
+    BYTE     bAlpha,
+    DWORD    dwFlags
+)
+{
+    ACRYLICMANAGER_TRY_EXECUTE_USER_FUNCTION(SetLayeredWindowAttributes, hWnd, crKey, bAlpha, dwFlags)
+}
+
+BOOL WINAPI
+MoveWindow(
+    HWND hWnd,
+    int  X,
+    int  Y,
+    int  nWidth,
+    int  nHeight,
+    BOOL bRepaint
+)
+{
+    ACRYLICMANAGER_TRY_EXECUTE_USER_FUNCTION(MoveWindow, hWnd, X, Y, nWidth, nHeight, bRepaint)
+}
+
+BOOL WINAPI
+SetWindowPos(
+    HWND hWnd,
+    HWND hWndInsertAfter,
+    int  X,
+    int  Y,
+    int  cx,
+    int  cy,
+    UINT uFlags
+)
+{
+    ACRYLICMANAGER_TRY_EXECUTE_USER_FUNCTION(SetWindowPos, hWnd, hWndInsertAfter, X, Y, cx, cy, uFlags)
+}
+
+BOOL WINAPI
+GetWindowPlacement(
+    HWND            hWnd,
+    WINDOWPLACEMENT *lpwndpl
+)
+{
+    ACRYLICMANAGER_TRY_EXECUTE_USER_FUNCTION(GetWindowPlacement, hWnd, lpwndpl)
+}
+
+BOOL WINAPI
+IsWindowVisible(
+    HWND hWnd
+)
+{
+    ACRYLICMANAGER_TRY_EXECUTE_USER_FUNCTION(IsWindowVisible, hWnd)
+}
+
+BOOL WINAPI
+IsIconic(
+    HWND hWnd
+)
+{
+    ACRYLICMANAGER_TRY_EXECUTE_USER_FUNCTION(IsIconic, hWnd)
+}
+
+BOOL WINAPI
+IsZoomed(
+    HWND hWnd
+)
+{
+    ACRYLICMANAGER_TRY_EXECUTE_USER_FUNCTION(IsZoomed, hWnd)
+}
+
+HWND WINAPI
+SetFocus(
+    HWND hWnd
+)
+{
+    ACRYLICMANAGER_TRY_EXECUTE_USER_PTR_FUNCTION(SetFocus, hWnd)
+}
+
+HWND WINAPI
+GetActiveWindow()
+{
+    ACRYLICMANAGER_TRY_EXECUTE_USER_PTR_FUNCTION(GetActiveWindow)
+}
+
+HMENU WINAPI
+GetSystemMenu(
+    HWND hWnd,
+    BOOL bRevert
+)
+{
+    ACRYLICMANAGER_TRY_EXECUTE_USER_PTR_FUNCTION(GetSystemMenu, hWnd, bRevert)
+}
+
+BOOL WINAPI
+TrackPopupMenu(
+    HMENU      hMenu,
+    UINT       uFlags,
+    int        x,
+    int        y,
+    int        nReserved,
+    HWND       hWnd,
+    const RECT *prcRect
+)
+{
+    ACRYLICMANAGER_TRY_EXECUTE_USER_FUNCTION(TrackPopupMenu, hMenu, uFlags, x, y, nReserved, hWnd, prcRect)
+}
+
+BOOL WINAPI
+SetMenuItemInfoW(
+    HMENU            hmenu,
+    UINT             item,
+    BOOL             fByPosition,
+    LPCMENUITEMINFOW lpmii
+)
+{
+    ACRYLICMANAGER_TRY_EXECUTE_USER_FUNCTION(SetMenuItemInfoW, hmenu, item, fByPosition, lpmii)
+}
+
+BOOL WINAPI
+SetMenuDefaultItem(
+    HMENU hMenu,
+    UINT  uItem,
+    UINT  fByPos
+)
+{
+    ACRYLICMANAGER_TRY_EXECUTE_USER_FUNCTION(SetMenuDefaultItem, hMenu, uItem, fByPos)
+}
+
+HDC WINAPI
+GetDC(
+    HWND hWnd
+)
+{
+    ACRYLICMANAGER_TRY_EXECUTE_USER_PTR_FUNCTION(GetDC, hWnd)
+}
+
+int WINAPI
+ReleaseDC(
+    HWND hWnd,
+    HDC  hDC
+)
+{
+    ACRYLICMANAGER_TRY_EXECUTE_USER_INT_FUNCTION(ReleaseDC, hWnd, hDC)
+}
+
+HDC WINAPI
+BeginPaint(
+    HWND          hWnd,
+    LPPAINTSTRUCT lpPaint
+)
+{
+    ACRYLICMANAGER_TRY_EXECUTE_USER_PTR_FUNCTION(BeginPaint, hWnd, lpPaint)
+}
+
+BOOL WINAPI
+EndPaint(
+    HWND              hWnd,
+    const PAINTSTRUCT *lpPaint
+)
+{
+    ACRYLICMANAGER_TRY_EXECUTE_USER_FUNCTION(EndPaint, hWnd, lpPaint)
+}
+
+BOOL WINAPI
+GetClientRect(
+    HWND   hWnd,
+    LPRECT lpRect
+)
+{
+    ACRYLICMANAGER_TRY_EXECUTE_USER_FUNCTION(GetClientRect, hWnd, lpRect)
+}
+
+BOOL WINAPI
+GetWindowRect(
+    HWND   hWnd,
+    LPRECT lpRect
+)
+{
+    ACRYLICMANAGER_TRY_EXECUTE_USER_FUNCTION(GetWindowRect, hWnd, lpRect)
+}
+
+int WINAPI
+MessageBoxW(
+    HWND    hWnd,
+    LPCWSTR lpText,
+    LPCWSTR lpCaption,
+    UINT    uType
+)
+{
+    ACRYLICMANAGER_TRY_EXECUTE_USER_INT_FUNCTION(MessageBoxW, hWnd, lpText, lpCaption, uType)
+}
+
+HCURSOR WINAPI
+SetCursor(
+    HCURSOR hCursor
+)
+{
+    ACRYLICMANAGER_TRY_EXECUTE_USER_PTR_FUNCTION(SetCursor, hCursor)
+}
+
+BOOL WINAPI
+ClientToScreen(
+    HWND    hWnd,
+    LPPOINT lpPoint
+)
+{
+    ACRYLICMANAGER_TRY_EXECUTE_USER_FUNCTION(ClientToScreen, hWnd, lpPoint)
+}
+
+BOOL WINAPI
+ScreenToClient(
+    HWND    hWnd,
+    LPPOINT lpPoint
+)
+{
+    ACRYLICMANAGER_TRY_EXECUTE_USER_FUNCTION(ScreenToClient, hWnd, lpPoint)
+}
+
+int WINAPI
+FillRect(
+    HDC        hDC,
+    const RECT *lprc,
+    HBRUSH     hbr
+)
+{
+    ACRYLICMANAGER_TRY_EXECUTE_USER_INT_FUNCTION(FillRect, hDC, lprc, hbr)
+}
+
+LONG_PTR WINAPI
+GetWindowLongPtrW(
+    HWND hWnd,
+    int  nIndex
+)
+{
+    ACRYLICMANAGER_TRY_EXECUTE_USER_INT_FUNCTION(GetWindowLongPtrW, hWnd, nIndex)
+}
+
+LONG_PTR WINAPI
+SetWindowLongPtrW(
+    HWND     hWnd,
+    int      nIndex,
+    LONG_PTR dwNewLong
+)
+{
+    ACRYLICMANAGER_TRY_EXECUTE_USER_INT_FUNCTION(SetWindowLongPtrW, hWnd, nIndex, dwNewLong)
+}
+
+ULONG_PTR WINAPI
+GetClassLongPtrW(
+    HWND hWnd,
+    int  nIndex
+)
+{
+    ACRYLICMANAGER_TRY_EXECUTE_USER_INT_FUNCTION(GetClassLongPtrW, hWnd, nIndex)
+}
+
+ULONG_PTR WINAPI
+SetClassLongPtrW(
+    HWND     hWnd,
+    int      nIndex,
+    LONG_PTR dwNewLong
+)
+{
+    ACRYLICMANAGER_TRY_EXECUTE_USER_INT_FUNCTION(SetClassLongPtrW, hWnd, nIndex, dwNewLong)
+}
+
+HWND WINAPI
+FindWindowW(
+    LPCWSTR lpClassName,
+    LPCWSTR lpWindowName
+)
+{
+    ACRYLICMANAGER_TRY_EXECUTE_USER_PTR_FUNCTION(FindWindowW, lpClassName, lpWindowName)
+}
+
+HCURSOR WINAPI
+LoadCursorW(
+    HINSTANCE hInstance,
+    LPCWSTR   lpCursorName
+)
+{
+    ACRYLICMANAGER_TRY_EXECUTE_USER_PTR_FUNCTION(LoadCursorW, hInstance, lpCursorName)
+}
+
+HICON WINAPI
+LoadIconW(
+    HINSTANCE hInstance,
+    LPCWSTR   lpIconName
+)
+{
+    ACRYLICMANAGER_TRY_EXECUTE_USER_PTR_FUNCTION(LoadIconW, hInstance, lpIconName)
+}
+
+BOOL WINAPI
+SystemParametersInfoW(
+    UINT  uiAction,
+    UINT  uiParam,
+    PVOID pvParam,
+    UINT  fWinIni
+)
+{
+    ACRYLICMANAGER_TRY_EXECUTE_USER_FUNCTION(SystemParametersInfoW, uiAction, uiParam, pvParam, fWinIni)
+}
+
+HMONITOR WINAPI
+MonitorFromWindow(
+    HWND  hWnd,
+    DWORD dwFlags
+)
+{
+    ACRYLICMANAGER_TRY_EXECUTE_USER_PTR_FUNCTION(MonitorFromWindow, hWnd, dwFlags)
+}
+
+BOOL WINAPI
+GetMonitorInfoW(
+    HMONITOR      hMonitor,
+    LPMONITORINFO lpmi
+)
+{
+    ACRYLICMANAGER_TRY_EXECUTE_USER_FUNCTION(GetMonitorInfoW, hMonitor, lpmi)
+}
+
+BOOL WINAPI
+SetProcessDPIAware()
+{
+    ACRYLICMANAGER_TRY_EXECUTE_USER_FUNCTION(SetProcessDPIAware)
+}
+
+BOOL WINAPI
+IsProcessDPIAware()
+{
+    ACRYLICMANAGER_TRY_EXECUTE_USER_FUNCTION(IsProcessDPIAware)
+}
+
 /////////////////////////////////
 /////     Shell32
 /////////////////////////////////
@@ -372,6 +846,14 @@ CoTaskMemFree(
 )
 {
     ACRYLICMANAGER_TRY_EXECUTE_COM_VOID_FUNCTION(CoTaskMemFree, pv)
+}
+
+HRESULT WINAPI
+CoIncrementMTAUsage(
+    CO_MTA_USAGE_COOKIE *pCookie
+)
+{
+    ACRYLICMANAGER_TRY_EXECUTE_COM_FUNCTION(CoIncrementMTAUsage, pCookie)
 }
 
 /////////////////////////////////

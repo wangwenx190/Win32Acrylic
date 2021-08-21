@@ -645,14 +645,6 @@ RoResolveNamespace(
     ACRYLICMANAGER_TRY_EXECUTE_WINRT_FUNCTION(RoResolveNamespace, name, windowsMetaDataDir, packageGraphDirsCount, packageGraphDirs, metaDataFilePathsCount, metaDataFilePaths, subNamespacesCount, subNamespaces)
 }
 
-HRESULT WINAPI
-CoIncrementMTAUsage(
-    CO_MTA_USAGE_COOKIE *pCookie
-)
-{
-    ACRYLICMANAGER_TRY_EXECUTE_OLE_FUNCTION(CoIncrementMTAUsage, pCookie)
-}
-
 #ifdef __cplusplus
 EXTERN_C_END
 #endif

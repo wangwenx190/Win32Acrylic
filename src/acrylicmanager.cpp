@@ -2987,6 +2987,24 @@ HRESULT am_GetSystemSymbolAddress_p(LPCWSTR library, LPCWSTR function, FARPROC *
     return (addr ? S_OK : E_FAIL);
 }
 
+HRESULT am_SetOfficialBlurEnabled_p(const HWND hWnd, const int r, const int g, const int b, const int a)
+{
+    if (!hWnd) {
+        return E_INVALIDARG;
+    }
+    // todo
+    return E_FAIL;
+}
+
+HRESULT am_IsOfficialBlurEnabled_p(const HWND hWnd, bool *result)
+{
+    if (!hWnd || !result) {
+        return E_INVALIDARG;
+    }
+    // todo
+    return E_FAIL;
+}
+
 /////////////////////////////////
 /////     Public interface
 /////////////////////////////////

@@ -434,6 +434,21 @@ am_GetSystemSymbolAddress_p(
     _Out_ FARPROC *address
 );
 
+[[nodiscard]] ACRYLICMANAGER_API HRESULT WINAPI
+am_SetOfficialBlurEnabled_p(
+    _In_ const HWND hWnd,
+    _In_ const int  r = -1,
+    _In_ const int  g = -1,
+    _In_ const int  b = -1,
+    _In_ const int  a = -1
+);
+
+[[nodiscard]] ACRYLICMANAGER_API HRESULT WINAPI
+am_IsOfficialBlurEnabled_p(
+    _In_ const HWND hWnd,
+    _Out_ bool      *result
+);
+
 #ifdef __cplusplus
 EXTERN_C_END
 #endif

@@ -197,11 +197,6 @@ am_FreeStringW(
 );
 
 [[nodiscard]] ACRYLICMANAGER_API HRESULT WINAPI
-am_CanUnloadDll(
-    _Out_ bool *result
-);
-
-[[nodiscard]] ACRYLICMANAGER_API HRESULT WINAPI
 am_Release();
 
 [[nodiscard]] ACRYLICMANAGER_API HRESULT WINAPI

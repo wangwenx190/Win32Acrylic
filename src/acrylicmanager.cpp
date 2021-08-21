@@ -1876,15 +1876,6 @@ static bool g_am_IsUsingDirect2D_p = false;
     return S_OK;
 }
 
-[[nodiscard]] static inline HRESULT am_CanUnloadDll_p(bool *result)
-{
-    if (!result) {
-        return E_INVALIDARG;
-    }
-    *result = !g_am_AcrylicManagerInitialized_p;
-    return S_OK;
-}
-
 [[nodiscard]] static inline HRESULT am_GetHostWindow_p(HWND *result)
 {
     if (!result) {
@@ -3535,11 +3526,6 @@ HRESULT am_FreeStringW(LPWSTR str)
     return am_LocalFreeW_p(str);
 }
 
-HRESULT am_CanUnloadDll(bool *result)
-{
-    return am_CanUnloadDll_p(result);
-}
-
 HRESULT am_Release()
 {
     return am_CleanupHelper_p();
@@ -3565,7 +3551,8 @@ HRESULT am_RemoveHostWindow()
 /////////////////////////////////
 
 #ifndef ACRYLICMANAGER_STATIC
-BOOL APIENTRY
+
+[[nodiscard]] ACRYLICMANAGER_API BOOL APIENTRY
 DllMain(
     HMODULE hModule,
     DWORD  ul_reason_for_call,
@@ -3582,4 +3569,5 @@ DllMain(
     }
     return TRUE;
 }
+
 #endif

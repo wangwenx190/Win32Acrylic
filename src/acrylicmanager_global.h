@@ -62,6 +62,10 @@
 #define _USER32_
 #endif
 
+#ifndef _ADVAPI32_
+#define _ADVAPI32_
+#endif
+
 #ifndef _SHELL32_
 #define _SHELL32_
 #endif

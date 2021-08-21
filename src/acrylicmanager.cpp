@@ -1902,6 +1902,205 @@ static bool g_am_IsUsingDirect2D_p = false;
     return am_InstallHostWindowHookHelper_p(g_am_HostWindowHandle_p, false);
 }
 
+// XAML Island
+
+#if 0
+static const auto invalidReason = static_cast<winrt::Windows::UI::Xaml::Hosting::XamlSourceFocusNavigationReason>(-1);
+
+[[nodiscard]] static inline HRESULT am_GetReasonFromKey_p(const WPARAM key,
+                       winrt::Windows::UI::Xaml::Hosting::XamlSourceFocusNavigationReason *result)
+{
+    if (!key || !result) {
+        return E_INVALIDARG;
+    }
+    auto reason = invalidReason;
+    if (key == VK_TAB) {
+        byte keyboardState[256];
+        SecureZeroMemory(keyboardState, sizeof(keyboardState));
+        if (GetKeyboardState(keyboardState) == FALSE) {
+            PRINT_WIN32_ERROR_MESSAGE_AND_RETURN(GetKeyboardState)
+        }
+        reason = ((keyboardState[VK_SHIFT] & 0x80) ?
+            winrt::Windows::UI::Xaml::Hosting::XamlSourceFocusNavigationReason::Last :
+            winrt::Windows::UI::Xaml::Hosting::XamlSourceFocusNavigationReason::First);
+    } else if (key == VK_LEFT) {
+        reason = winrt::Windows::UI::Xaml::Hosting::XamlSourceFocusNavigationReason::Left;
+    } else if (key == VK_RIGHT) {
+        reason = winrt::Windows::UI::Xaml::Hosting::XamlSourceFocusNavigationReason::Right;
+    } else if (key == VK_UP) {
+        reason = winrt::Windows::UI::Xaml::Hosting::XamlSourceFocusNavigationReason::Up;
+    } else if (key == VK_DOWN) {
+        reason = winrt::Windows::UI::Xaml::Hosting::XamlSourceFocusNavigationReason::Down;
+    }
+    *result = reason;
+    return S_OK;
+}
+
+[[nodiscard]] static inline HRESULT am_GetNextFocusedIsland_p(const MSG *msg,
+            const std::vector<winrt::Windows::UI::Xaml::Hosting::DesktopWindowXamlSource> &sources,
+                                winrt::Windows::UI::Xaml::Hosting::DesktopWindowXamlSource *result)
+{
+    if (!msg || sources.empty() || !result) {
+        return E_INVALIDARG;
+    }
+    if (msg->message == WM_KEYDOWN) {
+        winrt::Windows::UI::Xaml::Hosting::XamlSourceFocusNavigationReason reason = invalidReason;
+        if (FAILED(am_GetReasonFromKey_p(msg->wParam, &reason))) {
+            return E_FAIL;
+        }
+        if (reason != invalidReason) {
+            const BOOL previous =
+                ((reason == winrt::Windows::UI::Xaml::Hosting::XamlSourceFocusNavigationReason::First) ||
+                    (reason == winrt::Windows::UI::Xaml::Hosting::XamlSourceFocusNavigationReason::Down) ||
+                    (reason == winrt::Windows::UI::Xaml::Hosting::XamlSourceFocusNavigationReason::Right)) ? FALSE : TRUE;
+            const HWND currentFocusedWindow = GetFocus();
+            const HWND nextElement = GetNextDlgTabItem(g_am_MainWindowHandle_p, currentFocusedWindow, previous);
+            for (auto &&source : std::as_const(sources)) {
+                HWND islandWnd = nullptr;
+                const auto interop = source.as<IDesktopWindowXamlSourceNative>();
+                if (!interop) {
+                    return E_FAIL;
+                }
+                winrt::check_hresult(interop->get_WindowHandle(&islandWnd));
+                if (nextElement == islandWnd) {
+                    *result = source;
+                    return S_OK;
+                }
+            }
+        }
+    }
+    return E_FAIL;
+}
+
+[[nodiscard]] static inline HRESULT am_GetFocusedIsland_p(
+        const std::vector<winrt::Windows::UI::Xaml::Hosting::DesktopWindowXamlSource> &sources,
+                                winrt::Windows::UI::Xaml::Hosting::DesktopWindowXamlSource *result)
+{
+    if (sources.empty() || !result) {
+        return E_INVALIDARG;
+    }
+    for (auto &&source : std::as_const(sources)) {
+        if (source.HasFocus()) {
+            *result = source;
+            return S_OK;
+        }
+    }
+    return E_FAIL;
+}
+
+[[nodiscard]] static inline HRESULT am_NavigateFocus_p(MSG *msg, bool *ret)
+{
+    if (const auto nextFocusedIsland = am_GetNextFocusedIsland_p(msg)) {
+        WINRT_VERIFY(!nextFocusedIsland.HasFocus());
+        const HWND previousFocusedWindow = GetFocus();
+        RECT rect = {};
+        WINRT_VERIFY(GetWindowRect(previousFocusedWindow, &rect));
+        const auto nativeIsland = nextFocusedIsland.as<IDesktopWindowXamlSourceNative>();
+        HWND islandWnd{};
+        winrt::check_hresult(nativeIsland->get_WindowHandle(&islandWnd));
+        POINT pt = { rect.left, rect.top };
+        SIZE size = { rect.right - rect.left, rect.bottom - rect.top };
+        ::ScreenToClient(islandWnd, &pt);
+        const auto hintRect = winrt::Windows::Foundation::Rect({ static_cast<float>(pt.x), static_cast<float>(pt.y), static_cast<float>(size.cx), static_cast<float>(size.cy) });
+        const auto reason = am_GetReasonFromKey_p(msg->wParam);
+        const auto request = winrt::Windows::UI::Xaml::Hosting::XamlSourceFocusNavigationRequest(reason, hintRect);
+        m_lastFocusRequestId = request.CorrelationId();
+        const auto result = nextFocusedIsland.NavigateFocus(request);
+        *ret = result.WasFocusMoved();
+        return S_OK;
+    } else {
+        const bool islandIsFocused = am_GetFocusedIsland()_p != nullptr;
+        byte keyboardState[256];
+        SecureZeroMemory(keyboardState, sizeof(keyboardState));
+        WINRT_VERIFY(GetKeyboardState(keyboardState));
+        const bool isMenuModifier = (keyboardState[VK_MENU] & 0x80);
+        if (islandIsFocused && !isMenuModifier) {
+            *ret = false;
+            return S_OK;
+        }
+        const bool isDialogMessage = !!IsDialogMessageW(g_am_MainWindowHandle_p, msg);
+        *ret = isDialogMessage;
+        return S_OK;
+    }
+    return E_FAIL;
+}
+
+static const WPARAM invalidKey = (WPARAM)-1;
+
+WPARAM GetKeyFromReason(winrt::Windows::UI::Xaml::Hosting::XamlSourceFocusNavigationReason reason)
+{
+    auto key = invalidKey;
+    if (reason == winrt::Windows::UI::Xaml::Hosting::XamlSourceFocusNavigationReason::Last || reason == winrt::Windows::UI::Xaml::Hosting::XamlSourceFocusNavigationReason::First)
+    {
+        key = VK_TAB;
+    }
+    else if (reason == winrt::Windows::UI::Xaml::Hosting::XamlSourceFocusNavigationReason::Left)
+    {
+        key = VK_LEFT;
+    }
+    else if (reason == winrt::Windows::UI::Xaml::Hosting::XamlSourceFocusNavigationReason::Right)
+    {
+        key = VK_RIGHT;
+    }
+    else if (reason == winrt::Windows::UI::Xaml::Hosting::XamlSourceFocusNavigationReason::Up)
+    {
+        key = VK_UP;
+    }
+    else if (reason == winrt::Windows::UI::Xaml::Hosting::XamlSourceFocusNavigationReason::Down)
+    {
+        key = VK_DOWN;
+    }
+    return key;
+}
+
+void DesktopWindow::OnTakeFocusRequested(winrt::Windows::UI::Xaml::Hosting::DesktopWindowXamlSource const& sender, winrt::Windows::UI::Xaml::Hosting::DesktopWindowXamlSourceTakeFocusRequestedEventArgs const& args)
+{
+    if (args.Request().CorrelationId() != m_lastFocusRequestId)
+    {
+        const auto reason = args.Request().Reason();
+        const BOOL previous =
+            (reason == winrt::Windows::UI::Xaml::Hosting::XamlSourceFocusNavigationReason::First ||
+                reason == winrt::Windows::UI::Xaml::Hosting::XamlSourceFocusNavigationReason::Down ||
+                reason == winrt::Windows::UI::Xaml::Hosting::XamlSourceFocusNavigationReason::Right) ? false : true;
+
+        const auto nativeXamlSource = sender.as<IDesktopWindowXamlSourceNative>();
+        HWND senderHwnd = nullptr;
+        winrt::check_hresult(nativeXamlSource->get_WindowHandle(&senderHwnd));
+
+        MSG msg = {};
+        msg.hwnd = senderHwnd;
+        msg.message = WM_KEYDOWN;
+        msg.wParam = GetKeyFromReason(reason);
+        if (!NavigateFocus(&msg))
+        {
+            const auto nextElement = ::GetNextDlgTabItem(m_window.get(), senderHwnd, previous);
+            ::SetFocus(nextElement);
+        }
+    }
+    else
+    {
+        const auto request = winrt::Windows::UI::Xaml::Hosting::XamlSourceFocusNavigationRequest(winrt::Windows::UI::Xaml::Hosting::XamlSourceFocusNavigationReason::Restore);
+        m_lastFocusRequestId = request.CorrelationId();
+        sender.NavigateFocus(request);
+    }
+}
+
+winrt::Windows::UI::Xaml::UIElement LoadXamlControl(uint32_t id)
+{
+    auto rc = ::FindResourceW(nullptr, MAKEINTRESOURCE(id), MAKEINTRESOURCE(XAMLRESOURCE));
+    THROW_LAST_ERROR_IF(!rc);
+
+    HGLOBAL rcData = ::LoadResource(nullptr, rc);
+    THROW_LAST_ERROR_IF(!rcData);
+
+    auto data = static_cast<wchar_t*>(::LockResource(rcData));
+    auto content = winrt::Windows::UI::Xaml::Markup::XamlReader::Load(data);
+    return content.as<winrt::Windows::UI::Xaml::UIElement>();
+}
+#endif
+
+// Direct2D
+
 /////////////////////////////////
 /////     Private interface
 /////////////////////////////////

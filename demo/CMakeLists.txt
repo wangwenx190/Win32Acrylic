@@ -23,18 +23,17 @@ target_link_libraries(Demo_HostWindow PRIVATE
     user32
 )
 
-set(DEFINITIONS_COMMON
+target_compile_definitions(Demo_Simple PRIVATE
     UNICODE
     _UNICODE
     WIN32_LEAN_AND_MEAN
     _CRT_SECURE_NO_WARNINGS
 )
-
-target_compile_definitions(Demo_Simple PRIVATE
-    ${DEFINITIONS_COMMON}
-)
 target_compile_definitions(Demo_HostWindow PRIVATE
-    ${DEFINITIONS_COMMON}
+    UNICODE
+    _UNICODE
+    WIN32_LEAN_AND_MEAN
+    _CRT_SECURE_NO_WARNINGS
 )
 
 if(MSVC)

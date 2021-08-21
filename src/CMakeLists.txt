@@ -1,7 +1,12 @@
+enable_language(RC)
+
 set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>" CACHE STRING "" FORCE)
 set(CMAKE_CXX_STANDARD_LIBRARIES "kernel32.lib" CACHE STRING "" FORCE)
 
+configure_file(acrylicmanager.rc.in ${PROJECT_BINARY_DIR}/acrylicmanager.rc @ONLY)
+
 set(SOURCES
+    ${PROJECT_BINARY_DIR}/acrylicmanager.rc
     acrylicmanager_global.h
     resource.h
     runtimeobject.cpp
@@ -10,12 +15,6 @@ set(SOURCES
     acrylicmanager_p.h
     acrylicmanager.cpp
 )
-
-if(BUILD_SHARED_LIBS)
-    enable_language(RC)
-    configure_file(acrylicmanager.rc.in ${PROJECT_BINARY_DIR}/acrylicmanager.rc @ONLY)
-    list(APPEND SOURCES ${PROJECT_BINARY_DIR}/acrylicmanager.rc)
-endif()
 
 add_library(${PROJECT_NAME} ${SOURCES})
 add_library(wangwenx190::${PROJECT_NAME} ALIAS ${PROJECT_NAME})

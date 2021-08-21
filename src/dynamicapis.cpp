@@ -26,6 +26,7 @@
 
 #if WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_DESKTOP)
 
+#include <ShellApi.h>
 #include <ShellScalingApi.h>
 #include <UxTheme.h>
 #include <DwmApi.h>
@@ -128,6 +129,19 @@ SetProcessDpiAwarenessContext(
 }
 
 /////////////////////////////////
+/////     Shell32
+/////////////////////////////////
+
+UINT_PTR WINAPI
+SHAppBarMessage(
+    DWORD       dwMessage,
+    PAPPBARDATA pData
+)
+{
+    ACRYLICMANAGER_TRY_EXECUTE_SHELL_FUNCTION_RETURN(SHAppBarMessage, 0, dwMessage, pData)
+}
+
+/////////////////////////////////
 /////     Gdi32
 /////////////////////////////////
 
@@ -146,6 +160,43 @@ GetStockObject(
 )
 {
     ACRYLICMANAGER_TRY_EXECUTE_GDI_FUNCTION_RETURN(GetStockObject, nullptr, i)
+}
+
+/////////////////////////////////
+/////     AdvApi32
+/////////////////////////////////
+
+LSTATUS WINAPI
+RegOpenKeyExW(
+    HKEY    hKey,
+    LPCWSTR lpSubKey,
+    DWORD   ulOptions,
+    REGSAM  samDesired,
+    PHKEY   phkResult
+)
+{
+    ACRYLICMANAGER_TRY_EXECUTE_ADVAPI_FUNCTION_RETURN(RegOpenKeyExW, -1, hKey, lpSubKey, ulOptions, samDesired, phkResult)
+}
+
+LSTATUS WINAPI
+RegQueryValueExW(
+    HKEY    hKey,
+    LPCWSTR lpValueName,
+    LPDWORD lpReserved,
+    LPDWORD lpType,
+    LPBYTE  lpData,
+    LPDWORD lpcbData
+)
+{
+    ACRYLICMANAGER_TRY_EXECUTE_ADVAPI_FUNCTION_RETURN(RegQueryValueExW, -1, hKey, lpValueName, lpReserved, lpType, lpData, lpcbData)
+}
+
+LSTATUS WINAPI
+RegCloseKey(
+    HKEY hKey
+)
+{
+    ACRYLICMANAGER_TRY_EXECUTE_ADVAPI_FUNCTION_RETURN(RegCloseKey, -1, hKey)
 }
 
 /////////////////////////////////
@@ -173,7 +224,7 @@ SetProcessDpiAwareness(
 
 HRESULT WINAPI
 GetProcessDpiAwareness(
-    HANDLE hProcess,
+    HANDLE                hProcess,
     PROCESS_DPI_AWARENESS *value
 )
 {
@@ -276,7 +327,7 @@ CoInitialize(
     LPVOID pvReserved
 )
 {
-    ACRYLICMANAGER_TRY_EXECUTE_OLE_FUNCTION(CoInitialize, pvReserved)
+    ACRYLICMANAGER_TRY_EXECUTE_COM_FUNCTION(CoInitialize, pvReserved)
 }
 
 HRESULT WINAPI
@@ -284,7 +335,7 @@ CoCreateGuid(
     GUID *pGuid
 )
 {
-    ACRYLICMANAGER_TRY_EXECUTE_OLE_FUNCTION(CoCreateGuid, pGuid)
+    ACRYLICMANAGER_TRY_EXECUTE_COM_FUNCTION(CoCreateGuid, pGuid)
 }
 
 int WINAPI
@@ -294,13 +345,33 @@ StringFromGUID2(
     int      cchMax
 )
 {
-    ACRYLICMANAGER_TRY_EXECUTE_OLE_INT_FUNCTION(StringFromGUID2, rGuid, lpsz, cchMax)
+    ACRYLICMANAGER_TRY_EXECUTE_COM_INT_FUNCTION(StringFromGUID2, rGuid, lpsz, cchMax)
 }
 
 void WINAPI
 CoUninitialize()
 {
-    ACRYLICMANAGER_TRY_EXECUTE_OLE_VOID_FUNCTION(CoUninitialize)
+    ACRYLICMANAGER_TRY_EXECUTE_COM_VOID_FUNCTION(CoUninitialize)
+}
+
+HRESULT WINAPI
+CoCreateInstance(
+    REFCLSID   rclsid,
+    LPUNKNOWN  pUnkOuter,
+    DWORD      dwClsContext,
+    REFIID     riid,
+    LPVOID FAR *ppv
+)
+{
+    ACRYLICMANAGER_TRY_EXECUTE_COM_FUNCTION(CoCreateInstance, rclsid, pUnkOuter, dwClsContext, riid, ppv)
+}
+
+void WINAPI
+CoTaskMemFree(
+    LPVOID pv
+)
+{
+    ACRYLICMANAGER_TRY_EXECUTE_COM_VOID_FUNCTION(CoTaskMemFree, pv)
 }
 
 /////////////////////////////////
@@ -338,6 +409,10 @@ D2D1CreateFactory(
     }
     return func(factoryType, riid, pFactoryOptions, ppIFactory);
 }
+
+/////////////////////////////////
+/////     Direct3D
+/////////////////////////////////
 
 HRESULT WINAPI
 D3D11CreateDevice(

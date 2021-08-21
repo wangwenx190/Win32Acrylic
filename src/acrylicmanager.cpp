@@ -2929,10 +2929,40 @@ HRESULT am_GetSystemSymbolAddress_p(LPCWSTR library, LPCWSTR function, FARPROC *
     if (!library || !function || !address) {
         return E_INVALIDARG;
     }
-    const auto module = LoadLibraryExW(library, nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
+#if WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_DESKTOP)
+    static bool tried = false;
+    using sig = decltype(&::LoadLibraryExW);
+    static sig func = nullptr;
+    if (!func) {
+        if (tried) {
+            return E_FAIL;
+        } else {
+            tried = true;
+            MEMORY_BASIC_INFORMATION mbi;
+            SecureZeroMemory(&mbi, sizeof(mbi));
+            if (VirtualQuery(reinterpret_cast<LPCVOID>(&VirtualQuery), &mbi, sizeof(mbi)) == 0) {
+                PRINT_WIN32_ERROR_MESSAGE_AND_RETURN(VirtualQuery)
+            }
+            const auto kernel32 = static_cast<HMODULE>(mbi.AllocationBase);
+            if (!kernel32) {
+                return E_FAIL;
+            }
+            func = reinterpret_cast<sig>(GetProcAddress(kernel32, "LoadLibraryExW"));
+            if (!func) {
+                PRINT_WIN32_ERROR_MESSAGE_AND_RETURN(GetProcAddress)
+            }
+        }
+    }
+    const auto module = func(library, nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
     if (!module) {
         PRINT_WIN32_ERROR_MESSAGE_AND_RETURN(LoadLibraryExW)
     }
+#else
+    const auto module = LoadPackagedLibrary(library, 0);
+    if (!module) {
+        PRINT_WIN32_ERROR_MESSAGE_AND_RETURN(LoadPackagedLibrary)
+    }
+#endif
     LPSTR funcNameA = nullptr;
     if (FAILED(am_WideToMulti_p(function, CP_UTF8, &funcNameA))) {
         return E_FAIL;

@@ -23,6 +23,9 @@
  */
 
 #include "acrylicmanager_global.h"
+
+#if WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_DESKTOP)
+
 #include <ShellScalingApi.h>
 #include <UxTheme.h>
 #include <DwmApi.h>
@@ -337,4 +340,6 @@ D2D1CreateFactory(
 
 #ifdef __cplusplus
 EXTERN_C_END
+#endif
+
 #endif

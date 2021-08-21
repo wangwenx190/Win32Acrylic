@@ -22,6 +22,10 @@
  * SOFTWARE.
  */
 
+#include "acrylicmanager_global.h"
+
+#if WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_DESKTOP)
+
 // Define these macros first before including their header files to avoid linking
 // to their import libraries.
 
@@ -29,7 +33,6 @@
 #define _ROAPI_
 #endif
 
-#include "acrylicmanager_global.h"
 #include <RoApi.h>
 #include <RoErrorApi.h>
 #include <RoRegistrationApi.h>
@@ -652,4 +655,6 @@ CoIncrementMTAUsage(
 
 #ifdef __cplusplus
 EXTERN_C_END
+#endif
+
 #endif

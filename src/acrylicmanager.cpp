@@ -29,7 +29,6 @@
 #include <shobjidl_core.h>
 #include <wininet.h>
 #include <shlobj_core.h>
-#include <atlbase.h>
 
 #include <ShellApi.h>
 #include <ShellScalingApi.h>
@@ -112,6 +111,7 @@ static Microsoft::WRL::ComPtr<ID2D1Device1> g_am_D2DDevice_p = nullptr;
 static Microsoft::WRL::ComPtr<ID2D1DeviceContext1> g_am_D2DContext_p = nullptr;
 static Microsoft::WRL::ComPtr<IDXGISwapChain1> g_am_SwapChain_p = nullptr;
 static Microsoft::WRL::ComPtr<ID2D1Bitmap1> g_am_D2DTargetBitmap_p = nullptr;
+static Microsoft::WRL::ComPtr<ID2D1BitmapBrush> g_am_D2DBitmapBrush_p = nullptr;
 static D3D_FEATURE_LEVEL g_am_D3DFeatureLevel_p = D3D_FEATURE_LEVEL_1_0_CORE;
 
 static const bool g_am_IsWindows7OrGreater_p = []{
@@ -517,6 +517,7 @@ static bool g_am_IsUsingDirect2D_p = false;
     COM_SAFE_RELEASE(g_am_D2DDevice_p)
     COM_SAFE_RELEASE(g_am_SwapChain_p)
     COM_SAFE_RELEASE(g_am_D2DTargetBitmap_p)
+    COM_SAFE_RELEASE(g_am_D2DBitmapBrush_p)
     SAFE_FREE_CHARARRAY(g_am_WallpaperFilePath_p)
     g_am_DesktopBackgroundColor_p = D2D1::ColorF(D2D1::ColorF::Black);
     g_am_WallpaperAspectStyle_p = WallpaperAspectStyle::Invalid;
@@ -2072,6 +2073,110 @@ winrt::Windows::UI::Xaml::UIElement LoadXamlControl(uint32_t id)
 #endif
 
 // Direct2D
+
+[[nodiscard]] static inline HRESULT
+am_D2DLoadBitmapFromFile_p(
+    ID2D1DeviceContext1 *pRenderTarget,
+    LPCWSTR             uri,
+    UINT                destinationWidth,
+    UINT                destinationHeight,
+    ID2D1Bitmap         **ppBitmap
+)
+{
+    if (!g_am_MainWindowHandle_p || !pRenderTarget || !uri || !ppBitmap) {
+        return E_INVALIDARG;
+    }
+    Microsoft::WRL::ComPtr<IWICImagingFactory> pIWICFactory = nullptr;
+    Microsoft::WRL::ComPtr<IWICBitmapDecoder> pDecoder = nullptr;
+    Microsoft::WRL::ComPtr<IWICBitmapFrameDecode> pSource = nullptr;
+    Microsoft::WRL::ComPtr<IWICStream> pStream = nullptr;
+    Microsoft::WRL::ComPtr<IWICFormatConverter> pConverter = nullptr;
+    Microsoft::WRL::ComPtr<IWICBitmapScaler> pScaler = nullptr;
+    HRESULT hr = CoInitialize(nullptr);
+    if (SUCCEEDED(hr)) {
+        hr = CoCreateInstance(CLSID_WICImagingFactory1, nullptr, CLSCTX_INPROC_SERVER,
+                              IID_PPV_ARGS(&pIWICFactory));
+        if (SUCCEEDED(hr)) {
+            hr = pIWICFactory->CreateDecoderFromFilename(
+                    uri, nullptr, GENERIC_READ, WICDecodeMetadataCacheOnLoad, &pDecoder);
+            if (SUCCEEDED(hr)) {
+                hr = pDecoder->GetFrame(0, &pSource);
+                if (SUCCEEDED(hr)) {
+                    hr = pIWICFactory->CreateFormatConverter(&pConverter);
+                    if (SUCCEEDED(hr)) {
+                        hr = pConverter->Initialize(pSource.Get(), GUID_WICPixelFormat32bppPBGRA,
+                                    WICBitmapDitherTypeNone, nullptr, 0.0f, WICBitmapPaletteTypeMedianCut);
+                        if (SUCCEEDED(hr)) {
+                            hr = pRenderTarget->CreateBitmapFromWicBitmap(pConverter.Get(), ppBitmap);
+                            if (SUCCEEDED(hr)) {
+                                hr = pRenderTarget->CreateBitmapBrush(*ppBitmap, &g_am_D2DBitmapBrush_p);
+                                if (SUCCEEDED(hr)) {
+                                    CoUninitialize();
+                                    return S_OK;
+                                } else {
+                                    CoUninitialize();
+                                    PRINT_HR_ERROR_MESSAGE_AND_RETURN(CreateBitmapBrush, hr)
+                                }
+                            } else {
+                                CoUninitialize();
+                                PRINT_HR_ERROR_MESSAGE_AND_RETURN(CreateBitmapFromWicBitmap, hr)
+                            }
+                        } else {
+                            CoUninitialize();
+                            PRINT_HR_ERROR_MESSAGE_AND_RETURN(Initialize, hr)
+                        }
+                    } else {
+                        CoUninitialize();
+                        PRINT_HR_ERROR_MESSAGE_AND_RETURN(CreateFormatConverter, hr)
+                    }
+                } else {
+                    CoUninitialize();
+                    PRINT_HR_ERROR_MESSAGE_AND_RETURN(GetFrame, hr)
+                }
+            } else {
+                CoUninitialize();
+                PRINT_HR_ERROR_MESSAGE_AND_RETURN(CreateDecoderFromFilename, hr)
+            }
+        } else {
+            CoUninitialize();
+            PRINT_HR_ERROR_MESSAGE_AND_RETURN(CoCreateInstance, hr)
+        }
+    } else {
+        PRINT_HR_ERROR_MESSAGE_AND_RETURN(CoInitialize, hr)
+    }
+    return E_FAIL;
+}
+
+[[nodiscard]] static inline HRESULT am_D2DDrawWallpaper_p()
+{
+    if (!g_am_MainWindowHandle_p || !g_am_D2DContext_p) {
+        return E_INVALIDARG;
+    }
+    if (!g_am_D2DBitmapBrush_p) {
+        RECT rect = {0, 0, 0, 0};
+        if (GetClientRect(g_am_MainWindowHandle_p, &rect) == FALSE) {
+            PRINT_WIN32_ERROR_MESSAGE_AND_RETURN(GetClientRect)
+        }
+        const auto width = GET_RECT_WIDTH(rect);
+        const auto height = GET_RECT_HEIGHT(rect);
+        ID2D1Bitmap *pBitmap = nullptr;
+        if (FAILED(am_D2DLoadBitmapFromFile_p(g_am_D2DContext_p.Get(), g_am_WallpaperFilePath_p,
+                                              width, height, &pBitmap))) {
+            return E_FAIL;
+        }
+        if (!pBitmap) {
+            return E_FAIL;
+        }
+        g_am_D2DContext_p->BeginDraw();
+        g_am_D2DContext_p->Clear(g_am_DesktopBackgroundColor_p);
+        g_am_D2DContext_p->DrawBitmap(pBitmap, D2D1::RectF(0, 0, width, height));
+        if (FAILED(g_am_D2DContext_p->EndDraw())) {
+            return E_FAIL;
+        }
+        return S_OK;
+    }
+    return E_FAIL;
+}
 
 /////////////////////////////////
 /////     Private interface

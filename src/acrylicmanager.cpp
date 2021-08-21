@@ -135,9 +135,12 @@ static const bool g_am_IsWindows10OrGreater_p = []{
 }();
 
 static const bool g_am_IsDirect2DAvailable_p = []{
+    return g_am_IsWindows8OrGreater_p;
+}();
+
+static const bool g_am_IsForceDirect2D_p = []{
     bool force = false;
-    return (g_am_IsWindows8OrGreater_p
-            || (SUCCEEDED(am_GetBoolFromEnvironmentVariable_p(g_am_ForceDirect2DEnvVar_p, &force)) && force));
+    return (SUCCEEDED(am_GetBoolFromEnvironmentVariable_p(g_am_ForceDirect2DEnvVar_p, &force)) && force);
 }();
 
 static const bool g_am_IsDarkModeAvailable_p = []{
@@ -146,9 +149,23 @@ static const bool g_am_IsDarkModeAvailable_p = []{
 }();
 
 static const bool g_am_IsXAMLIslandAvailable_p = []{
-    bool result = false, force = false;
-    return ((SUCCEEDED(am_CompareSystemVersion_p(WindowsVersion::Windows10_19H1, VersionCompare::GreaterOrEqual, &result)) && result)
-            || (SUCCEEDED(am_GetBoolFromEnvironmentVariable_p(g_am_ForceXAMLIslandEnvVar_p, &force)) && force));
+    bool result = false;
+    return (SUCCEEDED(am_CompareSystemVersion_p(WindowsVersion::Windows10_19H1, VersionCompare::GreaterOrEqual, &result)) && result);
+}();
+
+static const bool g_am_IsForceXAMLIsland_p = []{
+    bool force = false;
+    return (SUCCEEDED(am_GetBoolFromEnvironmentVariable_p(g_am_ForceXAMLIslandEnvVar_p, &force)) && force);
+}();
+
+static const bool g_am_IsOfficialBlurAvailable_p = []{
+    // todo
+    return false;
+}();
+
+static const bool g_am_IsForceOfficialBlur_p = []{
+    bool force = false;
+    return (SUCCEEDED(am_GetBoolFromEnvironmentVariable_p(g_am_ForceOfficialBlurEnvVar_p, &force)) && force);
 }();
 
 /////////////////////////////////
@@ -1589,6 +1606,9 @@ static const bool g_am_IsXAMLIslandAvailable_p = []{
     if (!g_am_MainWindowHandle_p) {
         PRINT_AND_SAFE_RETURN(L"The main window has not been created.")
     }
+    if (!g_am_IsDirect2DAvailable_p) {
+        PRINT_AND_SAFE_RETURN(L"Direct2D effects are only available on Windows 8 and onwards.")
+    }
     const int screen = 0; // fixme: use the correct screen id.
     if (FAILED(am_GetWallpaperFilePath_p(screen, &g_am_WallpaperFilePath_p))) {
         PRINT_AND_SAFE_RETURN(L"Failed to retrieve the wallpaper file path.")
@@ -1717,7 +1737,11 @@ static const bool g_am_IsXAMLIslandAvailable_p = []{
     if (FAILED(am_CreateMainWindowHelper_p(x, y, w, h))) {
         PRINT_AND_RETURN(L"Failed to create main window.")
     }
-    if (g_am_IsXAMLIslandAvailable_p) {
+    const auto official = []() -> HRESULT {
+        // todo
+        return E_FAIL;
+    };
+    const auto xamlIsland = []() -> HRESULT {
         if (SUCCEEDED(am_CreateXAMLIslandHelper_p())) {
             if (SUCCEEDED(am_RegisterDragBarWindowClassHelper_p())) {
                 if (SUCCEEDED(am_CreateDragBarWindowHelper_p())) {
@@ -1732,19 +1756,35 @@ static const bool g_am_IsXAMLIslandAvailable_p = []{
         } else {
             PRINT_AND_RETURN(L"Failed to create XAML Island.")
         }
-    } else if (g_am_IsDirect2DAvailable_p) {
+    };
+    const auto direct2d = []() -> HRESULT {
         if (SUCCEEDED(am_InitializeDirect2DInfrastructureHelper_p())) {
             g_am_AcrylicManagerInitialized_p = true;
             return S_OK;
         } else {
             PRINT_AND_RETURN(L"Failed to initialize the Direct2D infrastructure.")
         }
-    } else {
-        // Just don't crash.
-        g_am_AcrylicManagerInitialized_p = true;
-        return S_OK;
+    };
+    if (g_am_IsForceOfficialBlur_p) {
+        return official();
     }
-    return E_FAIL;
+    if (g_am_IsForceXAMLIsland_p) {
+        return xamlIsland();
+    }
+    if (g_am_IsForceDirect2D_p) {
+        return direct2d();
+    }
+    if (g_am_IsOfficialBlurAvailable_p) {
+        return official();
+    }
+    if (g_am_IsXAMLIslandAvailable_p) {
+        return xamlIsland();
+    }
+    if (g_am_IsDirect2DAvailable_p) {
+        return direct2d();
+    }
+    // Just don't crash.
+    return S_OK;
 }
 
 [[nodiscard]] static inline HRESULT am_InstallHostWindowHookHelper_p(const HWND hWnd, const bool enable)
@@ -2544,7 +2584,13 @@ HRESULT am_GetWallpaperFilePath_p(const int screen, LPWSTR *result)
     if (g_am_IsWindows8OrGreater_p) {
         HRESULT hr = CoInitialize(nullptr);
         if (SUCCEEDED(hr)) {
-            CComPtr<IDesktopWallpaper> pDesktopWallpaper = nullptr;
+            IDesktopWallpaper *pDesktopWallpaper = nullptr;
+            const auto cleanup = [&pDesktopWallpaper](){
+                if (pDesktopWallpaper) {
+                    pDesktopWallpaper->Release();
+                    pDesktopWallpaper = nullptr;
+                }
+            };
             hr = CoCreateInstance(CLSID_DesktopWallpaper, nullptr, CLSCTX_LOCAL_SERVER, IID_PPV_ARGS(&pDesktopWallpaper));
             if (SUCCEEDED(hr)) {
                 UINT monitorCount = 0;
@@ -2563,22 +2609,28 @@ HRESULT am_GetWallpaperFilePath_p(const int screen, LPWSTR *result)
                                 wcscpy(_path, wallpaperPath);
                                 *result = _path;
                                 CoTaskMemFree(wallpaperPath);
+                                cleanup();
                                 CoUninitialize();
                                 return S_OK;
                             } else {
                                 CoTaskMemFree(monitorId);
+                                cleanup();
                                 PRINT_HR_ERROR_MESSAGE(GetWallpaper, hr)
                             }
                         } else {
+                            cleanup();
                             PRINT_HR_ERROR_MESSAGE(GetMonitorDevicePathAt, hr)
                         }
                     } else {
+                        cleanup();
                         PRINT(L"The given screen ID is beyond total screen count.");
                     }
                 } else {
+                    cleanup();
                     PRINT_HR_ERROR_MESSAGE(GetMonitorDevicePathCount, hr)
                 }
             } else {
+                cleanup();
                 PRINT_HR_ERROR_MESSAGE(CoCreateInstance, hr)
             }
             CoUninitialize();
@@ -2588,7 +2640,13 @@ HRESULT am_GetWallpaperFilePath_p(const int screen, LPWSTR *result)
     }
     HRESULT hr = CoInitialize(nullptr);
     if (SUCCEEDED(hr)) {
-        CComPtr<IActiveDesktop> pActiveDesktop = nullptr;
+        IActiveDesktop *pActiveDesktop = nullptr;
+        const auto cleanup = [&pActiveDesktop](){
+            if (pActiveDesktop) {
+                pActiveDesktop->Release();
+                pActiveDesktop = nullptr;
+            }
+        };
         hr = CoCreateInstance(CLSID_ActiveDesktop, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&pActiveDesktop));
         if (SUCCEEDED(hr)) {
             const auto wallpaperPath = new wchar_t[MAX_PATH];
@@ -2597,12 +2655,15 @@ HRESULT am_GetWallpaperFilePath_p(const int screen, LPWSTR *result)
             hr = pActiveDesktop->GetWallpaper(wallpaperPath, MAX_PATH, AD_GETWP_LAST_APPLIED);
             if (SUCCEEDED(hr)) {
                 *result = wallpaperPath;
+                cleanup();
                 CoUninitialize();
                 return S_OK;
             } else {
+                cleanup();
                 PRINT_HR_ERROR_MESSAGE(GetWallpaper, hr)
             }
         } else {
+            cleanup();
             PRINT_HR_ERROR_MESSAGE(CoCreateInstance, hr)
         }
         CoUninitialize();
@@ -2634,19 +2695,28 @@ HRESULT am_GetDesktopBackgroundColor_p(COLORREF *result)
     if (g_am_IsWindows8OrGreater_p) {
         HRESULT hr = CoInitialize(nullptr);
         if (SUCCEEDED(hr)) {
-            CComPtr<IDesktopWallpaper> pDesktopWallpaper = nullptr;
+            IDesktopWallpaper *pDesktopWallpaper = nullptr;
+            const auto cleanup = [&pDesktopWallpaper](){
+                if (pDesktopWallpaper) {
+                    pDesktopWallpaper->Release();
+                    pDesktopWallpaper = nullptr;
+                }
+            };
             hr = CoCreateInstance(CLSID_DesktopWallpaper, nullptr, CLSCTX_LOCAL_SERVER, IID_PPV_ARGS(&pDesktopWallpaper));
             if (SUCCEEDED(hr)) {
                 COLORREF color = RGB(0, 0, 0);
                 hr = pDesktopWallpaper->GetBackgroundColor(&color);
                 if (SUCCEEDED(hr)) {
                     *result = color;
+                    cleanup();
                     CoUninitialize();
                     return S_OK;
                 } else {
+                    cleanup();
                     PRINT_HR_ERROR_MESSAGE(GetBackgroundColor, hr)
                 }
             } else {
+                cleanup();
                 PRINT_HR_ERROR_MESSAGE(CoCreateInstance, hr)
             }
             CoUninitialize();
@@ -2668,7 +2738,13 @@ HRESULT am_GetWallpaperAspectStyle_p(const int screen, WallpaperAspectStyle *res
     if (g_am_IsWindows8OrGreater_p) {
         HRESULT hr = CoInitialize(nullptr);
         if (SUCCEEDED(hr)) {
-            CComPtr<IDesktopWallpaper> pDesktopWallpaper = nullptr;
+            IDesktopWallpaper *pDesktopWallpaper = nullptr;
+            const auto cleanup = [&pDesktopWallpaper](){
+                if (pDesktopWallpaper) {
+                    pDesktopWallpaper->Release();
+                    pDesktopWallpaper = nullptr;
+                }
+            };
             hr = CoCreateInstance(CLSID_DesktopWallpaper, nullptr, CLSCTX_LOCAL_SERVER, IID_PPV_ARGS(&pDesktopWallpaper));
             if (SUCCEEDED(hr)) {
                 DESKTOP_WALLPAPER_POSITION position = DWPOS_FILL;
@@ -2694,12 +2770,15 @@ HRESULT am_GetWallpaperAspectStyle_p(const int screen, WallpaperAspectStyle *res
                         *result = WallpaperAspectStyle::Span;
                         break;
                     }
+                    cleanup();
                     CoUninitialize();
                     return S_OK;
                 } else {
+                    cleanup();
                     PRINT_HR_ERROR_MESSAGE(GetPosition, hr)
                 }
             } else {
+                cleanup();
                 PRINT_HR_ERROR_MESSAGE(CoCreateInstance, hr)
             }
             CoUninitialize();
@@ -2709,7 +2788,13 @@ HRESULT am_GetWallpaperAspectStyle_p(const int screen, WallpaperAspectStyle *res
     }
     HRESULT hr = CoInitialize(nullptr);
     if (SUCCEEDED(hr)) {
-        CComPtr<IActiveDesktop> pActiveDesktop = nullptr;
+        IActiveDesktop *pActiveDesktop = nullptr;
+        const auto cleanup = [&pActiveDesktop](){
+            if (pActiveDesktop) {
+                pActiveDesktop->Release();
+                pActiveDesktop = nullptr;
+            }
+        };
         hr = CoCreateInstance(CLSID_ActiveDesktop, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&pActiveDesktop));
         if (SUCCEEDED(hr)) {
             WALLPAPEROPT opt;
@@ -2737,12 +2822,15 @@ HRESULT am_GetWallpaperAspectStyle_p(const int screen, WallpaperAspectStyle *res
                     *result = WallpaperAspectStyle::Span;
                     break;
                 }
+                cleanup();
                 CoUninitialize();
                 return S_OK;
             } else {
+                cleanup();
                 PRINT_HR_ERROR_MESSAGE(GetWallpaperOptions, hr)
             }
         } else {
+            cleanup();
             PRINT_HR_ERROR_MESSAGE(CoCreateInstance, hr)
         }
         CoUninitialize();

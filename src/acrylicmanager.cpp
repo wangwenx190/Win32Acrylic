@@ -1499,15 +1499,15 @@ static bool g_am_IsUsingDirect2D_p = false;
         PRINT_WIN32_ERROR_MESSAGE_AND_SAFE_RETURN(SetLayeredWindowAttributes)
     }
 
-    RECT rect = {0, 0, 0, 0};
-    if (GetClientRect(g_am_MainWindowHandle_p, &rect) == FALSE) {
-        PRINT_WIN32_ERROR_MESSAGE_AND_SAFE_RETURN(GetClientRect)
+    SIZE size = {0, 0};
+    if (FAILED(am_GetWindowClientSize_p(g_am_MainWindowHandle_p, &size))) {
+        PRINT_AND_SAFE_RETURN(L"Failed to retrieve the client area size of main window.")
     }
     int tbh = 0;
     if (FAILED(am_GetTitleBarHeight_p(g_am_MainWindowHandle_p, g_am_CurrentDpi_p, &tbh))) {
         PRINT_AND_SAFE_RETURN(L"Failed to retrieve the title bar height.")
     }
-    if (SetWindowPos(g_am_DragBarWindowHandle_p, HWND_TOP, 0, 0, rect.right,  tbh,
+    if (SetWindowPos(g_am_DragBarWindowHandle_p, HWND_TOP, 0, 0, size.cx, tbh,
                  SWP_NOACTIVATE | SWP_SHOWWINDOW | SWP_NOOWNERZORDER) == FALSE) {
         PRINT_WIN32_ERROR_MESSAGE_AND_SAFE_RETURN(SetWindowPos)
     }
@@ -1547,17 +1547,17 @@ static bool g_am_IsUsingDirect2D_p = false;
         PRINT_AND_SAFE_RETURN(L"Failed to retrieve XAML Island window handle.")
     }
     // Update the XAML Island window size because initially it is 0x0.
-    RECT rect = {0, 0, 0, 0};
-    if (GetClientRect(g_am_MainWindowHandle_p, &rect) == FALSE) {
-        PRINT_WIN32_ERROR_MESSAGE_AND_SAFE_RETURN(GetClientRect)
-    }
     // Give enough space to our thin homemade top border.
     int borderThickness = 0;
     if (FAILED(am_GetWindowVisibleFrameBorderThickness_p(g_am_MainWindowHandle_p, g_am_CurrentDpi_p, &borderThickness))) {
         PRINT_AND_SAFE_RETURN(L"Failed to retrieve the window visible frame border thickness.")
     }
+    SIZE size = {0, 0};
+    if (FAILED(am_GetWindowClientSize_p(g_am_MainWindowHandle_p, &size))) {
+        PRINT_AND_SAFE_RETURN(L"Failed to retrieve the client area size of main window.")
+    }
     if (SetWindowPos(g_am_XAMLIslandWindowHandle_p, HWND_BOTTOM, 0,
-                 borderThickness, rect.right, (rect.bottom - borderThickness),
+                 borderThickness, size.cx, (size.cy - borderThickness),
                      SWP_NOACTIVATE | SWP_SHOWWINDOW | SWP_NOOWNERZORDER) == FALSE) {
         PRINT_WIN32_ERROR_MESSAGE_AND_SAFE_RETURN(SetWindowPos)
     }
@@ -2150,15 +2150,13 @@ am_D2DLoadBitmapFromFile_p(
         return E_INVALIDARG;
     }
     if (!g_am_D2DBitmapBrush_p) {
-        RECT rect = {0, 0, 0, 0};
-        if (GetClientRect(g_am_MainWindowHandle_p, &rect) == FALSE) {
-            PRINT_WIN32_ERROR_MESSAGE_AND_RETURN(GetClientRect)
+        SIZE size = {0, 0};
+        if (FAILED(am_GetWindowClientSize_p(g_am_MainWindowHandle_p, &size))) {
+            PRINT_AND_RETURN(L"Failed to retrieve the client area size of main window.")
         }
-        const auto width = GET_RECT_WIDTH(rect);
-        const auto height = GET_RECT_HEIGHT(rect);
         ID2D1Bitmap *pBitmap = nullptr;
         if (FAILED(am_D2DLoadBitmapFromFile_p(g_am_D2DContext_p.Get(), g_am_WallpaperFilePath_p,
-                                              width, height, &pBitmap))) {
+                                              size.cx, size.cy, &pBitmap))) {
             return E_FAIL;
         }
         if (!pBitmap) {
@@ -2166,13 +2164,12 @@ am_D2DLoadBitmapFromFile_p(
         }
         g_am_D2DContext_p->BeginDraw();
         g_am_D2DContext_p->Clear(g_am_DesktopBackgroundColor_p);
-        g_am_D2DContext_p->DrawBitmap(pBitmap, D2D1::RectF(0, 0, width, height));
+        g_am_D2DContext_p->DrawBitmap(pBitmap, D2D1::RectF(0, 0, size.cx, size.cy));
         if (FAILED(g_am_D2DContext_p->EndDraw())) {
             return E_FAIL;
         }
-        return S_OK;
     }
-    return E_FAIL;
+    return S_OK;
 }
 
 /////////////////////////////////
@@ -3440,6 +3437,19 @@ HRESULT am_IsOfficialBlurEnabled_p(const HWND hWnd, bool *result)
     }
     // todo
     return E_FAIL;
+}
+
+HRESULT am_GetWindowClientSize_p(const HWND hWnd, SIZE *result)
+{
+    if (!hWnd || !result) {
+        return E_INVALIDARG;
+    }
+    RECT rect = {0, 0, 0, 0};
+    if (GetClientRect(hWnd, &rect) == FALSE) {
+        PRINT_WIN32_ERROR_MESSAGE_AND_RETURN(GetClientRect)
+    }
+    *result = GET_RECT_SIZE(rect);
+    return S_OK;
 }
 
 /////////////////////////////////

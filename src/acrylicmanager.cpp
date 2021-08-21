@@ -193,11 +193,11 @@ static bool g_am_IsUsingDirect2D_p = false;
     if (!name || !result) {
         return E_INVALIDARG;
     }
-    const auto buf = new wchar_t[MAX_PATH];
+    auto buf = new wchar_t[MAX_PATH];
     SecureZeroMemory(buf, sizeof(buf));
     if (GetEnvironmentVariableW(name, buf, sizeof(buf)) == 0) {
         // We eat this error because the given environment variable may not exist.
-        delete [] buf;
+        SAFE_FREE_CHARARRAY(buf)
         return E_FAIL;
     }
     *result = buf;
@@ -242,7 +242,7 @@ static bool g_am_IsUsingDirect2D_p = false;
     if (RegOpenKeyExW(rootKey, subKey, 0, KEY_READ, &hKey) != ERROR_SUCCESS) {
         PRINT_WIN32_ERROR_MESSAGE_AND_RETURN(RegOpenKeyExW)
     }
-    const auto buf = new wchar_t[MAX_PATH];
+    auto buf = new wchar_t[MAX_PATH];
     SecureZeroMemory(buf, sizeof(buf));
     DWORD dwType = REG_SZ;
     DWORD dwSize = sizeof(buf);
@@ -250,7 +250,7 @@ static bool g_am_IsUsingDirect2D_p = false;
                                 reinterpret_cast<LPBYTE>(buf), &dwSize) == ERROR_SUCCESS);
     if (!success) {
         // We eat this error because the given registry key and value may not exist.
-        delete [] buf;
+        SAFE_FREE_CHARARRAY(buf)
     }
     if (RegCloseKey(hKey) != ERROR_SUCCESS) {
         PRINT_WIN32_ERROR_MESSAGE_AND_RETURN(RegCloseKey)
@@ -512,30 +512,12 @@ static bool g_am_IsUsingDirect2D_p = false;
     }
 
     // Direct2D
-    if (g_am_D2DContext_p) {
-        g_am_D2DContext_p->Release();
-        g_am_D2DContext_p = nullptr;
-    }
-    if (g_am_D2DFactory_p) {
-        g_am_D2DFactory_p->Release();
-        g_am_D2DFactory_p = nullptr;
-    }
-    if (g_am_D2DDevice_p) {
-        g_am_D2DDevice_p->Release();
-        g_am_D2DDevice_p = nullptr;
-    }
-    if (g_am_SwapChain_p) {
-        g_am_SwapChain_p->Release();
-        g_am_SwapChain_p = nullptr;
-    }
-    if (g_am_D2DTargetBitmap_p) {
-        g_am_D2DTargetBitmap_p->Release();
-        g_am_D2DTargetBitmap_p = nullptr;
-    }
-    if (g_am_WallpaperFilePath_p) {
-        delete [] g_am_WallpaperFilePath_p;
-        g_am_WallpaperFilePath_p = nullptr;
-    }
+    COM_SAFE_RELEASE(g_am_D2DContext_p)
+    COM_SAFE_RELEASE(g_am_D2DFactory_p)
+    COM_SAFE_RELEASE(g_am_D2DDevice_p)
+    COM_SAFE_RELEASE(g_am_SwapChain_p)
+    COM_SAFE_RELEASE(g_am_D2DTargetBitmap_p)
+    SAFE_FREE_CHARARRAY(g_am_WallpaperFilePath_p)
     g_am_DesktopBackgroundColor_p = D2D1::ColorF(D2D1::ColorF::Black);
     g_am_WallpaperAspectStyle_p = WallpaperAspectStyle::Invalid;
     g_am_D3DFeatureLevel_p = D3D_FEATURE_LEVEL_1_0_CORE;
@@ -571,8 +553,7 @@ static bool g_am_IsUsingDirect2D_p = false;
             if (UnregisterClassW(g_am_DragBarWindowClassName_p, HINST_THISCOMPONENT) == FALSE) {
                 PRINT_WIN32_ERROR_MESSAGE(UnregisterClassW)
             }
-            delete [] g_am_DragBarWindowClassName_p;
-            g_am_DragBarWindowClassName_p = nullptr;
+            SAFE_FREE_CHARARRAY(g_am_DragBarWindowClassName_p)
         }
         g_am_DragBarWindowAtom_p = 0;
     }
@@ -589,8 +570,7 @@ static bool g_am_IsUsingDirect2D_p = false;
             if (UnregisterClassW(g_am_MainWindowClassName_p, HINST_THISCOMPONENT) == FALSE) {
                 PRINT_WIN32_ERROR_MESSAGE(UnregisterClassW)
             }
-            delete [] g_am_MainWindowClassName_p;
-            g_am_MainWindowClassName_p = nullptr;
+            SAFE_FREE_CHARARRAY(g_am_MainWindowClassName_p)
         }
         g_am_MainWindowAtom_p = 0;
     }
@@ -1377,7 +1357,7 @@ static bool g_am_IsUsingDirect2D_p = false;
     g_am_MainWindowClassName_p = new wchar_t[MAX_PATH];
     SecureZeroMemory(g_am_MainWindowClassName_p, sizeof(g_am_MainWindowClassName_p));
     swprintf(g_am_MainWindowClassName_p, L"%s%s%s", g_am_WindowClassNamePrefix_p, guid, g_am_MainWindowClassNameSuffix_p);
-    delete [] guid;
+    SAFE_FREE_CHARARRAY(guid)
 
     WNDCLASSEXW wcex;
     SecureZeroMemory(&wcex, sizeof(wcex));
@@ -1419,7 +1399,7 @@ static bool g_am_IsUsingDirect2D_p = false;
     g_am_DragBarWindowClassName_p = new wchar_t[MAX_PATH];
     SecureZeroMemory(g_am_DragBarWindowClassName_p, sizeof(g_am_DragBarWindowClassName_p));
     swprintf(g_am_DragBarWindowClassName_p, L"%s%s%s", g_am_WindowClassNamePrefix_p, guid, g_am_DragBarWindowClassNameSuffix_p);
-    delete [] guid;
+    SAFE_FREE_CHARARRAY(guid)
 
     WNDCLASSEXW wcex;
     SecureZeroMemory(&wcex, sizeof(wcex));
@@ -1644,6 +1624,8 @@ static bool g_am_IsUsingDirect2D_p = false;
     // Don't forget to declare your app's minimum required feature level in its
     // description. All apps are assumed to support 9.1 unless otherwise stated.
     const D3D_FEATURE_LEVEL featureLevels[] = {
+        D3D_FEATURE_LEVEL_12_1,
+        D3D_FEATURE_LEVEL_12_0,
         D3D_FEATURE_LEVEL_11_1,
         D3D_FEATURE_LEVEL_11_0,
         D3D_FEATURE_LEVEL_10_1,
@@ -1678,8 +1660,8 @@ static bool g_am_IsUsingDirect2D_p = false;
     // Selecing a target
     DXGI_SWAP_CHAIN_DESC1 swapChainDesc;
     SecureZeroMemory(&swapChainDesc, sizeof(swapChainDesc));
-    swapChainDesc.Width = 0;
-    swapChainDesc.Height = 0;
+    swapChainDesc.Width = 0; // use automatic sizing
+    swapChainDesc.Height = 0; // use automatic sizing
     swapChainDesc.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
     swapChainDesc.Stereo = FALSE;
     swapChainDesc.SampleDesc.Count = 1;
@@ -1716,9 +1698,10 @@ static bool g_am_IsUsingDirect2D_p = false;
         PRINT_HR_ERROR_MESSAGE_AND_SAFE_RETURN(GetBuffer, hr)
     }
 
-    const D2D1_BITMAP_PROPERTIES1 bitmapProperties =
-            D2D1::BitmapProperties1(D2D1_BITMAP_OPTIONS_TARGET | D2D1_BITMAP_OPTIONS_CANNOT_DRAW,
-                                    D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_IGNORE));
+    const D2D1_BITMAP_PROPERTIES1 bitmapProperties = D2D1::BitmapProperties1(
+                D2D1_BITMAP_OPTIONS_TARGET | D2D1_BITMAP_OPTIONS_CANNOT_DRAW,
+                D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_IGNORE),
+                static_cast<float>(g_am_CurrentDpi_p), static_cast<float>(g_am_CurrentDpi_p));
 
     Microsoft::WRL::ComPtr<IDXGISurface> dxgiBackBuffer = nullptr;
     hr = g_am_SwapChain_p->GetBuffer(0, IID_PPV_ARGS(&dxgiBackBuffer));
@@ -1861,8 +1844,7 @@ static bool g_am_IsUsingDirect2D_p = false;
     if (!str) {
         return E_INVALIDARG;
     }
-    delete [] str;
-    str = nullptr;
+    SAFE_FREE_CHARARRAY(str)
     return S_OK;
 }
 
@@ -1871,8 +1853,7 @@ static bool g_am_IsUsingDirect2D_p = false;
     if (!str) {
         return E_INVALIDARG;
     }
-    delete [] str;
-    str = nullptr;
+    SAFE_FREE_CHARARRAY(str)
     return S_OK;
 }
 
@@ -2554,12 +2535,12 @@ HRESULT am_GenerateGUID_p(LPWSTR *result)
         CoUninitialize();
         return hr;
     }
-    const auto buf = new wchar_t[MAX_PATH];
+    auto buf = new wchar_t[MAX_PATH];
     SecureZeroMemory(buf, sizeof(buf));
     if (StringFromGUID2(guid, buf, MAX_PATH) == 0) {
         PRINT_WIN32_ERROR_MESSAGE(StringFromGUID2)
         CoUninitialize();
-        delete [] buf;
+        SAFE_FREE_CHARARRAY(buf)
         return E_FAIL;
     }
     CoUninitialize();
@@ -2766,13 +2747,13 @@ HRESULT am_PrintErrorMessageFromHResult_p(LPCWSTR function, const HRESULT hr)
     FormatMessageW(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
         nullptr, dwError, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), buf, 0, nullptr);
 
-    const auto str = new wchar_t[200];
+    auto str = new wchar_t[MAX_PATH];
     SecureZeroMemory(str, sizeof(str));
     swprintf(str, L"%s failed with error %d: %s", function, dwError, buf);
     PRINT(str)
 
     LocalFree(buf);
-    delete [] str;
+    SAFE_FREE_CHARARRAY(str)
 
     return S_OK;
 }
@@ -2786,12 +2767,6 @@ HRESULT am_GetWallpaperFilePath_p(const int screen, LPWSTR *result)
         HRESULT hr = CoInitialize(nullptr);
         if (SUCCEEDED(hr)) {
             IDesktopWallpaper *pDesktopWallpaper = nullptr;
-            const auto cleanup = [&pDesktopWallpaper](){
-                if (pDesktopWallpaper) {
-                    pDesktopWallpaper->Release();
-                    pDesktopWallpaper = nullptr;
-                }
-            };
             hr = CoCreateInstance(CLSID_DesktopWallpaper, nullptr, CLSCTX_LOCAL_SERVER, IID_PPV_ARGS(&pDesktopWallpaper));
             if (SUCCEEDED(hr)) {
                 UINT monitorCount = 0;
@@ -2810,28 +2785,28 @@ HRESULT am_GetWallpaperFilePath_p(const int screen, LPWSTR *result)
                                 wcscpy(_path, wallpaperPath);
                                 *result = _path;
                                 CoTaskMemFree(wallpaperPath);
-                                cleanup();
+                                COM_SAFE_RELEASE(pDesktopWallpaper)
                                 CoUninitialize();
                                 return S_OK;
                             } else {
                                 CoTaskMemFree(monitorId);
-                                cleanup();
+                                COM_SAFE_RELEASE(pDesktopWallpaper)
                                 PRINT_HR_ERROR_MESSAGE(GetWallpaper, hr)
                             }
                         } else {
-                            cleanup();
+                            COM_SAFE_RELEASE(pDesktopWallpaper)
                             PRINT_HR_ERROR_MESSAGE(GetMonitorDevicePathAt, hr)
                         }
                     } else {
-                        cleanup();
+                        COM_SAFE_RELEASE(pDesktopWallpaper)
                         PRINT(L"The given screen ID is beyond total screen count.");
                     }
                 } else {
-                    cleanup();
+                    COM_SAFE_RELEASE(pDesktopWallpaper)
                     PRINT_HR_ERROR_MESSAGE(GetMonitorDevicePathCount, hr)
                 }
             } else {
-                cleanup();
+                COM_SAFE_RELEASE(pDesktopWallpaper)
                 PRINT_HR_ERROR_MESSAGE(CoCreateInstance, hr)
             }
             CoUninitialize();
@@ -2842,12 +2817,6 @@ HRESULT am_GetWallpaperFilePath_p(const int screen, LPWSTR *result)
     HRESULT hr = CoInitialize(nullptr);
     if (SUCCEEDED(hr)) {
         IActiveDesktop *pActiveDesktop = nullptr;
-        const auto cleanup = [&pActiveDesktop](){
-            if (pActiveDesktop) {
-                pActiveDesktop->Release();
-                pActiveDesktop = nullptr;
-            }
-        };
         hr = CoCreateInstance(CLSID_ActiveDesktop, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&pActiveDesktop));
         if (SUCCEEDED(hr)) {
             const auto wallpaperPath = new wchar_t[MAX_PATH];
@@ -2856,29 +2825,29 @@ HRESULT am_GetWallpaperFilePath_p(const int screen, LPWSTR *result)
             hr = pActiveDesktop->GetWallpaper(wallpaperPath, MAX_PATH, AD_GETWP_LAST_APPLIED);
             if (SUCCEEDED(hr)) {
                 *result = wallpaperPath;
-                cleanup();
+                COM_SAFE_RELEASE(pActiveDesktop)
                 CoUninitialize();
                 return S_OK;
             } else {
-                cleanup();
+                COM_SAFE_RELEASE(pActiveDesktop)
                 PRINT_HR_ERROR_MESSAGE(GetWallpaper, hr)
             }
         } else {
-            cleanup();
+            COM_SAFE_RELEASE(pActiveDesktop)
             PRINT_HR_ERROR_MESSAGE(CoCreateInstance, hr)
         }
         CoUninitialize();
     } else {
         PRINT_HR_ERROR_MESSAGE(CoInitialize, hr)
     }
-    const auto wallpaperPath = new wchar_t[MAX_PATH];
+    auto wallpaperPath = new wchar_t[MAX_PATH];
     SecureZeroMemory(wallpaperPath, sizeof(wallpaperPath));
     if (SystemParametersInfoW(SPI_GETDESKWALLPAPER, MAX_PATH, wallpaperPath, 0) != FALSE) {
         *result = wallpaperPath;
         return S_OK;
     } else {
         PRINT_WIN32_ERROR_MESSAGE(SystemParametersInfoW)
-        delete [] wallpaperPath;
+        SAFE_FREE_CHARARRAY(wallpaperPath)
     }
     LPWSTR path = nullptr;
     if (SUCCEEDED(am_GetStringFromRegistry_p(HKEY_CURRENT_USER, g_am_DesktopRegistryKey_p, L"WallPaper", &path))) {
@@ -2897,27 +2866,21 @@ HRESULT am_GetDesktopBackgroundColor_p(COLORREF *result)
         HRESULT hr = CoInitialize(nullptr);
         if (SUCCEEDED(hr)) {
             IDesktopWallpaper *pDesktopWallpaper = nullptr;
-            const auto cleanup = [&pDesktopWallpaper](){
-                if (pDesktopWallpaper) {
-                    pDesktopWallpaper->Release();
-                    pDesktopWallpaper = nullptr;
-                }
-            };
             hr = CoCreateInstance(CLSID_DesktopWallpaper, nullptr, CLSCTX_LOCAL_SERVER, IID_PPV_ARGS(&pDesktopWallpaper));
             if (SUCCEEDED(hr)) {
                 COLORREF color = RGB(0, 0, 0);
                 hr = pDesktopWallpaper->GetBackgroundColor(&color);
                 if (SUCCEEDED(hr)) {
                     *result = color;
-                    cleanup();
+                    COM_SAFE_RELEASE(pDesktopWallpaper)
                     CoUninitialize();
                     return S_OK;
                 } else {
-                    cleanup();
+                    COM_SAFE_RELEASE(pDesktopWallpaper)
                     PRINT_HR_ERROR_MESSAGE(GetBackgroundColor, hr)
                 }
             } else {
-                cleanup();
+                COM_SAFE_RELEASE(pDesktopWallpaper)
                 PRINT_HR_ERROR_MESSAGE(CoCreateInstance, hr)
             }
             CoUninitialize();
@@ -2940,12 +2903,6 @@ HRESULT am_GetWallpaperAspectStyle_p(const int screen, WallpaperAspectStyle *res
         HRESULT hr = CoInitialize(nullptr);
         if (SUCCEEDED(hr)) {
             IDesktopWallpaper *pDesktopWallpaper = nullptr;
-            const auto cleanup = [&pDesktopWallpaper](){
-                if (pDesktopWallpaper) {
-                    pDesktopWallpaper->Release();
-                    pDesktopWallpaper = nullptr;
-                }
-            };
             hr = CoCreateInstance(CLSID_DesktopWallpaper, nullptr, CLSCTX_LOCAL_SERVER, IID_PPV_ARGS(&pDesktopWallpaper));
             if (SUCCEEDED(hr)) {
                 DESKTOP_WALLPAPER_POSITION position = DWPOS_FILL;
@@ -2971,15 +2928,15 @@ HRESULT am_GetWallpaperAspectStyle_p(const int screen, WallpaperAspectStyle *res
                         *result = WallpaperAspectStyle::Span;
                         break;
                     }
-                    cleanup();
+                    COM_SAFE_RELEASE(pDesktopWallpaper)
                     CoUninitialize();
                     return S_OK;
                 } else {
-                    cleanup();
+                    COM_SAFE_RELEASE(pDesktopWallpaper)
                     PRINT_HR_ERROR_MESSAGE(GetPosition, hr)
                 }
             } else {
-                cleanup();
+                COM_SAFE_RELEASE(pDesktopWallpaper)
                 PRINT_HR_ERROR_MESSAGE(CoCreateInstance, hr)
             }
             CoUninitialize();
@@ -2990,12 +2947,6 @@ HRESULT am_GetWallpaperAspectStyle_p(const int screen, WallpaperAspectStyle *res
     HRESULT hr = CoInitialize(nullptr);
     if (SUCCEEDED(hr)) {
         IActiveDesktop *pActiveDesktop = nullptr;
-        const auto cleanup = [&pActiveDesktop](){
-            if (pActiveDesktop) {
-                pActiveDesktop->Release();
-                pActiveDesktop = nullptr;
-            }
-        };
         hr = CoCreateInstance(CLSID_ActiveDesktop, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&pActiveDesktop));
         if (SUCCEEDED(hr)) {
             WALLPAPEROPT opt;
@@ -3023,15 +2974,15 @@ HRESULT am_GetWallpaperAspectStyle_p(const int screen, WallpaperAspectStyle *res
                     *result = WallpaperAspectStyle::Span;
                     break;
                 }
-                cleanup();
+                COM_SAFE_RELEASE(pActiveDesktop)
                 CoUninitialize();
                 return S_OK;
             } else {
-                cleanup();
+                COM_SAFE_RELEASE(pActiveDesktop)
                 PRINT_HR_ERROR_MESSAGE(GetWallpaperOptions, hr)
             }
         } else {
-            cleanup();
+            COM_SAFE_RELEASE(pActiveDesktop)
             PRINT_HR_ERROR_MESSAGE(CoCreateInstance, hr)
         }
         CoUninitialize();
@@ -3195,7 +3146,7 @@ HRESULT am_GetIntFromEnvironmentVariable_p(LPCWSTR name, int *value)
     LPWSTR str = nullptr;
     if (SUCCEEDED(am_GetStringFromEnvironmentVariableHelper_p(name, &str))) {
         *value = _wtoi(str);
-        delete [] str;
+        SAFE_FREE_CHARARRAY(str)
         return S_OK;
     }
     return E_FAIL;
@@ -3211,7 +3162,7 @@ HRESULT am_GetBoolFromEnvironmentVariable_p(LPCWSTR name, bool *value)
         *value = ((_wcsicmp(str, L"True") == 0) || (_wcsicmp(str, L"Yes") == 0)
                   || (_wcsicmp(str, L"Enable") == 0) || (_wcsicmp(str, L"Enabled") == 0)
                   || (_wcsicmp(str, L"On") == 0) || (_wcsicmp(str, L"0") != 0));
-        delete [] str;
+        SAFE_FREE_CHARARRAY(str)
         return S_OK;
     }
     return E_FAIL;
@@ -3370,7 +3321,7 @@ HRESULT am_GetSystemSymbolAddress_p(LPCWSTR library, LPCWSTR function, FARPROC *
     } else {
         PRINT_WIN32_ERROR_MESSAGE(GetProcAddress)
     }
-    delete [] funcNameA;
+    SAFE_FREE_CHARARRAY(funcNameA)
     return (addr ? S_OK : E_FAIL);
 }
 

@@ -55,9 +55,6 @@ static am_SetWindowTranslucentBackgroundEnabled_sig am_SetWindowTranslucentBackg
 using am_EventLoopExec_sig = HRESULT(WINAPI *)(int *);
 static am_EventLoopExec_sig am_EventLoopExec = nullptr;
 
-using am_CanUnloadDll_sig = HRESULT(WINAPI *)(bool *);
-static am_CanUnloadDll_sig am_CanUnloadDll = nullptr;
-
 using am_Release_sig = HRESULT(WINAPI *)();
 static am_Release_sig am_Release = nullptr;
 
@@ -114,11 +111,6 @@ static am_Release_sig am_Release = nullptr;
     am_EventLoopExec = reinterpret_cast<am_EventLoopExec_sig>(GetProcAddress(dll, "am_EventLoopExec"));
     if (!am_EventLoopExec) {
         OutputDebugStringW(L"Failed to resolve am_EventLoopExec().");
-        return false;
-    }
-    am_CanUnloadDll = reinterpret_cast<am_CanUnloadDll_sig>(GetProcAddress(dll, "am_CanUnloadDll"));
-    if (!am_CanUnloadDll) {
-        OutputDebugStringW(L"Failed to resolve am_CanUnloadDll().");
         return false;
     }
     am_Release = reinterpret_cast<am_Release_sig>(GetProcAddress(dll, "am_Release"));

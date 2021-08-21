@@ -490,3 +490,23 @@ __PRINT_HR_ERROR_MESSAGE_FOOT
     SAFE_RETURN \
 }
 #endif
+
+#ifndef COM_SAFE_RELEASE
+#define COM_SAFE_RELEASE(pInterface) \
+{ \
+    if (pInterface) { \
+        pInterface->Release(); \
+        pInterface = nullptr; \
+    } \
+}
+#endif
+
+#ifndef SAFE_FREE_CHARARRAY
+#define SAFE_FREE_CHARARRAY(array) \
+{ \
+    if (array) { \
+        delete [] array; \
+        array = nullptr; \
+    } \
+}
+#endif

@@ -139,8 +139,8 @@ static const bool g_am_IsDirect2DAvailable_p = []{
 }();
 
 static const bool g_am_IsForceDirect2D_p = []{
-    bool force = false;
-    return (SUCCEEDED(am_GetBoolFromEnvironmentVariable_p(g_am_ForceDirect2DEnvVar_p, &force)) && force);
+    bool result = false;
+    return (SUCCEEDED(am_GetBoolFromEnvironmentVariable_p(g_am_ForceDirect2DEnvVar_p, &result)) && result);
 }();
 
 static const bool g_am_IsDarkModeAvailable_p = []{
@@ -154,8 +154,8 @@ static const bool g_am_IsXAMLIslandAvailable_p = []{
 }();
 
 static const bool g_am_IsForceXAMLIsland_p = []{
-    bool force = false;
-    return (SUCCEEDED(am_GetBoolFromEnvironmentVariable_p(g_am_ForceXAMLIslandEnvVar_p, &force)) && force);
+    bool result = false;
+    return (SUCCEEDED(am_GetBoolFromEnvironmentVariable_p(g_am_ForceXAMLIslandEnvVar_p, &result)) && result);
 }();
 
 static const bool g_am_IsOfficialBlurAvailable_p = []{
@@ -164,9 +164,13 @@ static const bool g_am_IsOfficialBlurAvailable_p = []{
 }();
 
 static const bool g_am_IsForceOfficialBlur_p = []{
-    bool force = false;
-    return (SUCCEEDED(am_GetBoolFromEnvironmentVariable_p(g_am_ForceOfficialBlurEnvVar_p, &force)) && force);
+    bool result = false;
+    return (SUCCEEDED(am_GetBoolFromEnvironmentVariable_p(g_am_ForceOfficialBlurEnvVar_p, &result)) && result);
 }();
+
+static bool g_am_IsUsingOfficialBlur_p = false;
+static bool g_am_IsUsingXAMLIsland_p = false;
+static bool g_am_IsUsingDirect2D_p = false;
 
 /////////////////////////////////
 /////     Helper functions
@@ -498,6 +502,8 @@ static const bool g_am_IsForceOfficialBlur_p = []{
 
 [[nodiscard]] static inline HRESULT am_CleanupHelper_p()
 {
+    g_am_IsUsingOfficialBlur_p = false;
+
     // Host window
     if (g_am_HostWindowHandle_p && g_am_HostWindowProc_p) {
         SetWindowLongPtrW(g_am_HostWindowHandle_p, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(g_am_HostWindowProc_p));
@@ -533,6 +539,7 @@ static const bool g_am_IsForceOfficialBlur_p = []{
     g_am_DesktopBackgroundColor_p = D2D1::ColorF(D2D1::ColorF::Black);
     g_am_WallpaperAspectStyle_p = WallpaperAspectStyle::Invalid;
     g_am_D3DFeatureLevel_p = D3D_FEATURE_LEVEL_1_0_CORE;
+    g_am_IsUsingDirect2D_p = false;
 
     // XAML Island
     if (g_am_XAMLSource_p) {
@@ -550,6 +557,7 @@ static const bool g_am_IsForceOfficialBlur_p = []{
     g_am_TintOpacity_p = 0.0;
     g_am_TintLuminosityOpacity_p = std::nullopt;
     g_am_FallbackColor_p = {};
+    g_am_IsUsingXAMLIsland_p = false;
 
     // Drag bar window
     if (g_am_DragBarWindowHandle_p) {
@@ -1739,12 +1747,14 @@ static const bool g_am_IsForceOfficialBlur_p = []{
     }
     const auto official = []() -> HRESULT {
         // todo
+        g_am_IsUsingOfficialBlur_p = false;
         return E_FAIL;
     };
     const auto xamlIsland = []() -> HRESULT {
         if (SUCCEEDED(am_CreateXAMLIslandHelper_p())) {
             if (SUCCEEDED(am_RegisterDragBarWindowClassHelper_p())) {
                 if (SUCCEEDED(am_CreateDragBarWindowHelper_p())) {
+                    g_am_IsUsingXAMLIsland_p = true;
                     g_am_AcrylicManagerInitialized_p = true;
                     return S_OK;
                 } else {
@@ -1759,6 +1769,7 @@ static const bool g_am_IsForceOfficialBlur_p = []{
     };
     const auto direct2d = []() -> HRESULT {
         if (SUCCEEDED(am_InitializeDirect2DInfrastructureHelper_p())) {
+            g_am_IsUsingDirect2D_p = true;
             g_am_AcrylicManagerInitialized_p = true;
             return S_OK;
         } else {

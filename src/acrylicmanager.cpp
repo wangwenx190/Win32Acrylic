@@ -63,23 +63,23 @@
 /////////////////////////////////
 
 // The thickness of an auto-hide taskbar in pixels.
-static const int g_am_AutoHideTaskbarThicknessPx_p = 2;
-static const int g_am_AutoHideTaskbarThicknessPy_p = g_am_AutoHideTaskbarThicknessPx_p;
+static constexpr int g_am_AutoHideTaskbarThicknessPx_p = 2;
+static constexpr int g_am_AutoHideTaskbarThicknessPy_p = g_am_AutoHideTaskbarThicknessPx_p;
 
-static LPCWSTR g_am_ForceOfficialBlurEnvVar_p = L"ACRYLICMANAGER_FORCE_OFFICIAL_BLUR";
-static LPCWSTR g_am_ForceXAMLIslandEnvVar_p = L"ACRYLICMANAGER_FORCE_XAML_ISLAND";
-static LPCWSTR g_am_ForceDirect2DEnvVar_p = L"ACRYLICMANAGER_FORCE_DIRECT2D";
-static LPCWSTR g_am_PersonalizeRegistryKey_p = LR"(Software\Microsoft\Windows\CurrentVersion\Themes\Personalize)";
-static LPCWSTR g_am_DWMRegistryKey_p = LR"(Software\Microsoft\Windows\DWM)";
-static LPCWSTR g_am_DesktopRegistryKey_p = LR"(Control Panel\Desktop)";
-static LPCWSTR g_am_WindowClassNamePrefix_p = LR"(wangwenx190\AcrylicManager\WindowClass\)";
-static LPCWSTR g_am_MainWindowClassNameSuffix_p = L"@MainWindow";
-static LPCWSTR g_am_DragBarWindowClassNameSuffix_p = L"@DragBarWindow";
+static constexpr wchar_t g_am_ForceOfficialBlurEnvVar_p[] = L"ACRYLICMANAGER_FORCE_OFFICIAL_BLUR";
+static constexpr wchar_t g_am_ForceXAMLIslandEnvVar_p[] = L"ACRYLICMANAGER_FORCE_XAML_ISLAND";
+static constexpr wchar_t g_am_ForceDirect2DEnvVar_p[] = L"ACRYLICMANAGER_FORCE_DIRECT2D";
+static constexpr wchar_t g_am_PersonalizeRegistryKey_p[] = LR"(Software\Microsoft\Windows\CurrentVersion\Themes\Personalize)";
+static constexpr wchar_t g_am_DWMRegistryKey_p[] = LR"(Software\Microsoft\Windows\DWM)";
+static constexpr wchar_t g_am_DesktopRegistryKey_p[] = LR"(Control Panel\Desktop)";
+static constexpr wchar_t g_am_WindowClassNamePrefix_p[] = LR"(wangwenx190\AcrylicManager\WindowClass\)";
+static constexpr wchar_t g_am_MainWindowClassNameSuffix_p[] = L"@MainWindow";
+static constexpr wchar_t g_am_DragBarWindowClassNameSuffix_p[] = L"@DragBarWindow";
 
 static LPWSTR g_am_MainWindowClassName_p = nullptr;
 static LPWSTR g_am_DragBarWindowClassName_p = nullptr;
-static LPCWSTR g_am_MainWindowTitle_p = L"AcrylicManager Main Window";
-static LPCWSTR g_am_DragBarWindowTitle_p = nullptr;
+static constexpr wchar_t g_am_MainWindowTitle_p[] = L"AcrylicManager Main Window";
+static constexpr wchar_t *g_am_DragBarWindowTitle_p = nullptr;
 static bool g_am_AcrylicManagerInitialized_p = false;
 static ATOM g_am_MainWindowAtom_p = 0;
 static ATOM g_am_DragBarWindowAtom_p = 0;
@@ -107,10 +107,42 @@ static winrt::Windows::UI::Xaml::Media::AcrylicBrush g_am_BackgroundBrush_p = nu
 static Microsoft::WRL::ComPtr<ID2D1Factory2> g_am_D2DFactory_p = nullptr;
 static Microsoft::WRL::ComPtr<ID2D1Device1> g_am_D2DDevice_p = nullptr;
 static Microsoft::WRL::ComPtr<ID2D1DeviceContext1> g_am_D2DContext_p = nullptr;
-static Microsoft::WRL::ComPtr<IDXGISwapChain1> g_am_SwapChain_p = nullptr;
 static Microsoft::WRL::ComPtr<ID2D1Bitmap1> g_am_D2DTargetBitmap_p = nullptr;
-static Microsoft::WRL::ComPtr<ID2D1BitmapBrush> g_am_D2DBitmapBrush_p = nullptr;
+static Microsoft::WRL::ComPtr<ID2D1Effect> g_am_D2DBitmapSourceEffect_p = nullptr;
+static Microsoft::WRL::ComPtr<ID2D1Effect> g_am_D2DGaussianBlurEffect_p = nullptr;
+static Microsoft::WRL::ComPtr<IWICImagingFactory> g_am_WICFactory_p = nullptr;
+static Microsoft::WRL::ComPtr<IWICBitmapDecoder> g_am_WICDecoder_p = nullptr;
+static Microsoft::WRL::ComPtr<IWICBitmapFrameDecode> g_am_WICFrame_p = nullptr;
+static Microsoft::WRL::ComPtr<IWICStream> g_am_WICStream_p = nullptr;
+static Microsoft::WRL::ComPtr<IWICFormatConverter> g_am_WICConverter_p = nullptr;
+static Microsoft::WRL::ComPtr<IWICBitmapScaler> g_am_WICScaler_p = nullptr;
+static Microsoft::WRL::ComPtr<ID3D11Device> g_am_D3D11Device_p = nullptr;
+static Microsoft::WRL::ComPtr<ID3D11DeviceContext> g_am_D3D11Context_p = nullptr;
+static Microsoft::WRL::ComPtr<ID3D11Texture2D> g_am_D3D11Texture_p = nullptr;
+static Microsoft::WRL::ComPtr<IDXGIDevice1> g_am_DXGIDevice_p = nullptr;
+static Microsoft::WRL::ComPtr<IDXGIAdapter> g_am_DXGIAdapter_p = nullptr;
+static Microsoft::WRL::ComPtr<IDXGIFactory2> g_am_DXGIFactory_p = nullptr;
+static Microsoft::WRL::ComPtr<IDXGISurface> g_am_DXGISurface_p = nullptr;
+static Microsoft::WRL::ComPtr<IDXGISwapChain1> g_am_DXGISwapChain_p = nullptr;
 static D3D_FEATURE_LEVEL g_am_D3DFeatureLevel_p = D3D_FEATURE_LEVEL_1_0_CORE;
+
+#ifdef __cplusplus
+EXTERN_C_START
+#endif
+
+constexpr GUID am_CLSID_D2D1Atlas = {0x913e2be4, 0xfdcf, 0x4fe2, {0xa5, 0xf0, 0x24, 0x54, 0xf1, 0x4f, 0xf4, 0x8}};
+constexpr GUID am_CLSID_D2D1BitmapSource = {0x5fb6c24d, 0xc6dd, 0x4231, {0x94, 0x4,  0x50, 0xf4, 0xd5, 0xc3, 0x25, 0x2d}};
+constexpr GUID am_CLSID_D2D1Blend = {0x81c5b77b, 0x13f8, 0x4cdd, {0xad, 0x20, 0xc8, 0x90, 0x54, 0x7a, 0xc6, 0x5d}};
+constexpr GUID am_CLSID_D2D1Border = {0x2A2D49C0, 0x4ACF, 0x43c7, {0x8C, 0x6A, 0x7C, 0x4A, 0x27, 0x87, 0x4D, 0x27}};
+constexpr GUID am_CLSID_D2D1Composite = {0x48fc9f51, 0xf6ac, 0x48f1, {0x8b, 0x58, 0x3b, 0x28, 0xac, 0x46, 0xf7, 0x6d}};
+constexpr GUID am_CLSID_D2D1Flood = {0x61c23c20, 0xae69, 0x4d8e, {0x94, 0xcf, 0x50, 0x07, 0x8d, 0xf6, 0x38, 0xf2}};
+constexpr GUID am_CLSID_D2D1GaussianBlur = {0x1feb6d69, 0x2fe6, 0x4ac9, {0x8c, 0x58, 0x1d, 0x7f, 0x93, 0xe7, 0xa6, 0xa5}};
+constexpr GUID am_CLSID_D2D1Saturation = {0x5cb2d9cf, 0x327d, 0x459f, {0xa0, 0xce, 0x40, 0xc0, 0xb2, 0x08, 0x6b, 0xf7}};
+constexpr GUID am_CLSID_D2D1Shadow = {0xC67EA361, 0x1863, 0x4e69, {0x89, 0xDB, 0x69, 0x5D, 0x3E, 0x9A, 0x5B, 0x6B}};
+
+#ifdef __cplusplus
+EXTERN_C_END
+#endif
 
 static const bool g_am_IsWindows7OrGreater_p = []{
     bool result = false;
@@ -510,12 +542,6 @@ static bool g_am_IsUsingDirect2D_p = false;
     }
 
     // Direct2D
-    COM_SAFE_RELEASE(g_am_D2DContext_p)
-    COM_SAFE_RELEASE(g_am_D2DFactory_p)
-    COM_SAFE_RELEASE(g_am_D2DDevice_p)
-    COM_SAFE_RELEASE(g_am_SwapChain_p)
-    COM_SAFE_RELEASE(g_am_D2DTargetBitmap_p)
-    COM_SAFE_RELEASE(g_am_D2DBitmapBrush_p)
     SAFE_FREE_CHARARRAY(g_am_WallpaperFilePath_p)
     g_am_DesktopBackgroundColor_p = D2D1::ColorF(D2D1::ColorF::Black);
     g_am_WallpaperAspectStyle_p = WallpaperAspectStyle::Invalid;
@@ -751,6 +777,87 @@ static bool g_am_IsUsingDirect2D_p = false;
     return S_OK;
 }
 
+[[nodiscard]] static inline HRESULT am_D2DGenerateWICBitmapSource_p()
+{
+    if (!g_am_MainWindowHandle_p || !g_am_D2DContext_p || !g_am_WallpaperFilePath_p) {
+        return E_POINTER;
+    }
+    HRESULT hr = CoInitialize(nullptr);
+    if (FAILED(hr)) {
+        PRINT_HR_ERROR_MESSAGE_AND_RETURN(CoInitialize, hr)
+    }
+    hr = CoCreateInstance(CLSID_WICImagingFactory1, nullptr, CLSCTX_INPROC_SERVER,
+                          IID_PPV_ARGS(&g_am_WICFactory_p));
+    if (FAILED(hr)) {
+        CoUninitialize();
+        PRINT_HR_ERROR_MESSAGE_AND_RETURN(CoCreateInstance, hr)
+    }
+    hr = g_am_WICFactory_p->CreateDecoderFromFilename(g_am_WallpaperFilePath_p, nullptr,GENERIC_READ,
+                                             WICDecodeMetadataCacheOnLoad, &g_am_WICDecoder_p);
+    if (FAILED(hr)) {
+        CoUninitialize();
+        PRINT_HR_ERROR_MESSAGE_AND_RETURN(CreateDecoderFromFilename, hr)
+    }
+    hr = g_am_WICDecoder_p->GetFrame(0, &g_am_WICFrame_p);
+    if (FAILED(hr)) {
+        CoUninitialize();
+        PRINT_HR_ERROR_MESSAGE_AND_RETURN(GetFrame, hr)
+    }
+    hr = g_am_WICFactory_p->CreateFormatConverter(&g_am_WICConverter_p);
+    if (FAILED(hr)) {
+        CoUninitialize();
+        PRINT_HR_ERROR_MESSAGE_AND_RETURN(CreateFormatConverter, hr)
+    }
+    hr = g_am_WICConverter_p->Initialize(g_am_WICFrame_p.Get(), GUID_WICPixelFormat32bppPBGRA,
+                WICBitmapDitherTypeNone, nullptr, 0.0f, WICBitmapPaletteTypeMedianCut);
+    if (FAILED(hr)) {
+        CoUninitialize();
+        PRINT_HR_ERROR_MESSAGE_AND_RETURN(Initialize, hr)
+    }
+    CoUninitialize();
+    return S_OK;
+}
+
+[[nodiscard]] static inline HRESULT am_D2DCreateEffects_p()
+{
+    if (!g_am_MainWindowHandle_p || !g_am_D2DContext_p || !g_am_WICConverter_p) {
+        return E_POINTER;
+    }
+    HRESULT hr = g_am_D2DContext_p->CreateEffect(am_CLSID_D2D1BitmapSource, &g_am_D2DBitmapSourceEffect_p);
+    if (FAILED(hr)) {
+        PRINT_HR_ERROR_MESSAGE_AND_SAFE_RETURN(CreateEffect, hr)
+    }
+    hr = g_am_D2DBitmapSourceEffect_p->SetValue(D2D1_BITMAPSOURCE_PROP_WIC_BITMAP_SOURCE, g_am_WICConverter_p.Get());
+    if (FAILED(hr)) {
+        PRINT_HR_ERROR_MESSAGE_AND_SAFE_RETURN(SetValue, hr)
+    }
+    hr = g_am_D2DContext_p->CreateEffect(am_CLSID_D2D1GaussianBlur, &g_am_D2DGaussianBlurEffect_p);
+    if (FAILED(hr)) {
+        PRINT_HR_ERROR_MESSAGE_AND_SAFE_RETURN(CreateEffect, hr)
+    }
+    g_am_D2DGaussianBlurEffect_p->SetInputEffect(0, g_am_D2DBitmapSourceEffect_p.Get());
+    hr = g_am_D2DGaussianBlurEffect_p->SetValue(D2D1_GAUSSIANBLUR_PROP_STANDARD_DEVIATION, 6.0f);
+    if (FAILED(hr)) {
+        PRINT_HR_ERROR_MESSAGE_AND_SAFE_RETURN(SetValue, hr)
+    }
+    return S_OK;
+}
+
+[[nodiscard]] static inline HRESULT am_D2DDrawFinalVisual_p()
+{
+    if (!g_am_MainWindowHandle_p || !g_am_D2DContext_p || !g_am_D2DGaussianBlurEffect_p) {
+        return E_POINTER;
+    }
+    g_am_D2DContext_p->BeginDraw();
+    g_am_D2DContext_p->Clear(g_am_DesktopBackgroundColor_p);
+    g_am_D2DContext_p->DrawImage(g_am_D2DGaussianBlurEffect_p.Get());
+    const HRESULT hr = g_am_D2DContext_p->EndDraw();
+    if (FAILED(hr)) {
+        PRINT_HR_ERROR_MESSAGE_AND_SAFE_RETURN(EndDraw, hr)
+    }
+    return S_OK;
+}
+
 [[nodiscard]] static inline HRESULT am_MainWindowEventLoopHelper_p(int *result)
 {
     if (!result || !g_am_MainWindowHandle_p) {
@@ -920,7 +1027,7 @@ static bool g_am_IsUsingDirect2D_p = false;
         // mispositioned by the width/height of the upper-left nonclient
         // area.
         return nonClientAreaExists ? 0 : WVR_REDRAW;
-    }
+    } break;
     case WM_NCHITTEST: {
         const POINT globalPos = {GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)};
         POINT localPos = globalPos;
@@ -1019,7 +1126,7 @@ static bool g_am_IsUsingDirect2D_p = false;
             return HTCLIENT;
         }
         return HTNOWHERE;
-    }
+    } break;
     case WM_PAINT: {
         if (g_am_IsWindows10OrGreater_p) {
             PAINTSTRUCT ps = {};
@@ -1096,11 +1203,26 @@ static bool g_am_IsUsingDirect2D_p = false;
                 PRINT_WIN32_ERROR_MESSAGE(EndPaint)
                 break;
             }
-            return 0;
-        } else {
-            // todo
-            break;
         }
+        if (g_am_IsUsingDirect2D_p) {
+            if (!g_am_WICConverter_p) {
+                if (FAILED(am_D2DGenerateWICBitmapSource_p())) {
+                    PRINT(L"WM_PAINT: Failed to generate the WICBitmapSource.")
+                    break;
+                }
+            }
+            if (!g_am_D2DGaussianBlurEffect_p) {
+                if (FAILED(am_D2DCreateEffects_p())) {
+                    PRINT(L"WM_PAINT: Failed to create Direct2D effects.")
+                    break;
+                }
+            }
+            if (FAILED(am_D2DDrawFinalVisual_p())) {
+                PRINT(L"WM_PAINT: Failed to draw the Direct2D visuals.")
+                break;
+            }
+        }
+        return 0;
     } break;
     case WM_DPICHANGED: {
         wallpaperChanged = true;
@@ -1635,8 +1757,8 @@ static bool g_am_IsUsingDirect2D_p = false;
     // Don't forget to declare your app's minimum required feature level in its
     // description. All apps are assumed to support 9.1 unless otherwise stated.
     const D3D_FEATURE_LEVEL featureLevels[] = {
-        D3D_FEATURE_LEVEL_12_1,
-        D3D_FEATURE_LEVEL_12_0,
+        //D3D_FEATURE_LEVEL_12_1,
+        //D3D_FEATURE_LEVEL_12_0,
         D3D_FEATURE_LEVEL_11_1,
         D3D_FEATURE_LEVEL_11_0,
         D3D_FEATURE_LEVEL_10_1,
@@ -1646,21 +1768,18 @@ static bool g_am_IsUsingDirect2D_p = false;
         D3D_FEATURE_LEVEL_9_1
     };
     // Create the DX11 API device object, and get a corresponding context.
-    Microsoft::WRL::ComPtr<ID3D11Device> device = nullptr;
-    Microsoft::WRL::ComPtr<ID3D11DeviceContext> context = nullptr;
     hr = D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr, creationFlags,
-                           featureLevels, ARRAYSIZE(featureLevels), D3D11_SDK_VERSION, &device,
-                           &g_am_D3DFeatureLevel_p, &context);
+                           featureLevels, ARRAYSIZE(featureLevels), D3D11_SDK_VERSION,
+                           &g_am_D3D11Device_p, &g_am_D3DFeatureLevel_p, &g_am_D3D11Context_p);
     if (FAILED(hr)) {
         PRINT_HR_ERROR_MESSAGE_AND_SAFE_RETURN(D3D11CreateDevice, hr)
     }
-    Microsoft::WRL::ComPtr<IDXGIDevice1> dxgiDevice = nullptr;
     // Obtain the underlying DXGI device of the Direct3D11 device
-    hr = device.As(&dxgiDevice);
+    hr = g_am_D3D11Device_p.As(&g_am_DXGIDevice_p);
     if (FAILED(hr)) {
         PRINT_HR_ERROR_MESSAGE_AND_SAFE_RETURN(As, hr)
     }
-    hr = g_am_D2DFactory_p->CreateDevice(dxgiDevice.Get(), &g_am_D2DDevice_p);
+    hr = g_am_D2DFactory_p->CreateDevice(g_am_DXGIDevice_p.Get(), &g_am_D2DDevice_p);
     if (FAILED(hr)) {
         PRINT_HR_ERROR_MESSAGE_AND_SAFE_RETURN(CreateDevice, hr)
     }
@@ -1671,8 +1790,8 @@ static bool g_am_IsUsingDirect2D_p = false;
     // Selecing a target
     DXGI_SWAP_CHAIN_DESC1 swapChainDesc;
     SecureZeroMemory(&swapChainDesc, sizeof(swapChainDesc));
-    swapChainDesc.Width = 0; // use automatic sizing
-    swapChainDesc.Height = 0; // use automatic sizing
+    swapChainDesc.Width = 0; // Use automatic sizing
+    swapChainDesc.Height = 0; // Use automatic sizing
     swapChainDesc.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
     swapChainDesc.Stereo = FALSE;
     swapChainDesc.SampleDesc.Count = 1;
@@ -1681,30 +1800,26 @@ static bool g_am_IsUsingDirect2D_p = false;
     swapChainDesc.Scaling = DXGI_SCALING_NONE;
     swapChainDesc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL;
 
-    Microsoft::WRL::ComPtr<IDXGIAdapter> dxgiAdapter = nullptr;
-    hr = dxgiDevice->GetAdapter(&dxgiAdapter);
+    hr = g_am_DXGIDevice_p->GetAdapter(&g_am_DXGIAdapter_p);
     if (FAILED(hr)) {
         PRINT_HR_ERROR_MESSAGE_AND_SAFE_RETURN(GetAdapter, hr)
     }
-
-    Microsoft::WRL::ComPtr<IDXGIFactory2> dxgiFactory = nullptr;
-    hr = dxgiAdapter->GetParent(IID_PPV_ARGS(&dxgiFactory));
+    hr = g_am_DXGIAdapter_p->GetParent(IID_PPV_ARGS(&g_am_DXGIFactory_p));
     if (FAILED(hr)) {
         PRINT_HR_ERROR_MESSAGE_AND_SAFE_RETURN(GetParent, hr)
     }
-    hr = dxgiFactory->CreateSwapChainForHwnd(device.Get(), g_am_MainWindowHandle_p, &swapChainDesc,
-                                        nullptr, nullptr, &g_am_SwapChain_p);
+    hr = g_am_DXGIFactory_p->CreateSwapChainForHwnd(g_am_D3D11Device_p.Get(), g_am_MainWindowHandle_p,
+                                                    &swapChainDesc, nullptr, nullptr, &g_am_DXGISwapChain_p);
     if (FAILED(hr)) {
         PRINT_HR_ERROR_MESSAGE_AND_SAFE_RETURN(CreateSwapChainForHwnd, hr)
     }
 
-    hr = dxgiDevice->SetMaximumFrameLatency(1);
+    hr = g_am_DXGIDevice_p->SetMaximumFrameLatency(1);
     if (FAILED(hr)) {
         PRINT_HR_ERROR_MESSAGE_AND_SAFE_RETURN(SetMaximumFrameLatency, hr)
     }
 
-    Microsoft::WRL::ComPtr<ID3D11Texture2D> backBuffer = nullptr;
-    hr = g_am_SwapChain_p->GetBuffer(0, IID_PPV_ARGS(&backBuffer));
+    hr = g_am_DXGISwapChain_p->GetBuffer(0, IID_PPV_ARGS(&g_am_D3D11Texture_p));
     if (FAILED(hr)) {
         PRINT_HR_ERROR_MESSAGE_AND_SAFE_RETURN(GetBuffer, hr)
     }
@@ -1714,12 +1829,11 @@ static bool g_am_IsUsingDirect2D_p = false;
                 D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_IGNORE),
                 static_cast<float>(g_am_CurrentDpi_p), static_cast<float>(g_am_CurrentDpi_p));
 
-    Microsoft::WRL::ComPtr<IDXGISurface> dxgiBackBuffer = nullptr;
-    hr = g_am_SwapChain_p->GetBuffer(0, IID_PPV_ARGS(&dxgiBackBuffer));
+    hr = g_am_DXGISwapChain_p->GetBuffer(0, IID_PPV_ARGS(&g_am_DXGISurface_p));
     if (FAILED(hr)) {
         PRINT_HR_ERROR_MESSAGE_AND_SAFE_RETURN(GetBuffer, hr)
     }
-    hr = g_am_D2DContext_p->CreateBitmapFromDxgiSurface(dxgiBackBuffer.Get(), &bitmapProperties,
+    hr = g_am_D2DContext_p->CreateBitmapFromDxgiSurface(g_am_DXGISurface_p.Get(), &bitmapProperties,
                                                    &g_am_D2DTargetBitmap_p);
     if (FAILED(hr)) {
         PRINT_HR_ERROR_MESSAGE_AND_SAFE_RETURN(CreateBitmapFromDxgiSurface, hr)
@@ -2081,109 +2195,6 @@ winrt::Windows::UI::Xaml::UIElement LoadXamlControl(uint32_t id)
     return content.as<winrt::Windows::UI::Xaml::UIElement>();
 }
 #endif
-
-// Direct2D
-
-[[nodiscard]] static inline HRESULT
-am_D2DLoadBitmapFromFile_p(
-    ID2D1DeviceContext1 *pRenderTarget,
-    LPCWSTR             uri,
-    UINT                destinationWidth,
-    UINT                destinationHeight,
-    ID2D1Bitmap         **ppBitmap
-)
-{
-    if (!g_am_MainWindowHandle_p || !pRenderTarget || !uri || !ppBitmap) {
-        return E_INVALIDARG;
-    }
-    Microsoft::WRL::ComPtr<IWICImagingFactory> pIWICFactory = nullptr;
-    Microsoft::WRL::ComPtr<IWICBitmapDecoder> pDecoder = nullptr;
-    Microsoft::WRL::ComPtr<IWICBitmapFrameDecode> pSource = nullptr;
-    Microsoft::WRL::ComPtr<IWICStream> pStream = nullptr;
-    Microsoft::WRL::ComPtr<IWICFormatConverter> pConverter = nullptr;
-    Microsoft::WRL::ComPtr<IWICBitmapScaler> pScaler = nullptr;
-    HRESULT hr = CoInitialize(nullptr);
-    if (SUCCEEDED(hr)) {
-        hr = CoCreateInstance(CLSID_WICImagingFactory1, nullptr, CLSCTX_INPROC_SERVER,
-                              IID_PPV_ARGS(&pIWICFactory));
-        if (SUCCEEDED(hr)) {
-            hr = pIWICFactory->CreateDecoderFromFilename(
-                    uri, nullptr, GENERIC_READ, WICDecodeMetadataCacheOnLoad, &pDecoder);
-            if (SUCCEEDED(hr)) {
-                hr = pDecoder->GetFrame(0, &pSource);
-                if (SUCCEEDED(hr)) {
-                    hr = pIWICFactory->CreateFormatConverter(&pConverter);
-                    if (SUCCEEDED(hr)) {
-                        hr = pConverter->Initialize(pSource.Get(), GUID_WICPixelFormat32bppPBGRA,
-                                    WICBitmapDitherTypeNone, nullptr, 0.0f, WICBitmapPaletteTypeMedianCut);
-                        if (SUCCEEDED(hr)) {
-                            hr = pRenderTarget->CreateBitmapFromWicBitmap(pConverter.Get(), ppBitmap);
-                            if (SUCCEEDED(hr)) {
-                                hr = pRenderTarget->CreateBitmapBrush(*ppBitmap, &g_am_D2DBitmapBrush_p);
-                                if (SUCCEEDED(hr)) {
-                                    CoUninitialize();
-                                    return S_OK;
-                                } else {
-                                    CoUninitialize();
-                                    PRINT_HR_ERROR_MESSAGE_AND_RETURN(CreateBitmapBrush, hr)
-                                }
-                            } else {
-                                CoUninitialize();
-                                PRINT_HR_ERROR_MESSAGE_AND_RETURN(CreateBitmapFromWicBitmap, hr)
-                            }
-                        } else {
-                            CoUninitialize();
-                            PRINT_HR_ERROR_MESSAGE_AND_RETURN(Initialize, hr)
-                        }
-                    } else {
-                        CoUninitialize();
-                        PRINT_HR_ERROR_MESSAGE_AND_RETURN(CreateFormatConverter, hr)
-                    }
-                } else {
-                    CoUninitialize();
-                    PRINT_HR_ERROR_MESSAGE_AND_RETURN(GetFrame, hr)
-                }
-            } else {
-                CoUninitialize();
-                PRINT_HR_ERROR_MESSAGE_AND_RETURN(CreateDecoderFromFilename, hr)
-            }
-        } else {
-            CoUninitialize();
-            PRINT_HR_ERROR_MESSAGE_AND_RETURN(CoCreateInstance, hr)
-        }
-    } else {
-        PRINT_HR_ERROR_MESSAGE_AND_RETURN(CoInitialize, hr)
-    }
-    return E_FAIL;
-}
-
-[[nodiscard]] static inline HRESULT am_D2DDrawWallpaper_p()
-{
-    if (!g_am_MainWindowHandle_p || !g_am_D2DContext_p) {
-        return E_INVALIDARG;
-    }
-    if (!g_am_D2DBitmapBrush_p) {
-        SIZE size = {0, 0};
-        if (FAILED(am_GetWindowClientSize_p(g_am_MainWindowHandle_p, &size))) {
-            PRINT_AND_RETURN(L"Failed to retrieve the client area size of main window.")
-        }
-        ID2D1Bitmap *pBitmap = nullptr;
-        if (FAILED(am_D2DLoadBitmapFromFile_p(g_am_D2DContext_p.Get(), g_am_WallpaperFilePath_p,
-                                              size.cx, size.cy, &pBitmap))) {
-            return E_FAIL;
-        }
-        if (!pBitmap) {
-            return E_FAIL;
-        }
-        g_am_D2DContext_p->BeginDraw();
-        g_am_D2DContext_p->Clear(g_am_DesktopBackgroundColor_p);
-        g_am_D2DContext_p->DrawBitmap(pBitmap, D2D1::RectF(0, 0, size.cx, size.cy));
-        if (FAILED(g_am_D2DContext_p->EndDraw())) {
-            return E_FAIL;
-        }
-    }
-    return S_OK;
-}
 
 /////////////////////////////////
 /////     Private interface

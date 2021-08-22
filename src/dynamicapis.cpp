@@ -993,8 +993,14 @@ D2D1CreateFactory(
             return E_NOTIMPL;
         } else {
             tried = true;
-            func = reinterpret_cast<sig>(GetSystemSymbolAddress(L"D2D1.dll", "D2D1CreateFactory"));
+            const HMODULE dll = LoadLibraryExW(L"D2D1.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
+            if (!dll) {
+                OutputDebugStringW(L"Failed to load dynamic link library D2D1.dll.");
+                return E_NOTIMPL;
+            }
+            func = reinterpret_cast<sig>(GetProcAddress(dll, "D2D1CreateFactory"));
             if (!func) {
+                OutputDebugStringW(L"Failed to resolve symbol D2D1CreateFactory().");
                 return E_NOTIMPL;
             }
         }

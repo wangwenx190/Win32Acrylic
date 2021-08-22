@@ -110,7 +110,19 @@ static Microsoft::WRL::ComPtr<ID2D1DeviceContext1> g_am_D2DContext_p = nullptr;
 static Microsoft::WRL::ComPtr<ID2D1Bitmap1> g_am_D2DTargetBitmap_p = nullptr;
 static D2D1_BITMAP_PROPERTIES1 g_am_D2DBitmapProperties_p = {};
 static Microsoft::WRL::ComPtr<ID2D1Effect> g_am_D2DBitmapSourceEffect_p = nullptr;
+static Microsoft::WRL::ComPtr<ID2D1Effect> g_am_D2DTintColorEffect_p = nullptr;
+static Microsoft::WRL::ComPtr<ID2D1Effect> g_am_D2DFallbackColorEffect_p = nullptr;
+static Microsoft::WRL::ComPtr<ID2D1Effect> g_am_D2DLuminosityColorEffect_p = nullptr;
+static Microsoft::WRL::ComPtr<ID2D1Effect> g_am_D2DLuminosityBlendEffect_p = nullptr;
+static Microsoft::WRL::ComPtr<ID2D1Effect> g_am_D2DLuminosityColorBlendEffect_p = nullptr;
+static Microsoft::WRL::ComPtr<ID2D1Effect> g_am_D2DSaturationEffect_p = nullptr;
 static Microsoft::WRL::ComPtr<ID2D1Effect> g_am_D2DGaussianBlurEffect_p = nullptr;
+static Microsoft::WRL::ComPtr<ID2D1Effect> g_am_D2DExclusionColorEffect_p = nullptr;
+static Microsoft::WRL::ComPtr<ID2D1Effect> g_am_D2DExclusionBlendEffect_p = nullptr;
+static Microsoft::WRL::ComPtr<ID2D1Effect> g_am_D2DCompositeEffect_p = nullptr;
+static Microsoft::WRL::ComPtr<ID2D1Effect> g_am_D2DNoiseBorderEffect_p = nullptr;
+static Microsoft::WRL::ComPtr<ID2D1Effect> g_am_D2DNoiseOpacityEffect_p = nullptr;
+static Microsoft::WRL::ComPtr<ID2D1Effect> g_am_D2DBlendEffectOuterEffect_p = nullptr;
 static Microsoft::WRL::ComPtr<IWICImagingFactory> g_am_WICFactory_p = nullptr;
 static Microsoft::WRL::ComPtr<IWICBitmapDecoder> g_am_WICDecoder_p = nullptr;
 static Microsoft::WRL::ComPtr<IWICBitmapFrameDecode> g_am_WICFrame_p = nullptr;
@@ -824,6 +836,13 @@ static bool g_am_IsUsingDirect2D_p = false;
 {
     if (!g_am_MainWindowHandle_p || !g_am_D2DContext_p || !g_am_WICConverter_p) {
         return E_POINTER;
+    }
+    SystemTheme systemTheme = SystemTheme::Invalid;
+    if (FAILED(am_GetSystemThemeHelper_p(&systemTheme)) || (systemTheme == SystemTheme::Invalid)) {
+        PRINT_AND_SAFE_RETURN(L"Failed to retrieve the system theme.")
+    }
+    if (systemTheme == SystemTheme::HighContrast) {
+        PRINT_AND_SAFE_RETURN(L"AcrylicManager won't be functional when high contrast mode is on.")
     }
     HRESULT hr = g_am_D2DContext_p->CreateEffect(am_CLSID_D2D1BitmapSource, &g_am_D2DBitmapSourceEffect_p);
     if (FAILED(hr)) {

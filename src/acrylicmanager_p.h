@@ -460,6 +460,34 @@ am_GetWindowDevicePixelRatio_p(
     _Out_ double    *result
 );
 
+[[nodiscard]] ACRYLICMANAGER_API HRESULT WINAPI
+am_GetEffectiveTintColor_p(
+    _In_ int    tintColorR,
+    _In_ int    tintColorG,
+    _In_ int    tintColorB,
+    _In_ int    tintColorA,
+    _In_ double tintOpacity,
+    _In_ double *tintLuminosityOpacity,
+    _Out_ int   *r,
+    _Out_ int   *g,
+    _Out_ int   *b,
+    _Out_ int   *a
+);
+
+[[nodiscard]] ACRYLICMANAGER_API HRESULT WINAPI
+am_GetEffectiveLuminosityColor_p(
+    _In_ int    tintColorR,
+    _In_ int    tintColorG,
+    _In_ int    tintColorB,
+    _In_ int    tintColorA,
+    _In_ double tintOpacity,
+    _In_ double *tintLuminosityOpacity,
+    _Out_ int   *r,
+    _Out_ int   *g,
+    _Out_ int   *b,
+    _Out_ int   *a
+);
+
 #ifdef __cplusplus
 EXTERN_C_END
 #endif

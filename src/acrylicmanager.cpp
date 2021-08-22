@@ -108,6 +108,7 @@ static Microsoft::WRL::ComPtr<ID2D1Factory2> g_am_D2DFactory_p = nullptr;
 static Microsoft::WRL::ComPtr<ID2D1Device1> g_am_D2DDevice_p = nullptr;
 static Microsoft::WRL::ComPtr<ID2D1DeviceContext1> g_am_D2DContext_p = nullptr;
 static Microsoft::WRL::ComPtr<ID2D1Bitmap1> g_am_D2DTargetBitmap_p = nullptr;
+static D2D1_BITMAP_PROPERTIES1 g_am_D2DBitmapProperties_p = {};
 static Microsoft::WRL::ComPtr<ID2D1Effect> g_am_D2DBitmapSourceEffect_p = nullptr;
 static Microsoft::WRL::ComPtr<ID2D1Effect> g_am_D2DGaussianBlurEffect_p = nullptr;
 static Microsoft::WRL::ComPtr<IWICImagingFactory> g_am_WICFactory_p = nullptr;
@@ -124,6 +125,7 @@ static Microsoft::WRL::ComPtr<IDXGIAdapter> g_am_DXGIAdapter_p = nullptr;
 static Microsoft::WRL::ComPtr<IDXGIFactory2> g_am_DXGIFactory_p = nullptr;
 static Microsoft::WRL::ComPtr<IDXGISurface> g_am_DXGISurface_p = nullptr;
 static Microsoft::WRL::ComPtr<IDXGISwapChain1> g_am_DXGISwapChain_p = nullptr;
+static DXGI_SWAP_CHAIN_DESC1 g_am_DXGISwapChainDesc_p = {};
 static D3D_FEATURE_LEVEL g_am_D3DFeatureLevel_p = D3D_FEATURE_LEVEL_1_0_CORE;
 
 #ifdef __cplusplus
@@ -848,12 +850,31 @@ static bool g_am_IsUsingDirect2D_p = false;
     if (!g_am_MainWindowHandle_p || !g_am_D2DContext_p || !g_am_D2DGaussianBlurEffect_p) {
         return E_POINTER;
     }
+    SIZE size = {0, 0};
+    if (FAILED(am_GetWindowClientSize_p(g_am_MainWindowHandle_p, &size))) {
+        return E_FAIL;
+    }
+    int borderThickness = 0;
+    if (FAILED(am_GetWindowVisibleFrameBorderThickness_p(g_am_MainWindowHandle_p, g_am_CurrentDpi_p, &borderThickness))) {
+        return E_FAIL;
+    }
     g_am_D2DContext_p->BeginDraw();
     g_am_D2DContext_p->Clear(g_am_DesktopBackgroundColor_p);
-    g_am_D2DContext_p->DrawImage(g_am_D2DGaussianBlurEffect_p.Get());
-    const HRESULT hr = g_am_D2DContext_p->EndDraw();
+    g_am_D2DContext_p->DrawImage(g_am_D2DGaussianBlurEffect_p.Get(),
+                                 D2D1::Point2F(0.0, static_cast<float>(borderThickness)),
+                                 D2D1::RectF(0.0, 0.0,
+                                             static_cast<float>(size.cx), static_cast<float>(size.cy)));
+    HRESULT hr = g_am_D2DContext_p->EndDraw();
     if (FAILED(hr)) {
-        PRINT_HR_ERROR_MESSAGE_AND_SAFE_RETURN(EndDraw, hr)
+        PRINT_HR_ERROR_MESSAGE_AND_RETURN(EndDraw, hr)
+    }
+    hr = g_am_DXGISwapChain_p->Present(1, 0);
+    if (FAILED(hr)) {
+        PRINT_HR_ERROR_MESSAGE_AND_RETURN(Present, hr)
+    }
+    hr = DwmFlush();
+    if (FAILED(hr)) {
+        PRINT_HR_ERROR_MESSAGE_AND_RETURN(DwmFlush, hr)
     }
     return S_OK;
 }
@@ -1742,16 +1763,11 @@ static bool g_am_IsUsingDirect2D_p = false;
     if (FAILED(am_GetWallpaperAspectStyle_p(screen, &g_am_WallpaperAspectStyle_p))) {
         PRINT_AND_SAFE_RETURN(L"Failed to retrieve the wallpaper aspect style.")
     }
-    D2D1_FACTORY_OPTIONS options;
-    SecureZeroMemory(&options, sizeof(options));
-    HRESULT hr = D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED, IID_ID2D1Factory2,
-                                   &options, &g_am_D2DFactory_p);
+    HRESULT hr = D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED,
+                                   IID_PPV_ARGS(g_am_D2DFactory_p.GetAddressOf()));
     if (FAILED(hr)) {
         PRINT_HR_ERROR_MESSAGE_AND_SAFE_RETURN(D2D1CreateFactory, hr)
     }
-    // This flag adds support for surfaces with a different color channel ordering than the API default.
-    // You need it for compatibility with Direct2D.
-    const UINT creationFlags = D3D11_CREATE_DEVICE_BGRA_SUPPORT;
     // This array defines the set of DirectX hardware feature levels this app supports.
     // The ordering is important and you should preserve it.
     // Don't forget to declare your app's minimum required feature level in its
@@ -1767,49 +1783,49 @@ static bool g_am_IsUsingDirect2D_p = false;
         D3D_FEATURE_LEVEL_9_2,
         D3D_FEATURE_LEVEL_9_1
     };
-    // Create the DX11 API device object, and get a corresponding context.
-    hr = D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr, creationFlags,
+    hr = D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr, D3D11_CREATE_DEVICE_BGRA_SUPPORT,
                            featureLevels, ARRAYSIZE(featureLevels), D3D11_SDK_VERSION,
-                           &g_am_D3D11Device_p, &g_am_D3DFeatureLevel_p, &g_am_D3D11Context_p);
+                           g_am_D3D11Device_p.GetAddressOf(), &g_am_D3DFeatureLevel_p,
+                           g_am_D3D11Context_p.GetAddressOf());
     if (FAILED(hr)) {
         PRINT_HR_ERROR_MESSAGE_AND_SAFE_RETURN(D3D11CreateDevice, hr)
     }
-    // Obtain the underlying DXGI device of the Direct3D11 device
     hr = g_am_D3D11Device_p.As(&g_am_DXGIDevice_p);
     if (FAILED(hr)) {
         PRINT_HR_ERROR_MESSAGE_AND_SAFE_RETURN(As, hr)
     }
-    hr = g_am_D2DFactory_p->CreateDevice(g_am_DXGIDevice_p.Get(), &g_am_D2DDevice_p);
+    hr = g_am_D2DFactory_p->CreateDevice(g_am_DXGIDevice_p.Get(), g_am_D2DDevice_p.GetAddressOf());
     if (FAILED(hr)) {
         PRINT_HR_ERROR_MESSAGE_AND_SAFE_RETURN(CreateDevice, hr)
     }
-    hr = g_am_D2DDevice_p->CreateDeviceContext(D2D1_DEVICE_CONTEXT_OPTIONS_NONE, &g_am_D2DContext_p);
+    hr = g_am_D2DDevice_p->CreateDeviceContext(D2D1_DEVICE_CONTEXT_OPTIONS_NONE,
+                                               g_am_D2DContext_p.GetAddressOf());
     if (FAILED(hr)) {
         PRINT_HR_ERROR_MESSAGE_AND_SAFE_RETURN(CreateDeviceContext, hr)
     }
     // Selecing a target
-    DXGI_SWAP_CHAIN_DESC1 swapChainDesc;
-    SecureZeroMemory(&swapChainDesc, sizeof(swapChainDesc));
-    swapChainDesc.Width = 0; // Use automatic sizing
-    swapChainDesc.Height = 0; // Use automatic sizing
-    swapChainDesc.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
-    swapChainDesc.Stereo = FALSE;
-    swapChainDesc.SampleDesc.Count = 1;
-    swapChainDesc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
-    swapChainDesc.BufferCount = 2;
-    swapChainDesc.Scaling = DXGI_SCALING_NONE;
-    swapChainDesc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL;
+    SecureZeroMemory(&g_am_DXGISwapChainDesc_p, sizeof(g_am_DXGISwapChainDesc_p));
+    g_am_DXGISwapChainDesc_p.Width = 0; // Use automatic sizing
+    g_am_DXGISwapChainDesc_p.Height = 0; // Use automatic sizing
+    g_am_DXGISwapChainDesc_p.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
+    g_am_DXGISwapChainDesc_p.Stereo = FALSE;
+    g_am_DXGISwapChainDesc_p.SampleDesc.Count = 1;
+    g_am_DXGISwapChainDesc_p.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
+    g_am_DXGISwapChainDesc_p.BufferCount = 2;
+    g_am_DXGISwapChainDesc_p.Scaling = DXGI_SCALING_NONE;
+    g_am_DXGISwapChainDesc_p.SwapEffect = DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL;
 
-    hr = g_am_DXGIDevice_p->GetAdapter(&g_am_DXGIAdapter_p);
+    hr = g_am_DXGIDevice_p->GetAdapter(g_am_DXGIAdapter_p.GetAddressOf());
     if (FAILED(hr)) {
         PRINT_HR_ERROR_MESSAGE_AND_SAFE_RETURN(GetAdapter, hr)
     }
-    hr = g_am_DXGIAdapter_p->GetParent(IID_PPV_ARGS(&g_am_DXGIFactory_p));
+    hr = g_am_DXGIAdapter_p->GetParent(IID_PPV_ARGS(g_am_DXGIFactory_p.GetAddressOf()));
     if (FAILED(hr)) {
         PRINT_HR_ERROR_MESSAGE_AND_SAFE_RETURN(GetParent, hr)
     }
     hr = g_am_DXGIFactory_p->CreateSwapChainForHwnd(g_am_D3D11Device_p.Get(), g_am_MainWindowHandle_p,
-                                                    &swapChainDesc, nullptr, nullptr, &g_am_DXGISwapChain_p);
+                                                    &g_am_DXGISwapChainDesc_p, nullptr, nullptr,
+                                                    g_am_DXGISwapChain_p.GetAddressOf());
     if (FAILED(hr)) {
         PRINT_HR_ERROR_MESSAGE_AND_SAFE_RETURN(CreateSwapChainForHwnd, hr)
     }
@@ -1819,22 +1835,24 @@ static bool g_am_IsUsingDirect2D_p = false;
         PRINT_HR_ERROR_MESSAGE_AND_SAFE_RETURN(SetMaximumFrameLatency, hr)
     }
 
-    hr = g_am_DXGISwapChain_p->GetBuffer(0, IID_PPV_ARGS(&g_am_D3D11Texture_p));
+    hr = g_am_DXGISwapChain_p->GetBuffer(0, IID_PPV_ARGS(g_am_D3D11Texture_p.GetAddressOf()));
     if (FAILED(hr)) {
         PRINT_HR_ERROR_MESSAGE_AND_SAFE_RETURN(GetBuffer, hr)
     }
 
-    const D2D1_BITMAP_PROPERTIES1 bitmapProperties = D2D1::BitmapProperties1(
+    SecureZeroMemory(&g_am_D2DBitmapProperties_p, sizeof(g_am_D2DBitmapProperties_p));
+    g_am_D2DBitmapProperties_p = D2D1::BitmapProperties1(
                 D2D1_BITMAP_OPTIONS_TARGET | D2D1_BITMAP_OPTIONS_CANNOT_DRAW,
                 D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_IGNORE),
                 static_cast<float>(g_am_CurrentDpi_p), static_cast<float>(g_am_CurrentDpi_p));
 
-    hr = g_am_DXGISwapChain_p->GetBuffer(0, IID_PPV_ARGS(&g_am_DXGISurface_p));
+    hr = g_am_DXGISwapChain_p->GetBuffer(0, IID_PPV_ARGS(g_am_DXGISurface_p.GetAddressOf()));
     if (FAILED(hr)) {
         PRINT_HR_ERROR_MESSAGE_AND_SAFE_RETURN(GetBuffer, hr)
     }
-    hr = g_am_D2DContext_p->CreateBitmapFromDxgiSurface(g_am_DXGISurface_p.Get(), &bitmapProperties,
-                                                   &g_am_D2DTargetBitmap_p);
+    hr = g_am_D2DContext_p->CreateBitmapFromDxgiSurface(g_am_DXGISurface_p.Get(),
+                                                        &g_am_D2DBitmapProperties_p,
+                                                        g_am_D2DTargetBitmap_p.GetAddressOf());
     if (FAILED(hr)) {
         PRINT_HR_ERROR_MESSAGE_AND_SAFE_RETURN(CreateBitmapFromDxgiSurface, hr)
     }

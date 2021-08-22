@@ -899,6 +899,12 @@ DwmGetColorizationColor(
     ACRYLICMANAGER_TRY_EXECUTE_DWM_FUNCTION(DwmGetColorizationColor, pcrColorization, pfOpaqueBlend)
 }
 
+HRESULT WINAPI
+DwmFlush()
+{
+    ACRYLICMANAGER_TRY_EXECUTE_DWM_FUNCTION(DwmFlush)
+}
+
 /////////////////////////////////
 /////     ComBaseApi
 /////////////////////////////////

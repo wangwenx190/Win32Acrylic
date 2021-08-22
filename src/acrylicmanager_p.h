@@ -181,7 +181,7 @@ EXTERN_C_START
 #endif
 
 [[nodiscard]] ACRYLICMANAGER_API HRESULT WINAPI
-am_GetWindowDpi_p(
+am_GetWindowDotsPerInch_p(
     _In_ const HWND hWnd,
     _Out_ UINT      *dpi
 );
@@ -305,7 +305,7 @@ am_ShouldSystemUsesLightTheme_p(
 );
 
 [[nodiscard]] ACRYLICMANAGER_API HRESULT WINAPI
-am_IsHighContrastModeOn_p(
+am_IsHighContrastModeEnabled_p(
     _Out_ bool *enabled
 );
 
@@ -434,13 +434,6 @@ am_SetWindowTranslucentBackgroundEnabled_p(
 );
 
 [[nodiscard]] ACRYLICMANAGER_API HRESULT WINAPI
-am_GetSystemSymbolAddress_p(
-    _In_ LPCWSTR  library,
-    _In_ LPCWSTR  function,
-    _Out_ FARPROC *address
-);
-
-[[nodiscard]] ACRYLICMANAGER_API HRESULT WINAPI
 am_SetOfficialBlurEnabled_p(
     _In_ const HWND hWnd,
     _In_ const int  r = -1,
@@ -459,6 +452,12 @@ am_IsOfficialBlurEnabled_p(
 am_GetWindowClientSize_p(
     _In_ const HWND hWnd,
     _Out_ SIZE      *result
+);
+
+[[nodiscard]] ACRYLICMANAGER_API HRESULT WINAPI
+am_GetWindowDevicePixelRatio_p(
+    _In_ const HWND hWnd,
+    _Out_ double    *result
 );
 
 #ifdef __cplusplus

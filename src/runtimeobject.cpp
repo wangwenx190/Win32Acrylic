@@ -645,6 +645,25 @@ RoResolveNamespace(
     ACRYLICMANAGER_TRY_EXECUTE_WINRT_FUNCTION(RoResolveNamespace, name, windowsMetaDataDir, packageGraphDirsCount, packageGraphDirs, metaDataFilePathsCount, metaDataFilePaths, subNamespacesCount, subNamespaces)
 }
 
+// Wrappers
+
+void WINAPI
+WINRT_SysFreeString(
+    BSTR bstrString
+)
+{
+    SysFreeString(bstrString);
+}
+
+HRESULT WINAPI
+WINRT_IIDFromString(
+    LPCOLESTR lpsz,
+    LPIID     lpiid
+)
+{
+    return IIDFromString(lpsz, lpiid);
+}
+
 #ifdef __cplusplus
 EXTERN_C_END
 #endif

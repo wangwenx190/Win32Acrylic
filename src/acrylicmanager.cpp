@@ -87,6 +87,7 @@ static HWND g_am_MainWindowHandle_p = nullptr;
 static HWND g_am_XAMLIslandWindowHandle_p = nullptr;
 static HWND g_am_DragBarWindowHandle_p = nullptr;
 static UINT g_am_CurrentDpi_p = 0;
+static double g_am_CurrentDpr_p = 0.0;
 static HWND g_am_HostWindowHandle_p = nullptr;
 static WNDPROC g_am_HostWindowProc_p = nullptr;
 static SystemTheme g_am_BrushTheme_p = SystemTheme::Invalid;
@@ -342,7 +343,7 @@ static bool g_am_IsUsingDirect2D_p = false;
         return E_INVALIDARG;
     }
     bool highContrast = false;
-    if (FAILED(am_IsHighContrastModeOn_p(&highContrast))) {
+    if (FAILED(am_IsHighContrastModeEnabled_p(&highContrast))) {
         return E_FAIL;
     }
     // Dark mode was first introduced in Windows 10 1607.
@@ -573,6 +574,9 @@ static bool g_am_IsUsingDirect2D_p = false;
         g_am_MainWindowAtom_p = 0;
     }
     g_am_CurrentDpi_p = 0;
+    g_am_CurrentDpr_p = 0.0;
+
+    ReleaseAllLoadedLibraries();
 
     g_am_AcrylicManagerInitialized_p = false;
 
@@ -1100,9 +1104,13 @@ static bool g_am_IsUsingDirect2D_p = false;
     } break;
     case WM_DPICHANGED: {
         wallpaperChanged = true;
-        const double x = LOWORD(wParam);
-        const double y = HIWORD(wParam);
+        const auto x = static_cast<double>(LOWORD(wParam));
+        const auto y = static_cast<double>(HIWORD(wParam));
         g_am_CurrentDpi_p = std::round((x + y) / 2.0);
+        if (FAILED(am_GetWindowDevicePixelRatio_p(hWnd, &g_am_CurrentDpr_p))) {
+            PRINT(L"WM_DPICHANGED: Failed to retrieve the device scale factor of the current monitor.")
+            break;
+        }
         const auto prcNewWindow = reinterpret_cast<LPRECT>(lParam);
         if (MoveWindow(hWnd, prcNewWindow->left, prcNewWindow->top,
                    GET_RECT_WIDTH(*prcNewWindow), GET_RECT_HEIGHT(*prcNewWindow), TRUE) == FALSE) {
@@ -1439,8 +1447,13 @@ static bool g_am_IsUsingDirect2D_p = false;
         PRINT_WIN32_ERROR_MESSAGE_AND_SAFE_RETURN(CreateWindowExW)
     }
 
-    if (FAILED(am_GetWindowDpi_p(g_am_MainWindowHandle_p, &g_am_CurrentDpi_p)) || (g_am_CurrentDpi_p == 0)) {
+    if (FAILED(am_GetWindowDotsPerInch_p(g_am_MainWindowHandle_p, &g_am_CurrentDpi_p))
+            || (g_am_CurrentDpi_p == 0)) {
         g_am_CurrentDpi_p = USER_DEFAULT_SCREEN_DPI;
+    }
+    if (FAILED(am_GetWindowDevicePixelRatio_p(g_am_MainWindowHandle_p, &g_am_CurrentDpr_p))
+            || (g_am_CurrentDpr_p <= 0.0)) {
+        g_am_CurrentDpr_p = 1.0;
     }
 
     // Ensure DWM still draws the top frame by extending the top frame.
@@ -2176,7 +2189,7 @@ am_D2DLoadBitmapFromFile_p(
 /////     Private interface
 /////////////////////////////////
 
-HRESULT am_GetWindowDpi_p(const HWND hWnd, UINT *result)
+HRESULT am_GetWindowDotsPerInch_p(const HWND hWnd, UINT *result)
 {
     if (!hWnd || !result) {
         return E_INVALIDARG;
@@ -2254,7 +2267,7 @@ HRESULT am_GetResizeBorderThickness_p(const bool x, const UINT dpi, int *thickne
     // There is no "SM_CYPADDEDBORDER".
     const int result = GetSystemMetricsForDpi(SM_CXPADDEDBORDER, dpi)
             + GetSystemMetricsForDpi((x ? SM_CXSIZEFRAME : SM_CYSIZEFRAME), dpi);
-    const int preset = std::round(8.0 * GET_DEVICE_PIXEL_RATIO(dpi));
+    const int preset = std::round(8.0 * g_am_CurrentDpr_p);
     *thickness = ((result > 0) ? result : preset);
     return S_OK;
 }
@@ -2265,7 +2278,7 @@ HRESULT am_GetCaptionHeight_p(const UINT dpi, int *height)
         return E_INVALIDARG;
     }
     const int result = GetSystemMetricsForDpi(SM_CYCAPTION, dpi);
-    const int preset = std::round(23.0 * GET_DEVICE_PIXEL_RATIO(dpi));
+    const int preset = std::round(23.0 * g_am_CurrentDpr_p);
     *height = ((result > 0) ? result : preset);
     return S_OK;
 }
@@ -2291,7 +2304,7 @@ HRESULT am_GetTitleBarHeight_p(const HWND hWnd, const UINT dpi, int *height)
         *height = (rbtY + cth);
         return S_OK;
     }
-    *height = std::round(31.0 * GET_DEVICE_PIXEL_RATIO(dpi));
+    *height = std::round(31.0 * g_am_CurrentDpr_p);
     return S_OK;
 }
 
@@ -2614,7 +2627,7 @@ HRESULT am_GetWindowVisibleFrameBorderThickness_p(const HWND hWnd, const UINT dp
     if (FAILED(am_IsWindowNoState_p(hWnd, &normal))) {
         return E_FAIL;
     }
-    *result = (normal ? std::round(1.0 * GET_DEVICE_PIXEL_RATIO(dpi)) : 0);
+    *result = (normal ? std::round(1.0 * g_am_CurrentDpr_p) : 0);
     return S_OK;
 }
 
@@ -2673,7 +2686,7 @@ HRESULT am_ShouldSystemUsesLightTheme_p(bool *result)
     return S_OK;
 }
 
-HRESULT am_IsHighContrastModeOn_p(bool *result)
+HRESULT am_IsHighContrastModeEnabled_p(bool *result)
 {
     if (!result) {
         return E_INVALIDARG;
@@ -2701,11 +2714,7 @@ HRESULT am_SetWindowCompositionAttribute_p(const HWND hWnd, LPWINDOWCOMPOSITIONA
             return E_FAIL;
         } else {
             tried = true;
-            FARPROC addr = nullptr;
-            if (FAILED(am_GetSystemSymbolAddress_p(L"User32.dll", L"SetWindowCompositionAttribute", &addr))) {
-                return E_FAIL;
-            }
-            func = reinterpret_cast<sig>(addr);
+            func = reinterpret_cast<sig>(GetSystemSymbolAddress(L"User32.dll", "SetWindowCompositionAttribute"));
             if (!func) {
                 return E_FAIL;
             }
@@ -3371,56 +3380,6 @@ HRESULT am_SetWindowTranslucentBackgroundEnabled_p(const HWND hWnd, const bool e
     return S_OK;
 }
 
-HRESULT am_GetSystemSymbolAddress_p(LPCWSTR library, LPCWSTR function, FARPROC *address)
-{
-    if (!library || !function || !address) {
-        return E_INVALIDARG;
-    }
-#if WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_DESKTOP)
-    const auto module = LoadLibraryExW(library, nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
-#else
-    static bool tried = false;
-    using sig = decltype(&::LoadLibraryExW);
-    static sig func = nullptr;
-    if (!func) {
-        if (tried) {
-            return E_FAIL;
-        } else {
-            tried = true;
-            MEMORY_BASIC_INFORMATION mbi;
-            SecureZeroMemory(&mbi, sizeof(mbi));
-            if (VirtualQuery(reinterpret_cast<LPCVOID>(&VirtualQuery), &mbi, sizeof(mbi)) == 0) {
-                PRINT_WIN32_ERROR_MESSAGE_AND_RETURN(VirtualQuery)
-            }
-            const auto kernel32 = static_cast<HMODULE>(mbi.AllocationBase);
-            if (!kernel32) {
-                return E_FAIL;
-            }
-            func = reinterpret_cast<sig>(GetProcAddress(kernel32, "LoadLibraryExW"));
-            if (!func) {
-                PRINT_WIN32_ERROR_MESSAGE_AND_RETURN(GetProcAddress)
-            }
-        }
-    }
-    const auto module = func(library, nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
-#endif
-    if (!module) {
-        PRINT_WIN32_ERROR_MESSAGE_AND_RETURN(LoadLibraryExW)
-    }
-    LPSTR funcNameA = nullptr;
-    if (FAILED(am_WideToMulti_p(function, CP_UTF8, &funcNameA))) {
-        return E_FAIL;
-    }
-    const auto addr = GetProcAddress(module, funcNameA);
-    if (addr) {
-        *address = addr;
-    } else {
-        PRINT_WIN32_ERROR_MESSAGE(GetProcAddress)
-    }
-    SAFE_FREE_CHARARRAY(funcNameA)
-    return (addr ? S_OK : E_FAIL);
-}
-
 HRESULT am_SetOfficialBlurEnabled_p(const HWND hWnd, const int r, const int g, const int b, const int a)
 {
     if (!hWnd) {
@@ -3449,6 +3408,75 @@ HRESULT am_GetWindowClientSize_p(const HWND hWnd, SIZE *result)
         PRINT_WIN32_ERROR_MESSAGE_AND_RETURN(GetClientRect)
     }
     *result = GET_RECT_SIZE(rect);
+    return S_OK;
+}
+
+HRESULT am_GetWindowDevicePixelRatio_p(const HWND hWnd, double *result)
+{
+    if (!hWnd || !result) {
+        return E_INVALIDARG;
+    }
+    const HMONITOR mon = GET_CURRENT_SCREEN(hWnd);
+    if (!mon) {
+        PRINT_WIN32_ERROR_MESSAGE_AND_RETURN(MonitorFromWindow)
+    }
+    DEVICE_SCALE_FACTOR dsf = DEVICE_SCALE_FACTOR_INVALID;
+    const HRESULT hr = GetScaleFactorForMonitor(mon, &dsf);
+    if (FAILED(hr)) {
+        PRINT_HR_ERROR_MESSAGE_AND_RETURN(GetScaleFactorForMonitor, hr)
+    }
+    switch (dsf) {
+    case SCALE_100_PERCENT:
+        *result = 1.0;
+        break;
+    case SCALE_120_PERCENT:
+        *result = 1.2;
+        break;
+    case SCALE_125_PERCENT:
+        *result = 1.25;
+        break;
+    case SCALE_140_PERCENT:
+        *result = 1.4;
+        break;
+    case SCALE_150_PERCENT:
+        *result = 1.5;
+        break;
+    case SCALE_160_PERCENT:
+        *result = 1.6;
+        break;
+    case SCALE_175_PERCENT:
+        *result = 1.75;
+        break;
+    case SCALE_180_PERCENT:
+        *result = 1.8;
+        break;
+    case SCALE_200_PERCENT:
+        *result = 2.0;
+        break;
+    case SCALE_225_PERCENT:
+        *result = 2.25;
+        break;
+    case SCALE_250_PERCENT:
+        *result = 2.5;
+        break;
+    case SCALE_300_PERCENT:
+        *result = 3.0;
+        break;
+    case SCALE_350_PERCENT:
+        *result = 3.5;
+        break;
+    case SCALE_400_PERCENT:
+        *result = 4.0;
+        break;
+    case SCALE_450_PERCENT:
+        *result = 4.5;
+        break;
+    case SCALE_500_PERCENT:
+        *result = 5.0;
+        break;
+    default:
+        return E_FAIL;
+    }
     return S_OK;
 }
 

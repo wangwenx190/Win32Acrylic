@@ -32,6 +32,104 @@
 #include <DwmApi.h>
 #include <D2D1.h>
 #include <D3D11.h>
+#include <unordered_map>
+
+static std::unordered_map<std::wstring, HMODULE> g_loadedLibraryList = {};
+
+FARPROC WINAPI
+GetSystemSymbolAddress(
+    _In_ LPCWSTR library,
+    _In_ LPCSTR  function
+)
+{
+    if (!library || !function) {
+        return nullptr;
+    }
+    HMODULE dll = nullptr;
+    const auto search = g_loadedLibraryList.find(library);
+    if (search == g_loadedLibraryList.end()) {
+#if WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_DESKTOP)
+        dll = LoadLibraryExW(library, nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
+#else
+        static bool tried = false;
+        using sig = decltype(&::LoadLibraryExW);
+        static sig func = nullptr;
+        if (!func) {
+            if (tried) {
+                return nullptr;
+            } else {
+                tried = true;
+                MEMORY_BASIC_INFORMATION mbi;
+                SecureZeroMemory(&mbi, sizeof(mbi));
+                if (VirtualQuery(reinterpret_cast<LPCVOID>(&VirtualQuery), &mbi, sizeof(mbi)) == 0) {
+                    OutputDebugStringW(L"VirtualQuery() failed.");
+                    return nullptr;
+                }
+                const auto kernel32 = static_cast<HMODULE>(mbi.AllocationBase);
+                if (!kernel32) {
+                    OutputDebugStringW(L"Failed to retrieve the base address of Kernel32.dll.");
+                    return nullptr;
+                }
+                func = reinterpret_cast<sig>(GetProcAddress(kernel32, "LoadLibraryExW"));
+                if (!func) {
+                    OutputDebugStringW(L"Failed to resolve symbol LoadLibraryExW().");
+                    return nullptr;
+                }
+            }
+        }
+        dll = func(library, nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
+#endif
+        if (dll) {
+            g_loadedLibraryList.insert({library, dll});
+        } else {
+            auto str = new wchar_t[MAX_PATH];
+            SecureZeroMemory(str, sizeof(str));
+            swprintf(str, L"Failed to load dynamic link library %s.", library);
+            OutputDebugStringW(str);
+            SAFE_FREE_CHARARRAY(str)
+            return nullptr;
+        }
+    } else {
+        dll = search->second;
+        if (!dll) {
+            OutputDebugStringW(L"The cached module handle is null.");
+            return nullptr;
+        }
+    }
+    const FARPROC addr = GetProcAddress(dll, function);
+    if (addr) {
+        return addr;
+    } else {
+        auto str = new wchar_t[MAX_PATH];
+        SecureZeroMemory(str, sizeof(str));
+        swprintf(str, L"Failed to resolve symbol %hs().", function);
+        OutputDebugStringW(str);
+        SAFE_FREE_CHARARRAY(str)
+        return nullptr;
+    }
+}
+
+void WINAPI ReleaseAllLoadedLibraries()
+{
+    if (g_loadedLibraryList.empty()) {
+        return;
+    }
+    for (auto &&library : std::as_const(g_loadedLibraryList)) {
+        const HMODULE dll = library.second;
+        if (!dll) {
+            OutputDebugStringW(L"The cached module handle is null.");
+            continue;
+        }
+        if (FreeLibrary(dll) == FALSE) {
+            auto str = new wchar_t[MAX_PATH];
+            SecureZeroMemory(str, sizeof(str));
+            swprintf(str, L"Failed to unload module %s.", library.first.c_str());
+            OutputDebugStringW(str);
+            SAFE_FREE_CHARARRAY(str)
+        }
+    }
+    g_loadedLibraryList.clear();
+}
 
 #ifdef __cplusplus
 EXTERN_C_START
@@ -705,6 +803,15 @@ GetProcessDpiAwareness(
     ACRYLICMANAGER_TRY_EXECUTE_SHCORE_FUNCTION(GetProcessDpiAwareness, hProcess, value)
 }
 
+HRESULT WINAPI
+GetScaleFactorForMonitor(
+    HMONITOR            hMon,
+    DEVICE_SCALE_FACTOR *pScale
+)
+{
+    ACRYLICMANAGER_TRY_EXECUTE_SHCORE_FUNCTION(GetScaleFactorForMonitor, hMon, pScale)
+}
+
 /////////////////////////////////
 /////     UxTheme
 /////////////////////////////////
@@ -822,6 +929,15 @@ StringFromGUID2(
     ACRYLICMANAGER_TRY_EXECUTE_COM_INT_FUNCTION(StringFromGUID2, rGuid, lpsz, cchMax)
 }
 
+HRESULT WINAPI
+IIDFromString(
+    LPCOLESTR lpsz,
+    LPIID     lpiid
+)
+{
+    ACRYLICMANAGER_TRY_EXECUTE_COM_FUNCTION(IIDFromString, lpsz, lpiid)
+}
+
 void WINAPI
 CoUninitialize()
 {
@@ -877,14 +993,8 @@ D2D1CreateFactory(
             return E_NOTIMPL;
         } else {
             tried = true;
-            const HMODULE dll = LoadLibraryExW(L"D2D1.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
-            if (!dll) {
-                OutputDebugStringW(L"Failed to load D2D1.dll.");
-                return E_NOTIMPL;
-            }
-            func = reinterpret_cast<sig>(GetProcAddress(dll, "D2D1CreateFactory"));
+            func = reinterpret_cast<sig>(GetSystemSymbolAddress(L"D2D1.dll", "D2D1CreateFactory"));
             if (!func) {
-                OutputDebugStringW(L"Failed to resolve D2D1CreateFactory().");
                 return E_NOTIMPL;
             }
         }
@@ -911,6 +1021,18 @@ D3D11CreateDevice(
 )
 {
     ACRYLICMANAGER_TRY_EXECUTE_D3D_FUNCTION(D3D11CreateDevice, pAdapter, DriverType, Software, Flags, pFeatureLevels, FeatureLevels, SDKVersion, ppDevice, pFeatureLevel, ppImmediateContext)
+}
+
+/////////////////////////////////
+/////     COM Automation
+/////////////////////////////////
+
+void WINAPI
+SysFreeString(
+    BSTR bstrString
+)
+{
+    ACRYLICMANAGER_TRY_EXECUTE_COMAUTO_VOID_FUNCTION(SysFreeString, bstrString)
 }
 
 #ifdef __cplusplus

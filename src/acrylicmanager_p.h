@@ -488,6 +488,41 @@ am_GetEffectiveLuminosityColor_p(
     _Out_ int   *a
 );
 
+[[nodiscard]] ACRYLICMANAGER_API HRESULT WINAPI
+am_GetIntFromIniFile_p(
+    _In_ LPCWSTR ini,
+    _In_ LPCWSTR section,
+    _In_ LPCWSTR key,
+    _Out_ int    *value
+);
+
+[[nodiscard]] ACRYLICMANAGER_API HRESULT WINAPI
+am_GetBoolFromIniFile_p(
+    _In_ LPCWSTR ini,
+    _In_ LPCWSTR section,
+    _In_ LPCWSTR key,
+    _Out_ bool   *value
+);
+
+[[nodiscard]] ACRYLICMANAGER_API HRESULT WINAPI
+am_GetStringFromIniFile_p(
+    _In_ LPCWSTR ini,
+    _In_ LPCWSTR section,
+    _In_ LPCWSTR key,
+    _Out_ LPWSTR *value
+);
+
+[[nodiscard]] ACRYLICMANAGER_API HRESULT WINAPI
+am_GetSymbolAddressFromExecutable_p(
+    _In_ LPCWSTR    path,
+    _In_ LPCWSTR    function,
+    _In_ const bool system,
+    _Out_ FARPROC   *result
+);
+
+[[nodiscard]] ACRYLICMANAGER_API HRESULT WINAPI
+am_ReleaseAllLoadedModules_p();
+
 #ifdef __cplusplus
 EXTERN_C_END
 #endif

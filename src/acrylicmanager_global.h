@@ -373,6 +373,10 @@ EXTERN_C IMAGE_DOS_HEADER __ImageBase;
 #define GET_CURRENT_SCREEN(window) (MonitorFromWindow(window, MONITOR_DEFAULTTONEAREST))
 #endif
 
+#ifndef GET_PRIMARY_SCREEN
+#define GET_PRIMARY_SCREEN(window) (MonitorFromWindow(window, MONITOR_DEFAULTTOPRIMARY))
+#endif
+
 #ifndef DECLARE_UNUSED
 #define DECLARE_UNUSED(var) (static_cast<void>(var))
 #endif
@@ -527,6 +531,3 @@ __PRINT_HR_ERROR_MESSAGE_FOOT
     } \
 }
 #endif
-
-FARPROC WINAPI GetSystemSymbolAddress(_In_ LPCWSTR library, _In_ LPCSTR function);
-void WINAPI ReleaseAllLoadedLibraries();

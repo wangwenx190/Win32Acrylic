@@ -98,6 +98,7 @@ static winrt::Windows::UI::Color g_am_TintColor_p = {};
 static double g_am_TintOpacity_p = 0.0;
 static std::optional<double> g_am_TintLuminosityOpacity_p = std::nullopt;
 static winrt::Windows::UI::Color g_am_FallbackColor_p = {};
+static std::unordered_map<LPCWSTR, HMODULE> g_am_LoadedModuleList_p = {};
 
 static winrt::Windows::UI::Xaml::Hosting::WindowsXamlManager g_am_XAMLManager_p = nullptr;
 static winrt::Windows::UI::Xaml::Hosting::DesktopWindowXamlSource g_am_XAMLSource_p = nullptr;
@@ -616,7 +617,7 @@ static bool g_am_IsUsingDirect2D_p = false;
     g_am_CurrentDpi_p = 0;
     g_am_CurrentDpr_p = 0.0;
 
-    ReleaseAllLoadedLibraries();
+    am_ReleaseAllLoadedModules_p();
 
     g_am_AcrylicManagerInitialized_p = false;
 
@@ -953,8 +954,11 @@ static bool g_am_IsUsingDirect2D_p = false;
         // borders, and the default frame will be fine.
         bool nonClientAreaExists = false;
         bool max = false, full = false;
-        if ((SUCCEEDED(am_IsMaximized_p(hWnd, &max)) && max)
-                && (SUCCEEDED(am_IsFullScreened_p(hWnd, &full)) && !full)) {
+        if (FAILED(am_IsMaximized_p(hWnd, &max)) || FAILED(am_IsFullScreened_p(hWnd, &full))) {
+            PRINT(L"Failed to retrieve the window state.")
+            break;
+        }
+        if (max && !full) {
             // When a window is maximized, its size is actually a little bit more
             // than the monitor's work area. The window is positioned and sized in
             // such a way that the resize handles are outside of the monitor and
@@ -970,8 +974,14 @@ static bool g_am_IsUsingDirect2D_p = false;
                     if (SUCCEEDED(am_GetResizeBorderThickness_p(true, g_am_CurrentDpi_p, &rbtX))) {
                         clientRect->left += rbtX;
                         clientRect->right -= rbtX;
+                    } else {
+                        PRINT(L"Failed to retrieve the resize border thickness (x).")
+                        break;
                     }
                 }
+            } else {
+                PRINT(L"Failed to retrieve the resize border thickness (y).")
+                break;
             }
             nonClientAreaExists = true;
         }
@@ -992,7 +1002,7 @@ static bool g_am_IsUsingDirect2D_p = false;
                 // we have to use another way to judge the edge of the auto-hide taskbar
                 // when the application is running on Windows 7 or Windows 8.
                 if (g_am_IsWindows8Point1OrGreater_p) {
-                    RECT screenRect = {};
+                    RECT screenRect = {0, 0, 0, 0};
                     if (SUCCEEDED(am_GetScreenGeometry_p(hWnd, &screenRect))) {
                         // This helper can be used to determine if there's a
                         // auto-hide taskbar on the given edge of the monitor
@@ -1009,6 +1019,9 @@ static bool g_am_IsUsingDirect2D_p = false;
                         bottom = hasAutohideTaskbar(ABE_BOTTOM);
                         left = hasAutohideTaskbar(ABE_LEFT);
                         right = hasAutohideTaskbar(ABE_RIGHT);
+                    } else {
+                        PRINT(L"Failed to retrieve the current screen geometry.")
+                        break;
                     }
                 } else {
                     // The following code is copied from Mozilla Firefox with some modifications.
@@ -1019,11 +1032,22 @@ static bool g_am_IsUsingDirect2D_p = false;
                     _abd.hWnd = FindWindowW(L"Shell_TrayWnd", nullptr);
                     if (_abd.hWnd) {
                         const HMONITOR windowMonitor = GET_CURRENT_SCREEN(hWnd);
-                        const HMONITOR taskbarMonitor = MonitorFromWindow(_abd.hWnd, MONITOR_DEFAULTTOPRIMARY);
+                        if (!windowMonitor) {
+                            PRINT_WIN32_ERROR_MESSAGE(MonitorFromWindow)
+                            break;
+                        }
+                        const HMONITOR taskbarMonitor = GET_PRIMARY_SCREEN(_abd.hWnd);
+                        if (!taskbarMonitor) {
+                            PRINT_WIN32_ERROR_MESSAGE(MonitorFromWindow)
+                            break;
+                        }
                         if (taskbarMonitor == windowMonitor) {
                             SHAppBarMessage(ABM_GETTASKBARPOS, &_abd);
                             edge = _abd.uEdge;
                         }
+                    } else {
+                        PRINT_WIN32_ERROR_MESSAGE(FindWindowW)
+                        break;
                     }
                     top = (edge == ABE_TOP);
                     bottom = (edge == ABE_BOTTOM);
@@ -1078,11 +1102,13 @@ static bool g_am_IsUsingDirect2D_p = false;
         bool max = false, full = false, normal = false;
         if (FAILED(am_IsMaximized_p(hWnd, &max)) || FAILED(am_IsFullScreened_p(hWnd, &full))
                 || FAILED(am_IsWindowNoState_p(hWnd, &normal))) {
+            PRINT(L"Failed to retrieve the window state.")
             break;
         }
         const bool maxOrFull = (max || full);
-        SIZE ws = {};
+        SIZE ws = {0, 0};
         if (FAILED(am_GetWindowSizeHelper_p(hWnd, &ws))) {
+            PRINT(L"Failed to retrieve the window size.")
             break;
         }
         const LONG ww = ws.cx;
@@ -1090,6 +1116,7 @@ static bool g_am_IsUsingDirect2D_p = false;
         if (FAILED(am_GetResizeBorderThickness_p(true, g_am_CurrentDpi_p, &rbtX))
                 || FAILED(am_GetResizeBorderThickness_p(false, g_am_CurrentDpi_p, &rbtY))
                 || FAILED(am_GetCaptionHeight_p(g_am_CurrentDpi_p, &cth))) {
+            PRINT(L"Failed retrieve the resize border thickness or caption height.")
             break;
         }
         const bool hitTestVisible = /*am_IsHitTestVisibleInChrome_p(hWnd)*/false; // todo
@@ -1192,6 +1219,7 @@ static bool g_am_IsUsingDirect2D_p = false;
             //  so it should work fine.
             int borderThickness = 0;
             if (FAILED(am_GetWindowVisibleFrameBorderThickness_p(hWnd, g_am_CurrentDpi_p, &borderThickness))) {
+                PRINT(L"Failed to retrieve the window visible frame border thickness.")
                 break;
             }
             if (ps.rcPaint.top < borderThickness) {
@@ -1302,6 +1330,9 @@ static bool g_am_IsUsingDirect2D_p = false;
                     PRINT_WIN32_ERROR_MESSAGE(SetWindowPos)
                     break;
                 }
+            } else {
+                PRINT(L"Failed to retrieve the window visible frame border thickness.")
+                break;
             }
         }
         if (g_am_DragBarWindowHandle_p) {
@@ -1311,13 +1342,19 @@ static bool g_am_IsUsingDirect2D_p = false;
                     PRINT_WIN32_ERROR_MESSAGE(SetWindowPos)
                     break;
                 }
+            } else {
+                PRINT(L"Failed to retrieve the title bar height.")
+                break;
             }
         }
     } break;
     case WM_SETFOCUS: {
         if (g_am_XAMLIslandWindowHandle_p) {
             // Send focus to the XAML Island child window.
-            SetFocus(g_am_XAMLIslandWindowHandle_p);
+            if (SetFocus(g_am_XAMLIslandWindowHandle_p) == nullptr) {
+                PRINT_WIN32_ERROR_MESSAGE(SetFocus)
+                break;
+            }
             return 0;
         }
     } break;
@@ -2417,7 +2454,7 @@ HRESULT am_IsFullScreened_p(const HWND hWnd, bool *full)
     if (GetWindowRect(hWnd, &windowRect) == FALSE) {
         PRINT_WIN32_ERROR_MESSAGE_AND_RETURN(GetWindowRect)
     }
-    const HMONITOR mon = MonitorFromWindow(hWnd, MONITOR_DEFAULTTOPRIMARY);
+    const HMONITOR mon = GET_PRIMARY_SCREEN(hWnd);
     if (!mon) {
         PRINT_WIN32_ERROR_MESSAGE_AND_RETURN(MonitorFromWindow)
     }
@@ -2762,7 +2799,11 @@ HRESULT am_SetWindowCompositionAttribute_p(const HWND hWnd, LPWINDOWCOMPOSITIONA
             return E_FAIL;
         } else {
             tried = true;
-            func = reinterpret_cast<sig>(GetSystemSymbolAddress(L"User32.dll", "SetWindowCompositionAttribute"));
+            FARPROC address = nullptr;
+            if (FAILED(am_GetSymbolAddressFromExecutable_p(L"User32.dll", L"SetWindowCompositionAttribute", true, &address))) {
+                return E_FAIL;
+            }
+            func = reinterpret_cast<sig>(address);
             if (!func) {
                 return E_FAIL;
             }
@@ -3525,6 +3566,86 @@ HRESULT am_GetWindowDevicePixelRatio_p(const HWND hWnd, double *result)
     default:
         return E_FAIL;
     }
+    return S_OK;
+}
+
+HRESULT am_GetSymbolAddressFromExecutable_p(LPCWSTR path, LPCWSTR function, const bool system, FARPROC *result)
+{
+    if (!path || !function || !result) {
+        return E_INVALIDARG;
+    }
+    HMODULE module = nullptr;
+    const auto search = g_am_LoadedModuleList_p.find(path);
+    if (search == g_am_LoadedModuleList_p.end()) {
+        const DWORD flag = (system ? LOAD_LIBRARY_SEARCH_SYSTEM32 : LOAD_LIBRARY_SEARCH_APPLICATION_DIR);
+#if WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_DESKTOP)
+        module = LoadLibraryExW(path, nullptr, flag);
+#else
+        static bool tried = false;
+        using sig = decltype(&::LoadLibraryExW);
+        static sig func = nullptr;
+        if (!func) {
+            if (tried) {
+                return E_FAIL;
+            } else {
+                tried = true;
+                MEMORY_BASIC_INFORMATION mbi;
+                SecureZeroMemory(&mbi, sizeof(mbi));
+                if (VirtualQuery(reinterpret_cast<LPCVOID>(&VirtualQuery), &mbi, sizeof(mbi)) == 0) {
+                    PRINT_WIN32_ERROR_MESSAGE_AND_RETURN(VirtualQuery)
+                }
+                const auto kernel32 = static_cast<HMODULE>(mbi.AllocationBase);
+                if (!kernel32) {
+                    PRINT_AND_RETURN(L"Failed to retrieve the Kernel32.dll's base address.")
+                }
+                func = reinterpret_cast<sig>(GetProcAddress(kernel32, "LoadLibraryExW"));
+                if (!func) {
+                    PRINT_WIN32_ERROR_MESSAGE_AND_RETURN(GetProcAddress)
+                }
+            }
+        }
+        module = func(path, nullptr, flag);
+#endif
+        if (module) {
+            g_am_LoadedModuleList_p.insert({path, module});
+        } else {
+            PRINT_WIN32_ERROR_MESSAGE_AND_RETURN(LoadLibraryExW)
+        }
+    } else {
+        module = search->second;
+        if (!module) {
+            PRINT_AND_RETURN(L"The cached module handle is null.")
+        }
+    }
+    LPSTR functionNameAnsi = nullptr;
+    if (FAILED(am_WideToMulti_p(function, CP_UTF8, &functionNameAnsi))) {
+        PRINT_AND_RETURN(L"Failed to convert a wide string to multibyte string.")
+    }
+    const FARPROC address = GetProcAddress(module, functionNameAnsi);
+    SAFE_FREE_CHARARRAY(functionNameAnsi)
+    if (!address) {
+        PRINT_WIN32_ERROR_MESSAGE_AND_RETURN(GetProcAddress)
+    }
+    *result = address;
+    return S_OK;
+}
+
+HRESULT am_ReleaseAllLoadedModules_p()
+{
+    if (g_am_LoadedModuleList_p.empty()) {
+        return S_OK;
+    }
+    for (auto &&module : std::as_const(g_am_LoadedModuleList_p)) {
+        const HMODULE handle = module.second;
+        if (!handle) {
+            PRINT(L"The cached module handle is null.")
+            continue;
+        }
+        if (FreeLibrary(handle) == FALSE) {
+            PRINT_WIN32_ERROR_MESSAGE(FreeLibrary)
+        }
+    }
+    g_am_LoadedModuleList_p.clear();
     return S_OK;
 }
 

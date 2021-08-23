@@ -3720,6 +3720,52 @@ HRESULT am_GetEffectiveLuminosityColor_p(
     return S_OK;
 }
 
+HRESULT am_GetIntFromIniFile_p(LPCWSTR ini, LPCWSTR section, LPCWSTR key, int *value)
+{
+    if (!ini || !section || !key || !value) {
+        return E_INVALIDARG;
+    }
+    const int result = GetPrivateProfileIntW(section, key, 0, ini);
+    if (GetLastError() != ERROR_SUCCESS) {
+        PRINT_WIN32_ERROR_MESSAGE_AND_RETURN(GetPrivateProfileIntW)
+    }
+    *value = result;
+    return S_OK;
+}
+
+HRESULT am_GetBoolFromIniFile_p(LPCWSTR ini, LPCWSTR section, LPCWSTR key, bool *value)
+{
+    if (!ini || !section || !key || !value) {
+        return E_INVALIDARG;
+    }
+    auto buf = new wchar_t[MAX_PATH];
+    SecureZeroMemory(buf, sizeof(buf));
+    if (GetPrivateProfileStringW(section, key, nullptr, buf, MAX_PATH, ini) == 0) {
+        SAFE_FREE_CHARARRAY(buf)
+        PRINT_WIN32_ERROR_MESSAGE_AND_RETURN(GetPrivateProfileStringW)
+    }
+    *value = ((_wcsicmp(buf, L"True") == 0) || (_wcsicmp(buf, L"Yes") == 0)
+              || (_wcsicmp(buf, L"Enable") == 0) || (_wcsicmp(buf, L"Enabled") == 0)
+              || (_wcsicmp(buf, L"On") == 0) || (_wcsicmp(buf, L"0") != 0));
+    SAFE_FREE_CHARARRAY(buf)
+    return S_OK;
+}
+
+HRESULT am_GetStringFromIniFile_p(LPCWSTR ini, LPCWSTR section, LPCWSTR key, LPWSTR *value)
+{
+    if (!ini || !section || !key || !value) {
+        return E_INVALIDARG;
+    }
+    auto buf = new wchar_t[MAX_PATH];
+    SecureZeroMemory(buf, sizeof(buf));
+    if (GetPrivateProfileStringW(section, key, nullptr, buf, MAX_PATH, ini) == 0) {
+        SAFE_FREE_CHARARRAY(buf)
+        PRINT_WIN32_ERROR_MESSAGE_AND_RETURN(GetPrivateProfileStringW)
+    }
+    *value = buf;
+    return S_OK;
+}
+
 HRESULT am_GetSymbolAddressFromExecutable_p(LPCWSTR path, LPCWSTR function, const bool system, FARPROC *result)
 {
     if (!path || !function || !result) {
@@ -3970,7 +4016,9 @@ DllMain(
     switch (ul_reason_for_call)
     {
     case DLL_PROCESS_ATTACH:
+        break;
     case DLL_PROCESS_DETACH:
+        am_CleanupHelper_p();
         break;
     }
     return TRUE;

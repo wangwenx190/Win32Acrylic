@@ -473,10 +473,12 @@ __PRINT_HR_ERROR_MESSAGE_FOOT
 #ifndef MAKE_COLOR_FROM_COMPONENTS
 #define MAKE_COLOR_FROM_COMPONENTS(color, r, g, b, a) \
 { \
-    (color).R = static_cast<uint8_t>(std::clamp(r, 0, 255)); \
-    (color).G = static_cast<uint8_t>(std::clamp(g, 0, 255)); \
-    (color).B = static_cast<uint8_t>(std::clamp(b, 0, 255)); \
-    (color).A = static_cast<uint8_t>(std::clamp(a, 0, 255)); \
+    color = winrt::Windows::UI::ColorHelper::FromArgb( \
+        static_cast<uint8_t>(std::clamp(a, 0, 255)), \
+        static_cast<uint8_t>(std::clamp(r, 0, 255)), \
+        static_cast<uint8_t>(std::clamp(g, 0, 255)), \
+        static_cast<uint8_t>(std::clamp(b, 0, 255)) \
+    ); \
 }
 #endif
 

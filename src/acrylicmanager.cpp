@@ -40,6 +40,8 @@
 #include <WinRT\Windows.UI.Xaml.Media.h>
 #include <Windows.UI.Xaml.Hosting.DesktopWindowXamlSource.h>
 
+#include "colorconversion.h"
+
 #include <wrl\client.h>
 #include <DXGI1_2.h>
 #include <D3D11.h>
@@ -96,7 +98,7 @@ static D2D1_COLOR_F g_am_DesktopBackgroundColor_p = D2D1::ColorF(D2D1::ColorF::B
 static WallpaperAspectStyle g_am_WallpaperAspectStyle_p = WallpaperAspectStyle::Invalid;
 static winrt::Windows::UI::Color g_am_TintColor_p = {};
 static double g_am_TintOpacity_p = 0.0;
-static std::optional<double> g_am_TintLuminosityOpacity_p = std::nullopt;
+static winrt::Windows::Foundation::IReference<double> g_am_TintLuminosityOpacity_p = nullptr;
 static winrt::Windows::UI::Color g_am_FallbackColor_p = {};
 static std::unordered_map<LPCWSTR, HMODULE> g_am_LoadedModuleList_p = {};
 
@@ -179,6 +181,11 @@ static const bool g_am_IsWindows10OrGreater_p = []{
     return (SUCCEEDED(am_CompareSystemVersion_p(WindowsVersion::Windows10, VersionCompare::GreaterOrEqual, &result)) && result);
 }();
 
+static const bool g_am_IsWindows10_19H1OrGreater_p = []{
+    bool result = false;
+    return (SUCCEEDED(am_CompareSystemVersion_p(WindowsVersion::Windows10_19H1, VersionCompare::GreaterOrEqual, &result)) && result);
+}();
+
 static const bool g_am_IsDirect2DAvailable_p = []{
     return g_am_IsWindows8OrGreater_p;
 }();
@@ -194,8 +201,7 @@ static const bool g_am_IsDarkModeAvailable_p = []{
 }();
 
 static const bool g_am_IsXAMLIslandAvailable_p = []{
-    bool result = false;
-    return (SUCCEEDED(am_CompareSystemVersion_p(WindowsVersion::Windows10_19H1, VersionCompare::GreaterOrEqual, &result)) && result);
+    return g_am_IsWindows10_19H1OrGreater_p;
 }();
 
 static const bool g_am_IsForceXAMLIsland_p = []{
@@ -577,7 +583,7 @@ static bool g_am_IsUsingDirect2D_p = false;
     g_am_BrushTheme_p = SystemTheme::Invalid;
     g_am_TintColor_p = {};
     g_am_TintOpacity_p = 0.0;
-    g_am_TintLuminosityOpacity_p = std::nullopt;
+    g_am_TintLuminosityOpacity_p = nullptr;
     g_am_FallbackColor_p = {};
     g_am_IsUsingXAMLIsland_p = false;
 
@@ -670,8 +676,8 @@ static bool g_am_IsUsingDirect2D_p = false;
     if (!g_am_BackgroundBrush_p || !result) {
         return E_INVALIDARG;
     }
-    if (g_am_TintLuminosityOpacity_p.has_value()) {
-        *result = g_am_TintLuminosityOpacity_p.value();
+    if (g_am_TintLuminosityOpacity_p != nullptr) {
+        *result = g_am_TintLuminosityOpacity_p.GetDouble();
     } else {
         *result = -1.0;
     }
@@ -689,7 +695,7 @@ static bool g_am_IsUsingDirect2D_p = false;
         g_am_TintLuminosityOpacity_p = value;
     } else {
         g_am_BackgroundBrush_p.TintLuminosityOpacity(nullptr);
-        g_am_TintLuminosityOpacity_p = std::nullopt;
+        g_am_TintLuminosityOpacity_p = nullptr;
     }
     return S_OK;
 }
@@ -791,6 +797,102 @@ static bool g_am_IsUsingDirect2D_p = false;
     *result = g_am_BrushTheme_p;
     return S_OK;
 }
+
+// XAML
+
+[[nodiscard]] static inline double am_GetTintOpacityModifier_p(const winrt::Windows::UI::Color &tintColor)
+{
+    // TintOpacityModifier affects the 19H1+ Luminosity-based recipe only
+    if (!g_am_IsWindows10_19H1OrGreater_p) {
+        return 1.0;
+    }
+
+    // This method supresses the maximum allowable tint opacity depending on the luminosity and saturation of a color by
+    // compressing the range of allowable values - for example, a user-defined value of 100% will be mapped to 45% for pure
+    // white (100% luminosity), 85% for pure black (0% luminosity), and 90% for pure gray (50% luminosity).  The intensity of
+    // the effect increases linearly as luminosity deviates from 50%.  After this effect is calculated, we cancel it out
+    // linearly as saturation increases from zero.
+
+    const double midPoint = 0.50; // Mid point of HsvV range that these calculations are based on. This is here for easy tuning.
+
+    const double whiteMaxOpacity = 0.45; // 100% luminosity
+    const double midPointMaxOpacity = 0.90; // 50% luminosity
+    const double blackMaxOpacity = 0.85; // 0% luminosity
+
+    const Rgb rgb = RgbFromColor(tintColor);
+    const Hsv hsv = RgbToHsv(rgb);
+
+    double opacityModifier = midPointMaxOpacity;
+
+    if (hsv.v != midPoint) {
+        // Determine maximum suppression amount
+        double lowestMaxOpacity = midPointMaxOpacity;
+        double maxDeviation = midPoint;
+
+        if (hsv.v > midPoint) {
+            lowestMaxOpacity = whiteMaxOpacity; // At white (100% hsvV)
+            maxDeviation = (1.0 - maxDeviation);
+        } else if (hsv.v < midPoint) {
+            lowestMaxOpacity = blackMaxOpacity; // At black (0% hsvV)
+        }
+
+        double maxOpacitySuppression = (midPointMaxOpacity - lowestMaxOpacity);
+
+        // Determine normalized deviation from the midpoint
+        const double deviation = std::abs(hsv.v - midPoint);
+        const double normalizedDeviation = (deviation / maxDeviation);
+
+        // If we have saturation, reduce opacity suppression to allow that color to come through more
+        if (hsv.s > 0.0) {
+            // Dampen opacity suppression based on how much saturation there is
+            maxOpacitySuppression *= std::max((1.0 - (hsv.s * 2.0)), 0.0);
+        }
+
+        const double opacitySuppression = (maxOpacitySuppression * normalizedDeviation);
+
+        opacityModifier = (midPointMaxOpacity - opacitySuppression);
+    }
+
+    return opacityModifier;
+}
+
+// The tintColor passed into this method should be the original, unmodified color created using user values for TintColor + TintOpacity
+[[nodiscard]] static inline winrt::Windows::UI::Color am_GetLuminosityColor_p(
+        const winrt::Windows::UI::Color &tintColor,
+        const winrt::Windows::Foundation::IReference<double> luminosityOpacity)
+{
+    const Rgb rgbTintColor = RgbFromColor(tintColor);
+
+    // If luminosity opacity is specified, just use the values as is
+    if (luminosityOpacity != nullptr) {
+        return ColorFromRgba(rgbTintColor, std::clamp(luminosityOpacity.GetDouble(), 0.0, 1.0));
+    } else {
+        // To create the Luminosity blend input color without luminosity opacity,
+        // we're taking the TintColor input, converting to HSV, and clamping the V between these values
+        const double minHsvV = 0.125;
+        const double maxHsvV = 0.965;
+
+        const Hsv hsvTintColor = RgbToHsv(rgbTintColor);
+
+        const auto clampedHsvV = std::clamp(hsvTintColor.v, minHsvV, maxHsvV);
+
+        const Hsv hsvLuminosityColor = Hsv(hsvTintColor.h, hsvTintColor.s, clampedHsvV);
+        const Rgb rgbLuminosityColor = HsvToRgb(hsvLuminosityColor);
+
+        // Now figure out luminosity opacity
+        // Map original *tint* opacity to this range
+        const double minLuminosityOpacity = 0.15;
+        const double maxLuminosityOpacity = 1.03;
+
+        const double luminosityOpacityRangeMax = (maxLuminosityOpacity - minLuminosityOpacity);
+        const double mappedTintOpacity = (((tintColor.A / 255.0) * luminosityOpacityRangeMax) + minLuminosityOpacity);
+
+        // Finally, combine the luminosity opacity and the HsvV-clamped tint color
+        return ColorFromRgba(rgbLuminosityColor, std::min(mappedTintOpacity, 1.0));
+    }
+}
+
+// Direct2D
 
 [[nodiscard]] static inline HRESULT am_D2DGenerateWICBitmapSource_p()
 {
@@ -1789,11 +1891,7 @@ static bool g_am_IsUsingDirect2D_p = false;
     // Retrieve initial parameters of the acrylic brush.
     g_am_TintColor_p = g_am_BackgroundBrush_p.TintColor();
     g_am_TintOpacity_p = g_am_BackgroundBrush_p.TintOpacity();
-    if (g_am_BackgroundBrush_p.TintLuminosityOpacity()) {
-        g_am_TintLuminosityOpacity_p = g_am_BackgroundBrush_p.TintLuminosityOpacity().GetDouble();
-    } else {
-        g_am_TintLuminosityOpacity_p = std::nullopt;
-    }
+    g_am_TintLuminosityOpacity_p = g_am_BackgroundBrush_p.TintLuminosityOpacity();
     g_am_FallbackColor_p = g_am_BackgroundBrush_p.FallbackColor();
 
     return S_OK;
@@ -3569,6 +3667,59 @@ HRESULT am_GetWindowDevicePixelRatio_p(const HWND hWnd, double *result)
     return S_OK;
 }
 
+HRESULT am_GetEffectiveTintColor_p(
+        int tintColorR, int tintColorG, int tintColorB, int tintColorA,
+        double tintOpacity, double *tintLuminosityOpacity,
+        int *r, int *g, int *b, int *a)
+{
+    if (!r || !g || !b || !a) {
+        return E_INVALIDARG;
+    }
+
+    winrt::Windows::UI::Color tintColor = {};
+    MAKE_COLOR_FROM_COMPONENTS(tintColor, tintColorR, tintColorG, tintColorB, tintColorA)
+
+    // Update tintColor's alpha with the combined opacity value
+    // If LuminosityOpacity was specified, we don't intervene into users parameters
+    if (tintLuminosityOpacity) {
+        tintColor.A = static_cast<uint8_t>(std::round(static_cast<double>(tintColor.A) * tintOpacity));
+    } else {
+        const double tintOpacityModifier = am_GetTintOpacityModifier_p(tintColor);
+        tintColor.A = static_cast<uint8_t>(std::round(static_cast<double>(tintColor.A) * tintOpacity * tintOpacityModifier));
+    }
+
+    GET_COLOR_COMPONENTS(tintColor, *r, *g, *b, *a)
+
+    return S_OK;
+}
+
+HRESULT am_GetEffectiveLuminosityColor_p(
+        int tintColorR, int tintColorG, int tintColorB, int tintColorA,
+        double tintOpacity, double *tintLuminosityOpacity,
+        int *r, int *g, int *b, int *a)
+{
+    if (!r || !g || !b || !a) {
+        return E_INVALIDARG;
+    }
+
+    winrt::Windows::UI::Color tintColor = {};
+    MAKE_COLOR_FROM_COMPONENTS(tintColor, tintColorR, tintColorG, tintColorB, tintColorA)
+
+    // Purposely leaving out tint opacity modifier here because GetLuminosityColor needs the *original* tint opacity set by the user.
+    tintColor.A = static_cast<uint8_t>(std::round(static_cast<double>(tintColor.A) * std::clamp(tintOpacity, 0.0, 1.0)));
+
+    winrt::Windows::Foundation::IReference<double> luminosityOpacity = nullptr;
+    if (tintLuminosityOpacity) {
+        luminosityOpacity = std::clamp(*tintLuminosityOpacity, 0.0, 1.0);
+    }
+
+    const winrt::Windows::UI::Color finalColor = am_GetLuminosityColor_p(tintColor, luminosityOpacity);
+
+    GET_COLOR_COMPONENTS(finalColor, *r, *g, *b, *a)
+
+    return S_OK;
+}
+
 HRESULT am_GetSymbolAddressFromExecutable_p(LPCWSTR path, LPCWSTR function, const bool system, FARPROC *result)
 {
     if (!path || !function || !result) {
@@ -3819,8 +3970,6 @@ DllMain(
     switch (ul_reason_for_call)
     {
     case DLL_PROCESS_ATTACH:
-    case DLL_THREAD_ATTACH:
-    case DLL_THREAD_DETACH:
     case DLL_PROCESS_DETACH:
         break;
     }

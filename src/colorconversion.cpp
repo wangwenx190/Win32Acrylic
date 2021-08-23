@@ -293,10 +293,10 @@ winrt::hstring RgbaToHex(const Rgb &rgb, const double alpha)
 winrt::Windows::UI::Color ColorFromRgba(const Rgb &rgb, const double alpha)
 {
     return winrt::Windows::UI::ColorHelper::FromArgb(
-        static_cast<byte>(std::round(alpha * 255)),
-        static_cast<byte>(std::round(rgb.r * 255)),
-        static_cast<byte>(std::round(rgb.g * 255)),
-        static_cast<byte>(std::round(rgb.b * 255)));
+        static_cast<byte>(std::round(alpha * 255.0)),
+        static_cast<byte>(std::round(rgb.r * 255.0)),
+        static_cast<byte>(std::round(rgb.g * 255.0)),
+        static_cast<byte>(std::round(rgb.b * 255.0)));
 }
 
 Rgb RgbFromColor(const winrt::Windows::UI::Color &color)

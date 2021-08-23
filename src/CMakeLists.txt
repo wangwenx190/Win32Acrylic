@@ -11,6 +11,8 @@ set(SOURCES
     resource.h
     runtimeobject.cpp
     dynamicapis.cpp
+    colorconversion.h
+    colorconversion.cpp
     acrylicmanager.h
     acrylicmanager_p.h
     acrylicmanager.cpp

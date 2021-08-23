@@ -119,27 +119,27 @@
 
 #ifndef ACRYLICMANAGER_TRY_EXECUTE_FUNCTION_PART1
 #define ACRYLICMANAGER_TRY_EXECUTE_FUNCTION_PART1(funcName) \
-static bool tried = false; \
-using sig = decltype(&::funcName); \
-static sig func = nullptr; \
-if (!func) { \
-    if (tried) {
+static bool __tried = false; \
+using __sig = decltype(&::funcName); \
+static __sig __func = nullptr; \
+if (!__func) { \
+    if (__tried) {
 #endif
 
 #ifndef ACRYLICMANAGER_TRY_EXECUTE_FUNCTION_PART2
 #define ACRYLICMANAGER_TRY_EXECUTE_FUNCTION_PART2(libName) \
     } else { \
-        tried = true; \
-        const HMODULE dll = LoadLibraryExW(L#libName ".dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32); \
-        if (!dll) { \
+        __tried = true; \
+        const HMODULE __module = LoadLibraryExW(L#libName ".dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32); \
+        if (!__module) { \
             OutputDebugStringW(L"Failed to load dynamic link library " #libName ".dll.");
 #endif
 
 #ifndef ACRYLICMANAGER_TRY_EXECUTE_FUNCTION_PART3
 #define ACRYLICMANAGER_TRY_EXECUTE_FUNCTION_PART3(funcName) \
         } \
-        func = reinterpret_cast<sig>(GetProcAddress(dll, #funcName)); \
-        if (!func) { \
+        __func = reinterpret_cast<__sig>(GetProcAddress(__module, #funcName)); \
+        if (!__func) { \
             OutputDebugStringW(L"Failed to resolve symbol " #funcName "().");
 #endif
 
@@ -167,11 +167,11 @@ if (!func) { \
 #endif
 
 #ifndef ACRYLICMANAGER_TRY_EXECUTE_FUNCTION_CALL_FUNC
-#define ACRYLICMANAGER_TRY_EXECUTE_FUNCTION_CALL_FUNC(...) func(__VA_ARGS__);
+#define ACRYLICMANAGER_TRY_EXECUTE_FUNCTION_CALL_FUNC(...) __func(__VA_ARGS__);
 #endif
 
 #ifndef ACRYLICMANAGER_TRY_EXECUTE_FUNCTION_CALL_FUNC_RETURN
-#define ACRYLICMANAGER_TRY_EXECUTE_FUNCTION_CALL_FUNC_RETURN(...) return func(__VA_ARGS__);
+#define ACRYLICMANAGER_TRY_EXECUTE_FUNCTION_CALL_FUNC_RETURN(...) return __func(__VA_ARGS__);
 #endif
 
 #ifndef ACRYLICMANAGER_TRY_EXECUTE_VOID_FUNCTION
@@ -460,8 +460,8 @@ __PRINT_HR_ERROR_MESSAGE_FOOT
 }
 #endif
 
-#ifndef GET_COLOR_COMPONENTS
-#define GET_COLOR_COMPONENTS(color, r, g, b, a) \
+#ifndef GET_WINRTCOLOR_COMPONENTS
+#define GET_WINRTCOLOR_COMPONENTS(color, r, g, b, a) \
 { \
     r = std::clamp(static_cast<int>((color).R), 0, 255); \
     g = std::clamp(static_cast<int>((color).G), 0, 255); \
@@ -470,16 +470,37 @@ __PRINT_HR_ERROR_MESSAGE_FOOT
 }
 #endif
 
-#ifndef MAKE_COLOR_FROM_COMPONENTS
-#define MAKE_COLOR_FROM_COMPONENTS(color, r, g, b, a) \
-{ \
-    color = winrt::Windows::UI::ColorHelper::FromArgb( \
-        static_cast<uint8_t>(std::clamp(a, 0, 255)), \
-        static_cast<uint8_t>(std::clamp(r, 0, 255)), \
-        static_cast<uint8_t>(std::clamp(g, 0, 255)), \
-        static_cast<uint8_t>(std::clamp(b, 0, 255)) \
-    ); \
-}
+#ifndef MAKE_WINRTCOLOR_FROM_COMPONENTS
+#define MAKE_WINRTCOLOR_FROM_COMPONENTS(r, g, b, a) \
+[=]{ \
+    const auto __r = static_cast<uint8_t>(std::clamp(r, 0, 255)); \
+    const auto __g = static_cast<uint8_t>(std::clamp(g, 0, 255)); \
+    const auto __b = static_cast<uint8_t>(std::clamp(b, 0, 255)); \
+    const auto __a = static_cast<uint8_t>(std::clamp(a, 0, 255)); \
+    return winrt::Windows::UI::ColorHelper::FromArgb(__a, __r, __g, __b); \
+}()
+#endif
+
+#ifndef WINRTCOLOR_TO_D2DCOLOR4F
+#define WINRTCOLOR_TO_D2DCOLOR4F(color) \
+[=]{ \
+    const float __r = (static_cast<float>((color).R) / 255.0); \
+    const float __g = (static_cast<float>((color).G) / 255.0); \
+    const float __b = (static_cast<float>((color).B) / 255.0); \
+    const float __a = (static_cast<float>((color).A) / 255.0); \
+    return D2D1::Vector4F(__r, __g, __b, __a); \
+}()
+#endif
+
+#ifndef D2DCOLOR4F_TO_WINRTCOLOR
+#define D2DCOLOR4F_TO_WINRTCOLOR(color) \
+[=]{ \
+    const auto __r = static_cast<uint8_t>(std::round((color).x * 255.0)); \
+    const auto __g = static_cast<uint8_t>(std::round((color).y * 255.0)); \
+    const auto __b = static_cast<uint8_t>(std::round((color).z * 255.0)); \
+    const auto __a = static_cast<uint8_t>(std::round((color).w * 255.0)); \
+    return winrt::Windows::UI::ColorHelper::FromArgb(__a, __r, __g, __b); \
+}()
 #endif
 
 #ifndef SAFE_RETURN

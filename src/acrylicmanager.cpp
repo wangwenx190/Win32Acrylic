@@ -112,7 +112,7 @@ static Microsoft::WRL::ComPtr<ID2D1Device1> g_am_D2DDevice_p = nullptr;
 static Microsoft::WRL::ComPtr<ID2D1DeviceContext1> g_am_D2DContext_p = nullptr;
 static Microsoft::WRL::ComPtr<ID2D1Bitmap1> g_am_D2DTargetBitmap_p = nullptr;
 static D2D1_BITMAP_PROPERTIES1 g_am_D2DBitmapProperties_p = {};
-static Microsoft::WRL::ComPtr<ID2D1Effect> g_am_D2DBitmapSourceEffect_p = nullptr;
+static Microsoft::WRL::ComPtr<ID2D1Effect> g_am_D2DWallpaperBitmapSourceEffect_p = nullptr;
 static Microsoft::WRL::ComPtr<ID2D1Effect> g_am_D2DTintColorEffect_p = nullptr;
 static Microsoft::WRL::ComPtr<ID2D1Effect> g_am_D2DFallbackColorEffect_p = nullptr;
 static Microsoft::WRL::ComPtr<ID2D1Effect> g_am_D2DLuminosityColorEffect_p = nullptr;
@@ -122,10 +122,13 @@ static Microsoft::WRL::ComPtr<ID2D1Effect> g_am_D2DSaturationEffect_p = nullptr;
 static Microsoft::WRL::ComPtr<ID2D1Effect> g_am_D2DGaussianBlurEffect_p = nullptr;
 static Microsoft::WRL::ComPtr<ID2D1Effect> g_am_D2DExclusionColorEffect_p = nullptr;
 static Microsoft::WRL::ComPtr<ID2D1Effect> g_am_D2DExclusionBlendEffect_p = nullptr;
-static Microsoft::WRL::ComPtr<ID2D1Effect> g_am_D2DCompositeEffect_p = nullptr;
+static Microsoft::WRL::ComPtr<ID2D1Effect> g_am_D2DExclusionBlendEffectInner_p = nullptr;
+static Microsoft::WRL::ComPtr<ID2D1Effect> g_am_D2DExclusionCompositeEffect_p = nullptr;
+static Microsoft::WRL::ComPtr<ID2D1Effect> g_am_D2DNoiseBitmapSourceEffect_p = nullptr;
 static Microsoft::WRL::ComPtr<ID2D1Effect> g_am_D2DNoiseBorderEffect_p = nullptr;
 static Microsoft::WRL::ComPtr<ID2D1Effect> g_am_D2DNoiseOpacityEffect_p = nullptr;
-static Microsoft::WRL::ComPtr<ID2D1Effect> g_am_D2DBlendEffectOuterEffect_p = nullptr;
+static Microsoft::WRL::ComPtr<ID2D1Effect> g_am_D2DNoiseBlendEffectOuter_p = nullptr;
+static Microsoft::WRL::ComPtr<ID2D1Effect> g_am_D2DFadeInOutEffect_p = nullptr;
 static Microsoft::WRL::ComPtr<IWICImagingFactory> g_am_WICFactory_p = nullptr;
 static Microsoft::WRL::ComPtr<IWICBitmapDecoder> g_am_WICDecoder_p = nullptr;
 static Microsoft::WRL::ComPtr<IWICBitmapFrameDecode> g_am_WICFrame_p = nullptr;
@@ -563,6 +566,8 @@ static bool g_am_IsUsingDirect2D_p = false;
     }
 
     // Direct2D
+    g_am_D2DBitmapProperties_p = {};
+    g_am_DXGISwapChainDesc_p = {};
     SAFE_FREE_CHARARRAY(g_am_WallpaperFilePath_p)
     g_am_DesktopBackgroundColor_p = D2D1::ColorF(D2D1::ColorF::Black);
     g_am_WallpaperAspectStyle_p = WallpaperAspectStyle::Invalid;
@@ -635,7 +640,7 @@ static bool g_am_IsUsingDirect2D_p = false;
     if (!g_am_BackgroundBrush_p || !r || !g || !b || !a) {
         return E_INVALIDARG;
     }
-    GET_COLOR_COMPONENTS(g_am_TintColor_p, *r, *g, *b, *a)
+    GET_WINRTCOLOR_COMPONENTS(g_am_TintColor_p, *r, *g, *b, *a)
     return S_OK;
 }
 
@@ -644,8 +649,7 @@ static bool g_am_IsUsingDirect2D_p = false;
     if (!g_am_BackgroundBrush_p) {
         return E_INVALIDARG;
     }
-    winrt::Windows::UI::Color color = {};
-    MAKE_COLOR_FROM_COMPONENTS(color, r, g, b, a)
+    const winrt::Windows::UI::Color color = MAKE_WINRTCOLOR_FROM_COMPONENTS(r, g, b, a);
     g_am_BackgroundBrush_p.TintColor(color);
     g_am_TintColor_p = color;
     return S_OK;
@@ -705,7 +709,7 @@ static bool g_am_IsUsingDirect2D_p = false;
     if (!g_am_BackgroundBrush_p || !r || !g || !b || !a) {
         return E_INVALIDARG;
     }
-    GET_COLOR_COMPONENTS(g_am_FallbackColor_p, *r, *g, *b, *a)
+    GET_WINRTCOLOR_COMPONENTS(g_am_FallbackColor_p, *r, *g, *b, *a)
     return S_OK;
 }
 
@@ -714,8 +718,7 @@ static bool g_am_IsUsingDirect2D_p = false;
     if (!g_am_BackgroundBrush_p) {
         return E_INVALIDARG;
     }
-    winrt::Windows::UI::Color color = {};
-    MAKE_COLOR_FROM_COMPONENTS(color, r, g, b, a)
+    const winrt::Windows::UI::Color color = MAKE_WINRTCOLOR_FROM_COMPONENTS(r, g, b, a);
     g_am_BackgroundBrush_p.FallbackColor(color);
     g_am_FallbackColor_p = color;
     return S_OK;
@@ -731,18 +734,18 @@ static bool g_am_IsUsingDirect2D_p = false;
     double tlo = 0.0;
     winrt::Windows::UI::Color fbc = {};
     if (theme == SystemTheme::Light) {
-        MAKE_COLOR_FROM_COMPONENTS(tc, 252, 252, 252, 255) // #FCFCFC
+        tc = MAKE_WINRTCOLOR_FROM_COMPONENTS(252, 252, 252, 255); // #FCFCFC
         to = 0.0;
         tlo = 0.85;
-        MAKE_COLOR_FROM_COMPONENTS(fbc, 249, 249, 249, 255) // #F9F9F9
+        fbc = MAKE_WINRTCOLOR_FROM_COMPONENTS(249, 249, 249, 255); // #F9F9F9
     } else {
-        MAKE_COLOR_FROM_COMPONENTS(tc, 44, 44, 44, 255) // #2C2C2C
+        tc = MAKE_WINRTCOLOR_FROM_COMPONENTS(44, 44, 44, 255); // #2C2C2C
         to = 0.15;
         tlo = 0.96;
-        MAKE_COLOR_FROM_COMPONENTS(fbc, 44, 44, 44, 255) // #2C2C2C
+        fbc = MAKE_WINRTCOLOR_FROM_COMPONENTS(44, 44, 44, 255); // #2C2C2C
     }
     int r = 0, g = 0, b = 0, a = 0;
-    GET_COLOR_COMPONENTS(tc, r, g, b, a)
+    GET_WINRTCOLOR_COMPONENTS(tc, r, g, b, a)
     if (FAILED(am_SetTintColorHelper_p(r, g, b, a))) {
         return E_FAIL;
     }
@@ -752,7 +755,7 @@ static bool g_am_IsUsingDirect2D_p = false;
     if (FAILED(am_SetTintLuminosityOpacityHelper_p(&tlo))) {
         return E_FAIL;
     }
-    GET_COLOR_COMPONENTS(fbc, r, g, b, a)
+    GET_WINRTCOLOR_COMPONENTS(fbc, r, g, b, a)
     if (FAILED(am_SetFallbackColorHelper_p(r, g, b, a))) {
         return E_FAIL;
     }
@@ -894,7 +897,7 @@ static bool g_am_IsUsingDirect2D_p = false;
 
 // Direct2D
 
-[[nodiscard]] static inline HRESULT am_D2DGenerateWICBitmapSource_p()
+[[nodiscard]] static inline HRESULT am_D2DGenerateWallpaperBitmapSource_p()
 {
     if (!g_am_MainWindowHandle_p || !g_am_D2DContext_p || !g_am_WallpaperFilePath_p) {
         return E_POINTER;
@@ -935,11 +938,112 @@ static bool g_am_IsUsingDirect2D_p = false;
     return S_OK;
 }
 
-[[nodiscard]] static inline HRESULT am_D2DCreateEffects_p()
+[[nodiscard]] static inline HRESULT am_D2DGenerateNoiseBitmapSource_p();
+
+[[nodiscard]] static inline HRESULT am_D2DPrepareEffects_Luminosity_p(ID2D1Effect **output)
+{
+    // Apply luminosity:
+
+    // Luminosity Color
+    HRESULT hr = g_am_D2DContext_p->CreateEffect(am_CLSID_D2D1Flood, g_am_D2DLuminosityColorEffect_p.GetAddressOf());
+    if (FAILED(hr)) {
+        //
+    }
+    hr = g_am_D2DLuminosityColorEffect_p->SetValue(D2D1_FLOOD_PROP_COLOR, effectiveLuminosityColor);
+    if (FAILED(hr)) {
+        //
+    }
+
+    // Luminosity blend
+    hr = g_am_D2DContext_p->CreateEffect(am_CLSID_D2D1Blend, g_am_D2DLuminosityBlendEffect_p.GetAddressOf());
+    if (FAILED(hr)) {
+        //
+    }
+    hr = g_am_D2DLuminosityBlendEffect_p->SetValue(D2D1_BLEND_PROP_MODE, D2D1_BLEND_MODE_LUMINOSITY);
+    if (FAILED(hr)) {
+        //
+    }
+    g_am_D2DLuminosityBlendEffect_p->SetInputEffect(0, g_am_D2DGaussianBlurEffect_p.Get());
+    g_am_D2DLuminosityBlendEffect_p->SetInputEffect(1, g_am_D2DLuminosityColorEffect_p.Get());
+
+    // Apply tint:
+
+    // Color blend
+    hr = g_am_D2DContext_p->CreateEffect(am_CLSID_D2D1Blend, g_am_D2DLuminosityColorBlendEffect_p.GetAddressOf());
+    if (FAILED(hr)) {
+        //
+    }
+    hr = g_am_D2DLuminosityColorBlendEffect_p->SetValue(D2D1_BLEND_PROP_MODE, D2D1_BLEND_MODE_COLOR);
+    if (FAILED(hr)) {
+        //
+    }
+    g_am_D2DLuminosityColorBlendEffect_p->SetInputEffect(0, g_am_D2DLuminosityBlendEffect_p.Get());
+    g_am_D2DLuminosityColorBlendEffect_p->SetInputEffect(1, g_am_D2DTintColorEffect_p.Get());
+
+    *output = g_am_D2DLuminosityColorBlendEffect_p.Get();
+
+    return S_OK;
+}
+
+[[nodiscard]] static inline HRESULT am_D2DPrepareEffects_Legacy_p(ID2D1Effect **output)
+{
+    // Apply saturation
+    HRESULT hr = g_am_D2DContext_p->CreateEffect(am_CLSID_D2D1Saturation, g_am_D2DSaturationEffect_p.GetAddressOf());
+    if (FAILED(hr)) {
+        //
+    }
+    hr = g_am_D2DSaturationEffect_p->SetValue(D2D1_SATURATION_PROP_SATURATION, sc_saturation);
+    if (FAILED(hr)) {
+        //
+    }
+    g_am_D2DSaturationEffect_p->SetInputEffect(0, g_am_D2DGaussianBlurEffect_p.Get());
+
+    // Apply exclusion:
+    // Exclusion Color
+    hr = g_am_D2DContext_p->CreateEffect(am_CLSID_D2D1Flood, g_am_D2DExclusionColorEffect_p.GetAddressOf());
+    if (FAILED(hr)) {
+        //
+    }
+    hr = g_am_D2DExclusionColorEffect_p->SetValue(D2D1_FLOOD_PROP_COLOR, sc_exclusionColor);
+    if (FAILED(hr)) {
+        //
+    }
+    // Exclusion blend
+    hr = g_am_D2DContext_p->CreateEffect(am_CLSID_D2D1Blend, g_am_D2DExclusionBlendEffectInner_p.GetAddressOf());
+    if (FAILED(hr)) {
+        //
+    }
+    hr = g_am_D2DExclusionBlendEffectInner_p->SetValue(D2D1_BLEND_PROP_MODE, D2D1_BLEND_MODE_EXCLUSION);
+    if (FAILED(hr)) {
+        //
+    }
+    g_am_D2DExclusionBlendEffectInner_p->SetInputEffect(0, g_am_D2DSaturationEffect_p.Get());
+    g_am_D2DExclusionBlendEffectInner_p->SetInputEffect(1, g_am_D2DExclusionColorEffect_p.Get());
+
+    // Apply tint
+    hr = g_am_D2DContext_p->CreateEffect(am_CLSID_D2D1Composite, g_am_D2DExclusionCompositeEffect_p.GetAddressOf());
+    if (FAILED(hr)) {
+        //
+    }
+    hr = g_am_D2DExclusionCompositeEffect_p->SetValue(D2D1_COMPOSITE_PROP_MODE, D2D1_COMPOSITE_MODE_SOURCE_OVER);
+    if (FAILED(hr)) {
+        //
+    }
+    g_am_D2DExclusionCompositeEffect_p->SetInputEffect(0, g_am_D2DExclusionBlendEffectInner_p.Get());
+    g_am_D2DExclusionCompositeEffect_p->SetInputEffect(1, g_am_D2DTintColorEffect_p.Get());
+
+    *output = g_am_D2DExclusionCompositeEffect_p.Get();
+
+    return S_OK;
+}
+
+[[nodiscard]] static inline HRESULT am_D2DCreateEffects_p(ID2D1Effect **output)
 {
     if (!g_am_MainWindowHandle_p || !g_am_D2DContext_p || !g_am_WICConverter_p) {
         return E_POINTER;
     }
+
+    // todo: move theme check to common area
     SystemTheme systemTheme = SystemTheme::Invalid;
     if (FAILED(am_GetSystemThemeHelper_p(&systemTheme)) || (systemTheme == SystemTheme::Invalid)) {
         PRINT_AND_SAFE_RETURN(L"Failed to retrieve the system theme.")
@@ -947,23 +1051,114 @@ static bool g_am_IsUsingDirect2D_p = false;
     if (systemTheme == SystemTheme::HighContrast) {
         PRINT_AND_SAFE_RETURN(L"AcrylicManager won't be functional when high contrast mode is on.")
     }
-    HRESULT hr = g_am_D2DContext_p->CreateEffect(am_CLSID_D2D1BitmapSource, &g_am_D2DBitmapSourceEffect_p);
+
+    HRESULT hr = g_am_D2DContext_p->CreateEffect(am_CLSID_D2D1BitmapSource, g_am_D2DWallpaperBitmapSourceEffect_p.GetAddressOf());
     if (FAILED(hr)) {
         PRINT_HR_ERROR_MESSAGE_AND_SAFE_RETURN(CreateEffect, hr)
     }
-    hr = g_am_D2DBitmapSourceEffect_p->SetValue(D2D1_BITMAPSOURCE_PROP_WIC_BITMAP_SOURCE, g_am_WICConverter_p.Get());
+    hr = g_am_D2DWallpaperBitmapSourceEffect_p->SetValue(D2D1_BITMAPSOURCE_PROP_WIC_BITMAP_SOURCE, g_am_WICConverter_p.Get());
     if (FAILED(hr)) {
         PRINT_HR_ERROR_MESSAGE_AND_SAFE_RETURN(SetValue, hr)
     }
-    hr = g_am_D2DContext_p->CreateEffect(am_CLSID_D2D1GaussianBlur, &g_am_D2DGaussianBlurEffect_p);
+    hr = g_am_D2DContext_p->CreateEffect(am_CLSID_D2D1Flood, g_am_D2DTintColorEffect_p.GetAddressOf());
+    if (FAILED(hr)) {
+        //
+    }
+    hr = g_am_D2DTintColorEffect_p->SetValue(D2D1_FLOOD_PROP_COLOR, tintColor);
+    if (FAILED(hr)) {
+        //
+    }
+    hr = g_am_D2DContext_p->CreateEffect(am_CLSID_D2D1GaussianBlur, g_am_D2DGaussianBlurEffect_p.GetAddressOf());
     if (FAILED(hr)) {
         PRINT_HR_ERROR_MESSAGE_AND_SAFE_RETURN(CreateEffect, hr)
     }
-    g_am_D2DGaussianBlurEffect_p->SetInputEffect(0, g_am_D2DBitmapSourceEffect_p.Get());
-    hr = g_am_D2DGaussianBlurEffect_p->SetValue(D2D1_GAUSSIANBLUR_PROP_STANDARD_DEVIATION, 6.0f);
+    hr = g_am_D2DGaussianBlurEffect_p->SetValue(D2D1_GAUSSIANBLUR_PROP_BORDER_MODE, D2D1_BORDER_MODE_HARD);
+    if (FAILED(hr)) {
+        //
+    }
+    hr = g_am_D2DGaussianBlurEffect_p->SetValue(D2D1_GAUSSIANBLUR_PROP_OPTIMIZATION, D2D1_DIRECTIONALBLUR_OPTIMIZATION_QUALITY);
+    if (FAILED(hr)) {
+        //
+    }
+    hr = g_am_D2DGaussianBlurEffect_p->SetValue(D2D1_GAUSSIANBLUR_PROP_STANDARD_DEVIATION, sc_blurRadius);
     if (FAILED(hr)) {
         PRINT_HR_ERROR_MESSAGE_AND_SAFE_RETURN(SetValue, hr)
     }
+    g_am_D2DGaussianBlurEffect_p->SetInputEffect(0, g_am_D2DWallpaperBitmapSourceEffect_p.Get());
+
+    ID2D1Effect *tintOutput = nullptr;
+    if (g_am_IsWindows10_19H1OrGreater_p) {
+        if (FAILED(am_D2DPrepareEffects_Luminosity_p(&tintOutput))) {
+            //
+        }
+    } else {
+        if (FAILED(am_D2DPrepareEffects_Legacy_p(&tintOutput))) {
+            //
+        }
+    }
+
+    // Create noise with alpha and wrap:
+    // Noise image BorderEffect (infinitely tiles noise image)
+    hr = g_am_D2DContext_p->CreateEffect(am_CLSID_D2D1Border, g_am_D2DNoiseBorderEffect_p.GetAddressOf());
+    if (FAILED(hr)) {
+        //
+    }
+    hr = g_am_D2DNoiseBorderEffect_p->SetValue(D2D1_BORDER_PROP_EDGE_MODE_X, D2D1_BORDER_EDGE_MODE_WRAP);
+    if (FAILED(hr)) {
+        //
+    }
+    hr = g_am_D2DNoiseBorderEffect_p->SetValue(D2D1_BORDER_PROP_EDGE_MODE_Y, D2D1_BORDER_EDGE_MODE_WRAP);
+    if (FAILED(hr)) {
+        //
+    }
+    g_am_D2DNoiseBorderEffect_p->SetInputEffect(0, g_am_D2DNoiseBitmapSourceEffect_p.Get());
+    // OpacityEffect applied to wrapped noise
+    hr = g_am_D2DContext_p->CreateEffect(am_CLSID_D2D1Opacity, g_am_D2DNoiseOpacityEffect_p.GetAddressOf());
+    if (FAILED(hr)) {
+        //
+    }
+    hr = g_am_D2DNoiseOpacityEffect_p->SetValue(D2D1_OPACITY_PROP_OPACITY, sc_noiseOpacity);
+    if (FAILED(hr)) {
+        //
+    }
+    g_am_D2DNoiseOpacityEffect_p->SetInputEffect(0, g_am_D2DNoiseBorderEffect_p.Get());
+
+    // Blend noise on top of tint
+    hr = g_am_D2DContext_p->CreateEffect(am_CLSID_D2D1Composite, g_am_D2DNoiseBlendEffectOuter_p.GetAddressOf());
+    if (FAILED(hr)) {
+        //
+    }
+    hr = g_am_D2DNoiseBlendEffectOuter_p->SetValue(D2D1_COMPOSITE_PROP_MODE, D2D1_COMPOSITE_MODE_SOURCE_OVER);
+    if (FAILED(hr)) {
+        //
+    }
+    g_am_D2DNoiseBlendEffectOuter_p->SetInputEffect(0, tintOutput);
+    g_am_D2DNoiseBlendEffectOuter_p->SetInputEffect(1, g_am_D2DNoiseOpacityEffect_p.Get());
+
+    // Fallback color
+    hr = g_am_D2DContext_p->CreateEffect(am_CLSID_D2D1Flood, g_am_D2DFallbackColorEffect_p.GetAddressOf());
+    if (FAILED(hr)) {
+        //
+    }
+    hr = g_am_D2DFallbackColorEffect_p->SetValue(D2D1_FLOOD_PROP_COLOR, fallbackColor);
+    if (FAILED(hr)) {
+        //
+    }
+    // CrossFade with the fallback color. Weight = 0 means full fallback, 1 means full acrylic.
+    hr = g_am_D2DContext_p->CreateEffect(am_CLSID_D2D1CrossFade, g_am_D2DFadeInOutEffect_p.GetAddressOf());
+    if (FAILED(hr)) {
+        //
+    }
+    hr = g_am_D2DFadeInOutEffect_p->SetValue(D2D1_CROSSFADE_PROP_WEIGHT, 1.0f);
+    if (FAILED(hr)) {
+        //
+    }
+    // fixme: check which one is destination (index 0), which one is source (index 1)
+    g_am_D2DFadeInOutEffect_p->SetInputEffect(0, g_am_D2DNoiseBlendEffectOuter_p.Get());
+    g_am_D2DFadeInOutEffect_p->SetInputEffect(1, g_am_D2DFallbackColorEffect_p.Get());
+
+    *output = g_am_D2DFadeInOutEffect_p.Get();
+
     return S_OK;
 }
 
@@ -3676,8 +3871,7 @@ HRESULT am_GetEffectiveTintColor_p(
         return E_INVALIDARG;
     }
 
-    winrt::Windows::UI::Color tintColor = {};
-    MAKE_COLOR_FROM_COMPONENTS(tintColor, tintColorR, tintColorG, tintColorB, tintColorA)
+    winrt::Windows::UI::Color tintColor = MAKE_WINRTCOLOR_FROM_COMPONENTS(tintColorR, tintColorG, tintColorB, tintColorA);
 
     // Update tintColor's alpha with the combined opacity value
     // If LuminosityOpacity was specified, we don't intervene into users parameters
@@ -3688,7 +3882,7 @@ HRESULT am_GetEffectiveTintColor_p(
         tintColor.A = static_cast<uint8_t>(std::round(static_cast<double>(tintColor.A) * tintOpacity * tintOpacityModifier));
     }
 
-    GET_COLOR_COMPONENTS(tintColor, *r, *g, *b, *a)
+    GET_WINRTCOLOR_COMPONENTS(tintColor, *r, *g, *b, *a)
 
     return S_OK;
 }
@@ -3702,8 +3896,7 @@ HRESULT am_GetEffectiveLuminosityColor_p(
         return E_INVALIDARG;
     }
 
-    winrt::Windows::UI::Color tintColor = {};
-    MAKE_COLOR_FROM_COMPONENTS(tintColor, tintColorR, tintColorG, tintColorB, tintColorA)
+    winrt::Windows::UI::Color tintColor = MAKE_WINRTCOLOR_FROM_COMPONENTS(tintColorR, tintColorG, tintColorB, tintColorA);
 
     // Purposely leaving out tint opacity modifier here because GetLuminosityColor needs the *original* tint opacity set by the user.
     tintColor.A = static_cast<uint8_t>(std::round(static_cast<double>(tintColor.A) * std::clamp(tintOpacity, 0.0, 1.0)));
@@ -3715,7 +3908,7 @@ HRESULT am_GetEffectiveLuminosityColor_p(
 
     const winrt::Windows::UI::Color finalColor = am_GetLuminosityColor_p(tintColor, luminosityOpacity);
 
-    GET_COLOR_COMPONENTS(finalColor, *r, *g, *b, *a)
+    GET_WINRTCOLOR_COMPONENTS(finalColor, *r, *g, *b, *a)
 
     return S_OK;
 }

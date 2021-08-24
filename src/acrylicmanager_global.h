@@ -320,9 +320,9 @@ ACRYLICMANAGER_TRY_EXECUTE_FUNCTION_CALL_FUNC_RETURN(__VA_ARGS__)
 #define ACRYLICMANAGER_VERSION_STR L"1.0.0.0"
 #endif
 
-#ifndef HINST_THISCOMPONENT
+#ifndef GET_CURRENT_INSTANCE
 EXTERN_C IMAGE_DOS_HEADER __ImageBase;
-#define HINST_THISCOMPONENT (reinterpret_cast<HINSTANCE>(&__ImageBase))
+#define GET_CURRENT_INSTANCE (reinterpret_cast<HINSTANCE>(&__ImageBase))
 #endif
 
 #ifndef USER_DEFAULT_SCREEN_DPI
@@ -338,11 +338,55 @@ EXTERN_C IMAGE_DOS_HEADER __ImageBase;
 #endif
 
 #ifndef IsMaximized
-#define IsMaximized(window) (IsZoomed(window))
+#define IsMaximized(window) (window ? (IsZoomed(window) != FALSE) : false)
 #endif
 
 #ifndef IsMinimized
-#define IsMinimized(window) (IsIconic(window))
+#define IsMinimized(window) (window ? (IsIconic(window) != FALSE) : false)
+#endif
+
+#ifndef IsFullScreened
+#define IsFullScreened(window) \
+[]{ \
+    if (!window) { \
+        return false; \
+    } \
+    const HMONITOR __ps = GET_PRIMARY_SCREEN(window); \
+    if (!__ps) { \
+        return false; \
+    } \
+    const MONITORINFO __mi = GET_MONITOR_INFO(__ps); \
+    const RECT __sr = __mi.rcMonitor; \
+    const RECT __wr = GET_WINDOW_RECT(window); \
+    return ((__wr.left == __sr.left) \
+             && (__wr.right == __sr.right) \
+             && (__wr.top == __sr.top) \
+             && (__wr.bottom == __sr.bottom)); \
+}()
+#endif
+
+#ifndef IsWindowNoState
+#define IsWindowNoState(window) \
+[]{ \
+    if (!window) { \
+        return false; \
+    } \
+    WINDOWPLACEMENT __wp; \
+    SecureZeroMemory(&__wp, sizeof(__wp)); \
+    __wp.length = sizeof(__wp); \
+    if (GetWindowPlacement(window, &__wp) == FALSE) { \
+        return false; \
+    } \
+    return (__wp.showCmd == SW_NORMAL); \
+}()
+#endif
+
+#ifndef IsWindowShown
+#define IsWindowShown(window) (window ? (IsWindowVisible(window) != FALSE) : false)
+#endif
+
+#ifndef IsWindowHidden
+#define IsWindowHidden(window) (window ? (IsWindowVisible(window) == FALSE) : false)
 #endif
 
 #ifndef GET_X_LPARAM
@@ -370,113 +414,107 @@ EXTERN_C IMAGE_DOS_HEADER __ImageBase;
 #endif
 
 #ifndef GET_CURRENT_SCREEN
-#define GET_CURRENT_SCREEN(window) (MonitorFromWindow(window, MONITOR_DEFAULTTONEAREST))
+#define GET_CURRENT_SCREEN(window) (window ? MonitorFromWindow(window, MONITOR_DEFAULTTONEAREST) : nullptr)
 #endif
 
 #ifndef GET_PRIMARY_SCREEN
-#define GET_PRIMARY_SCREEN(window) (MonitorFromWindow(window, MONITOR_DEFAULTTOPRIMARY))
+#define GET_PRIMARY_SCREEN(window) (window ? MonitorFromWindow(window, MONITOR_DEFAULTTOPRIMARY) : nullptr)
+#endif
+
+#ifndef GET_MONITOR_INFO
+#define GET_MONITOR_INFO(window) \
+[]{ \
+    if (!window) { \
+        return MONITORINFO{}; \
+    } \
+    const HMONITOR __ps = GET_CURRENT_SCREEN(window); \
+    if (!__ps) { \
+        return MONITORINFO{}; \
+    } \
+    MONITORINFO __mi; \
+    SecureZeroMemory(&__mi, sizeof(__mi)); \
+    __mi.cbSize = sizeof(__mi); \
+    if (GetMonitorInfoW(__ps, &__mi) == FALSE) { \
+        return MONITORINFO{}; \
+    } \
+    return __mi; \
+}()
+#endif
+
+#ifndef GET_WINDOW_RECT
+#define GET_WINDOW_RECT(window) \
+[]{ \
+    if (!window) { \
+        return RECT{}; \
+    } \
+    RECT __rect = {0, 0, 0, 0}; \
+    if (GetWindowRect(window, &__rect) == FALSE) { \
+        return RECT{}; \
+    } \
+    return __rect; \
+}()
+#endif
+
+#ifndef GET_WINDOW_SIZE
+#define GET_WINDOW_SIZE(window) (window ? GET_RECT_SIZE(GET_WINDOW_RECT(window)) : SIZE{})
+#endif
+
+#ifndef GET_WINDOW_CLIENT_SIZE
+#define GET_WINDOW_CLIENT_SIZE(window) \
+[]{ \
+    if (!window) { \
+        return SIZE{}; \
+    } \
+    RECT __rect = {0, 0, 0, 0}; \
+    if (GetClientRect(window, &__rect) == FALSE) { \
+        return SIZE{}; \
+    } \
+    return GET_RECT_SIZE(__rect); \
+}()
 #endif
 
 #ifndef DECLARE_UNUSED
 #define DECLARE_UNUSED(var) (static_cast<void>(var))
 #endif
 
-#ifndef __PRINT_WIN32_ERROR_MESSAGE_HEAD
-#define __PRINT_WIN32_ERROR_MESSAGE_HEAD(function) \
+#ifndef PRINT_HR_ERROR_MESSAGE
+#define PRINT_HR_ERROR_MESSAGE(function, hresult) \
 { \
-    const HRESULT __hr = HRESULT_FROM_WIN32(GetLastError()); \
-    if (FAILED(__hr)) { \
-        const HRESULT __hr_ = am_PrintErrorMessageFromHResult_p(L#function, __hr); \
-        DECLARE_UNUSED(__hr_); \
-    }
-#endif
-
-#ifndef __PRINT_WIN32_ERROR_MESSAGE_FOOT
-#define __PRINT_WIN32_ERROR_MESSAGE_FOOT \
+    if (FAILED(hresult)) { \
+        const std::wstring __message = Utils::TranslateErrorCodeToMessage(L#function, hresult); \
+        if (!__message.empty()) { \
+            OutputDebugStringW(__message.c_str()); \
+            MessageBoxW(nullptr, __message.c_str(), L"AcrylicManager", MB_ICONERROR | MB_OK); \
+        } \
+    } \
 }
-#endif
-
-#ifndef PRINT_WIN32_ERROR_MESSAGE_AND_RETURN
-#define PRINT_WIN32_ERROR_MESSAGE_AND_RETURN(function) \
-__PRINT_WIN32_ERROR_MESSAGE_HEAD(function) \
-return __hr; \
-__PRINT_WIN32_ERROR_MESSAGE_FOOT
-#endif
-
-#ifndef PRINT_WIN32_ERROR_MESSAGE_AND_SAFE_RETURN
-#define PRINT_WIN32_ERROR_MESSAGE_AND_SAFE_RETURN(function) \
-__PRINT_WIN32_ERROR_MESSAGE_HEAD(function) \
-SAFE_RELEASE_RESOURCES \
-return __hr; \
-__PRINT_WIN32_ERROR_MESSAGE_FOOT
 #endif
 
 #ifndef PRINT_WIN32_ERROR_MESSAGE
-#define PRINT_WIN32_ERROR_MESSAGE(function) \
-__PRINT_WIN32_ERROR_MESSAGE_HEAD(function) \
-__PRINT_WIN32_ERROR_MESSAGE_FOOT
-#endif
-
-#ifndef __PRINT_HR_ERROR_MESSAGE_HEAD
-#define __PRINT_HR_ERROR_MESSAGE_HEAD(function, hresult) \
-{ \
-    if (FAILED(hresult)) { \
-        const HRESULT __hr = am_PrintErrorMessageFromHResult_p(L#function, hresult); \
-        DECLARE_UNUSED(__hr); \
-    }
-#endif
-
-#ifndef __PRINT_HR_ERROR_MESSAGE_FOOT
-#define __PRINT_HR_ERROR_MESSAGE_FOOT \
-}
-#endif
-
-#ifndef PRINT_HR_ERROR_MESSAGE
-#define PRINT_HR_ERROR_MESSAGE(function, hresult) \
-__PRINT_HR_ERROR_MESSAGE_HEAD(function, hresult) \
-__PRINT_HR_ERROR_MESSAGE_FOOT
-#endif
-
-#ifndef PRINT_HR_ERROR_MESSAGE_AND_RETURN
-#define PRINT_HR_ERROR_MESSAGE_AND_RETURN(function, hresult) \
-__PRINT_HR_ERROR_MESSAGE_HEAD(function, hresult) \
-return hresult; \
-__PRINT_HR_ERROR_MESSAGE_FOOT
-#endif
-
-#ifndef PRINT_HR_ERROR_MESSAGE_AND_SAFE_RETURN
-#define PRINT_HR_ERROR_MESSAGE_AND_SAFE_RETURN(function, hresult) \
-__PRINT_HR_ERROR_MESSAGE_HEAD(function, hresult) \
-SAFE_RELEASE_RESOURCES \
-return hresult; \
-__PRINT_HR_ERROR_MESSAGE_FOOT
-#endif
-
-#ifndef SAFE_RELEASE_RESOURCES
-#define SAFE_RELEASE_RESOURCES \
-{ \
-    const HRESULT __hr = am_CleanupHelper_p(); \
-    DECLARE_UNUSED(__hr); \
-}
+#define PRINT_WIN32_ERROR_MESSAGE(function) (PRINT_HR_ERROR_MESSAGE(function, HRESULT_FROM_WIN32(GetLastError())))
 #endif
 
 #ifndef GET_WINRTCOLOR_COMPONENTS
 #define GET_WINRTCOLOR_COMPONENTS(color, r, g, b, a) \
 { \
-    r = std::clamp(static_cast<int>((color).R), 0, 255); \
-    g = std::clamp(static_cast<int>((color).G), 0, 255); \
-    b = std::clamp(static_cast<int>((color).B), 0, 255); \
-    a = std::clamp(static_cast<int>((color).A), 0, 255); \
+    constexpr int __min = 0; \
+    constexpr int __max = 255; \
+    r = std::clamp(static_cast<int>((color).R), __min, __max); \
+    g = std::clamp(static_cast<int>((color).G), __min, __max); \
+    b = std::clamp(static_cast<int>((color).B), __min, __max); \
+    a = std::clamp(static_cast<int>((color).A), __min, __max); \
 }
 #endif
 
 #ifndef MAKE_WINRTCOLOR_FROM_COMPONENTS
 #define MAKE_WINRTCOLOR_FROM_COMPONENTS(r, g, b, a) \
 [=]{ \
-    const auto __r = static_cast<uint8_t>(std::clamp(r, 0, 255)); \
-    const auto __g = static_cast<uint8_t>(std::clamp(g, 0, 255)); \
-    const auto __b = static_cast<uint8_t>(std::clamp(b, 0, 255)); \
-    const auto __a = static_cast<uint8_t>(std::clamp(a, 0, 255)); \
+    constexpr int __min = 0; \
+    constexpr int __max = 255; \
+    const auto __r = static_cast<uint8_t>(std::clamp(r, __min, __max)); \
+    const auto __g = static_cast<uint8_t>(std::clamp(g, __min, __max)); \
+    const auto __b = static_cast<uint8_t>(std::clamp(b, __min, __max)); \
+    const auto __a = static_cast<uint8_t>(std::clamp(a, __min, __max)); \
     return winrt::Windows::UI::ColorHelper::FromArgb(__a, __r, __g, __b); \
 }()
 #endif
@@ -484,10 +522,11 @@ __PRINT_HR_ERROR_MESSAGE_FOOT
 #ifndef WINRTCOLOR_TO_D2DCOLOR4F
 #define WINRTCOLOR_TO_D2DCOLOR4F(color) \
 [=]{ \
-    const float __r = (static_cast<float>((color).R) / 255.0); \
-    const float __g = (static_cast<float>((color).G) / 255.0); \
-    const float __b = (static_cast<float>((color).B) / 255.0); \
-    const float __a = (static_cast<float>((color).A) / 255.0); \
+    constexpr double __max = 255.0; \
+    const float __r = (static_cast<float>((color).R) / __max); \
+    const float __g = (static_cast<float>((color).G) / __max); \
+    const float __b = (static_cast<float>((color).B) / __max); \
+    const float __a = (static_cast<float>((color).A) / __max); \
     return D2D1::Vector4F(__r, __g, __b, __a); \
 }()
 #endif
@@ -495,44 +534,13 @@ __PRINT_HR_ERROR_MESSAGE_FOOT
 #ifndef D2DCOLOR4F_TO_WINRTCOLOR
 #define D2DCOLOR4F_TO_WINRTCOLOR(color) \
 [=]{ \
-    const auto __r = static_cast<uint8_t>(std::round((color).x * 255.0)); \
-    const auto __g = static_cast<uint8_t>(std::round((color).y * 255.0)); \
-    const auto __b = static_cast<uint8_t>(std::round((color).z * 255.0)); \
-    const auto __a = static_cast<uint8_t>(std::round((color).w * 255.0)); \
+    constexpr double __max = 255.0; \
+    const auto __r = static_cast<uint8_t>(std::round((color).x * __max)); \
+    const auto __g = static_cast<uint8_t>(std::round((color).y * __max)); \
+    const auto __b = static_cast<uint8_t>(std::round((color).z * __max)); \
+    const auto __a = static_cast<uint8_t>(std::round((color).w * __max)); \
     return winrt::Windows::UI::ColorHelper::FromArgb(__a, __r, __g, __b); \
 }()
-#endif
-
-#ifndef SAFE_RETURN
-#define SAFE_RETURN \
-{ \
-    SAFE_RELEASE_RESOURCES \
-    return E_FAIL; \
-}
-#endif
-
-#ifndef PRINT
-#define PRINT(message) \
-{ \
-    const HRESULT __hr = am_PrintHelper_p(message, true); \
-    DECLARE_UNUSED(__hr); \
-}
-#endif
-
-#ifndef PRINT_AND_RETURN
-#define PRINT_AND_RETURN(message) \
-{ \
-    PRINT(message) \
-    return E_FAIL; \
-}
-#endif
-
-#ifndef PRINT_AND_SAFE_RETURN
-#define PRINT_AND_SAFE_RETURN(message) \
-{ \
-    PRINT(message) \
-    SAFE_RETURN \
-}
 #endif
 
 #ifndef COM_SAFE_RELEASE
@@ -554,3 +562,153 @@ __PRINT_HR_ERROR_MESSAGE_FOOT
     } \
 }
 #endif
+
+enum class WindowsVersion : int
+{
+    WindowsVista = 0,
+    Windows7,
+    Windows8,
+    Windows8_1,
+    Windows10_1507,
+    Windows10_1511,
+    Windows10_1607,
+    Windows10_1703,
+    Windows10_1709,
+    Windows10_1803,
+    Windows10_1809,
+    Windows10_1903,
+    Windows10_1909,
+    Windows10_2004,
+    Windows10_20H2,
+    Windows10_21H1,
+    Windows11,
+    Windows10 = Windows10_1507,
+    Windows10_TH1 = Windows10_1507,
+    Windows10_TH2 = Windows10_1511,
+    Windows10_RS1 = Windows10_1607,
+    Windows10_RS2 = Windows10_1703,
+    Windows10_RS3 = Windows10_1709,
+    Windows10_RS4 = Windows10_1803,
+    Windows10_RS5 = Windows10_1809,
+    Windows10_19H1 = Windows10_1903,
+    Windows10_19H2 = Windows10_1909,
+    Windows10_20H1 = Windows10_2004
+    //Windows10_20H2 = Windows10_20H2,
+    //Windows10_21H1 = Windows10_21H1,
+};
+
+enum class VersionCompare : int
+{
+    Less = 0,
+    Equal,
+    Greater,
+    LessOrEqual,
+    GreaterOrEqual
+};
+
+enum class ColorizationArea : int
+{
+    None = 0,
+    StartMenu_TaskBar_ActionCenter,
+    TitleBar_WindowBorder,
+    All
+};
+
+enum class WallpaperAspectStyle : int
+{
+    Invalid = -1,
+    Central,
+    Tiled,
+    IgnoreRatioFit, // Stretch
+    KeepRatioFit, // Fit
+    KeepRatioByExpanding, // Fill
+    Span
+};
+
+enum class DpiAwareness : int
+{
+    Invalid = -1,
+    Unaware,
+    System,
+    PerMonitor,
+    PerMonitorV2
+};
+
+enum class DwmWindowAttribute : int
+{
+    TRANSITIONS_FORCEDISABLED = 3,            // [get/set] BOOL, Enable or disable window transitions.
+    CAPTION_BUTTON_BOUNDS = 5,                // [get] RECT, Bounds of the caption (titlebar) button area rectangle in window-relative space.
+    EXTENDED_FRAME_BOUNDS = 9,                // [get] RECT, Bounds of the extended frame rectangle in screen space.
+    EXCLUDED_FROM_PEEK = 12,                  // [get/set] BOOL, Exclude or include window from LivePreview.
+    USE_HOSTBACKDROPBRUSH = 17,               // [get/set] BOOL, Allows the use of host backdrop brushes for the window.
+    USE_IMMERSIVE_DARK_MODE_BEFORE_20H1 = 19, // [get/set] BOOL, Allows a window to either use the accent color, or dark, according to the user Color Mode preferences.
+    USE_IMMERSIVE_DARK_MODE = 20,             // [get/set] BOOL, The same as "DWMWA_USE_IMMERSIVE_DARK_MODE_BEFORE_20H1".
+    WINDOW_CORNER_PREFERENCE = 33,            // [get/set] WINDOW_CORNER_PREFERENCE, Controls the policy that rounds top-level window corners.
+    BORDER_COLOR = 34,                        // [get/set] COLORREF, Color of the thin border around a top-level window.
+    CAPTION_COLOR = 35,                       // [get/set] COLORREF, Color of the caption (titlebar).
+    TEXT_COLOR = 36,                          // [get/set] COLORREF, Color of the caption (titlebar) text.
+    VISIBLE_FRAME_BORDER_THICKNESS = 37       // [get] UINT, Width of the visible border around a thick frame window.
+};
+
+enum class MonitorDpiType : int
+{
+    EFFECTIVE_DPI = 0,
+    DEFAULT = EFFECTIVE_DPI
+};
+
+typedef enum _WINDOWCOMPOSITIONATTRIB
+{
+    WCA_UNDEFINED = 0x0,
+    WCA_NCRENDERING_ENABLED = 0x1,
+    WCA_NCRENDERING_POLICY = 0x2,
+    WCA_TRANSITIONS_FORCEDISABLED = 0x3,
+    WCA_ALLOW_NCPAINT = 0x4,
+    WCA_CAPTION_BUTTON_BOUNDS = 0x5,
+    WCA_NONCLIENT_RTL_LAYOUT = 0x6,
+    WCA_FORCE_ICONIC_REPRESENTATION = 0x7,
+    WCA_EXTENDED_FRAME_BOUNDS = 0x8,
+    WCA_HAS_ICONIC_BITMAP = 0x9,
+    WCA_THEME_ATTRIBUTES = 0xA,
+    WCA_NCRENDERING_EXILED = 0xB,
+    WCA_NCADORNMENTINFO = 0xC,
+    WCA_EXCLUDED_FROM_LIVEPREVIEW = 0xD,
+    WCA_VIDEO_OVERLAY_ACTIVE = 0xE,
+    WCA_FORCE_ACTIVEWINDOW_APPEARANCE = 0xF,
+    WCA_DISALLOW_PEEK = 0x10,
+    WCA_CLOAK = 0x11,
+    WCA_CLOAKED = 0x12,
+    WCA_ACCENT_POLICY = 0x13,
+    WCA_FREEZE_REPRESENTATION = 0x14,
+    WCA_EVER_UNCLOAKED = 0x15,
+    WCA_VISUAL_OWNER = 0x16,
+    WCA_HOLOGRAPHIC = 0x17,
+    WCA_EXCLUDED_FROM_DDA = 0x18,
+    WCA_PASSIVEUPDATEMODE = 0x19,
+    WCA_LAST = 0x1A
+} WINDOWCOMPOSITIONATTRIB;
+
+typedef struct _WINDOWCOMPOSITIONATTRIBDATA
+{
+    WINDOWCOMPOSITIONATTRIB Attrib;
+    LPVOID pvData;
+    SIZE_T cbData;
+} WINDOWCOMPOSITIONATTRIBDATA, *PWINDOWCOMPOSITIONATTRIBDATA, *LPWINDOWCOMPOSITIONATTRIBDATA;
+
+typedef enum _ACCENT_STATE
+{
+    ACCENT_DISABLED = 0,
+    ACCENT_ENABLE_GRADIENT = 1,
+    ACCENT_ENABLE_TRANSPARENTGRADIENT = 2,
+    ACCENT_ENABLE_BLURBEHIND = 3,
+    ACCENT_ENABLE_ACRYLICBLURBEHIND = 4, // RS4 1803
+    ACCENT_ENABLE_HOSTBACKDROP = 5, // RS5 1809
+    ACCENT_INVALID_STATE = 6
+} ACCENT_STATE;
+
+typedef struct _ACCENT_POLICY
+{
+    ACCENT_STATE AccentState;
+    DWORD AccentFlags;
+    COLORREF GradientColor;
+    DWORD AnimationId;
+} ACCENT_POLICY, *PACCENT_POLICY, *LPACCENT_POLICY;

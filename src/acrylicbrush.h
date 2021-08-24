@@ -23,3 +23,94 @@
  */
 
 #pragma once
+
+namespace AcrylicBrush
+{
+
+namespace Constants
+{
+
+namespace Light
+{
+
+constexpr winrt::Windows::UI::Color DefaultTintColor = {};
+constexpr double DefaultTintOpacity = {};
+constexpr double DefaultLuminosityOpacity = {};
+constexpr winrt::Windows::UI::Color DefaultFallbackColor = {};
+constexpr double DefaultBlurRadius = {};
+constexpr double DefaultSaturationAmount = {};
+constexpr double DefaultNoiseOpacity = {};
+constexpr winrt::Windows::UI::Color DefaultExclusionColor = {};
+
+}
+
+namespace Dark
+{
+
+constexpr winrt::Windows::UI::Color DefaultTintColor = {};
+constexpr double DefaultTintOpacity = {};
+constexpr double DefaultLuminosityOpacity = {};
+constexpr winrt::Windows::UI::Color DefaultFallbackColor = {};
+constexpr double DefaultBlurRadius = {};
+constexpr double DefaultSaturationAmount = {};
+constexpr double DefaultNoiseOpacity = {};
+constexpr winrt::Windows::UI::Color DefaultExclusionColor = {};
+
+}
+
+}
+
+namespace Base
+{
+
+[[nodiscard]] winrt::Windows::UI::Color GetTintColor();
+void SetTintColor(const winrt::Windows::UI::Color &value);
+
+[[nodiscard]] double GetTintOpacity();
+void SetTintOpacity(const double value);
+
+[[nodiscard]] winrt::Windows::Foundation::IReference<double> GetLuminosityOpacity();
+void SetLuminosityOpacity(const winrt::Windows::Foundation::IReference<double> value);
+
+[[nodiscard]] winrt::Windows::UI::Color GetFallbackColor();
+void SetFallbackColor(const winrt::Windows::UI::Color &value);
+
+[[nodiscard]] double GetBlurRadius();
+void SetBlurRadius(const double value);
+
+[[nodiscard]] double GetSaturationAmount();
+void SetSaturationAmount(const double value);
+
+[[nodiscard]] double GetNoiseOpacity();
+void SetNoiseOpacity(const double value);
+
+}
+
+namespace System
+{
+
+[[nodiscard]] bool IsSupportedByCurrentOS();
+[[nodiscard]] bool IsBlurEffectEnabled();
+[[nodiscard]] bool SetBlurEffectEnabled(const bool enable);
+
+}
+
+namespace XAML
+{
+
+[[nodiscard]] bool IsSupportedByCurrentOS();
+[[nodiscard]] bool IsBlurEffectEnabled();
+[[nodiscard]] bool SetBlurEffectEnabled(const bool enable);
+
+}
+
+namespace Direct2D
+{
+
+[[nodiscard]] bool IsSupportedByCurrentOS();
+[[nodiscard]] bool IsBlurEffectEnabled();
+[[nodiscard]] bool SetBlurEffectEnabled(const bool enable);
+
+}
+
+}

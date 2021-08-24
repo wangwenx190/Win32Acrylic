@@ -1,0 +1,971 @@
+/*
+ * MIT License
+ *
+ * Copyright (C) 2021 by wangwenx190 (Yuhang Zhao)
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ */
+
+#include "utils.h"
+
+static constexpr wchar_t g_personalizeRegistryKey[] = LR"(Software\Microsoft\Windows\CurrentVersion\Themes\Personalize)";
+static constexpr wchar_t g_dWMRegistryKey[] = LR"(Software\Microsoft\Windows\DWM)";
+static constexpr wchar_t g_desktopRegistryKey[] = LR"(Control Panel\Desktop)";
+
+[[nodiscard]] static inline bool CompareSystemVersion(const WindowsVersion ver, const VersionCompare comp)
+{
+    OSVERSIONINFOEXW osvi;
+    SecureZeroMemory(&osvi, sizeof(osvi));
+    osvi.dwOSVersionInfoSize = sizeof(osvi);
+    switch (ver) {
+    case WindowsVersion::WindowsVista: {
+        osvi.dwMajorVersion = 6;
+        osvi.dwMinorVersion = 0;
+        osvi.dwBuildNumber = 6000; // Windows Vista with Service Pack 1: 6001
+    } break;
+    case WindowsVersion::Windows7: {
+        osvi.dwMajorVersion = 6;
+        osvi.dwMinorVersion = 1;
+        osvi.dwBuildNumber = 7600; // Windows 7 with Service Pack 1: 7601
+    } break;
+    case WindowsVersion::Windows8: {
+        osvi.dwMajorVersion = 6;
+        osvi.dwMinorVersion = 2;
+        osvi.dwBuildNumber = 9200;
+    } break;
+    case WindowsVersion::Windows8_1: {
+        osvi.dwMajorVersion = 6;
+        osvi.dwMinorVersion = 3;
+        osvi.dwBuildNumber = 9200; // Windows 8.1 with Update 1: 9600
+    } break;
+    case WindowsVersion::Windows10_1507: {
+        osvi.dwMajorVersion = 10;
+        osvi.dwMinorVersion = 0;
+        osvi.dwBuildNumber = 10240;
+    } break;
+    case WindowsVersion::Windows10_1511: {
+        osvi.dwMajorVersion = 10;
+        osvi.dwMinorVersion = 0;
+        osvi.dwBuildNumber = 10586;
+    } break;
+    case WindowsVersion::Windows10_1607: {
+        osvi.dwMajorVersion = 10;
+        osvi.dwMinorVersion = 0;
+        osvi.dwBuildNumber = 14393;
+    } break;
+    case WindowsVersion::Windows10_1703: {
+        osvi.dwMajorVersion = 10;
+        osvi.dwMinorVersion = 0;
+        osvi.dwBuildNumber = 15063;
+    } break;
+    case WindowsVersion::Windows10_1709: {
+        osvi.dwMajorVersion = 10;
+        osvi.dwMinorVersion = 0;
+        osvi.dwBuildNumber = 16299;
+    } break;
+    case WindowsVersion::Windows10_1803: {
+        osvi.dwMajorVersion = 10;
+        osvi.dwMinorVersion = 0;
+        osvi.dwBuildNumber = 17134;
+    } break;
+    case WindowsVersion::Windows10_1809: {
+        osvi.dwMajorVersion = 10;
+        osvi.dwMinorVersion = 0;
+        osvi.dwBuildNumber = 17763;
+    } break;
+    case WindowsVersion::Windows10_1903: {
+        osvi.dwMajorVersion = 10;
+        osvi.dwMinorVersion = 0;
+        osvi.dwBuildNumber = 18362;
+    } break;
+    case WindowsVersion::Windows10_1909: {
+        osvi.dwMajorVersion = 10;
+        osvi.dwMinorVersion = 0;
+        osvi.dwBuildNumber = 18363;
+    } break;
+    case WindowsVersion::Windows10_2004: {
+        osvi.dwMajorVersion = 10;
+        osvi.dwMinorVersion = 0;
+        osvi.dwBuildNumber = 19041;
+    } break;
+    case WindowsVersion::Windows10_20H2: {
+        osvi.dwMajorVersion = 10;
+        osvi.dwMinorVersion = 0;
+        osvi.dwBuildNumber = 19042;
+    } break;
+    case WindowsVersion::Windows10_21H1: {
+        osvi.dwMajorVersion = 10;
+        osvi.dwMinorVersion = 0;
+        osvi.dwBuildNumber = 19043;
+    } break;
+    case WindowsVersion::Windows11: {
+        // FIXME: check the actual version number of Win11.
+        osvi.dwMajorVersion = 11;
+        osvi.dwMinorVersion = 0;
+        osvi.dwBuildNumber = 0;
+    } break;
+    }
+    BYTE op = 0;
+    switch (comp) {
+    case VersionCompare::Less:
+        op = VER_LESS;
+        break;
+    case VersionCompare::Equal:
+        op = VER_EQUAL;
+        break;
+    case VersionCompare::Greater:
+        op = VER_GREATER;
+        break;
+    case VersionCompare::LessOrEqual:
+        op = VER_LESS_EQUAL;
+        break;
+    case VersionCompare::GreaterOrEqual:
+        op = VER_GREATER_EQUAL;
+        break;
+    }
+    DWORDLONG dwlConditionMask = 0;
+    VER_SET_CONDITION(dwlConditionMask, VER_MAJORVERSION, op);
+    VER_SET_CONDITION(dwlConditionMask, VER_MINORVERSION, op);
+    VER_SET_CONDITION(dwlConditionMask, VER_BUILDNUMBER, op);
+    return (VerifyVersionInfoW(&osvi, VER_MAJORVERSION | VER_MINORVERSION | VER_BUILDNUMBER, dwlConditionMask) != FALSE);
+}
+
+bool Utils::IsWindows7OrGreater()
+{
+    return CompareSystemVersion(WindowsVersion::Windows7, VersionCompare::GreaterOrEqual);
+}
+
+bool Utils::IsWindows8OrGreater()
+{
+    return CompareSystemVersion(WindowsVersion::Windows8, VersionCompare::GreaterOrEqual);
+}
+
+bool Utils::IsWindows8Point1OrGreater()
+{
+    return CompareSystemVersion(WindowsVersion::Windows8_1, VersionCompare::GreaterOrEqual);
+}
+
+bool Utils::IsWindows10OrGreater()
+{
+    return CompareSystemVersion(WindowsVersion::Windows10, VersionCompare::GreaterOrEqual);
+}
+
+bool Utils::IsWindows10_1607OrGreater()
+{
+    return CompareSystemVersion(WindowsVersion::Windows10_1607, VersionCompare::GreaterOrEqual);
+}
+
+bool Utils::IsWindows10_19H1OrGreater()
+{
+    return CompareSystemVersion(WindowsVersion::Windows10_19H1, VersionCompare::GreaterOrEqual);
+}
+
+bool Utils::IsWindows11OrGreater()
+{
+    return CompareSystemVersion(WindowsVersion::Windows11, VersionCompare::GreaterOrEqual);
+}
+
+std::wstring Utils::GetCurrentDirectoryPath()
+{
+
+}
+
+UINT Utils::GetDotsPerInchForWindow(const HWND hWnd)
+{
+    if (!hWnd) {
+        return USER_DEFAULT_SCREEN_DPI;
+    }
+    {
+        const UINT dpi = GetDpiForWindow(hWnd);
+        if (dpi > 0) {
+            return dpi;
+        }
+    }
+    {
+        const UINT dpi = GetSystemDpiForProcess(GetCurrentProcess());
+        if (dpi > 0) {
+            return dpi;
+        }
+    }
+    {
+        const UINT dpi = GetDpiForSystem();
+        if (dpi > 0) {
+            return dpi;
+        }
+    }
+    {
+        UINT dpiX = 0, dpiY = 0;
+        if (SUCCEEDED(GetDpiForMonitor(GET_CURRENT_SCREEN(hWnd), static_cast<MONITOR_DPI_TYPE>(MonitorDpiType::EFFECTIVE_DPI), &dpiX, &dpiY))) {
+            if ((dpiX > 0) && (dpiY > 0)) {
+                return std::round(static_cast<double>(dpiX + dpiY) / 2.0);
+            }
+        }
+
+    }
+    {
+        const HDC hdc = GetDC(nullptr);
+        if (hdc) {
+            const int dpiX = GetDeviceCaps(hdc, LOGPIXELSX);
+            const int dpiY = GetDeviceCaps(hdc, LOGPIXELSY);
+            ReleaseDC(nullptr, hdc);
+            if ((dpiX > 0) && (dpiY > 0)) {
+                return std::round(static_cast<double>(dpiX + dpiY) / 2.0);
+            }
+        }
+    }
+    return USER_DEFAULT_SCREEN_DPI;
+}
+
+double Utils::GetDevicePixelRatioForWindow(const HWND hWnd)
+{
+    if (!hWnd) {
+        return 1.0;
+    }
+    const HMONITOR mon = GET_CURRENT_SCREEN(hWnd);
+    if (!mon) {
+        PRINT_WIN32_ERROR_MESSAGE(MonitorFromWindow)
+        return 1.0;
+    }
+    DEVICE_SCALE_FACTOR dsf = DEVICE_SCALE_FACTOR_INVALID;
+    const HRESULT hr = GetScaleFactorForMonitor(mon, &dsf);
+    if (FAILED(hr)) {
+        PRINT_HR_ERROR_MESSAGE(GetScaleFactorForMonitor, hr)
+        return 1.0;
+    }
+    switch (dsf) {
+    case SCALE_100_PERCENT:
+        return 1.0;
+    case SCALE_120_PERCENT:
+        return 1.2;
+    case SCALE_125_PERCENT:
+        return 1.25;
+    case SCALE_140_PERCENT:
+        return 1.4;
+    case SCALE_150_PERCENT:
+        return 1.5;
+    case SCALE_160_PERCENT:
+        return 1.6;
+    case SCALE_175_PERCENT:
+        return 1.75;
+    case SCALE_180_PERCENT:
+        return 1.8;
+    case SCALE_200_PERCENT:
+        return 2.0;
+    case SCALE_225_PERCENT:
+        return 2.25;
+    case SCALE_250_PERCENT:
+        return 2.5;
+    case SCALE_300_PERCENT:
+        return 3.0;
+    case SCALE_350_PERCENT:
+        return 3.5;
+    case SCALE_400_PERCENT:
+        return 4.0;
+    case SCALE_450_PERCENT:
+        return 4.5;
+    case SCALE_500_PERCENT:
+        return 5.0;
+    default:
+        return 1.0;
+    }
+}
+
+int Utils::GetResizeBorderThickness(const HWND hWnd)
+{
+    if (!hWnd) {
+        return 8;
+    }
+    const UINT dpi = GetDotsPerInchForWindow(hWnd);
+    const int result_dpi = (GetSystemMetricsForDpi(SM_CXPADDEDBORDER, dpi)
+                        + GetSystemMetricsForDpi(SM_CXSIZEFRAME, dpi));
+    const int result_nondpi = (GetSystemMetrics(SM_CXPADDEDBORDER)
+                               + GetSystemMetrics(SM_CXSIZEFRAME));
+    return ((result_dpi > 0) ? result_dpi : result_nondpi);
+}
+
+int Utils::GetCaptionHeight(const HWND hWnd)
+{
+    if (!hWnd) {
+        return 23;
+    }
+    const UINT dpi = GetDotsPerInchForWindow(hWnd);
+    const int result_dpi = GetSystemMetricsForDpi(SM_CYCAPTION, dpi);
+    const int result_nondpi = GetSystemMetrics(SM_CYCAPTION);
+    return ((result_dpi > 0) ? result_dpi : result_nondpi);
+}
+
+int Utils::GetTitleBarHeight(const HWND hWnd)
+{
+    if (!hWnd) {
+        return 31;
+    }
+    const int result = (GetResizeBorderThickness(hWnd) + GetCaptionHeight(hWnd));
+    const double dpr = GetDevicePixelRatioForWindow(hWnd);
+    return ((result > 0) ? result : std::round(31.0 * ((dpr > 0.0) ? dpr : 1.0)));
+}
+
+int Utils::GetWindowVisibleFrameBorderThickness(const HWND hWnd)
+{
+    if (!hWnd) {
+        return 1;
+    }
+    UINT value = 0;
+    const HRESULT hr = DwmGetWindowAttribute(hWnd, static_cast<DWORD>(DwmWindowAttribute::VISIBLE_FRAME_BORDER_THICKNESS), &value, sizeof(value));
+    if (SUCCEEDED(hr)) {
+        return value;
+    } else {
+        // We just eat this error because this enum value was introduced in a very
+        // late Windows 10 version, so querying it's value will always result in
+        // a "parameter error" (code: 87) on systems before that value was introduced.
+    }
+    const double dpr = GetDevicePixelRatioForWindow(hWnd);
+    return (IsWindowNoState(hWnd) ? std::round(1.0 * ((dpr > 0.0) ? dpr : 1.0)) : 0);
+}
+
+bool Utils::ShouldAppsUseDarkMode()
+{
+    const int value = GetIntFromRegistry(HKEY_CURRENT_USER, g_personalizeRegistryKey, L"AppsUseLightTheme");
+    return (value == 0);
+}
+
+bool Utils::ShouldSystemUsesDarkMode()
+{
+    const int value = GetIntFromRegistry(HKEY_CURRENT_USER, g_personalizeRegistryKey, L"SystemUsesLightTheme");
+    return (value == 0);
+}
+
+winrt::Windows::UI::Color Utils::GetColorizationColor()
+{
+    COLORREF color = RGB(0, 0, 0);
+    BOOL opaque = FALSE;
+    const HRESULT hr = DwmGetColorizationColor(&color, &opaque);
+    if (FAILED(hr)) {
+        PRINT_HR_ERROR_MESSAGE(DwmGetColorizationColor, hr)
+        return winrt::Windows::UI::Color::Black;
+    }
+    return color;
+}
+
+ColorizationArea Utils::GetColorizationArea()
+{
+    // todo: check which specific win10.
+    if (!IsWindows10OrGreater()) {
+        return ColorizationArea::None;
+    }
+    const HKEY rootKey = HKEY_CURRENT_USER;
+    const std::wstring keyName = L"ColorPrevalence";
+    const int themeValue = GetIntFromRegistry(rootKey, g_personalizeRegistryKey, keyName);
+    const int dwmValue = GetIntFromRegistry(rootKey, g_dWMRegistryKey, keyName);
+    const bool theme = (themeValue != 0);
+    const bool dwm = (dwmValue != 0);
+    if (theme && dwm) {
+        return ColorizationArea::All;
+    } else if (theme) {
+        return ColorizationArea::StartMenu_TaskBar_ActionCenter;
+    } else if (dwm) {
+        return ColorizationArea::TitleBar_WindowBorder;
+    }
+    return ColorizationArea::None;
+}
+
+bool Utils::IsHighContrastModeEnabled()
+{
+    HIGHCONTRASTW hc;
+    SecureZeroMemory(&hc, sizeof(hc));
+    hc.cbSize = sizeof(hc);
+    if (SystemParametersInfoW(SPI_GETHIGHCONTRAST, sizeof(hc), &hc, 0) == FALSE) {
+        PRINT_WIN32_ERROR_MESSAGE(SystemParametersInfoW)
+        return false;
+    }
+    return (hc.dwFlags & HCF_HIGHCONTRASTON);
+}
+
+bool Utils::IsWindowDarkFrameBorderEnabled(const HWND hWnd)
+{
+    if (!hWnd) {
+        return false;
+    }
+    BOOL enabled = FALSE;
+    HRESULT hr = DwmGetWindowAttribute(hWnd, static_cast<DWORD>(DwmWindowAttribute::USE_IMMERSIVE_DARK_MODE_BEFORE_20H1), &enabled, sizeof(enabled));
+    if (SUCCEEDED(hr)) {
+        return (enabled != FALSE);
+    } else {
+        // We just eat this error because this enum value was introduced in a very
+        // late Windows 10 version, so querying it's value will always result in
+        // a "parameter error" (code: 87) on systems before that value was introduced.
+    }
+    hr = DwmGetWindowAttribute(hWnd, static_cast<DWORD>(DwmWindowAttribute::USE_IMMERSIVE_DARK_MODE), &enabled, sizeof(enabled));
+    if (SUCCEEDED(hr)) {
+        return (enabled != FALSE);
+    } else {
+        // We just eat this error because this enum value was introduced in a very
+        // late Windows 10 version, so querying it's value will always result in
+        // a "parameter error" (code: 87) on systems before that value was introduced.
+    }
+    return false;
+}
+
+bool Utils::SetWindowDarkFrameBorderEnabled(const HWND hWnd, const bool enable)
+{
+    if (!hWnd) {
+        return false;
+    }
+    const BOOL enabled = (enable ? TRUE : FALSE);
+    HRESULT hr = DwmSetWindowAttribute(hWnd, static_cast<DWORD>(DwmWindowAttribute::USE_IMMERSIVE_DARK_MODE_BEFORE_20H1), &enabled, sizeof(enabled));
+    if (SUCCEEDED(hr)) {
+        return true;
+    } else {
+        // We just eat this error because this enum value was introduced in a very
+        // late Windows 10 version, so changing it's value will always result in
+        // a "parameter error" (code: 87) on systems before that value was introduced.
+    }
+    hr = DwmSetWindowAttribute(hWnd, static_cast<DWORD>(DwmWindowAttribute::USE_IMMERSIVE_DARK_MODE), &enabled, sizeof(enabled));
+    if (SUCCEEDED(hr)) {
+        return true;
+    } else {
+        // We just eat this error because this enum value was introduced in a very
+        // late Windows 10 version, so changing it's value will always result in
+        // a "parameter error" (code: 87) on systems before that value was introduced.
+    }
+    return false;
+}
+
+bool Utils::IsWindowTransitionsEnabled(const HWND hWnd)
+{
+    if (!hWnd) {
+        return false;
+    }
+    BOOL disabled = FALSE;
+    const HRESULT hr = DwmGetWindowAttribute(hWnd, static_cast<DWORD>(DwmWindowAttribute::TRANSITIONS_FORCEDISABLED), &disabled, sizeof(disabled));
+    if (FAILED(hr)) {
+        PRINT_HR_ERROR_MESSAGE(DwmGetWindowAttribute, hr)
+        return false;
+    }
+    return (disabled == FALSE);
+}
+
+bool Utils::SetWindowTransitionsEnabled(const HWND hWnd, const bool enable)
+{
+    if (!hWnd) {
+        return false;
+    }
+    const BOOL disabled = (enable ? FALSE : TRUE);
+    const HRESULT hr = DwmSetWindowAttribute(hWnd, static_cast<DWORD>(DwmWindowAttribute::TRANSITIONS_FORCEDISABLED), &disabled, sizeof(disabled));
+    if (FAILED(hr)) {
+        PRINT_HR_ERROR_MESSAGE(DwmSetWindowAttribute, hr)
+        return false;
+    }
+    return true;
+}
+
+std::wstring Utils::GetWallpaperFilePath(const int screen)
+{
+    if (IsWindows8OrGreater()) {
+        HRESULT hr = CoInitialize(nullptr);
+        if (SUCCEEDED(hr)) {
+            IDesktopWallpaper *pDesktopWallpaper = nullptr;
+            hr = CoCreateInstance(CLSID_DesktopWallpaper, nullptr, CLSCTX_LOCAL_SERVER, IID_PPV_ARGS(&pDesktopWallpaper));
+            if (SUCCEEDED(hr)) {
+                UINT monitorCount = 0;
+                hr = pDesktopWallpaper->GetMonitorDevicePathCount(&monitorCount);
+                if (SUCCEEDED(hr)) {
+                    if (screen < monitorCount) {
+                        LPWSTR monitorId = nullptr;
+                        hr = pDesktopWallpaper->GetMonitorDevicePathAt(screen, &monitorId);
+                        if (SUCCEEDED(hr)) {
+                            LPWSTR wallpaperPath = nullptr;
+                            hr = pDesktopWallpaper->GetWallpaper(monitorId, &wallpaperPath);
+                            if (SUCCEEDED(hr)) {
+                                CoTaskMemFree(monitorId);
+                                const std::wstring result = wallpaperPath;
+                                CoTaskMemFree(wallpaperPath);
+                                COM_SAFE_RELEASE(pDesktopWallpaper)
+                                CoUninitialize();
+                                return result;
+                            } else {
+                                CoTaskMemFree(monitorId);
+                                COM_SAFE_RELEASE(pDesktopWallpaper)
+                                PRINT_HR_ERROR_MESSAGE(GetWallpaper, hr)
+                            }
+                        } else {
+                            COM_SAFE_RELEASE(pDesktopWallpaper)
+                            PRINT_HR_ERROR_MESSAGE(GetMonitorDevicePathAt, hr)
+                        }
+                    } else {
+                        COM_SAFE_RELEASE(pDesktopWallpaper)
+                        PRINT(L"The given screen ID is beyond total screen count.");
+                    }
+                } else {
+                    COM_SAFE_RELEASE(pDesktopWallpaper)
+                    PRINT_HR_ERROR_MESSAGE(GetMonitorDevicePathCount, hr)
+                }
+            } else {
+                COM_SAFE_RELEASE(pDesktopWallpaper)
+                PRINT_HR_ERROR_MESSAGE(CoCreateInstance, hr)
+            }
+            CoUninitialize();
+        } else {
+            PRINT_HR_ERROR_MESSAGE(CoInitialize, hr)
+        }
+    }
+    HRESULT hr = CoInitialize(nullptr);
+    if (SUCCEEDED(hr)) {
+        IActiveDesktop *pActiveDesktop = nullptr;
+        hr = CoCreateInstance(CLSID_ActiveDesktop, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&pActiveDesktop));
+        if (SUCCEEDED(hr)) {
+            const auto wallpaperPath = new wchar_t[MAX_PATH];
+            SecureZeroMemory(wallpaperPath, sizeof(wallpaperPath));
+            // TODO: AD_GETWP_BMP, AD_GETWP_IMAGE, AD_GETWP_LAST_APPLIED. What's the difference?
+            hr = pActiveDesktop->GetWallpaper(wallpaperPath, MAX_PATH, AD_GETWP_LAST_APPLIED);
+            if (SUCCEEDED(hr)) {
+                const std::wstring result = wallpaperPath;
+                SAFE_FREE_CHARARRAY(wallpaperPath)
+                COM_SAFE_RELEASE(pActiveDesktop)
+                CoUninitialize();
+                return result;
+            } else {
+                SAFE_FREE_CHARARRAY(wallpaperPath)
+                COM_SAFE_RELEASE(pActiveDesktop)
+                PRINT_HR_ERROR_MESSAGE(GetWallpaper, hr)
+            }
+        } else {
+            COM_SAFE_RELEASE(pActiveDesktop)
+            PRINT_HR_ERROR_MESSAGE(CoCreateInstance, hr)
+        }
+        CoUninitialize();
+    } else {
+        PRINT_HR_ERROR_MESSAGE(CoInitialize, hr)
+    }
+    auto wallpaperPath = new wchar_t[MAX_PATH];
+    SecureZeroMemory(wallpaperPath, sizeof(wallpaperPath));
+    if (SystemParametersInfoW(SPI_GETDESKWALLPAPER, MAX_PATH, wallpaperPath, 0) != FALSE) {
+        const std::wstring result = wallpaperPath;
+        SAFE_FREE_CHARARRAY(wallpaperPath)
+        return result;
+    } else {
+        SAFE_FREE_CHARARRAY(wallpaperPath)
+        PRINT_WIN32_ERROR_MESSAGE(SystemParametersInfoW)
+    }
+    const std::wstring result = GetStringFromRegistry(HKEY_CURRENT_USER, g_desktopRegistryKey, L"WallPaper");
+    return result;
+}
+
+winrt::Windows::UI::Color Utils::GetDesktopBackgroundColor(const int screen)
+{
+    if (IsWindows8OrGreater()) {
+        HRESULT hr = CoInitialize(nullptr);
+        if (SUCCEEDED(hr)) {
+            IDesktopWallpaper *pDesktopWallpaper = nullptr;
+            hr = CoCreateInstance(CLSID_DesktopWallpaper, nullptr, CLSCTX_LOCAL_SERVER, IID_PPV_ARGS(&pDesktopWallpaper));
+            if (SUCCEEDED(hr)) {
+                COLORREF color = RGB(0, 0, 0);
+                hr = pDesktopWallpaper->GetBackgroundColor(&color);
+                if (SUCCEEDED(hr)) {
+                    COM_SAFE_RELEASE(pDesktopWallpaper)
+                    CoUninitialize();
+                    return color;
+                } else {
+                    COM_SAFE_RELEASE(pDesktopWallpaper)
+                    PRINT_HR_ERROR_MESSAGE(GetBackgroundColor, hr)
+                }
+            } else {
+                COM_SAFE_RELEASE(pDesktopWallpaper)
+                PRINT_HR_ERROR_MESSAGE(CoCreateInstance, hr)
+            }
+            CoUninitialize();
+        } else {
+            PRINT_HR_ERROR_MESSAGE(CoInitialize, hr)
+        }
+    }
+    // TODO: Is there any other way to get the background color? Traditional Win32 API? Registry?
+    // Is there a COM API for Win7?
+    return winrt::Windows::UI::Color::Black;
+}
+
+WallpaperAspectStyle Utils::GetWallpaperAspectStyle(const int screen)
+{
+    if (IsWindows8OrGreater()) {
+        HRESULT hr = CoInitialize(nullptr);
+        if (SUCCEEDED(hr)) {
+            IDesktopWallpaper *pDesktopWallpaper = nullptr;
+            hr = CoCreateInstance(CLSID_DesktopWallpaper, nullptr, CLSCTX_LOCAL_SERVER, IID_PPV_ARGS(&pDesktopWallpaper));
+            if (SUCCEEDED(hr)) {
+                DESKTOP_WALLPAPER_POSITION position = DWPOS_FILL;
+                hr = pDesktopWallpaper->GetPosition(&position);
+                if (SUCCEEDED(hr)) {
+                    WallpaperAspectStyle result = WallpaperAspectStyle::Invalid;
+                    switch (position) {
+                    case DWPOS_CENTER:
+                        result = WallpaperAspectStyle::Central;
+                        break;
+                    case DWPOS_TILE:
+                        result = WallpaperAspectStyle::Tiled;
+                        break;
+                    case DWPOS_STRETCH:
+                        result = WallpaperAspectStyle::IgnoreRatioFit;
+                        break;
+                    case DWPOS_FIT:
+                        result = WallpaperAspectStyle::KeepRatioFit;
+                        break;
+                    case DWPOS_FILL:
+                        result = WallpaperAspectStyle::KeepRatioByExpanding;
+                        break;
+                    case DWPOS_SPAN:
+                        result = WallpaperAspectStyle::Span;
+                        break;
+                    }
+                    COM_SAFE_RELEASE(pDesktopWallpaper)
+                    CoUninitialize();
+                    return result;
+                } else {
+                    COM_SAFE_RELEASE(pDesktopWallpaper)
+                    PRINT_HR_ERROR_MESSAGE(GetPosition, hr)
+                }
+            } else {
+                COM_SAFE_RELEASE(pDesktopWallpaper)
+                PRINT_HR_ERROR_MESSAGE(CoCreateInstance, hr)
+            }
+            CoUninitialize();
+        } else {
+            PRINT_HR_ERROR_MESSAGE(CoInitialize, hr)
+        }
+    }
+    HRESULT hr = CoInitialize(nullptr);
+    if (SUCCEEDED(hr)) {
+        IActiveDesktop *pActiveDesktop = nullptr;
+        hr = CoCreateInstance(CLSID_ActiveDesktop, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&pActiveDesktop));
+        if (SUCCEEDED(hr)) {
+            WALLPAPEROPT opt;
+            SecureZeroMemory(&opt, sizeof(opt));
+            opt.dwSize = sizeof(opt);
+            hr = pActiveDesktop->GetWallpaperOptions(&opt, 0);
+            if (SUCCEEDED(hr)) {
+                WallpaperAspectStyle result = WallpaperAspectStyle::Invalid;
+                switch (opt.dwStyle) {
+                case WPSTYLE_CENTER:
+                    result = WallpaperAspectStyle::Central;
+                    break;
+                case WPSTYLE_TILE:
+                    result = WallpaperAspectStyle::Tiled;
+                    break;
+                case WPSTYLE_STRETCH:
+                    result = WallpaperAspectStyle::IgnoreRatioFit;
+                    break;
+                case WPSTYLE_KEEPASPECT:
+                    result = WallpaperAspectStyle::KeepRatioFit;
+                    break;
+                case WPSTYLE_CROPTOFIT:
+                    result = WallpaperAspectStyle::KeepRatioByExpanding;
+                    break;
+                case WPSTYLE_SPAN:
+                    result = WallpaperAspectStyle::Span;
+                    break;
+                }
+                COM_SAFE_RELEASE(pActiveDesktop)
+                CoUninitialize();
+                return result;
+            } else {
+                COM_SAFE_RELEASE(pActiveDesktop)
+                PRINT_HR_ERROR_MESSAGE(GetWallpaperOptions, hr)
+            }
+        } else {
+            COM_SAFE_RELEASE(pActiveDesktop)
+            PRINT_HR_ERROR_MESSAGE(CoCreateInstance, hr)
+        }
+        CoUninitialize();
+    } else {
+        PRINT_HR_ERROR_MESSAGE(CoInitialize, hr)
+    }
+    const HKEY rootKey = HKEY_CURRENT_USER;
+    const int styleValue = GetIntFromRegistry(rootKey, g_desktopRegistryKey, L"WallpaperStyle");
+    switch (styleValue) {
+    case 0: {
+        const int tileValue = GetIntFromRegistry(rootKey, g_desktopRegistryKey, L"TileWallpaper");
+        if (tileValue != 0) {
+            return WallpaperAspectStyle::Tiled;
+        } else {
+            return WallpaperAspectStyle::Central;
+        }
+    }
+    case 2:
+        return WallpaperAspectStyle::IgnoreRatioFit;
+    case 6:
+        return WallpaperAspectStyle::KeepRatioFit;
+    case 10:
+        return WallpaperAspectStyle::KeepRatioByExpanding;
+    case 22:
+        return WallpaperAspectStyle::Span;
+    default:
+        return WallpaperAspectStyle::Invalid;
+    }
+}
+
+std::wstring Utils::GetStringFromEnvironmentVariable(const std::wstring &name)
+{
+    if (name.empty()) {
+        return {};
+    }
+    auto buf = new wchar_t[MAX_PATH];
+    SecureZeroMemory(buf, sizeof(buf));
+    if (GetEnvironmentVariableW(name, buf, sizeof(buf)) == 0) {
+        // We eat this error because the given environment variable may not exist.
+        SAFE_FREE_CHARARRAY(buf)
+        return {};
+    }
+    const std::wstring result = buf;
+    SAFE_FREE_CHARARRAY(buf)
+    return result;
+}
+
+int Utils::GetIntFromEnvironmentVariable(const std::wstring &name)
+{
+    if (name.empty()) {
+        return 0;
+    }
+    //
+}
+
+bool Utils::GetBoolFromEnvironmentVariable(const std::wstring &name)
+{
+    if (name.empty()) {
+        return false;
+    }
+    //
+}
+
+std::wstring Utils::GetStringFromIniFile(const std::wstring &file, const std::wstring &section, const std::wstring &key)
+{
+    if (file.empty() || section.empty() || key.empty()) {
+        return {};
+    }
+    auto buf = new wchar_t[MAX_PATH];
+    SecureZeroMemory(buf, sizeof(buf));
+    if (GetPrivateProfileStringW(section, key, nullptr, buf, MAX_PATH, ini) == 0) {
+        SAFE_FREE_CHARARRAY(buf)
+        PRINT_WIN32_ERROR_MESSAGE(GetPrivateProfileStringW)
+        return {};
+    }
+    const std::wstring result = buf;
+    SAFE_FREE_CHARARRAY(buf)
+    return result;
+}
+
+int Utils::GetIntFromIniFile(const std::wstring &file, const std::wstring &section, const std::wstring &key)
+{
+    if (file.empty() || section.empty() || key.empty()) {
+        return 0;
+    }
+    const int result = GetPrivateProfileIntW(section, key, 0, ini);
+    if (GetLastError() != ERROR_SUCCESS) {
+        PRINT_WIN32_ERROR_MESSAGE(GetPrivateProfileIntW)
+        return 0;
+    }
+    return result;
+}
+
+bool Utils::GetBoolFromIniFile(const std::wstring &file, const std::wstring &section, const std::wstring &key)
+{
+    if (file.empty() || section.empty() || key.empty()) {
+        return false;
+    }
+    //
+}
+
+std::wstring Utils::GetStringFromRegistry(const HKEY rootKey, const std::wstring &subKey, const std::wstring &key)
+{
+    if (!rootKey || subKey.empty() || key.empty()) {
+        return {};
+    }
+    HKEY hKey = nullptr;
+    if (RegOpenKeyExW(rootKey, subKey, 0, KEY_READ, &hKey) != ERROR_SUCCESS) {
+        PRINT_WIN32_ERROR_MESSAGE(RegOpenKeyExW)
+        return {};
+    }
+    auto buf = new wchar_t[MAX_PATH];
+    SecureZeroMemory(buf, sizeof(buf));
+    DWORD dwType = REG_SZ;
+    DWORD dwSize = sizeof(buf);
+    const bool success = (RegQueryValueExW(hKey, valueName, nullptr, &dwType,
+                                reinterpret_cast<LPBYTE>(buf), &dwSize) == ERROR_SUCCESS);
+    if (!success) {
+        // We eat this error because the given registry key and value may not exist.
+        SAFE_FREE_CHARARRAY(buf)
+    }
+    if (RegCloseKey(hKey) != ERROR_SUCCESS) {
+        PRINT_WIN32_ERROR_MESSAGE(RegCloseKey)
+        return {};
+    }
+    const std::wstring result = (success ? buf : std::wstring{});
+    SAFE_FREE_CHARARRAY(buf)
+    return result;
+}
+
+int Utils::GetIntFromRegistry(const HKEY rootKey, const std::wstring &subKey, const std::wstring &key)
+{
+    if (!rootKey || subKey.empty() || key.empty()) {
+        return 0;
+    }
+    HKEY hKey = nullptr;
+    if (RegOpenKeyExW(rootKey, subKey, 0, KEY_READ, &hKey) != ERROR_SUCCESS) {
+        PRINT_WIN32_ERROR_MESSAGE(RegOpenKeyExW)
+        return 0;
+    }
+    DWORD dwValue = 0;
+    DWORD dwType = REG_DWORD;
+    DWORD dwSize = sizeof(dwValue);
+    const bool success = (RegQueryValueExW(hKey, valueName, nullptr, &dwType,
+                                reinterpret_cast<LPBYTE>(&dwValue), &dwSize) == ERROR_SUCCESS);
+    if (!success) {
+        // We eat this error because the given registry key and value may not exist.
+    }
+    if (RegCloseKey(hKey) != ERROR_SUCCESS) {
+        PRINT_WIN32_ERROR_MESSAGE(RegCloseKey)
+        return 0;
+    }
+    return static_cast<int>(dwValue);
+}
+
+DpiAwareness Utils::GetDpiAwarenessForWindow(const HWND hWnd)
+{
+    if (!hWnd) {
+        return DpiAwareness::Invalid;
+    }
+    const auto context = GetWindowDpiAwarenessContext(hWnd);
+    if (context) {
+        const auto awareness = GetAwarenessFromDpiAwarenessContext(context);
+        if (awareness != DPI_AWARENESS_INVALID) {
+            return static_cast<DpiAwareness>(awareness);
+        } else {
+            PRINT_WIN32_ERROR_MESSAGE(GetAwarenessFromDpiAwarenessContext)
+        }
+    } else {
+        PRINT_WIN32_ERROR_MESSAGE(GetWindowDpiAwarenessContext)
+    }
+    PROCESS_DPI_AWARENESS awareness = PROCESS_DPI_UNAWARE;
+    const HRESULT hr = GetProcessDpiAwareness(nullptr, &awareness);
+    if (SUCCEEDED(hr)) {
+        return static_cast<DpiAwareness>(awareness);
+    } else {
+        PRINT_HR_ERROR_MESSAGE(GetProcessDpiAwareness, hr)
+    }
+    return((IsProcessDPIAware() == FALSE) ? DpiAwareness::Unaware : DpiAwareness::System);
+}
+
+bool Utils::SetDpiAwarenessForWindow(const HWND hWnd, const DpiAwareness awareness)
+{
+    if (!hWnd) {
+        return false;
+    }
+    switch (awareness) {
+    case DpiAwareness::PerMonitorV2: {
+        if (SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2) != FALSE) {
+            return true;
+        }
+        PRINT_WIN32_ERROR_MESSAGE(SetProcessDpiAwarenessContext)
+        return false;
+    }
+    case DpiAwareness::PerMonitor: {
+        if (SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE) != FALSE) {
+            return true;
+        }
+        PRINT_WIN32_ERROR_MESSAGE(SetProcessDpiAwarenessContext)
+        const HRESULT hr = SetProcessDpiAwareness(PROCESS_PER_MONITOR_DPI_AWARE);
+        if (SUCCEEDED(hr)) {
+            return true;
+        }
+        PRINT_HR_ERROR_MESSAGE(SetProcessDpiAwareness, hr)
+        return false;
+    }
+    case DpiAwareness::System: {
+        if (SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_SYSTEM_AWARE) != FALSE) {
+            return true;
+        }
+        PRINT_WIN32_ERROR_MESSAGE(SetProcessDpiAwarenessContext)
+        const HRESULT hr = SetProcessDpiAwareness(PROCESS_SYSTEM_DPI_AWARE);
+        if (SUCCEEDED(hr)) {
+            return true;
+        }
+        PRINT_HR_ERROR_MESSAGE(SetProcessDpiAwareness, hr)
+        return false;
+    }
+    case DpiAwareness::Unaware: {
+        if (SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_UNAWARE) != FALSE) {
+            return true;
+        }
+        PRINT_WIN32_ERROR_MESSAGE(SetProcessDpiAwarenessContext)
+        const HRESULT hr = SetProcessDpiAwareness(PROCESS_DPI_UNAWARE);
+        if (SUCCEEDED(hr)) {
+            return true;
+        }
+        PRINT_HR_ERROR_MESSAGE(SetProcessDpiAwareness, hr)
+        return false;
+    }
+    default:
+        break;
+    }
+    return false;
+}
+
+std::wstring Utils::TranslateErrorCodeToMessage(const std::wstring &function, const HRESULT hr)
+{
+    if (function.empty() || SUCCEEDED(hr)) {
+        return {};
+    }
+    const DWORD dwError = HRESULT_CODE(hr);
+    LPWSTR buf = nullptr;
+    if (FormatMessageW(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
+        nullptr, dwError, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), buf, 0, nullptr) == 0) {
+        return {};
+    }
+    auto str = new wchar_t[MAX_PATH];
+    SecureZeroMemory(str, sizeof(str));
+    swprintf(str, L"%s failed with error %d: %s", function, dwError, buf);
+    const std::wstring result = str;
+    LocalFree(buf);
+    SAFE_FREE_CHARARRAY(str)
+    return result;
+}
+
+std::wstring Utils::GenerateGUID()
+{
+    HRESULT hr = CoInitialize(nullptr);
+    if (FAILED(hr)) {
+        PRINT_HR_ERROR_MESSAGE(CoInitialize, hr)
+        return {};
+    }
+    GUID guid = {};
+    hr = CoCreateGuid(&guid);
+    if (FAILED(hr)) {
+        PRINT_HR_ERROR_MESSAGE(CoCreateGuid, hr)
+        CoUninitialize();
+        return {};
+    }
+    auto buf = new wchar_t[MAX_PATH];
+    SecureZeroMemory(buf, sizeof(buf));
+    if (StringFromGUID2(guid, buf, MAX_PATH) == 0) {
+        SAFE_FREE_CHARARRAY(buf)
+        PRINT_WIN32_ERROR_MESSAGE(StringFromGUID2)
+        CoUninitialize();
+        return {};
+    }
+    CoUninitialize();
+    const std::wstring result = buf;
+    SAFE_FREE_CHARARRAY(buf)
+    return result;
+}

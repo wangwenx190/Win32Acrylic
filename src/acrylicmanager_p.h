@@ -26,195 +26,11 @@
 
 #include "acrylicmanager_global.h"
 
-enum class WindowsVersion : int
-{
-    WindowsVista = 0,
-    Windows7,
-    Windows8,
-    Windows8_1,
-    Windows10_1507,
-    Windows10_1511,
-    Windows10_1607,
-    Windows10_1703,
-    Windows10_1709,
-    Windows10_1803,
-    Windows10_1809,
-    Windows10_1903,
-    Windows10_1909,
-    Windows10_2004,
-    Windows10_20H2,
-    Windows10_21H1,
-    Windows11,
-    Windows10 = Windows10_1507,
-    Windows10_TH1 = Windows10_1507,
-    Windows10_TH2 = Windows10_1511,
-    Windows10_RS1 = Windows10_1607,
-    Windows10_RS2 = Windows10_1703,
-    Windows10_RS3 = Windows10_1709,
-    Windows10_RS4 = Windows10_1803,
-    Windows10_RS5 = Windows10_1809,
-    Windows10_19H1 = Windows10_1903,
-    Windows10_19H2 = Windows10_1909,
-    Windows10_20H1 = Windows10_2004
-    //Windows10_20H2 = Windows10_20H2,
-    //Windows10_21H1 = Windows10_21H1,
-};
-
-enum class VersionCompare : int
-{
-    Less = 0,
-    Equal,
-    Greater,
-    LessOrEqual,
-    GreaterOrEqual
-};
-
-enum class ColorizationArea : int
-{
-    None = 0,
-    StartMenu_TaskBar_ActionCenter,
-    TitleBar_WindowBorder,
-    All
-};
-
-enum class WallpaperAspectStyle : int
-{
-    Invalid = -1,
-    Central,
-    Tiled,
-    IgnoreRatioFit, // Stretch
-    KeepRatioFit, // Fit
-    KeepRatioByExpanding, // Fill
-    Span
-};
-
-enum class DpiAwareness : int
-{
-    Invalid = -1,
-    Unaware,
-    System,
-    PerMonitor,
-    PerMonitorV2
-};
-
-enum class DwmWindowAttribute : int
-{
-    TRANSITIONS_FORCEDISABLED = 3,            // [get/set] BOOL, Enable or disable window transitions.
-    CAPTION_BUTTON_BOUNDS = 5,                // [get] RECT, Bounds of the caption (titlebar) button area rectangle in window-relative space.
-    EXTENDED_FRAME_BOUNDS = 9,                // [get] RECT, Bounds of the extended frame rectangle in screen space.
-    EXCLUDED_FROM_PEEK = 12,                  // [get/set] BOOL, Exclude or include window from LivePreview.
-    USE_HOSTBACKDROPBRUSH = 17,               // [get/set] BOOL, Allows the use of host backdrop brushes for the window.
-    USE_IMMERSIVE_DARK_MODE_BEFORE_20H1 = 19, // [get/set] BOOL, Allows a window to either use the accent color, or dark, according to the user Color Mode preferences.
-    USE_IMMERSIVE_DARK_MODE = 20,             // [get/set] BOOL, The same as "DWMWA_USE_IMMERSIVE_DARK_MODE_BEFORE_20H1".
-    WINDOW_CORNER_PREFERENCE = 33,            // [get/set] WINDOW_CORNER_PREFERENCE, Controls the policy that rounds top-level window corners.
-    BORDER_COLOR = 34,                        // [get/set] COLORREF, Color of the thin border around a top-level window.
-    CAPTION_COLOR = 35,                       // [get/set] COLORREF, Color of the caption (titlebar).
-    TEXT_COLOR = 36,                          // [get/set] COLORREF, Color of the caption (titlebar) text.
-    VISIBLE_FRAME_BORDER_THICKNESS = 37       // [get] UINT, Width of the visible border around a thick frame window.
-};
-
-enum class MonitorDpiType : int
-{
-    EFFECTIVE_DPI = 0,
-    DEFAULT = EFFECTIVE_DPI
-};
-
-typedef enum _WINDOWCOMPOSITIONATTRIB
-{
-    WCA_UNDEFINED = 0x0,
-    WCA_NCRENDERING_ENABLED = 0x1,
-    WCA_NCRENDERING_POLICY = 0x2,
-    WCA_TRANSITIONS_FORCEDISABLED = 0x3,
-    WCA_ALLOW_NCPAINT = 0x4,
-    WCA_CAPTION_BUTTON_BOUNDS = 0x5,
-    WCA_NONCLIENT_RTL_LAYOUT = 0x6,
-    WCA_FORCE_ICONIC_REPRESENTATION = 0x7,
-    WCA_EXTENDED_FRAME_BOUNDS = 0x8,
-    WCA_HAS_ICONIC_BITMAP = 0x9,
-    WCA_THEME_ATTRIBUTES = 0xA,
-    WCA_NCRENDERING_EXILED = 0xB,
-    WCA_NCADORNMENTINFO = 0xC,
-    WCA_EXCLUDED_FROM_LIVEPREVIEW = 0xD,
-    WCA_VIDEO_OVERLAY_ACTIVE = 0xE,
-    WCA_FORCE_ACTIVEWINDOW_APPEARANCE = 0xF,
-    WCA_DISALLOW_PEEK = 0x10,
-    WCA_CLOAK = 0x11,
-    WCA_CLOAKED = 0x12,
-    WCA_ACCENT_POLICY = 0x13,
-    WCA_FREEZE_REPRESENTATION = 0x14,
-    WCA_EVER_UNCLOAKED = 0x15,
-    WCA_VISUAL_OWNER = 0x16,
-    WCA_HOLOGRAPHIC = 0x17,
-    WCA_EXCLUDED_FROM_DDA = 0x18,
-    WCA_PASSIVEUPDATEMODE = 0x19,
-    WCA_LAST = 0x1A
-} WINDOWCOMPOSITIONATTRIB;
-
-typedef struct _WINDOWCOMPOSITIONATTRIBDATA
-{
-    WINDOWCOMPOSITIONATTRIB Attrib;
-    LPVOID pvData;
-    SIZE_T cbData;
-} WINDOWCOMPOSITIONATTRIBDATA, *PWINDOWCOMPOSITIONATTRIBDATA, *LPWINDOWCOMPOSITIONATTRIBDATA;
-
-typedef enum _ACCENT_STATE
-{
-    ACCENT_DISABLED = 0,
-    ACCENT_ENABLE_GRADIENT = 1,
-    ACCENT_ENABLE_TRANSPARENTGRADIENT = 2,
-    ACCENT_ENABLE_BLURBEHIND = 3,
-    ACCENT_ENABLE_ACRYLICBLURBEHIND = 4, // RS4 1803
-    ACCENT_ENABLE_HOSTBACKDROP = 5, // RS5 1809
-    ACCENT_INVALID_STATE = 6
-} ACCENT_STATE;
-
-typedef struct _ACCENT_POLICY
-{
-    ACCENT_STATE AccentState;
-    DWORD AccentFlags;
-    COLORREF GradientColor;
-    DWORD AnimationId;
-} ACCENT_POLICY, *PACCENT_POLICY, *LPACCENT_POLICY;
-
 #ifdef __cplusplus
 EXTERN_C_START
 #endif
 
-[[nodiscard]] ACRYLICMANAGER_API HRESULT WINAPI
-am_GetWindowDotsPerInch_p(
-    _In_ const HWND hWnd,
-    _Out_ UINT      *dpi
-);
 
-[[nodiscard]] ACRYLICMANAGER_API HRESULT WINAPI
-am_IsMinimized_p(
-    _In_ const HWND hWnd,
-    _Out_ bool      *min
-);
-
-[[nodiscard]] ACRYLICMANAGER_API HRESULT WINAPI
-am_IsMaximized_p(
-    _In_ const HWND hWnd,
-    _Out_ bool      *max
-);
-
-[[nodiscard]] ACRYLICMANAGER_API HRESULT WINAPI
-am_IsFullScreened_p(
-    _In_ const HWND hWnd,
-    _Out_ bool      *full
-);
-
-[[nodiscard]] ACRYLICMANAGER_API HRESULT WINAPI
-am_IsWindowNoState_p(
-    _In_ const HWND hWnd,
-    _Out_ bool      *normal
-);
-
-[[nodiscard]] ACRYLICMANAGER_API HRESULT WINAPI
-am_IsWindowVisible_p(
-    _In_ const HWND hWnd,
-    _Out_ bool      *visible
-);
 
 [[nodiscard]] ACRYLICMANAGER_API HRESULT WINAPI
 am_GetResizeBorderThickness_p(
@@ -259,18 +75,6 @@ am_TriggerFrameChange_p(
 );
 
 [[nodiscard]] ACRYLICMANAGER_API HRESULT WINAPI
-am_IsWindowTransitionsEnabled_p(
-    _In_ const HWND hWnd,
-    _Out_ bool      *enabled
-);
-
-[[nodiscard]] ACRYLICMANAGER_API HRESULT WINAPI
-am_SetWindowTransitionsEnabled_p(
-    _In_ const HWND hWnd,
-    _In_ const bool enable
-);
-
-[[nodiscard]] ACRYLICMANAGER_API HRESULT WINAPI
 am_OpenSystemMenu_p(
     _In_ const HWND  hWnd,
     _In_ const POINT pos
@@ -295,53 +99,9 @@ am_PrintErrorMessageFromHResult_p(
 );
 
 [[nodiscard]] ACRYLICMANAGER_API HRESULT WINAPI
-am_ShouldAppsUseLightTheme_p(
-    _Out_ bool *result
-);
-
-[[nodiscard]] ACRYLICMANAGER_API HRESULT WINAPI
-am_ShouldSystemUsesLightTheme_p(
-    _Out_ bool *result
-);
-
-[[nodiscard]] ACRYLICMANAGER_API HRESULT WINAPI
-am_IsHighContrastModeEnabled_p(
-    _Out_ bool *enabled
-);
-
-[[nodiscard]] ACRYLICMANAGER_API HRESULT WINAPI
 am_SetWindowCompositionAttribute_p(
     _In_ const HWND                    hWnd,
     _In_ LPWINDOWCOMPOSITIONATTRIBDATA pwcad
-);
-
-[[nodiscard]] ACRYLICMANAGER_API HRESULT WINAPI
-am_IsWindowUsingDarkFrame_p(
-    _In_ const HWND hWnd,
-    _Out_ bool      *result
-);
-
-[[nodiscard]] ACRYLICMANAGER_API HRESULT WINAPI
-am_SetWindowDarkFrameEnabled_p(
-    _In_ const HWND hWnd,
-    _In_ const bool enable
-);
-
-[[nodiscard]] ACRYLICMANAGER_API HRESULT WINAPI
-am_GetColorizationColor_p(
-    _Out_ COLORREF *color
-);
-
-[[nodiscard]] ACRYLICMANAGER_API HRESULT WINAPI
-am_GetColorizationArea_p(
-    _Out_ ColorizationArea *area
-);
-
-[[nodiscard]] ACRYLICMANAGER_API HRESULT WINAPI
-am_GetWindowVisibleFrameBorderThickness_p(
-    _In_ const HWND hWnd,
-    _In_ const UINT dpi,
-    _Out_ int       *thickness
 );
 
 [[nodiscard]] ACRYLICMANAGER_API HRESULT WINAPI
@@ -433,32 +193,6 @@ am_SetWindowTranslucentBackgroundEnabled_p(
     _In_ const bool enable
 );
 
-[[nodiscard]] ACRYLICMANAGER_API HRESULT WINAPI
-am_SetOfficialBlurEnabled_p(
-    _In_ const HWND hWnd,
-    _In_ const int  r = -1,
-    _In_ const int  g = -1,
-    _In_ const int  b = -1,
-    _In_ const int  a = -1
-);
-
-[[nodiscard]] ACRYLICMANAGER_API HRESULT WINAPI
-am_IsOfficialBlurEnabled_p(
-    _In_ const HWND hWnd,
-    _Out_ bool      *result
-);
-
-[[nodiscard]] ACRYLICMANAGER_API HRESULT WINAPI
-am_GetWindowClientSize_p(
-    _In_ const HWND hWnd,
-    _Out_ SIZE      *result
-);
-
-[[nodiscard]] ACRYLICMANAGER_API HRESULT WINAPI
-am_GetWindowDevicePixelRatio_p(
-    _In_ const HWND hWnd,
-    _Out_ double    *result
-);
 
 [[nodiscard]] ACRYLICMANAGER_API HRESULT WINAPI
 am_GetEffectiveTintColor_p(

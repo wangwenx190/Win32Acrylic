@@ -347,7 +347,7 @@ EXTERN_C IMAGE_DOS_HEADER __ImageBase;
 
 #ifndef IsFullScreened
 #define IsFullScreened(window) \
-[]{ \
+[=]{ \
     if (!window) { \
         return false; \
     } \
@@ -422,19 +422,15 @@ EXTERN_C IMAGE_DOS_HEADER __ImageBase;
 #endif
 
 #ifndef GET_MONITOR_INFO
-#define GET_MONITOR_INFO(window) \
-[]{ \
-    if (!window) { \
-        return MONITORINFO{}; \
-    } \
-    const HMONITOR __ps = GET_CURRENT_SCREEN(window); \
-    if (!__ps) { \
+#define GET_MONITOR_INFO(monitor) \
+[=]{ \
+    if (!monitor) { \
         return MONITORINFO{}; \
     } \
     MONITORINFO __mi; \
     SecureZeroMemory(&__mi, sizeof(__mi)); \
     __mi.cbSize = sizeof(__mi); \
-    if (GetMonitorInfoW(__ps, &__mi) == FALSE) { \
+    if (GetMonitorInfoW(monitor, &__mi) == FALSE) { \
         return MONITORINFO{}; \
     } \
     return __mi; \
@@ -443,7 +439,7 @@ EXTERN_C IMAGE_DOS_HEADER __ImageBase;
 
 #ifndef GET_WINDOW_RECT
 #define GET_WINDOW_RECT(window) \
-[]{ \
+[=]{ \
     if (!window) { \
         return RECT{}; \
     } \
@@ -456,12 +452,19 @@ EXTERN_C IMAGE_DOS_HEADER __ImageBase;
 #endif
 
 #ifndef GET_WINDOW_SIZE
-#define GET_WINDOW_SIZE(window) (window ? GET_RECT_SIZE(GET_WINDOW_RECT(window)) : SIZE{})
+#define GET_WINDOW_SIZE(window) \
+[=]{ \
+    if (!window) { \
+        return SIZE{}; \
+    } \
+    const RECT __rect = GET_WINDOW_RECT(window); \
+    return GET_RECT_SIZE(__rect); \
+}()
 #endif
 
 #ifndef GET_WINDOW_CLIENT_SIZE
 #define GET_WINDOW_CLIENT_SIZE(window) \
-[]{ \
+[=]{ \
     if (!window) { \
         return SIZE{}; \
     } \
@@ -472,6 +475,18 @@ EXTERN_C IMAGE_DOS_HEADER __ImageBase;
     return GET_RECT_SIZE(__rect); \
 }()
 #endif
+
+#ifndef GET_SCREEN_GEOMETRY
+#define GET_SCREEN_GEOMETRY(monitor) \
+[=]{ \
+    if (!monitor) { \
+        return RECT{}; \
+    } \
+    return GET_MONITOR_INFO(monitor).rcMonitor; \
+}()
+#endif
+
+#ifndef GET
 
 #ifndef DECLARE_UNUSED
 #define DECLARE_UNUSED(var) (static_cast<void>(var))

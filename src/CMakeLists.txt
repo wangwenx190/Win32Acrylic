@@ -15,6 +15,8 @@ set(SOURCES
     colorconversion.cpp
     utils.h
     utils.cpp
+    customframe.h
+    customframe.cpp
     acrylicbrush.h
     acrylicbrush_system.cpp
     acrylicbrush_xaml.cpp

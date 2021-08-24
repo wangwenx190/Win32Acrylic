@@ -35,9 +35,7 @@
 
 
 
-#ifndef ABM_GETAUTOHIDEBAREX
-#define ABM_GETAUTOHIDEBAREX (0x0000000b)
-#endif
+
 
 #ifndef WM_DWMCOMPOSITIONCHANGED
 #define WM_DWMCOMPOSITIONCHANGED (0x031E)
@@ -51,8 +49,7 @@
 /////     Global variables
 /////////////////////////////////
 
-// The thickness of an auto-hide taskbar in pixels.
-static constexpr int g_am_AutoHideTaskbarThicknessPx_p = 2;
+
 static constexpr int g_am_AutoHideTaskbarThicknessPy_p = g_am_AutoHideTaskbarThicknessPx_p;
 
 static constexpr wchar_t g_am_ForceOfficialBlurEnvVar_p[] = L"ACRYLICMANAGER_FORCE_OFFICIAL_BLUR";
@@ -1244,60 +1241,6 @@ HRESULT am_IsCompositionEnabled_p(bool *result)
         return S_OK;
     }
     return E_FAIL;
-}
-
-HRESULT am_OpenSystemMenu_p(const HWND hWnd, const POINT pos)
-{
-    if (!hWnd) {
-        return E_INVALIDARG;
-    }
-    const HMENU menu = GetSystemMenu(hWnd, FALSE);
-    if (!menu) {
-        PRINT_WIN32_ERROR_MESSAGE_AND_RETURN(GetSystemMenu)
-    }
-    // Update the options based on window state.
-    MENUITEMINFOW mii;
-    SecureZeroMemory(&mii, sizeof(mii));
-    mii.cbSize = sizeof(mii);
-    mii.fMask = MIIM_STATE;
-    mii.fType = MFT_STRING;
-    const auto setState = [&mii, menu](const UINT item, const bool enabled) -> bool {
-        mii.fState = enabled ? MF_ENABLED : MF_DISABLED;
-        return (SetMenuItemInfoW(menu, item, FALSE, &mii) != FALSE);
-    };
-    bool isMaximized = false;
-    if (FAILED(am_IsMaximized_p(hWnd, &isMaximized))) {
-        return E_FAIL;
-    }
-    if (!setState(SC_RESTORE, isMaximized)) {
-        PRINT_WIN32_ERROR_MESSAGE_AND_RETURN(SetMenuItemInfoW)
-    }
-    if (!setState(SC_MOVE, !isMaximized)) {
-        PRINT_WIN32_ERROR_MESSAGE_AND_RETURN(SetMenuItemInfoW)
-    }
-    if (!setState(SC_SIZE, !isMaximized)) {
-        PRINT_WIN32_ERROR_MESSAGE_AND_RETURN(SetMenuItemInfoW)
-    }
-    if (!setState(SC_MINIMIZE, true)) {
-        PRINT_WIN32_ERROR_MESSAGE_AND_RETURN(SetMenuItemInfoW)
-    }
-    if (!setState(SC_MAXIMIZE, !isMaximized)) {
-        PRINT_WIN32_ERROR_MESSAGE_AND_RETURN(SetMenuItemInfoW)
-    }
-    if (!setState(SC_CLOSE, true)) {
-        PRINT_WIN32_ERROR_MESSAGE_AND_RETURN(SetMenuItemInfoW)
-    }
-    if (SetMenuDefaultItem(menu, UINT_MAX, FALSE) == FALSE) {
-        PRINT_WIN32_ERROR_MESSAGE_AND_RETURN(SetMenuDefaultItem)
-    }
-    // ### TODO: support LTR layout.
-    const auto ret = TrackPopupMenu(menu, TPM_RETURNCMD, pos.x, pos.y, 0, hWnd, nullptr);
-    if (ret != 0) {
-        if (PostMessageW(hWnd, WM_SYSCOMMAND, ret, 0) == FALSE) {
-            PRINT_WIN32_ERROR_MESSAGE_AND_RETURN(PostMessageW)
-        }
-    }
-    return S_OK;
 }
 
 HRESULT am_SetWindowCompositionAttribute_p(const HWND hWnd, LPWINDOWCOMPOSITIONATTRIBDATA pwcad)

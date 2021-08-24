@@ -53,13 +53,11 @@ static winrt::Windows::UI::Xaml::Hosting::DesktopWindowXamlSource g_source = nul
 static winrt::Windows::UI::Xaml::Controls::Grid g_rootGrid = nullptr;
 static winrt::Windows::UI::Xaml::Media::AcrylicBrush g_backgroundBrush = nullptr;
 
-EXTERN_C LRESULT CALLBACK MainWindowProc(HWND, UINT, WPARAM, LPARAM);
-
-EXTERN_C LRESULT CALLBACK DragBarWindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
+EXTERN_C LRESULT CALLBACK DragBarWindowProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
     std::optional<UINT> nonClientMessage = std::nullopt;
 
-    switch (uMsg)
+    switch (message)
     {
     // Translate WM_* messages on the window to WM_NC* on the top level window.
     case WM_LBUTTONDOWN:
@@ -117,7 +115,7 @@ EXTERN_C LRESULT CALLBACK DragBarWindowProc(HWND hWnd, UINT uMsg, WPARAM wParam,
         return 0;
     }
 
-    return DefWindowProcW(hWnd, uMsg, wParam, lParam);
+    return DefWindowProcW(hWnd, message, wParam, lParam);
 }
 
 [[nodiscard]] static inline bool RegisterMainWindowClass()

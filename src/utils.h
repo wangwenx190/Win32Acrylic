@@ -70,5 +70,6 @@ namespace Utils
 [[nodiscard]] std::wstring GenerateGUID();
 [[nodiscard]] bool TriggerFrameChangeForWindow(const HWND hWnd);
 [[nodiscard]] bool UpdateFrameMargins(const HWND hWnd);
+[[nodiscard]] bool OpenSystemMenu(const HWND hWnd, const POINT pos);
 
 }

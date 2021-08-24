@@ -1032,3 +1032,63 @@ bool Utils::UpdateFrameMargins(const HWND hWnd)
     }
     return true;
 }
+
+bool OpenSystemMenu(const HWND hWnd, const POINT pos)
+{
+    if (!hWnd) {
+        return false;
+    }
+    const HMENU menu = GetSystemMenu(hWnd, FALSE);
+    if (!menu) {
+        PRINT_WIN32_ERROR_MESSAGE(GetSystemMenu)
+        return false;
+    }
+    // Update the options based on window state.
+    MENUITEMINFOW mii;
+    SecureZeroMemory(&mii, sizeof(mii));
+    mii.cbSize = sizeof(mii);
+    mii.fMask = MIIM_STATE;
+    mii.fType = MFT_STRING;
+    const auto setState = [&mii, menu](const UINT item, const bool enabled) -> bool {
+        mii.fState = (enabled ? MF_ENABLED : MF_DISABLED);
+        return (SetMenuItemInfoW(menu, item, FALSE, &mii) != FALSE);
+    };
+    const bool max = IsMaximized(hWnd);
+    if (!setState(SC_RESTORE, max)) {
+        PRINT_WIN32_ERROR_MESSAGE(SetMenuItemInfoW)
+        return false;
+    }
+    if (!setState(SC_MOVE, !max)) {
+        PRINT_WIN32_ERROR_MESSAGE(SetMenuItemInfoW)
+        return false;
+    }
+    if (!setState(SC_SIZE, !max)) {
+        PRINT_WIN32_ERROR_MESSAGE(SetMenuItemInfoW)
+        return false;
+    }
+    if (!setState(SC_MINIMIZE, true)) {
+        PRINT_WIN32_ERROR_MESSAGE(SetMenuItemInfoW)
+        return false;
+    }
+    if (!setState(SC_MAXIMIZE, !max)) {
+        PRINT_WIN32_ERROR_MESSAGE(SetMenuItemInfoW)
+        return false;
+    }
+    if (!setState(SC_CLOSE, true)) {
+        PRINT_WIN32_ERROR_MESSAGE(SetMenuItemInfoW)
+        return false;
+    }
+    if (SetMenuDefaultItem(menu, UINT_MAX, FALSE) == FALSE) {
+        PRINT_WIN32_ERROR_MESSAGE(SetMenuDefaultItem)
+        return false;
+    }
+    // ### TODO: support RTL layout.
+    const auto ret = TrackPopupMenu(menu, TPM_RETURNCMD, pos.x, pos.y, 0, hWnd, nullptr);
+    if (ret != 0) {
+        if (PostMessageW(hWnd, WM_SYSCOMMAND, ret, 0) == FALSE) {
+            PRINT_WIN32_ERROR_MESSAGE(PostMessageW)
+            return false;
+        }
+    }
+    return true;
+}

@@ -25,8 +25,8 @@
 #include <Windows.h>
 #include "resource.h"
 
-IDI_DEFAULTICON ICON "@CMAKE_CURRENT_SOURCE_DIR@/defaulticon.ico"
-IDI_DEFAULTICONSM ICON "@CMAKE_CURRENT_SOURCE_DIR@/defaulticonsm.ico"
+IDI_DEFAULTICON ICON "@CMAKE_CURRENT_SOURCE_DIR@/assets/defaulticon.ico"
+IDI_DEFAULTICONSM ICON "@CMAKE_CURRENT_SOURCE_DIR@/assets/defaulticonsm.ico"
 
 #ifndef ACRYLICMANAGER_STATIC
 

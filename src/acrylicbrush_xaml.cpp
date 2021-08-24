@@ -308,16 +308,8 @@ EXTERN_C LRESULT CALLBACK DragBarWindowProc(HWND hWnd, UINT message, WPARAM wPar
     }
     g_backgroundBrush = {};
     g_backgroundBrush.BackgroundSource(winrt::Windows::UI::Xaml::Media::AcrylicBackgroundSource::HostBackdrop);
-    if (Utils::ShouldAppsUseDarkMode()) {
-        g_backgroundBrush.TintColor(AcrylicBrush::Constants::Dark::DefaultTintColor);
-        g_backgroundBrush.TintOpacity(AcrylicBrush::Constants::Dark::DefaultTintOpacity);
-        g_backgroundBrush.TintLuminosityOpacity(AcrylicBrush::Constants::Dark::DefaultLuminosityOpacity);
-        g_backgroundBrush.FallbackColor(AcrylicBrush::Constants::Dark::DefaultFallbackColor);
-    } else {
-        g_backgroundBrush.TintColor(AcrylicBrush::Constants::Light::DefaultTintColor);
-        g_backgroundBrush.TintOpacity(AcrylicBrush::Constants::Light::DefaultTintOpacity);
-        g_backgroundBrush.TintLuminosityOpacity(AcrylicBrush::Constants::Light::DefaultLuminosityOpacity);
-        g_backgroundBrush.FallbackColor(AcrylicBrush::Constants::Light::DefaultFallbackColor);
+    if (!AcrylicBrush::XAML::ReloadBlurParameters()) {
+        return false;
     }
     g_rootGrid = {};
     g_rootGrid.Background(g_backgroundBrush);
@@ -362,6 +354,18 @@ bool AcrylicBrush::XAML::SetBlurEffectEnabled(const bool enable)
     } else {
         return false;
     }
+}
+
+bool AcrylicBrush::XAML::ReloadBlurParameters()
+{
+    if (!g_backgroundBrush) {
+        return false;
+    }
+    g_backgroundBrush.TintColor(AcrylicBrush::Base::GetTintColor());
+    g_backgroundBrush.TintOpacity(AcrylicBrush::Base::GetTintOpacity());
+    g_backgroundBrush.TintLuminosityOpacity(AcrylicBrush::Base::GetLuminosityOpacity());
+    g_backgroundBrush.FallbackColor(AcrylicBrush::Base::GetFallbackColor());
+    return true;
 }
 
 HWND AcrylicBrush::XAML::GetWindowHandle()

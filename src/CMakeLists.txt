@@ -18,6 +18,7 @@ set(SOURCES
     customframe.h
     customframe.cpp
     acrylicbrush.h
+    acrylicbrush.cpp
     acrylicbrush_system.cpp
     acrylicbrush_xaml.cpp
     acrylicbrush_direct2d.cpp

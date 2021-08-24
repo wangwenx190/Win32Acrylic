@@ -99,7 +99,7 @@ bool CustomFrame::HandleWindowProc(const MSG *msg, LRESULT *result)
                 // we have to use another way to judge the edge of the auto-hide taskbar
                 // when the application is running on Windows 7 or Windows 8.
                 if (Utils::IsWindows8OrGreater()) {
-                    const RECT screenRect = GET_SCREEN_GEOMETRY(msg->hwnd);
+                    const RECT screenRect = GET_SCREEN_GEOMETRY(GET_CURRENT_SCREEN(msg->hwnd));
                     // This helper can be used to determine if there's a
                     // auto-hide taskbar on the given edge of the monitor
                     // we're currently on.

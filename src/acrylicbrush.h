@@ -37,28 +37,28 @@ namespace Constants
 namespace Light
 {
 
-constexpr winrt::Windows::UI::Color DefaultTintColor = {};
-constexpr double DefaultTintOpacity = {};
-constexpr double DefaultLuminosityOpacity = {};
-constexpr winrt::Windows::UI::Color DefaultFallbackColor = {};
-constexpr double DefaultBlurRadius = {};
-constexpr double DefaultSaturationAmount = {};
-constexpr double DefaultNoiseOpacity = {};
-constexpr winrt::Windows::UI::Color DefaultExclusionColor = {};
+constexpr winrt::Windows::UI::Color DefaultTintColor = {255, 252, 252, 252};
+constexpr double DefaultTintOpacity = 0.0;
+constexpr double DefaultLuminosityOpacity = 0.85;
+constexpr winrt::Windows::UI::Color DefaultFallbackColor = {255, 249, 249, 249};
+constexpr double DefaultBlurRadius = 30.0;
+constexpr double DefaultSaturation = 1.25;
+constexpr double DefaultNoiseOpacity = 0.02;
+constexpr winrt::Windows::UI::Color DefaultExclusionColor = {26, 255, 255, 255};
 
 }
 
 namespace Dark
 {
 
-constexpr winrt::Windows::UI::Color DefaultTintColor = {};
-constexpr double DefaultTintOpacity = {};
-constexpr double DefaultLuminosityOpacity = {};
-constexpr winrt::Windows::UI::Color DefaultFallbackColor = {};
-constexpr double DefaultBlurRadius = {};
-constexpr double DefaultSaturationAmount = {};
-constexpr double DefaultNoiseOpacity = {};
-constexpr winrt::Windows::UI::Color DefaultExclusionColor = {};
+constexpr winrt::Windows::UI::Color DefaultTintColor = {255, 44, 44, 44};
+constexpr double DefaultTintOpacity = 0.15;
+constexpr double DefaultLuminosityOpacity = 0.96;
+constexpr winrt::Windows::UI::Color DefaultFallbackColor = {255, 44, 44, 44};
+constexpr double DefaultBlurRadius = 30.0;
+constexpr double DefaultSaturation = 1.25;
+constexpr double DefaultNoiseOpacity = 0.02;
+constexpr winrt::Windows::UI::Color DefaultExclusionColor = {26, 255, 255, 255};
 
 }
 
@@ -82,8 +82,8 @@ void SetFallbackColor(const winrt::Windows::UI::Color &value);
 [[nodiscard]] double GetBlurRadius();
 void SetBlurRadius(const double value);
 
-[[nodiscard]] double GetSaturationAmount();
-void SetSaturationAmount(const double value);
+[[nodiscard]] double GetSaturation();
+void SetSaturation(const double value);
 
 [[nodiscard]] double GetNoiseOpacity();
 void SetNoiseOpacity(const double value);
@@ -96,6 +96,7 @@ namespace System
 [[nodiscard]] bool IsSupportedByCurrentOS();
 [[nodiscard]] bool IsBlurEffectEnabled();
 [[nodiscard]] bool SetBlurEffectEnabled(const bool enable);
+[[nodiscard]] bool ReloadBlurParameters();
 [[nodiscard]] HWND GetWindowHandle();
 
 }
@@ -106,6 +107,7 @@ namespace XAML
 [[nodiscard]] bool IsSupportedByCurrentOS();
 [[nodiscard]] bool IsBlurEffectEnabled();
 [[nodiscard]] bool SetBlurEffectEnabled(const bool enable);
+[[nodiscard]] bool ReloadBlurParameters();
 [[nodiscard]] HWND GetWindowHandle();
 
 }
@@ -116,6 +118,7 @@ namespace Direct2D
 [[nodiscard]] bool IsSupportedByCurrentOS();
 [[nodiscard]] bool IsBlurEffectEnabled();
 [[nodiscard]] bool SetBlurEffectEnabled(const bool enable);
+[[nodiscard]] bool ReloadBlurParameters();
 [[nodiscard]] HWND GetWindowHandle();
 
 }

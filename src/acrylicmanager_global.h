@@ -486,7 +486,15 @@ EXTERN_C IMAGE_DOS_HEADER __ImageBase;
 }()
 #endif
 
-#ifndef GET
+#ifndef GET_SCREEN_AVAILABLE_GEOMETRY
+#define GET_SCREEN_AVAILABLE_GEOMETRY(monitor) \
+[=]{ \
+    if (!monitor) { \
+        return RECT{}; \
+    } \
+    return GET_MONITOR_INFO(monitor).rcWork; \
+}()
+#endif
 
 #ifndef DECLARE_UNUSED
 #define DECLARE_UNUSED(var) (static_cast<void>(var))

@@ -26,8 +26,6 @@
 #include "acrylicmanager_p.h"
 #include "resource.h"
 
-#include <wininet.h>
-#include <ShlObj_Core.h>
 #include <ShellApi.h>
 #include <ShellScalingApi.h>
 #include <UxTheme.h>
@@ -60,22 +58,9 @@ static constexpr int g_am_AutoHideTaskbarThicknessPy_p = g_am_AutoHideTaskbarThi
 static constexpr wchar_t g_am_ForceOfficialBlurEnvVar_p[] = L"ACRYLICMANAGER_FORCE_OFFICIAL_BLUR";
 static constexpr wchar_t g_am_ForceXAMLIslandEnvVar_p[] = L"ACRYLICMANAGER_FORCE_XAML_ISLAND";
 static constexpr wchar_t g_am_ForceDirect2DEnvVar_p[] = L"ACRYLICMANAGER_FORCE_DIRECT2D";
-static constexpr wchar_t g_am_WindowClassNamePrefix_p[] = LR"(wangwenx190\AcrylicManager\WindowClass\)";
-static constexpr wchar_t g_am_MainWindowClassNameSuffix_p[] = L"@MainWindow";
-static constexpr wchar_t g_am_DragBarWindowClassNameSuffix_p[] = L"@DragBarWindow";
 
-static LPWSTR g_am_MainWindowClassName_p = nullptr;
-static LPWSTR g_am_DragBarWindowClassName_p = nullptr;
-static constexpr wchar_t g_am_MainWindowTitle_p[] = L"AcrylicManager Main Window";
-static constexpr wchar_t *g_am_DragBarWindowTitle_p = nullptr;
 static bool g_am_AcrylicManagerInitialized_p = false;
-static ATOM g_am_MainWindowAtom_p = 0;
-static ATOM g_am_DragBarWindowAtom_p = 0;
-static HWND g_am_MainWindowHandle_p = nullptr;
-static HWND g_am_XAMLIslandWindowHandle_p = nullptr;
-static HWND g_am_DragBarWindowHandle_p = nullptr;
-static UINT g_am_CurrentDpi_p = 0;
-static double g_am_CurrentDpr_p = 0.0;
+
 static HWND g_am_HostWindowHandle_p = nullptr;
 static WNDPROC g_am_HostWindowProc_p = nullptr;
 static SystemTheme g_am_BrushTheme_p = SystemTheme::Invalid;
@@ -95,113 +80,6 @@ static bool g_am_IsUsingDirect2D_p = false;
 /////////////////////////////////
 /////     Helper functions
 /////////////////////////////////
-
-[[nodiscard]] static inline HRESULT am_UpdateFrameMarginsHelper_p(const HWND hWnd, const UINT dpi)
-{
-    if (!hWnd || (dpi == 0)) {
-        return E_INVALIDARG;
-    }
-    bool normal = false;
-    if (FAILED(am_IsWindowNoState_p(hWnd, &normal))) {
-        return E_FAIL;
-    }
-    int thickness = 0;
-    if (FAILED(am_GetWindowVisibleFrameBorderThickness_p(hWnd, dpi, &thickness))) {
-        return E_FAIL;
-    }
-    const LONG topFrameMargin = (normal ? thickness : 0);
-    // We removed the whole top part of the frame (see handling of
-    // WM_NCCALCSIZE) so the top border is missing now. We add it back here.
-    // Note #1: You might wonder why we don't remove just the title bar instead
-    //  of removing the whole top part of the frame and then adding the little
-    //  top border back. I tried to do this but it didn't work: DWM drew the
-    //  whole title bar anyways on top of the window. It seems that DWM only
-    //  wants to draw either nothing or the whole top part of the frame.
-    // Note #2: For some reason if you try to set the top margin to just the
-    //  top border height (what we want to do), then there is a transparency
-    //  bug when the window is inactive, so I've decided to add the whole top
-    //  part of the frame instead and then we will hide everything that we
-    //  don't need (that is, the whole thing but the little 1 pixel wide border
-    //  at the top) in the WM_PAINT handler. This eliminates the transparency
-    //  bug and it's what a lot of Win32 apps that customize the title bar do
-    //  so it should work fine.
-    const MARGINS margins = {0, 0, topFrameMargin, 0};
-    return DwmExtendFrameIntoClientArea(hWnd, &margins);
-}
-
-[[nodiscard]] static inline HRESULT am_ShowFullScreenHelper_p(const HWND hWnd, const bool enable)
-{
-    if (!hWnd) {
-        return E_INVALIDARG;
-    }
-    auto style = static_cast<DWORD>(GetWindowLongPtrW(hWnd, GWL_STYLE));
-    style &= ~(WS_OVERLAPPEDWINDOW); // fixme: check
-    style |= WS_POPUP;
-    SetWindowLongPtrW(hWnd, GWL_STYLE, style);
-    if (enable) {
-        // fixme: rethink
-        RECT rect = {};
-        if (FAILED(am_GetScreenGeometry_p(hWnd, &rect))) {
-            return E_FAIL;
-        }
-        if (MoveWindow(hWnd, rect.left, rect.top,
-                        GET_RECT_WIDTH(rect), GET_RECT_HEIGHT(rect), TRUE) == FALSE) {
-            PRINT_WIN32_ERROR_MESSAGE_AND_RETURN(MoveWindow)
-        }
-    } else {
-        // todo
-    }
-    return S_OK;
-}
-
-[[nodiscard]] static inline HRESULT am_GetSystemThemeHelper_p(SystemTheme *result)
-{
-    if (!result) {
-        return E_INVALIDARG;
-    }
-    bool highContrast = false;
-    if (FAILED(am_IsHighContrastModeEnabled_p(&highContrast))) {
-        return E_FAIL;
-    }
-    // Dark mode was first introduced in Windows 10 1607.
-    if (g_am_IsDarkModeAvailable_p) {
-        bool lightModeOn = false;
-        if (FAILED(am_ShouldAppsUseLightTheme_p(&lightModeOn))) {
-            if (FAILED(am_ShouldSystemUsesLightTheme_p(&lightModeOn))) {
-                return E_FAIL;
-            }
-        }
-        *result = (lightModeOn ? SystemTheme::Light : SystemTheme::Dark);
-        return S_OK;
-    }
-    return E_FAIL;
-}
-
-[[nodiscard]] static inline HRESULT am_GetWindowGeometryHelper_p(const HWND hWnd, RECT *result)
-{
-    if (!hWnd || !result) {
-        return E_INVALIDARG;
-    }
-    RECT rect = {0, 0, 0, 0};
-    if (GetWindowRect(hWnd, &rect) == FALSE) {
-        PRINT_WIN32_ERROR_MESSAGE_AND_RETURN(GetWindowRect)
-    }
-    *result = rect;
-    return S_OK;
-}
-
-[[nodiscard]] static inline HRESULT am_GetWindowSizeHelper_p(const HWND hWnd, SIZE *size)
-{
-    if (!hWnd || !size) {
-        return E_INVALIDARG;
-    }
-    RECT rect = {};
-    if (FAILED(am_GetWindowGeometryHelper_p(hWnd, &rect))) {
-        return E_FAIL;
-    }
-    *size = GET_RECT_SIZE(rect);
-    return S_OK;
-}
 
 [[nodiscard]] static inline HRESULT am_MoveWindowHelper_p(const HWND hWnd, const int x, const int y)
 {
@@ -256,63 +134,6 @@ static bool g_am_IsUsingDirect2D_p = false;
         PRINT_WIN32_ERROR_MESSAGE_AND_RETURN(MoveWindow)
     }
     return S_OK;
-}
-
-[[nodiscard]] static inline HRESULT am_GetWindowStateHelper_p(const HWND hWnd, WindowState *result)
-{
-    if (!hWnd || !result) {
-        return E_INVALIDARG;
-    }
-    bool state = false;
-    if (SUCCEEDED(am_IsFullScreened_p(hWnd, &state)) && state) {
-        *result = WindowState::FullScreened;
-        return S_OK;
-    } else if (SUCCEEDED(am_IsMaximized_p(hWnd, &state)) && state) {
-        *result = WindowState::Maximized;
-        return S_OK;
-    } else if (SUCCEEDED(am_IsMinimized_p(hWnd, &state)) && state) {
-        *result = WindowState::Minimized;
-        return S_OK;
-    } else if (SUCCEEDED(am_IsWindowNoState_p(hWnd, &state)) && state) {
-        *result = WindowState::Normal;
-        return S_OK;
-    } else if (SUCCEEDED(am_IsWindowVisible_p(hWnd, &state)) && state) {
-        *result = WindowState::Shown;
-        return S_OK;
-    } else if (SUCCEEDED(am_IsWindowVisible_p(hWnd, &state)) && !state) {
-        *result = WindowState::Hidden;
-        return S_OK;
-    }
-    return E_FAIL;
-}
-
-[[nodiscard]] static inline HRESULT am_SetWindowStateHelper_p(const HWND hWnd, const WindowState state)
-{
-    if (!hWnd) {
-        return E_INVALIDARG;
-    }
-    switch (state) {
-    case WindowState::Normal:
-        ShowWindow(hWnd, SW_NORMAL);
-        return S_OK;
-    case WindowState::Maximized:
-        ShowWindow(hWnd, SW_MAXIMIZE);
-        return S_OK;
-    case WindowState::Minimized:
-        ShowWindow(hWnd, SW_MINIMIZE);
-        return S_OK;
-    case WindowState::FullScreened:
-        return am_ShowFullScreenHelper_p(hWnd, true);
-    case WindowState::Hidden:
-        ShowWindow(hWnd, SW_HIDE);
-        return S_OK;
-    case WindowState::Shown:
-        ShowWindow(hWnd, SW_SHOW);
-        return S_OK;
-    default:
-        break;
-    }
-    return E_FAIL;
 }
 
 [[nodiscard]] static inline HRESULT am_CleanupHelper_p()
@@ -524,41 +345,12 @@ static bool g_am_IsUsingDirect2D_p = false;
     return S_OK;
 }
 
-[[nodiscard]] static inline HRESULT am_SetWindowGeometryHelper_p(const HWND hWnd, const int x, const int y, const int w, const int h)
-{
-    if (!hWnd || (x <= 0) || (y <= 0) || (w <= 0) || (h <= 0)) {
-        return E_INVALIDARG;
-    }
-    if (MoveWindow(hWnd, x, y, w, h, TRUE) == FALSE) {
-        PRINT_WIN32_ERROR_MESSAGE_AND_RETURN(MoveWindow)
-    }
-    return S_OK;
-}
-
 [[nodiscard]] static inline HRESULT am_IsWindowActiveHelper_p(const HWND hWnd, bool *result)
 {
     if (!hWnd || !result) {
         return E_INVALIDARG;
     }
     *result = (GetActiveWindow() == hWnd);
-    return S_OK;
-}
-
-[[nodiscard]] static inline HRESULT am_GetWindowHandleHelper_p(HWND *result)
-{
-    if (!result) {
-        return E_INVALIDARG;
-    }
-    *result = g_am_MainWindowHandle_p;
-    return S_OK;
-}
-
-[[nodiscard]] static inline HRESULT am_GetBrushThemeHelper_p(SystemTheme *result)
-{
-    if (!result) {
-        return E_INVALIDARG;
-    }
-    *result = g_am_BrushTheme_p;
     return S_OK;
 }
 
@@ -1203,71 +995,6 @@ static bool g_am_IsUsingDirect2D_p = false;
     return DefWindowProcW(hWnd, uMsg, wParam, lParam);
 }
 
-[[nodiscard]] static inline LRESULT CALLBACK am_DragBarWindowProcHelper_p(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
-{
-    std::optional<UINT> nonClientMessage = std::nullopt;
-
-    switch (uMsg)
-    {
-    // Translate WM_* messages on the window to WM_NC* on the top level window.
-    case WM_LBUTTONDOWN:
-        nonClientMessage = WM_NCLBUTTONDOWN;
-        break;
-    case WM_LBUTTONUP:
-        nonClientMessage = WM_NCLBUTTONUP;
-        break;
-    case WM_LBUTTONDBLCLK:
-        nonClientMessage = WM_NCLBUTTONDBLCLK;
-        break;
-    case WM_MBUTTONDOWN:
-        nonClientMessage = WM_NCMBUTTONDOWN;
-        break;
-    case WM_MBUTTONUP:
-        nonClientMessage = WM_NCMBUTTONUP;
-        break;
-    case WM_MBUTTONDBLCLK:
-        nonClientMessage = WM_NCMBUTTONDBLCLK;
-        break;
-    case WM_RBUTTONDOWN:
-        nonClientMessage = WM_NCRBUTTONDOWN;
-        break;
-    case WM_RBUTTONUP:
-        nonClientMessage = WM_NCRBUTTONUP;
-        break;
-    case WM_RBUTTONDBLCLK:
-        nonClientMessage = WM_NCRBUTTONDBLCLK;
-        break;
-    case WM_XBUTTONDOWN:
-        nonClientMessage = WM_NCXBUTTONDOWN;
-        break;
-    case WM_XBUTTONUP:
-        nonClientMessage = WM_NCXBUTTONUP;
-        break;
-    case WM_XBUTTONDBLCLK:
-        nonClientMessage = WM_NCXBUTTONDBLCLK;
-        break;
-    default:
-        break;
-    }
-
-    if (nonClientMessage.has_value() && g_am_MainWindowHandle_p)
-    {
-        POINT pos = {GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)};
-        if (ClientToScreen(hWnd, &pos) == FALSE) {
-            PRINT_WIN32_ERROR_MESSAGE(ClientToScreen)
-            return 0;
-        }
-        const LPARAM newLParam = MAKELPARAM(pos.x, pos.y);
-        // Hit test the parent window at the screen coordinates the user clicked in the drag input sink window,
-        // then pass that click through as an NC click in that location.
-        const LRESULT hitTestResult = SendMessageW(g_am_MainWindowHandle_p, WM_NCHITTEST, 0, newLParam);
-        SendMessageW(g_am_MainWindowHandle_p, nonClientMessage.value(), hitTestResult, newLParam);
-        return 0;
-    }
-
-    return DefWindowProcW(hWnd, uMsg, wParam, lParam);
-}
-
 [[nodiscard]] static inline LRESULT CALLBACK am_HookWindowProcHelper_p(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
     const auto getOriginalResult = [hWnd, uMsg, wParam, lParam]() {
@@ -1304,184 +1031,6 @@ static bool g_am_IsUsingDirect2D_p = false;
     }
 
     return getOriginalResult();
-}
-
-[[nodiscard]] static inline HRESULT am_RegisterMainWindowClassHelper_p()
-{
-    if (g_am_MainWindowAtom_p != 0) {
-        PRINT_AND_SAFE_RETURN(L"The main window class has been registered already.")
-    }
-
-    LPWSTR guid = nullptr;
-    if (FAILED(am_GenerateGUID_p(&guid))) {
-        PRINT_AND_SAFE_RETURN(L"Failed to generate a GUID for main window class.")
-    }
-    g_am_MainWindowClassName_p = new wchar_t[MAX_PATH];
-    SecureZeroMemory(g_am_MainWindowClassName_p, sizeof(g_am_MainWindowClassName_p));
-    swprintf(g_am_MainWindowClassName_p, L"%s%s%s", g_am_WindowClassNamePrefix_p, guid, g_am_MainWindowClassNameSuffix_p);
-    SAFE_FREE_CHARARRAY(guid)
-
-    WNDCLASSEXW wcex;
-    SecureZeroMemory(&wcex, sizeof(wcex));
-    wcex.cbSize = sizeof(wcex);
-
-    wcex.style = CS_HREDRAW | CS_VREDRAW;
-    wcex.lpfnWndProc = am_MainWindowProcHelper_p;
-    wcex.hInstance = HINST_THISCOMPONENT;
-    wcex.hCursor = LoadCursorW(nullptr, IDC_ARROW);
-    wcex.hIcon = LoadIconW(HINST_THISCOMPONENT, MAKEINTRESOURCEW(IDI_DEFAULTICON));
-    wcex.hIconSm = LoadIconW(HINST_THISCOMPONENT, MAKEINTRESOURCEW(IDI_DEFAULTICONSM));
-    wcex.hbrBackground = reinterpret_cast<HBRUSH>(COLOR_WINDOW + 1);
-    wcex.lpszClassName = g_am_MainWindowClassName_p;
-
-    g_am_MainWindowAtom_p = RegisterClassExW(&wcex);
-
-    if (g_am_MainWindowAtom_p == 0) {
-        PRINT_WIN32_ERROR_MESSAGE_AND_SAFE_RETURN(RegisterClassExW)
-    }
-
-    return S_OK;
-}
-
-[[nodiscard]] static inline HRESULT am_RegisterDragBarWindowClassHelper_p()
-{
-    if (!g_am_IsWindows8OrGreater_p) {
-        PRINT_AND_SAFE_RETURN(L"Drag bar window is only available on Windows 8 and onwards.")
-    }
-
-    if ((g_am_MainWindowAtom_p == 0) || (g_am_DragBarWindowAtom_p != 0)) {
-        PRINT_AND_SAFE_RETURN(L"The main window class has not been registered or "
-                               "the drag bar window class has been registered already.")
-    }
-
-    LPWSTR guid = nullptr;
-    if (FAILED(am_GenerateGUID_p(&guid))) {
-        PRINT_AND_SAFE_RETURN(L"Failed to generate a GUID for drag bar window class.")
-    }
-    g_am_DragBarWindowClassName_p = new wchar_t[MAX_PATH];
-    SecureZeroMemory(g_am_DragBarWindowClassName_p, sizeof(g_am_DragBarWindowClassName_p));
-    swprintf(g_am_DragBarWindowClassName_p, L"%s%s%s", g_am_WindowClassNamePrefix_p, guid, g_am_DragBarWindowClassNameSuffix_p);
-    SAFE_FREE_CHARARRAY(guid)
-
-    WNDCLASSEXW wcex;
-    SecureZeroMemory(&wcex, sizeof(wcex));
-    wcex.cbSize = sizeof(wcex);
-
-    wcex.style = CS_HREDRAW | CS_VREDRAW | CS_DBLCLKS;
-    wcex.lpfnWndProc = am_DragBarWindowProcHelper_p;
-    wcex.hInstance = HINST_THISCOMPONENT;
-    wcex.hCursor = LoadCursorW(nullptr, IDC_ARROW);
-    wcex.hbrBackground = GET_BLACK_BRUSH;
-    wcex.lpszClassName = g_am_DragBarWindowClassName_p;
-
-    g_am_DragBarWindowAtom_p = RegisterClassExW(&wcex);
-
-    if (g_am_DragBarWindowAtom_p == 0) {
-        PRINT_WIN32_ERROR_MESSAGE_AND_SAFE_RETURN(RegisterClassExW)
-    }
-
-    return S_OK;
-}
-
-[[nodiscard]] static inline HRESULT am_CreateMainWindowHelper_p(const int x, const int y, const int w, const int h)
-{
-    if ((g_am_MainWindowAtom_p == 0) || g_am_MainWindowHandle_p) {
-        PRINT_AND_SAFE_RETURN(L"The main window class has not been registered or "
-                               "the main window has been created already.")
-    }
-
-    g_am_MainWindowHandle_p = CreateWindowExW(0L,
-                                       g_am_MainWindowClassName_p, g_am_MainWindowTitle_p,
-                                       WS_OVERLAPPEDWINDOW,
-                                       ((x > 0) ? x : CW_USEDEFAULT),
-                                       ((y > 0) ? y : CW_USEDEFAULT),
-                                       ((w > 0) ? w : CW_USEDEFAULT),
-                                       ((h > 0) ? h : CW_USEDEFAULT),
-                                       nullptr, nullptr, HINST_THISCOMPONENT, nullptr);
-
-    if (!g_am_MainWindowHandle_p) {
-        PRINT_WIN32_ERROR_MESSAGE_AND_SAFE_RETURN(CreateWindowExW)
-    }
-
-    if (FAILED(am_GetWindowDotsPerInch_p(g_am_MainWindowHandle_p, &g_am_CurrentDpi_p))
-            || (g_am_CurrentDpi_p == 0)) {
-        g_am_CurrentDpi_p = USER_DEFAULT_SCREEN_DPI;
-    }
-    if (FAILED(am_GetWindowDevicePixelRatio_p(g_am_MainWindowHandle_p, &g_am_CurrentDpr_p))
-            || (g_am_CurrentDpr_p <= 0.0)) {
-        g_am_CurrentDpr_p = 1.0;
-    }
-
-    // Ensure DWM still draws the top frame by extending the top frame.
-    // This also ensures our window still has the frame shadow drawn by DWM.
-    if (FAILED(am_UpdateFrameMarginsHelper_p(g_am_MainWindowHandle_p, g_am_CurrentDpi_p))) {
-        PRINT_AND_SAFE_RETURN(L"Failed to update main window's frame margins.")
-    }
-    // Force a WM_NCCALCSIZE processing to make the window become frameless immediately.
-    if (FAILED(am_TriggerFrameChange_p(g_am_MainWindowHandle_p))) {
-        PRINT_AND_SAFE_RETURN(L"Failed to trigger frame change event for main window.")
-    }
-    // Ensure our window still has window transitions.
-    if (FAILED(am_SetWindowTransitionsEnabled_p(g_am_MainWindowHandle_p, true))) {
-        PRINT_AND_SAFE_RETURN(L"Failed to enable window transitions for main window.")
-    }
-
-    return S_OK;
-}
-
-[[nodiscard]] static inline HRESULT am_CreateDragBarWindowHelper_p()
-{
-    if (!g_am_MainWindowHandle_p) {
-        PRINT_AND_SAFE_RETURN(L"The main window has not been created.")
-    }
-
-    // Please refer to the "IMPORTANT NOTE" section below.
-    if (!g_am_IsWindows8OrGreater_p) {
-        PRINT_AND_SAFE_RETURN(L"Drag bar window is only available on Windows 8 and onwards.")
-    }
-    if ((g_am_DragBarWindowAtom_p == 0) || g_am_DragBarWindowHandle_p) {
-        PRINT_AND_SAFE_RETURN(L"The drag bar window class has not been registered or "
-                               "the drag bar window has been created already.")
-    }
-
-    // The drag bar window is a child window of the top level window that is put
-    // right on top of the drag bar. The XAML island window "steals" our mouse
-    // messages which makes it hard to implement a custom drag area. By putting
-    // a window on top of it, we prevent it from "stealing" the mouse messages.
-    //
-    // IMPORTANT NOTE: The WS_EX_LAYERED style is supported for both top-level
-    // windows and child windows since Windows 8. Previous Windows versions support
-    // WS_EX_LAYERED only for top-level windows.
-    g_am_DragBarWindowHandle_p = CreateWindowExW(WS_EX_LAYERED | WS_EX_NOREDIRECTIONBITMAP,
-                                          g_am_DragBarWindowClassName_p, g_am_DragBarWindowTitle_p,
-                                          WS_CHILD,
-                                          CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
-                                          g_am_MainWindowHandle_p, nullptr, HINST_THISCOMPONENT, nullptr);
-
-    if (!g_am_DragBarWindowHandle_p) {
-        PRINT_WIN32_ERROR_MESSAGE_AND_SAFE_RETURN(CreateWindowExW)
-    }
-
-    // Layered window won't be visible until we call SetLayeredWindowAttributes()
-    // or UpdateLayeredWindow().
-    if (SetLayeredWindowAttributes(g_am_DragBarWindowHandle_p, RGB(0, 0, 0), 255, LWA_ALPHA) == FALSE) {
-        PRINT_WIN32_ERROR_MESSAGE_AND_SAFE_RETURN(SetLayeredWindowAttributes)
-    }
-
-    SIZE size = {0, 0};
-    if (FAILED(am_GetWindowClientSize_p(g_am_MainWindowHandle_p, &size))) {
-        PRINT_AND_SAFE_RETURN(L"Failed to retrieve the client area size of main window.")
-    }
-    int tbh = 0;
-    if (FAILED(am_GetTitleBarHeight_p(g_am_MainWindowHandle_p, g_am_CurrentDpi_p, &tbh))) {
-        PRINT_AND_SAFE_RETURN(L"Failed to retrieve the title bar height.")
-    }
-    if (SetWindowPos(g_am_DragBarWindowHandle_p, HWND_TOP, 0, 0, size.cx, tbh,
-                 SWP_NOACTIVATE | SWP_SHOWWINDOW | SWP_NOOWNERZORDER) == FALSE) {
-        PRINT_WIN32_ERROR_MESSAGE_AND_SAFE_RETURN(SetWindowPos)
-    }
-
-    return S_OK;
 }
 
 [[nodiscard]] static inline HRESULT am_InitializeAcrylicManagerHelper_p(const int x, const int y, const int w, const int h)
@@ -1695,27 +1244,6 @@ HRESULT am_IsCompositionEnabled_p(bool *result)
         return S_OK;
     }
     return E_FAIL;
-}
-
-HRESULT am_IsWindowVisible_p(const HWND hWnd, bool *visible)
-{
-    if (!hWnd || !visible) {
-        return E_INVALIDARG;
-    }
-    *visible = (IsWindowVisible(hWnd) != FALSE);
-    return S_OK;
-}
-
-HRESULT am_TriggerFrameChange_p(const HWND hWnd)
-{
-    if (!hWnd) {
-        return E_INVALIDARG;
-    }
-    if (SetWindowPos(hWnd, nullptr, 0, 0, 0, 0,
-              SWP_FRAMECHANGED | SWP_NOACTIVATE | SWP_NOSIZE | SWP_NOMOVE | SWP_NOZORDER | SWP_NOOWNERZORDER) == FALSE) {
-        PRINT_WIN32_ERROR_MESSAGE_AND_RETURN(SetWindowPos)
-    }
-    return S_OK;
 }
 
 HRESULT am_OpenSystemMenu_p(const HWND hWnd, const POINT pos)

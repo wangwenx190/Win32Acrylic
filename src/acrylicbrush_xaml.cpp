@@ -23,6 +23,8 @@
  */
 
 #include "acrylicbrush.h"
+#include "resource.h"
+#include "utils.h"
 #include <Unknwn.h>
 #include <WinRT\Windows.Foundation.Collections.h>
 #include <WinRT\Windows.UI.Xaml.Hosting.h>
@@ -30,77 +32,343 @@
 #include <WinRT\Windows.UI.Xaml.Media.h>
 #include <Windows.UI.Xaml.Hosting.DesktopWindowXamlSource.h>
 
-static winrt::Windows::UI::Xaml::Hosting::WindowsXamlManager g_am_XAMLManager_p = nullptr;
-static winrt::Windows::UI::Xaml::Hosting::DesktopWindowXamlSource g_am_XAMLSource_p = nullptr;
-static winrt::Windows::UI::Xaml::Controls::Grid g_am_RootGrid_p = nullptr;
-static winrt::Windows::UI::Xaml::Media::AcrylicBrush g_am_BackgroundBrush_p = nullptr;
+static const std::wstring g_windowClassNamePrefix = LR"(wangwenx190\AcrylicManager\WindowClass\)";
+static const std::wstring g_mainWindowClassNameSuffix = L"@MainWindow";
+static const std::wstring g_dragBarWindowClassNameSuffix = L"@DragBarWindow";
+static const std::wstring g_mainWindowTitle = L"AcrylicManager Main Window";
+static const std::wstring g_dragBarWindowTitle = nullptr;
 
-[[nodiscard]] static inline HRESULT am_CreateXAMLIslandHelper_p()
+static std::wstring g_mainWindowClassName = nullptr;
+static std::wstring g_dragBarWindowClassName = nullptr;
+static ATOM g_mainWindowAtom = 0;
+static ATOM g_dragBarWindowAtom = 0;
+static HWND g_mainWindowHandle = nullptr;
+static HWND g_XAMLIslandWindowHandle = nullptr;
+static HWND g_dragBarWindowHandle = nullptr;
+static UINT g_currentDpi = 0;
+static double g_currentDpr = 0.0;
+
+static winrt::Windows::UI::Xaml::Hosting::WindowsXamlManager g_manager = nullptr;
+static winrt::Windows::UI::Xaml::Hosting::DesktopWindowXamlSource g_source = nullptr;
+static winrt::Windows::UI::Xaml::Controls::Grid g_rootGrid = nullptr;
+static winrt::Windows::UI::Xaml::Media::AcrylicBrush g_backgroundBrush = nullptr;
+
+EXTERN_C LRESULT CALLBACK MainWindowProc(HWND, UINT, WPARAM, LPARAM);
+
+EXTERN_C LRESULT CALLBACK DragBarWindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
-    if (!g_am_MainWindowHandle_p) {
-        PRINT_AND_SAFE_RETURN(L"The main window has not been created.")
+    std::optional<UINT> nonClientMessage = std::nullopt;
+
+    switch (uMsg)
+    {
+    // Translate WM_* messages on the window to WM_NC* on the top level window.
+    case WM_LBUTTONDOWN:
+        nonClientMessage = WM_NCLBUTTONDOWN;
+        break;
+    case WM_LBUTTONUP:
+        nonClientMessage = WM_NCLBUTTONUP;
+        break;
+    case WM_LBUTTONDBLCLK:
+        nonClientMessage = WM_NCLBUTTONDBLCLK;
+        break;
+    case WM_MBUTTONDOWN:
+        nonClientMessage = WM_NCMBUTTONDOWN;
+        break;
+    case WM_MBUTTONUP:
+        nonClientMessage = WM_NCMBUTTONUP;
+        break;
+    case WM_MBUTTONDBLCLK:
+        nonClientMessage = WM_NCMBUTTONDBLCLK;
+        break;
+    case WM_RBUTTONDOWN:
+        nonClientMessage = WM_NCRBUTTONDOWN;
+        break;
+    case WM_RBUTTONUP:
+        nonClientMessage = WM_NCRBUTTONUP;
+        break;
+    case WM_RBUTTONDBLCLK:
+        nonClientMessage = WM_NCRBUTTONDBLCLK;
+        break;
+    case WM_XBUTTONDOWN:
+        nonClientMessage = WM_NCXBUTTONDOWN;
+        break;
+    case WM_XBUTTONUP:
+        nonClientMessage = WM_NCXBUTTONUP;
+        break;
+    case WM_XBUTTONDBLCLK:
+        nonClientMessage = WM_NCXBUTTONDBLCLK;
+        break;
+    default:
+        break;
     }
 
+    if (nonClientMessage.has_value() && g_mainWindowHandle)
+    {
+        POINT pos = {GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)};
+        if (ClientToScreen(hWnd, &pos) == FALSE) {
+            PRINT_WIN32_ERROR_MESSAGE(ClientToScreen)
+            return 0;
+        }
+        const LPARAM newLParam = MAKELPARAM(pos.x, pos.y);
+        // Hit test the parent window at the screen coordinates the user clicked in the drag input sink window,
+        // then pass that click through as an NC click in that location.
+        const LRESULT hitTestResult = SendMessageW(g_mainWindowHandle, WM_NCHITTEST, 0, newLParam);
+        SendMessageW(g_mainWindowHandle, nonClientMessage.value(), hitTestResult, newLParam);
+        return 0;
+    }
+
+    return DefWindowProcW(hWnd, uMsg, wParam, lParam);
+}
+
+[[nodiscard]] static inline bool RegisterMainWindowClass()
+{
+    g_mainWindowClassName = g_windowClassNamePrefix + Utils::GenerateGUID() + g_mainWindowClassNameSuffix;
+
+    static const HINSTANCE instance = GET_CURRENT_INSTANCE;
+
+    WNDCLASSEXW wcex;
+    SecureZeroMemory(&wcex, sizeof(wcex));
+    wcex.cbSize = sizeof(wcex);
+
+    wcex.style = CS_HREDRAW | CS_VREDRAW;
+    wcex.lpfnWndProc = MainWindowProc;
+    wcex.hInstance = instance;
+    wcex.hCursor = LoadCursorW(nullptr, IDC_ARROW);
+    wcex.hIcon = LoadIconW(instance, MAKEINTRESOURCEW(IDI_DEFAULTICON));
+    wcex.hIconSm = LoadIconW(instance, MAKEINTRESOURCEW(IDI_DEFAULTICONSM));
+    wcex.hbrBackground = reinterpret_cast<HBRUSH>(COLOR_WINDOW + 1);
+    wcex.lpszClassName = g_mainWindowClassName.c_str();
+
+    g_mainWindowAtom = RegisterClassExW(&wcex);
+
+    if (g_mainWindowAtom == 0) {
+        PRINT_WIN32_ERROR_MESSAGE(RegisterClassExW)
+        return false;
+    }
+
+    return true;
+}
+
+[[nodiscard]] static inline bool RegisterDragBarWindowClass()
+{
+    if (!Utils::IsWindows8OrGreater()) {
+        OutputDebugStringW(L"Drag bar window is only available on Windows 8 and onwards.");
+        return false;
+    }
+
+    g_dragBarWindowClassName = g_windowClassNamePrefix + Utils::GenerateGUID() + g_dragBarWindowClassNameSuffix;
+
+    static const HINSTANCE instance = GET_CURRENT_INSTANCE;
+
+    WNDCLASSEXW wcex;
+    SecureZeroMemory(&wcex, sizeof(wcex));
+    wcex.cbSize = sizeof(wcex);
+
+    wcex.style = CS_HREDRAW | CS_VREDRAW | CS_DBLCLKS;
+    wcex.lpfnWndProc = DragBarWindowProc;
+    wcex.hInstance = instance;
+    wcex.hCursor = LoadCursorW(nullptr, IDC_ARROW);
+    wcex.hbrBackground = GET_BLACK_BRUSH;
+    wcex.lpszClassName = g_dragBarWindowClassName.c_str();
+
+    g_dragBarWindowAtom = RegisterClassExW(&wcex);
+
+    if (g_dragBarWindowAtom == 0) {
+        PRINT_WIN32_ERROR_MESSAGE(RegisterClassExW)
+        return false;
+    }
+
+    return true;
+}
+
+[[nodiscard]] static inline bool CreateMainWindow()
+{
+    g_mainWindowHandle = CreateWindowExW(0L,
+                                         g_mainWindowClassName.c_str(),
+                                         g_mainWindowTitle.c_str(),
+                                         WS_OVERLAPPEDWINDOW,
+                                         CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
+                                         nullptr, nullptr, GET_CURRENT_INSTANCE, nullptr);
+
+    if (!g_mainWindowHandle) {
+        PRINT_WIN32_ERROR_MESSAGE(CreateWindowExW)
+        return false;
+    }
+
+    g_currentDpi = Utils::GetDotsPerInchForWindow(g_mainWindowHandle);
+    if (g_currentDpi <= 0) {
+        g_currentDpi = USER_DEFAULT_SCREEN_DPI;
+    }
+    g_currentDpr = Utils::GetDevicePixelRatioForWindow(g_mainWindowHandle);
+    if (g_currentDpr <= 0.0) {
+        g_currentDpr = 1.0;
+    }
+
+    // Ensure DWM still draws the top frame by extending the top frame.
+    // This also ensures our window still has the frame shadow drawn by DWM.
+    if (!Utils::UpdateFrameMargins(g_mainWindowHandle)) {
+        OutputDebugStringW(L"Failed to update main window's frame margins.");
+        return false;
+    }
+    // Force a WM_NCCALCSIZE processing to make the window become frameless immediately.
+    if (!Utils::TriggerFrameChangeForWindow(g_mainWindowHandle)) {
+        OutputDebugStringW(L"Failed to trigger frame change event for main window.");
+        return false;
+    }
+    // Ensure our window still has window transitions.
+    if (!Utils::SetWindowTransitionsEnabled(g_mainWindowHandle, true)) {
+        OutputDebugStringW(L"Failed to enable window transitions for main window.");
+        return false;
+    }
+
+    return true;
+}
+
+[[nodiscard]] static inline bool CreateDragBarWindow()
+{
+    // Please refer to the "IMPORTANT NOTE" section below.
+    if (!Utils::IsWindows8OrGreater()) {
+        OutputDebugStringW(L"Drag bar window is only available on Windows 8 and onwards.");
+        return false;
+    }
+
+    // The drag bar window is a child window of the top level window that is put
+    // right on top of the drag bar. The XAML island window "steals" our mouse
+    // messages which makes it hard to implement a custom drag area. By putting
+    // a window on top of it, we prevent it from "stealing" the mouse messages.
+    //
+    // IMPORTANT NOTE: The WS_EX_LAYERED style is supported for both top-level
+    // windows and child windows since Windows 8. Previous Windows versions support
+    // WS_EX_LAYERED only for top-level windows.
+    g_dragBarWindowHandle = CreateWindowExW(WS_EX_LAYERED | WS_EX_NOREDIRECTIONBITMAP,
+                                            g_dragBarWindowClassName.c_str(),
+                                            g_dragBarWindowTitle.c_str(),
+                                            WS_CHILD,
+                                            CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
+                                            g_mainWindowHandle, nullptr, GET_CURRENT_INSTANCE, nullptr);
+
+    if (!g_dragBarWindowHandle) {
+        PRINT_WIN32_ERROR_MESSAGE(CreateWindowExW)
+        return false;
+    }
+
+    // Layered window won't be visible until we call SetLayeredWindowAttributes()
+    // or UpdateLayeredWindow().
+    if (SetLayeredWindowAttributes(g_dragBarWindowHandle, RGB(0, 0, 0), 255, LWA_ALPHA) == FALSE) {
+        PRINT_WIN32_ERROR_MESSAGE(SetLayeredWindowAttributes)
+        return false;
+    }
+
+    const SIZE size = GET_WINDOW_CLIENT_SIZE(g_mainWindowHandle);
+    const int titleBarHeight = Utils::GetTitleBarHeight(g_mainWindowHandle);
+    if (SetWindowPos(g_dragBarWindowHandle, HWND_TOP, 0, 0, size.cx, titleBarHeight,
+                     SWP_NOACTIVATE | SWP_SHOWWINDOW | SWP_NOOWNERZORDER) == FALSE) {
+        PRINT_WIN32_ERROR_MESSAGE(SetWindowPos)
+        return false;
+    }
+
+    return true;
+}
+
+[[nodiscard]] static inline bool CreateXAMLIsland()
+{
     // XAML Island is only supported on Windows 10 19H1 and onwards.
-    if (!g_am_IsXAMLIslandAvailable_p) {
-        PRINT_AND_SAFE_RETURN(L"XAML Island is only supported on Windows 10 19H1 and onwards.")
+    if (!Utils::IsWindows10_19H1OrGreater()) {
+        OutputDebugStringW(L"XAML Island is only supported on Windows 10 19H1 and onwards.");
+        return false;
     }
-    SystemTheme systemTheme = SystemTheme::Invalid;
-    if (FAILED(am_GetSystemThemeHelper_p(&systemTheme)) || (systemTheme == SystemTheme::Invalid)) {
-        PRINT_AND_SAFE_RETURN(L"Failed to retrieve the system theme.")
-    }
-    if (systemTheme == SystemTheme::HighContrast) {
-        PRINT_AND_SAFE_RETURN(L"AcrylicManager won't be functional when high contrast mode is on.")
+
+    if (Utils::IsHighContrastModeEnabled()) {
+        OutputDebugStringW(L"AcrylicManager won't be functional when high contrast mode is on.");
+        return false;
     }
 
     winrt::init_apartment(winrt::apartment_type::single_threaded);
-    g_am_XAMLManager_p = winrt::Windows::UI::Xaml::Hosting::WindowsXamlManager::InitializeForCurrentThread();
+    g_manager = winrt::Windows::UI::Xaml::Hosting::WindowsXamlManager::InitializeForCurrentThread();
 
-    g_am_XAMLSource_p = {};
-    const auto interop = g_am_XAMLSource_p.as<IDesktopWindowXamlSourceNative>();
+    g_source = {};
+    const auto interop = g_source.as<IDesktopWindowXamlSourceNative>();
     if (!interop) {
-        PRINT_AND_SAFE_RETURN(L"Failed to retrieve IDesktopWindowXamlSourceNative.")
+        OutputDebugStringW(L"Failed to retrieve IDesktopWindowXamlSourceNative.");
+        return false;
     }
-    winrt::check_hresult(interop->AttachToWindow(g_am_MainWindowHandle_p));
-    winrt::check_hresult(interop->get_WindowHandle(&g_am_XAMLIslandWindowHandle_p));
-    if (!g_am_XAMLIslandWindowHandle_p) {
-        PRINT_AND_SAFE_RETURN(L"Failed to retrieve XAML Island window handle.")
+    winrt::check_hresult(interop->AttachToWindow(g_mainWindowHandle));
+    winrt::check_hresult(interop->get_WindowHandle(&g_XAMLIslandWindowHandle));
+    if (!g_XAMLIslandWindowHandle) {
+        OutputDebugStringW(L"Failed to retrieve XAML Island window handle.");
+        return false;
     }
     // Update the XAML Island window size because initially it is 0x0.
-    // Give enough space to our thin homemade top border.
-    int borderThickness = 0;
-    if (FAILED(am_GetWindowVisibleFrameBorderThickness_p(g_am_MainWindowHandle_p, g_am_CurrentDpi_p, &borderThickness))) {
-        PRINT_AND_SAFE_RETURN(L"Failed to retrieve the window visible frame border thickness.")
-    }
-    SIZE size = {0, 0};
-    if (FAILED(am_GetWindowClientSize_p(g_am_MainWindowHandle_p, &size))) {
-        PRINT_AND_SAFE_RETURN(L"Failed to retrieve the client area size of main window.")
-    }
-    if (SetWindowPos(g_am_XAMLIslandWindowHandle_p, HWND_BOTTOM, 0,
-                 borderThickness, size.cx, (size.cy - borderThickness),
+    // And give enough space to our thin homemade top border.
+    const int borderThickness = Utils::GetWindowVisibleFrameBorderThickness(g_mainWindowHandle);
+    const SIZE size = GET_WINDOW_CLIENT_SIZE(g_mainWindowHandle);
+    if (SetWindowPos(g_XAMLIslandWindowHandle, HWND_BOTTOM, 0,
+                     borderThickness, size.cx, (size.cy - borderThickness),
                      SWP_NOACTIVATE | SWP_SHOWWINDOW | SWP_NOOWNERZORDER) == FALSE) {
-        PRINT_WIN32_ERROR_MESSAGE_AND_SAFE_RETURN(SetWindowPos)
+        PRINT_WIN32_ERROR_MESSAGE(SetWindowPos)
+        return false;
     }
-    g_am_BackgroundBrush_p = {};
-    if (FAILED(am_SwitchAcrylicBrushThemeHelper_p((systemTheme == SystemTheme::Auto) ? SystemTheme::Dark : systemTheme))) {
-        PRINT_AND_SAFE_RETURN(L"Failed to change acrylic brush's theme.")
+    g_backgroundBrush = {};
+    g_backgroundBrush.BackgroundSource(winrt::Windows::UI::Xaml::Media::AcrylicBackgroundSource::HostBackdrop);
+    if (Utils::ShouldAppsUseDarkMode()) {
+        g_backgroundBrush.TintColor(AcrylicBrush::Constants::Dark::DefaultTintColor);
+        g_backgroundBrush.TintOpacity(AcrylicBrush::Constants::Dark::DefaultTintOpacity);
+        g_backgroundBrush.TintLuminosityOpacity(AcrylicBrush::Constants::Dark::DefaultLuminosityOpacity);
+        g_backgroundBrush.FallbackColor(AcrylicBrush::Constants::Dark::DefaultFallbackColor);
+    } else {
+        g_backgroundBrush.TintColor(AcrylicBrush::Constants::Light::DefaultTintColor);
+        g_backgroundBrush.TintOpacity(AcrylicBrush::Constants::Light::DefaultTintOpacity);
+        g_backgroundBrush.TintLuminosityOpacity(AcrylicBrush::Constants::Light::DefaultLuminosityOpacity);
+        g_backgroundBrush.FallbackColor(AcrylicBrush::Constants::Light::DefaultFallbackColor);
     }
-    g_am_BrushTheme_p = SystemTheme::Auto;
-    g_am_BackgroundBrush_p.BackgroundSource(winrt::Windows::UI::Xaml::Media::AcrylicBackgroundSource::HostBackdrop);
-    g_am_RootGrid_p = {};
-    g_am_RootGrid_p.Background(g_am_BackgroundBrush_p);
-    //g_am_RootGrid_p.Children().Clear();
-    //g_am_RootGrid_p.Children().Append(/* some UWP control */);
-    //g_am_RootGrid_p.UpdateLayout();
-    g_am_XAMLSource_p.Content(g_am_RootGrid_p);
+    g_rootGrid = {};
+    g_rootGrid.Background(g_backgroundBrush);
+    //g_rootGrid.Children().Clear();
+    //g_rootGrid.Children().Append(/* some UWP control */);
+    //g_rootGrid.UpdateLayout();
+    g_source.Content(g_rootGrid);
 
-    // Retrieve initial parameters of the acrylic brush.
-    g_am_TintColor_p = g_am_BackgroundBrush_p.TintColor();
-    g_am_TintOpacity_p = g_am_BackgroundBrush_p.TintOpacity();
-    g_am_TintLuminosityOpacity_p = g_am_BackgroundBrush_p.TintLuminosityOpacity();
-    g_am_FallbackColor_p = g_am_BackgroundBrush_p.FallbackColor();
+    return true;
+}
 
-    return S_OK;
+bool AcrylicBrush::XAML::IsSupportedByCurrentOS()
+{
+    static const bool result = Utils::IsWindows10_19H1OrGreater();
+    return result;
+}
+
+bool AcrylicBrush::XAML::IsBlurEffectEnabled()
+{
+    return false;
+}
+
+bool AcrylicBrush::XAML::SetBlurEffectEnabled(const bool enable)
+{
+    if (enable) {
+        if (!RegisterMainWindowClass()) {
+            return false;
+        }
+        if (!CreateMainWindow()) {
+            return false;
+        }
+        if (!RegisterDragBarWindowClass()) {
+            return false;
+        }
+        if (!CreateDragBarWindow()) {
+            return false;
+        }
+        if (!CreateXAMLIsland()) {
+            return false;
+        }
+        return true;
+    } else {
+        return false;
+    }
+}
+
+HWND AcrylicBrush::XAML::GetWindowHandle()
+{
+    return g_mainWindowHandle;
 }
 
 #if 0

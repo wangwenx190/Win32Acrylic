@@ -23,6 +23,7 @@
  */
 
 #include "acrylicbrush.h"
+#include "utils.h"
 #include <wrl\client.h>
 #include <DXGI1_2.h>
 #include <D3D11.h>
@@ -85,6 +86,27 @@ constexpr GUID am_CLSID_D2D1Shadow = {0xC67EA361, 0x1863, 0x4e69, {0x89, 0xDB, 0
 #ifdef __cplusplus
 EXTERN_C_END
 #endif
+
+bool AcrylicBrush::Direct2D::IsSupportedByCurrentOS()
+{
+    static const bool result = Utils::IsWindows8OrGreater();
+    return result;
+}
+
+bool AcrylicBrush::Direct2D::IsBlurEffectEnabled()
+{
+    return false;
+}
+
+bool AcrylicBrush::Direct2D::SetBlurEffectEnabled(const bool enable)
+{
+    return false;
+}
+
+HWND AcrylicBrush::Direct2D::GetWindowHandle()
+{
+    return nullptr;
+}
 
 [[nodiscard]] static inline HRESULT am_D2DGenerateWallpaperBitmapSource_p()
 {

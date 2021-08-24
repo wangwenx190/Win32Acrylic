@@ -24,6 +24,10 @@
 
 #pragma once
 
+#include <Unknwn.h>
+#include <WinRT\Windows.UI.h>
+#include <WinRT\Windows.Foundation.Numerics.h>
+
 namespace AcrylicBrush
 {
 
@@ -92,6 +96,7 @@ namespace System
 [[nodiscard]] bool IsSupportedByCurrentOS();
 [[nodiscard]] bool IsBlurEffectEnabled();
 [[nodiscard]] bool SetBlurEffectEnabled(const bool enable);
+[[nodiscard]] HWND GetWindowHandle();
 
 }
 
@@ -101,6 +106,7 @@ namespace XAML
 [[nodiscard]] bool IsSupportedByCurrentOS();
 [[nodiscard]] bool IsBlurEffectEnabled();
 [[nodiscard]] bool SetBlurEffectEnabled(const bool enable);
+[[nodiscard]] HWND GetWindowHandle();
 
 }
 
@@ -110,6 +116,7 @@ namespace Direct2D
 [[nodiscard]] bool IsSupportedByCurrentOS();
 [[nodiscard]] bool IsBlurEffectEnabled();
 [[nodiscard]] bool SetBlurEffectEnabled(const bool enable);
+[[nodiscard]] HWND GetWindowHandle();
 
 }
 

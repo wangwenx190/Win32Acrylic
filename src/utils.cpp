@@ -23,6 +23,11 @@
  */
 
 #include "utils.h"
+#include <wininet.h>
+#include <ShlObj_Core.h>
+#include <ShellScalingApi.h>
+#include <DwmApi.h>
+#include <cmath>
 
 static constexpr wchar_t g_personalizeRegistryKey[] = LR"(Software\Microsoft\Windows\CurrentVersion\Themes\Personalize)";
 static constexpr wchar_t g_dWMRegistryKey[] = LR"(Software\Microsoft\Windows\DWM)";
@@ -148,42 +153,50 @@ static constexpr wchar_t g_desktopRegistryKey[] = LR"(Control Panel\Desktop)";
 
 bool Utils::IsWindows7OrGreater()
 {
-    return CompareSystemVersion(WindowsVersion::Windows7, VersionCompare::GreaterOrEqual);
+    static const bool result = CompareSystemVersion(WindowsVersion::Windows7, VersionCompare::GreaterOrEqual);
+    return result;
 }
 
 bool Utils::IsWindows8OrGreater()
 {
-    return CompareSystemVersion(WindowsVersion::Windows8, VersionCompare::GreaterOrEqual);
+    static const bool result = CompareSystemVersion(WindowsVersion::Windows8, VersionCompare::GreaterOrEqual);
+    return result;
 }
 
 bool Utils::IsWindows8Point1OrGreater()
 {
-    return CompareSystemVersion(WindowsVersion::Windows8_1, VersionCompare::GreaterOrEqual);
+    static const bool result = CompareSystemVersion(WindowsVersion::Windows8_1, VersionCompare::GreaterOrEqual);
+    return result;
 }
 
 bool Utils::IsWindows10OrGreater()
 {
-    return CompareSystemVersion(WindowsVersion::Windows10, VersionCompare::GreaterOrEqual);
+    static const bool result = CompareSystemVersion(WindowsVersion::Windows10, VersionCompare::GreaterOrEqual);
+    return result;
 }
 
 bool Utils::IsWindows10_1607OrGreater()
 {
-    return CompareSystemVersion(WindowsVersion::Windows10_1607, VersionCompare::GreaterOrEqual);
+    static const bool result = CompareSystemVersion(WindowsVersion::Windows10_1607, VersionCompare::GreaterOrEqual);
+    return result;
 }
 
 bool Utils::IsWindows10_19H1OrGreater()
 {
-    return CompareSystemVersion(WindowsVersion::Windows10_19H1, VersionCompare::GreaterOrEqual);
+    static const bool result = CompareSystemVersion(WindowsVersion::Windows10_19H1, VersionCompare::GreaterOrEqual);
+    return result;
 }
 
 bool Utils::IsWindows11OrGreater()
 {
-    return CompareSystemVersion(WindowsVersion::Windows11, VersionCompare::GreaterOrEqual);
+    static const bool result = CompareSystemVersion(WindowsVersion::Windows11, VersionCompare::GreaterOrEqual);
+    return result;
 }
 
 std::wstring Utils::GetCurrentDirectoryPath()
 {
-
+    static const std::wstring result = {};
+    return result;
 }
 
 UINT Utils::GetDotsPerInchForWindow(const HWND hWnd)
@@ -350,14 +363,14 @@ bool Utils::ShouldSystemUsesDarkMode()
     return (value == 0);
 }
 
-winrt::Windows::UI::Color Utils::GetColorizationColor()
+COLORREF Utils::GetColorizationColor()
 {
     COLORREF color = RGB(0, 0, 0);
     BOOL opaque = FALSE;
     const HRESULT hr = DwmGetColorizationColor(&color, &opaque);
     if (FAILED(hr)) {
         PRINT_HR_ERROR_MESSAGE(DwmGetColorizationColor, hr)
-        return winrt::Windows::UI::Color::Black;
+        return RGB(128, 128, 128); // Dark gray
     }
     return color;
 }
@@ -509,7 +522,7 @@ std::wstring Utils::GetWallpaperFilePath(const int screen)
                         }
                     } else {
                         COM_SAFE_RELEASE(pDesktopWallpaper)
-                        PRINT(L"The given screen ID is beyond total screen count.");
+                        OutputDebugStringW(L"The given screen ID is beyond total screen count.");
                     }
                 } else {
                     COM_SAFE_RELEASE(pDesktopWallpaper)
@@ -529,7 +542,7 @@ std::wstring Utils::GetWallpaperFilePath(const int screen)
         IActiveDesktop *pActiveDesktop = nullptr;
         hr = CoCreateInstance(CLSID_ActiveDesktop, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&pActiveDesktop));
         if (SUCCEEDED(hr)) {
-            const auto wallpaperPath = new wchar_t[MAX_PATH];
+            auto wallpaperPath = new wchar_t[MAX_PATH];
             SecureZeroMemory(wallpaperPath, sizeof(wallpaperPath));
             // TODO: AD_GETWP_BMP, AD_GETWP_IMAGE, AD_GETWP_LAST_APPLIED. What's the difference?
             hr = pActiveDesktop->GetWallpaper(wallpaperPath, MAX_PATH, AD_GETWP_LAST_APPLIED);
@@ -566,7 +579,7 @@ std::wstring Utils::GetWallpaperFilePath(const int screen)
     return result;
 }
 
-winrt::Windows::UI::Color Utils::GetDesktopBackgroundColor(const int screen)
+COLORREF Utils::GetDesktopBackgroundColor(const int screen)
 {
     if (IsWindows8OrGreater()) {
         HRESULT hr = CoInitialize(nullptr);
@@ -595,7 +608,7 @@ winrt::Windows::UI::Color Utils::GetDesktopBackgroundColor(const int screen)
     }
     // TODO: Is there any other way to get the background color? Traditional Win32 API? Registry?
     // Is there a COM API for Win7?
-    return winrt::Windows::UI::Color::Black;
+    return RGB(0, 0, 0);
 }
 
 WallpaperAspectStyle Utils::GetWallpaperAspectStyle(const int screen)
@@ -723,7 +736,7 @@ std::wstring Utils::GetStringFromEnvironmentVariable(const std::wstring &name)
     }
     auto buf = new wchar_t[MAX_PATH];
     SecureZeroMemory(buf, sizeof(buf));
-    if (GetEnvironmentVariableW(name, buf, sizeof(buf)) == 0) {
+    if (GetEnvironmentVariableW(name.c_str(), buf, sizeof(buf)) == 0) {
         // We eat this error because the given environment variable may not exist.
         SAFE_FREE_CHARARRAY(buf)
         return {};
@@ -756,7 +769,7 @@ std::wstring Utils::GetStringFromIniFile(const std::wstring &file, const std::ws
     }
     auto buf = new wchar_t[MAX_PATH];
     SecureZeroMemory(buf, sizeof(buf));
-    if (GetPrivateProfileStringW(section, key, nullptr, buf, MAX_PATH, ini) == 0) {
+    if (GetPrivateProfileStringW(section.c_str(), key.c_str(), nullptr, buf, MAX_PATH, file.c_str()) == 0) {
         SAFE_FREE_CHARARRAY(buf)
         PRINT_WIN32_ERROR_MESSAGE(GetPrivateProfileStringW)
         return {};
@@ -771,7 +784,7 @@ int Utils::GetIntFromIniFile(const std::wstring &file, const std::wstring &secti
     if (file.empty() || section.empty() || key.empty()) {
         return 0;
     }
-    const int result = GetPrivateProfileIntW(section, key, 0, ini);
+    const int result = GetPrivateProfileIntW(section.c_str(), key.c_str(), 0, file.c_str());
     if (GetLastError() != ERROR_SUCCESS) {
         PRINT_WIN32_ERROR_MESSAGE(GetPrivateProfileIntW)
         return 0;
@@ -793,7 +806,7 @@ std::wstring Utils::GetStringFromRegistry(const HKEY rootKey, const std::wstring
         return {};
     }
     HKEY hKey = nullptr;
-    if (RegOpenKeyExW(rootKey, subKey, 0, KEY_READ, &hKey) != ERROR_SUCCESS) {
+    if (RegOpenKeyExW(rootKey, subKey.c_str(), 0, KEY_READ, &hKey) != ERROR_SUCCESS) {
         PRINT_WIN32_ERROR_MESSAGE(RegOpenKeyExW)
         return {};
     }
@@ -801,7 +814,7 @@ std::wstring Utils::GetStringFromRegistry(const HKEY rootKey, const std::wstring
     SecureZeroMemory(buf, sizeof(buf));
     DWORD dwType = REG_SZ;
     DWORD dwSize = sizeof(buf);
-    const bool success = (RegQueryValueExW(hKey, valueName, nullptr, &dwType,
+    const bool success = (RegQueryValueExW(hKey, key.c_str(), nullptr, &dwType,
                                 reinterpret_cast<LPBYTE>(buf), &dwSize) == ERROR_SUCCESS);
     if (!success) {
         // We eat this error because the given registry key and value may not exist.
@@ -822,14 +835,14 @@ int Utils::GetIntFromRegistry(const HKEY rootKey, const std::wstring &subKey, co
         return 0;
     }
     HKEY hKey = nullptr;
-    if (RegOpenKeyExW(rootKey, subKey, 0, KEY_READ, &hKey) != ERROR_SUCCESS) {
+    if (RegOpenKeyExW(rootKey, subKey.c_str(), 0, KEY_READ, &hKey) != ERROR_SUCCESS) {
         PRINT_WIN32_ERROR_MESSAGE(RegOpenKeyExW)
         return 0;
     }
     DWORD dwValue = 0;
     DWORD dwType = REG_DWORD;
     DWORD dwSize = sizeof(dwValue);
-    const bool success = (RegQueryValueExW(hKey, valueName, nullptr, &dwType,
+    const bool success = (RegQueryValueExW(hKey, key.c_str(), nullptr, &dwType,
                                 reinterpret_cast<LPBYTE>(&dwValue), &dwSize) == ERROR_SUCCESS);
     if (!success) {
         // We eat this error because the given registry key and value may not exist.
@@ -846,11 +859,16 @@ DpiAwareness Utils::GetDpiAwarenessForWindow(const HWND hWnd)
     if (!hWnd) {
         return DpiAwareness::Invalid;
     }
+    static DpiAwareness result = DpiAwareness::Invalid;
+    if (result != DpiAwareness::Invalid) {
+        return result;
+    }
     const auto context = GetWindowDpiAwarenessContext(hWnd);
     if (context) {
         const auto awareness = GetAwarenessFromDpiAwarenessContext(context);
         if (awareness != DPI_AWARENESS_INVALID) {
-            return static_cast<DpiAwareness>(awareness);
+            result = static_cast<DpiAwareness>(awareness);
+            return result;
         } else {
             PRINT_WIN32_ERROR_MESSAGE(GetAwarenessFromDpiAwarenessContext)
         }
@@ -860,11 +878,13 @@ DpiAwareness Utils::GetDpiAwarenessForWindow(const HWND hWnd)
     PROCESS_DPI_AWARENESS awareness = PROCESS_DPI_UNAWARE;
     const HRESULT hr = GetProcessDpiAwareness(nullptr, &awareness);
     if (SUCCEEDED(hr)) {
-        return static_cast<DpiAwareness>(awareness);
+        result = static_cast<DpiAwareness>(awareness);
+        return result;
     } else {
         PRINT_HR_ERROR_MESSAGE(GetProcessDpiAwareness, hr)
     }
-    return((IsProcessDPIAware() == FALSE) ? DpiAwareness::Unaware : DpiAwareness::System);
+    result = ((IsProcessDPIAware() == FALSE) ? DpiAwareness::Unaware : DpiAwareness::System);
+    return result;
 }
 
 bool Utils::SetDpiAwarenessForWindow(const HWND hWnd, const DpiAwareness awareness)
@@ -935,7 +955,7 @@ std::wstring Utils::TranslateErrorCodeToMessage(const std::wstring &function, co
     }
     auto str = new wchar_t[MAX_PATH];
     SecureZeroMemory(str, sizeof(str));
-    swprintf(str, L"%s failed with error %d: %s", function, dwError, buf);
+    swprintf(str, L"%s failed with error %d: %s", function.c_str(), dwError, buf);
     const std::wstring result = str;
     LocalFree(buf);
     SAFE_FREE_CHARARRAY(str)
@@ -968,4 +988,47 @@ std::wstring Utils::GenerateGUID()
     const std::wstring result = buf;
     SAFE_FREE_CHARARRAY(buf)
     return result;
+}
+
+bool Utils::TriggerFrameChangeForWindow(const HWND hWnd)
+{
+    if (!hWnd) {
+        return false;
+    }
+    if (SetWindowPos(hWnd, nullptr, 0, 0, 0, 0,
+              SWP_FRAMECHANGED | SWP_NOACTIVATE | SWP_NOSIZE | SWP_NOMOVE | SWP_NOZORDER | SWP_NOOWNERZORDER) == FALSE) {
+        PRINT_WIN32_ERROR_MESSAGE(SetWindowPos)
+        return false;
+    }
+    return true;
+}
+
+bool Utils::UpdateFrameMargins(const HWND hWnd)
+{
+    if (!hWnd) {
+        return false;
+    }
+    const int topFrameMargin = (IsWindowNoState(hWnd) ? Utils::GetWindowVisibleFrameBorderThickness(hWnd) : 0);
+    // We removed the whole top part of the frame (see handling of
+    // WM_NCCALCSIZE) so the top border is missing now. We add it back here.
+    // Note #1: You might wonder why we don't remove just the title bar instead
+    //  of removing the whole top part of the frame and then adding the little
+    //  top border back. I tried to do this but it didn't work: DWM drew the
+    //  whole title bar anyways on top of the window. It seems that DWM only
+    //  wants to draw either nothing or the whole top part of the frame.
+    // Note #2: For some reason if you try to set the top margin to just the
+    //  top border height (what we want to do), then there is a transparency
+    //  bug when the window is inactive, so I've decided to add the whole top
+    //  part of the frame instead and then we will hide everything that we
+    //  don't need (that is, the whole thing but the little 1 pixel wide border
+    //  at the top) in the WM_PAINT handler. This eliminates the transparency
+    //  bug and it's what a lot of Win32 apps that customize the title bar do
+    //  so it should work fine.
+    const MARGINS margins = {0, 0, topFrameMargin, 0};
+    const HRESULT hr = DwmExtendFrameIntoClientArea(hWnd, &margins);
+    if (FAILED(hr)) {
+        PRINT_HR_ERROR_MESSAGE(DwmExtendFrameIntoClientArea, hr)
+        return false;
+    }
+    return true;
 }

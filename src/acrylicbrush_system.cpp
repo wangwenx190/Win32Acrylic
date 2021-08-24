@@ -23,3 +23,25 @@
  */
 
 #include "acrylicbrush.h"
+#include "utils.h"
+
+bool AcrylicBrush::System::IsSupportedByCurrentOS()
+{
+    static const bool result = false;
+    return result;
+}
+
+bool AcrylicBrush::System::IsBlurEffectEnabled()
+{
+    return false;
+}
+
+bool AcrylicBrush::System::SetBlurEffectEnabled(const bool enable)
+{
+    return false;
+}
+
+HWND AcrylicBrush::System::GetWindowHandle()
+{
+    return nullptr;
+}

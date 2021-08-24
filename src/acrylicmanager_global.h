@@ -367,7 +367,7 @@ EXTERN_C IMAGE_DOS_HEADER __ImageBase;
 
 #ifndef IsWindowNoState
 #define IsWindowNoState(window) \
-[]{ \
+[=]{ \
     if (!window) { \
         return false; \
     } \
@@ -406,7 +406,7 @@ EXTERN_C IMAGE_DOS_HEADER __ImageBase;
 #endif
 
 #ifndef GET_RECT_SIZE
-#define GET_RECT_SIZE(rect) (SIZE{GET_RECT_WIDTH(rect), GET_RECT_HEIGHT(rect)})
+#define GET_RECT_SIZE(rect) SIZE{GET_RECT_WIDTH(rect), GET_RECT_HEIGHT(rect)}
 #endif
 
 #ifndef GET_BLACK_BRUSH
@@ -491,7 +491,7 @@ EXTERN_C IMAGE_DOS_HEADER __ImageBase;
 #endif
 
 #ifndef PRINT_WIN32_ERROR_MESSAGE
-#define PRINT_WIN32_ERROR_MESSAGE(function) (PRINT_HR_ERROR_MESSAGE(function, HRESULT_FROM_WIN32(GetLastError())))
+#define PRINT_WIN32_ERROR_MESSAGE(function) PRINT_HR_ERROR_MESSAGE(function, HRESULT_FROM_WIN32(GetLastError()))
 #endif
 
 #ifndef GET_WINRTCOLOR_COMPONENTS

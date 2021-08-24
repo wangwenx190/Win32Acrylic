@@ -24,6 +24,9 @@
 
 #pragma once
 
+#include "acrylicmanager_global.h"
+#include <string>
+
 namespace Utils
 {
 
@@ -43,7 +46,7 @@ namespace Utils
 [[nodiscard]] int GetWindowVisibleFrameBorderThickness(const HWND hWnd);
 [[nodiscard]] bool ShouldAppsUseDarkMode();
 [[nodiscard]] bool ShouldSystemUsesDarkMode();
-[[nodiscard]] winrt::Windows::UI::Color GetColorizationColor();
+[[nodiscard]] COLORREF GetColorizationColor();
 [[nodiscard]] ColorizationArea GetColorizationArea();
 [[nodiscard]] bool IsHighContrastModeEnabled();
 [[nodiscard]] bool IsWindowDarkFrameBorderEnabled(const HWND hWnd);
@@ -51,7 +54,7 @@ namespace Utils
 [[nodiscard]] bool IsWindowTransitionsEnabled(const HWND hWnd);
 [[nodiscard]] bool SetWindowTransitionsEnabled(const HWND hWnd, const bool enable);
 [[nodiscard]] std::wstring GetWallpaperFilePath(const int screen);
-[[nodiscard]] winrt::Windows::UI::Color GetDesktopBackgroundColor(const int screen);
+[[nodiscard]] COLORREF GetDesktopBackgroundColor(const int screen);
 [[nodiscard]] WallpaperAspectStyle GetWallpaperAspectStyle(const int screen);
 [[nodiscard]] std::wstring GetStringFromEnvironmentVariable(const std::wstring &name);
 [[nodiscard]] int GetIntFromEnvironmentVariable(const std::wstring &name);
@@ -65,5 +68,7 @@ namespace Utils
 [[nodiscard]] bool SetDpiAwarenessForWindow(const HWND hWnd, const DpiAwareness awareness);
 [[nodiscard]] std::wstring TranslateErrorCodeToMessage(const std::wstring &function, const HRESULT hr);
 [[nodiscard]] std::wstring GenerateGUID();
+[[nodiscard]] bool TriggerFrameChangeForWindow(const HWND hWnd);
+[[nodiscard]] bool UpdateFrameMargins(const HWND hWnd);
 
 }

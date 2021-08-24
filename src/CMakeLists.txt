@@ -13,12 +13,13 @@ set(SOURCES
     dynamicapis.cpp
     colorconversion.h
     colorconversion.cpp
+    utils.h
+    utils.cpp
     acrylicbrush.h
     acrylicbrush_system.cpp
     acrylicbrush_xaml.cpp
     acrylicbrush_direct2d.cpp
     acrylicmanager.h
-    acrylicmanager_p.h
     acrylicmanager.cpp
 )
 

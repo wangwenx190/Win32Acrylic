@@ -35,9 +35,9 @@ namespace Utils
 [[nodiscard]] bool IsWindows8OrGreater();
 [[nodiscard]] bool IsWindows8Point1OrGreater();
 [[nodiscard]] bool IsWindows10OrGreater();
-[[nodiscard]] bool IsWindows10_1607OrGreater();
-[[nodiscard]] bool IsWindows10_1809OrGreater();
-[[nodiscard]] bool IsWindows10_19H1OrGreater();
+[[nodiscard]] bool IsWindows10RS1OrGreater();
+[[nodiscard]] bool IsWindows10RS5OrGreater();
+[[nodiscard]] bool IsWindows1019H1OrGreater();
 [[nodiscard]] bool IsWindows11OrGreater();
 [[nodiscard]] std::wstring GetCurrentDirectoryPath();
 [[nodiscard]] UINT GetDotsPerInchForWindow(const HWND hWnd);
@@ -74,5 +74,7 @@ namespace Utils
 [[nodiscard]] bool UpdateFrameMargins(const HWND hWnd);
 [[nodiscard]] bool OpenSystemMenu(const HWND hWnd, const POINT pos);
 [[nodiscard]] bool IsCompositionEnabled();
+[[nodiscard]] bool ExcludeWindowFromLivePreview(const HWND hWnd);
+[[nodiscard]] bool RemoveWindowFromTaskListAndTaskBar(const HWND hWnd);
 
 }

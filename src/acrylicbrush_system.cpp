@@ -26,6 +26,7 @@
 #include "resource.h"
 #include "customframe.h"
 #include "utils.h"
+#include <DwmApi.h>
 
 #ifndef WM_DWMCOMPOSITIONCHANGED
 #define WM_DWMCOMPOSITIONCHANGED (0x031E)
@@ -115,7 +116,9 @@ AcrylicBrush_System::~AcrylicBrush_System()
 
 bool AcrylicBrush_System::IsSupportedByCurrentOS() const
 {
-    static const bool result = false;
+    static const bool result = (Utils::IsWindows11OrGreater()
+                                || (Utils::CompareSystemVersion(WindowsVersion::Windows10_RS2, VersionCompare::Greater)
+                                    && Utils::CompareSystemVersion(WindowsVersion::Windows10_RS4, VersionCompare::Less)));
     return result;
 }
 
@@ -226,4 +229,66 @@ bool AcrylicBrush_System::InitializeInternalAPI() const
         return false;
     }
     return true;
+}
+
+bool AcrylicBrush_System::SetBlurBehindWindowEnabled(const bool enable, const winrt::Windows::UI::Color &color)
+{
+    // We prefer using DwmEnableBlurBehindWindow() on Windows 7.
+    if (Utils::IsWindows8OrGreater()) {
+        ACCENT_POLICY accent;
+        SecureZeroMemory(&accent, sizeof(accent));
+        WINDOWCOMPOSITIONATTRIBDATA data = {};
+        data.Attrib = WCA_ACCENT_POLICY;
+        data.pvData = &accent;
+        data.cbData = sizeof(accent);
+        if (enable) {
+            // The gradient color must be set otherwise it'll look like a classic blur.
+            // Use semi-transparent gradient color to get better appearance.
+            if (gradientColor.isValid()) {
+                accent.GradientColor = qRgba(gradientColor.blue(), gradientColor.green(), gradientColor.red(), gradientColor.alpha());
+            } else {
+                const QColor colorizationColor = DWM::getColorizationColor();
+                accent.GradientColor =
+                        RGB(qRound(colorizationColor.red() * (colorizationColor.alpha() / 255.0) + 255.0 - colorizationColor.alpha()),
+                            qRound(colorizationColor.green() * (colorizationColor.alpha() / 255.0) + 255.0 - colorizationColor.alpha()),
+                            qRound(colorizationColor.blue() * (colorizationColor.alpha() / 255.0) + 255.0 - colorizationColor.alpha()));
+            }
+            if (shouldUseOfficialAcrylicEffect()) {
+                accent.AccentState = ACCENT_ENABLE_ACRYLICBLURBEHIND;
+                if (!gradientColor.isValid()) {
+                    accent.GradientColor = 0x01FFFFFF;
+                }
+            } else {
+                accent.AccentState = ACCENT_ENABLE_BLURBEHIND;
+            }
+        } else {
+            accent.AccentState = ACCENT_DISABLED;
+        }
+        if (SetWindowCompositionAttribute(g_mainWindowHandle, &data) == FALSE) {
+            PRINT_WIN32_ERROR_MESSAGE(SetWindowCompositionAttribute)
+            return false;
+        }
+        return true;
+    } else {
+        DWM_BLURBEHIND dwmBB;
+        SecureZeroMemory(&dwmBB, sizeof(dwmBB));
+        dwmBB.dwFlags = DWM_BB_ENABLE;
+        dwmBB.fEnable = enable ? TRUE : FALSE;
+        if (enable) {
+            dwmBB.dwFlags |= DWM_BB_BLURREGION;
+            dwmBB.hRgnBlur = CreateRectRgn(0, 0, -1, -1);
+        }
+        const HRESULT hr = DwmEnableBlurBehindWindow(g_mainWindowHandle, &dwmBB);
+        if (dwmBB.hRgnBlur) {
+            if (DeleteObject(dwmBB.hRgnBlur) == FALSE) {
+                PRINT_WIN32_ERROR_MESSAGE(DeleteObject)
+                return false;
+            }
+        }
+        if (FAILED(hr)) {
+            PRINT_HR_ERROR_MESSAGE(DwmEnableBlurBehindWindow, hr)
+            return false;
+        }
+        return true;
+    }
 }

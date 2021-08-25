@@ -175,21 +175,21 @@ bool Utils::IsWindows10OrGreater()
     return result;
 }
 
-bool Utils::IsWindows10_1607OrGreater()
+bool Utils::IsWindows10RS1OrGreater()
 {
     static const bool result = CompareSystemVersion(WindowsVersion::Windows10_1607, VersionCompare::GreaterOrEqual);
     return result;
 }
 
-bool Utils::IsWindows10_1809OrGreater()
+bool Utils::IsWindows10RS5OrGreater()
 {
     static const bool result = CompareSystemVersion(WindowsVersion::Windows10_1809, VersionCompare::GreaterOrEqual);
     return result;
 }
 
-bool Utils::IsWindows10_19H1OrGreater()
+bool Utils::IsWindows1019H1OrGreater()
 {
-    static const bool result = CompareSystemVersion(WindowsVersion::Windows10_19H1, VersionCompare::GreaterOrEqual);
+    static const bool result = CompareSystemVersion(WindowsVersion::Windows10_1903, VersionCompare::GreaterOrEqual);
     return result;
 }
 
@@ -1135,4 +1135,27 @@ bool Utils::IsCompositionEnabled()
     }
     const int dwmComp = GetIntFromRegistry(HKEY_CURRENT_USER, g_dwmRegistryKey, L"Composition");
     return (dwmComp != 0);
+}
+
+bool Utils::ExcludeWindowFromLivePreview(const HWND hWnd)
+{
+    if (!hWnd) {
+        return false;
+    }
+    const BOOL value = TRUE;
+    const HRESULT hr = DwmSetWindowAttribute(hWnd, static_cast<DWORD>(DwmWindowAttribute::EXCLUDED_FROM_PEEK), &value, sizeof(value));
+    if (FAILED(hr)) {
+        PRINT_HR_ERROR_MESSAGE(DwmSetWindowAttribute, hr)
+        return false;
+    }
+    return true;
+}
+
+bool Utils::RemoveWindowFromTaskListAndTaskBar(const HWND hWnd)
+{
+    if (!hWnd) {
+        return false;
+    }
+    // todo
+    return true;
 }

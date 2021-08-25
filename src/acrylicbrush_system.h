@@ -44,6 +44,7 @@ private:
     [[nodiscard]] bool RegisterMainWindowClass() const;
     [[nodiscard]] bool CreateMainWindow() const;
     [[nodiscard]] bool InitializeInternalAPI() const;
+    [[nodiscard]] bool SetBlurBehindWindowEnabled(const bool enable, const winrt::Windows::UI::Color &color);
 
 private:
     static int m_refCount;

@@ -524,7 +524,7 @@ bool AcrylicBrush_Direct2D::CreateEffects(ID2D1Effect **output) const
     g_D2DGaussianBlurEffect->SetInputEffect(0, g_D2DWallpaperBitmapSourceEffect.Get());
 
     ID2D1Effect *tintOutput = nullptr;
-    if (Utils::IsWindows10_19H1OrGreater()) {
+    if (Utils::IsWindows1019H1OrGreater()) {
         if (!PrepareEffects_Luminosity(&tintOutput)) {
             //
         }

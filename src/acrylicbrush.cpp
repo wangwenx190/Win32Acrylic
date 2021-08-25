@@ -73,7 +73,7 @@ const std::wstring AcrylicBrush::m_windowClassNamePrefix = LR"(wangwenx190\Acryl
 [[nodiscard]] static inline double GetTintOpacityModifier(const winrt::Windows::UI::Color &tintColor)
 {
     // TintOpacityModifier affects the 19H1+ Luminosity-based recipe only
-    if (!Utils::IsWindows10_19H1OrGreater()) {
+    if (!Utils::IsWindows1019H1OrGreater()) {
         return 1.0;
     }
 
@@ -171,7 +171,7 @@ winrt::Windows::UI::Color AcrylicBrush::GetTintColor() const
     if (g_tintColor.has_value()) {
         return g_tintColor.value();
     } else {
-        if (Utils::IsWindows10_1607OrGreater() && Utils::ShouldAppsUseDarkMode()) {
+        if (Utils::IsWindows10RS1OrGreater() && Utils::ShouldAppsUseDarkMode()) {
             return Constants::Dark::DefaultTintColor;
         } else {
             return Constants::Light::DefaultTintColor;
@@ -189,7 +189,7 @@ double AcrylicBrush::GetTintOpacity() const
     if (g_tintOpacity.has_value()) {
         return g_tintOpacity.value();
     } else {
-        if (Utils::IsWindows10_1607OrGreater() && Utils::ShouldAppsUseDarkMode()) {
+        if (Utils::IsWindows10RS1OrGreater() && Utils::ShouldAppsUseDarkMode()) {
             return Constants::Dark::DefaultTintOpacity;
         } else {
             return Constants::Light::DefaultTintOpacity;
@@ -207,7 +207,7 @@ winrt::Windows::Foundation::IReference<double> AcrylicBrush::GetLuminosityOpacit
     if (g_luminosityOpacity.has_value()) {
         return g_luminosityOpacity.value();
     } else {
-        if (Utils::IsWindows10_1607OrGreater() && Utils::ShouldAppsUseDarkMode()) {
+        if (Utils::IsWindows10RS1OrGreater() && Utils::ShouldAppsUseDarkMode()) {
             return Constants::Dark::DefaultLuminosityOpacity;
         } else {
             return Constants::Light::DefaultLuminosityOpacity;
@@ -229,7 +229,7 @@ winrt::Windows::UI::Color AcrylicBrush::GetFallbackColor() const
     if (g_fallbackColor.has_value()) {
         return g_fallbackColor.value();
     } else {
-        if (Utils::IsWindows10_1607OrGreater() && Utils::ShouldAppsUseDarkMode()) {
+        if (Utils::IsWindows10RS1OrGreater() && Utils::ShouldAppsUseDarkMode()) {
             return Constants::Dark::DefaultFallbackColor;
         } else {
             return Constants::Light::DefaultFallbackColor;
@@ -247,7 +247,7 @@ double AcrylicBrush::GetBlurRadius() const
     if (g_blurRadius.has_value()) {
         return g_blurRadius.value();
     } else {
-        if (Utils::IsWindows10_1607OrGreater() && Utils::ShouldAppsUseDarkMode()) {
+        if (Utils::IsWindows10RS1OrGreater() && Utils::ShouldAppsUseDarkMode()) {
             return Constants::Dark::DefaultBlurRadius;
         } else {
             return Constants::Light::DefaultBlurRadius;
@@ -265,7 +265,7 @@ double AcrylicBrush::GetSaturation() const
     if (g_saturation.has_value()) {
         return g_saturation.value();
     } else {
-        if (Utils::IsWindows10_1607OrGreater() && Utils::ShouldAppsUseDarkMode()) {
+        if (Utils::IsWindows10RS1OrGreater() && Utils::ShouldAppsUseDarkMode()) {
             return Constants::Dark::DefaultSaturation;
         } else {
             return Constants::Light::DefaultSaturation;
@@ -283,7 +283,7 @@ double AcrylicBrush::GetNoiseOpacity() const
     if (g_noiseOpacity.has_value()) {
         return g_noiseOpacity.value();
     } else {
-        if (Utils::IsWindows10_1607OrGreater() && Utils::ShouldAppsUseDarkMode()) {
+        if (Utils::IsWindows10RS1OrGreater() && Utils::ShouldAppsUseDarkMode()) {
             return Constants::Dark::DefaultNoiseOpacity;
         } else {
             return Constants::Light::DefaultNoiseOpacity;
@@ -301,7 +301,7 @@ winrt::Windows::UI::Color AcrylicBrush::GetExclusionColor() const
     if (g_exclusionColor.has_value()) {
         return g_exclusionColor.value();
     } else {
-        if (Utils::IsWindows10_1607OrGreater() && Utils::ShouldAppsUseDarkMode()) {
+        if (Utils::IsWindows10RS1OrGreater() && Utils::ShouldAppsUseDarkMode()) {
             return Constants::Dark::DefaultExclusionColor;
         } else {
             return Constants::Light::DefaultExclusionColor;

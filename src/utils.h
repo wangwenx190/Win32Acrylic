@@ -30,11 +30,13 @@
 namespace Utils
 {
 
+[[nodiscard]] bool CompareSystemVersion(const WindowsVersion ver, const VersionCompare comp);
 [[nodiscard]] bool IsWindows7OrGreater();
 [[nodiscard]] bool IsWindows8OrGreater();
 [[nodiscard]] bool IsWindows8Point1OrGreater();
 [[nodiscard]] bool IsWindows10OrGreater();
 [[nodiscard]] bool IsWindows10_1607OrGreater();
+[[nodiscard]] bool IsWindows10_1809OrGreater();
 [[nodiscard]] bool IsWindows10_19H1OrGreater();
 [[nodiscard]] bool IsWindows11OrGreater();
 [[nodiscard]] std::wstring GetCurrentDirectoryPath();

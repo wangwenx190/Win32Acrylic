@@ -41,5 +41,10 @@ public:
     void Release() override;
 
 private:
+    [[nodiscard]] bool RegisterMainWindowClass() const;
+    [[nodiscard]] bool CreateMainWindow() const;
+    [[nodiscard]] bool InitializeInternalAPI() const;
+
+private:
     static int m_refCount;
 };

@@ -23,3 +23,50 @@
  */
 
 #include "acrylicbrush_winui3.h"
+
+int AcrylicBrush_WinUI3::m_refCount = 0;
+
+AcrylicBrush_WinUI3::AcrylicBrush_WinUI3()
+{
+    ++m_refCount;
+}
+
+AcrylicBrush_WinUI3::~AcrylicBrush_WinUI3()
+{
+    --m_refCount;
+}
+
+bool AcrylicBrush_WinUI3::IsSupportedByCurrentOS() const
+{
+    static const bool result = false;
+    return result;
+}
+
+bool AcrylicBrush_WinUI3::Create() const
+{
+    return false;
+}
+
+void AcrylicBrush_WinUI3::ReloadBlurParameters() const
+{
+
+}
+
+HWND AcrylicBrush_WinUI3::GetWindowHandle() const
+{
+    return nullptr;
+}
+
+int AcrylicBrush_WinUI3::EventLoopExec() const
+{
+    return -1;
+}
+
+void AcrylicBrush_WinUI3::Release()
+{
+    --m_refCount;
+    if (m_refCount <= 0) {
+        m_refCount = 0;
+        delete this;
+    }
+}

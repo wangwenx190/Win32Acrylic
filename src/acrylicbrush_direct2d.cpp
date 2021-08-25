@@ -34,6 +34,14 @@
 #include <D2D1Effects_2.h>
 #include <WinCodec.h>
 
+#ifndef WM_DWMCOMPOSITIONCHANGED
+#define WM_DWMCOMPOSITIONCHANGED (0x031E)
+#endif
+
+#ifndef WM_DWMCOLORIZATIONCOLORCHANGED
+#define WM_DWMCOLORIZATIONCOLORCHANGED (0x0320)
+#endif
+
 #ifdef __cplusplus
 EXTERN_C_START
 #endif
@@ -111,6 +119,15 @@ int AcrylicBrush_Direct2D::m_refCount = 0;
 
 static inline void Cleanup()
 {
+    if (!g_wallpaperFilePath.empty()) {
+        g_wallpaperFilePath.clear();
+    }
+    if (g_wallpaperAspectStyle != WallpaperAspectStyle::Invalid) {
+        g_wallpaperAspectStyle = WallpaperAspectStyle::Invalid;
+    }
+    if (g_desktopBackgroundColor != 0) {
+        g_desktopBackgroundColor = 0;
+    }
     if (g_mainWindowHandle) {
         DestroyWindow(g_mainWindowHandle);
         g_mainWindowHandle = nullptr;
@@ -227,12 +244,19 @@ bool AcrylicBrush_Direct2D::IsSupportedByCurrentOS() const
 
 HWND AcrylicBrush_Direct2D::GetWindowHandle() const
 {
-    return nullptr;
+    return g_mainWindowHandle;
 }
 
 int AcrylicBrush_Direct2D::EventLoopExec() const
 {
-    return 0;
+    MSG msg = {};
+
+    while (GetMessageW(&msg, nullptr, 0, 0) != FALSE) {
+        TranslateMessage(&msg);
+        DispatchMessageW(&msg);
+    }
+
+    return static_cast<int>(msg.wParam);
 }
 
 void AcrylicBrush_Direct2D::Release()
@@ -248,18 +272,16 @@ bool AcrylicBrush_Direct2D::RegisterMainWindowClass() const
 {
     g_mainWindowClassName = m_windowClassNamePrefix + Utils::GenerateGUID() + g_mainWindowClassNameSuffix;
 
-    static const HINSTANCE instance = GET_CURRENT_INSTANCE;
-
     WNDCLASSEXW wcex;
     SecureZeroMemory(&wcex, sizeof(wcex));
     wcex.cbSize = sizeof(wcex);
 
     wcex.style = CS_HREDRAW | CS_VREDRAW;
     wcex.lpfnWndProc = MainWindowProc;
-    wcex.hInstance = instance;
+    wcex.hInstance = GET_CURRENT_INSTANCE;
     wcex.hCursor = LoadCursorW(nullptr, IDC_ARROW);
-    wcex.hIcon = LoadIconW(instance, MAKEINTRESOURCEW(IDI_DEFAULTICON));
-    wcex.hIconSm = LoadIconW(instance, MAKEINTRESOURCEW(IDI_DEFAULTICONSM));
+    wcex.hIcon = LoadIconW(GET_CURRENT_INSTANCE, MAKEINTRESOURCEW(IDI_DEFAULTICON));
+    wcex.hIconSm = LoadIconW(GET_CURRENT_INSTANCE, MAKEINTRESOURCEW(IDI_DEFAULTICONSM));
     wcex.hbrBackground = reinterpret_cast<HBRUSH>(COLOR_WINDOW + 1);
     wcex.lpszClassName = g_mainWindowClassName.c_str();
 

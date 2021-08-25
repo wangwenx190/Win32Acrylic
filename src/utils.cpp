@@ -33,7 +33,7 @@ static constexpr wchar_t g_personalizeRegistryKey[] = LR"(Software\Microsoft\Win
 static constexpr wchar_t g_dwmRegistryKey[] = LR"(Software\Microsoft\Windows\DWM)";
 static constexpr wchar_t g_desktopRegistryKey[] = LR"(Control Panel\Desktop)";
 
-[[nodiscard]] static inline bool CompareSystemVersion(const WindowsVersion ver, const VersionCompare comp)
+bool Utils::CompareSystemVersion(const WindowsVersion ver, const VersionCompare comp)
 {
     OSVERSIONINFOEXW osvi;
     SecureZeroMemory(&osvi, sizeof(osvi));
@@ -178,6 +178,12 @@ bool Utils::IsWindows10OrGreater()
 bool Utils::IsWindows10_1607OrGreater()
 {
     static const bool result = CompareSystemVersion(WindowsVersion::Windows10_1607, VersionCompare::GreaterOrEqual);
+    return result;
+}
+
+bool Utils::IsWindows10_1809OrGreater()
+{
+    static const bool result = CompareSystemVersion(WindowsVersion::Windows10_1809, VersionCompare::GreaterOrEqual);
     return result;
 }
 

@@ -26,7 +26,7 @@
 
 #include "acrylicbrush.h"
 
-class ID2D1Effect;
+struct ID2D1Effect;
 
 class AcrylicBrush_Direct2D final : public AcrylicBrush
 {

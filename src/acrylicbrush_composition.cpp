@@ -23,3 +23,50 @@
  */
 
 #include "acrylicbrush_composition.h"
+
+int AcrylicBrush_Composition::m_refCount = 0;
+
+AcrylicBrush_Composition::AcrylicBrush_Composition()
+{
+    ++m_refCount;
+}
+
+AcrylicBrush_Composition::~AcrylicBrush_Composition()
+{
+    --m_refCount;
+}
+
+bool AcrylicBrush_Composition::IsSupportedByCurrentOS() const
+{
+    static const bool result = false;
+    return result;
+}
+
+bool AcrylicBrush_Composition::Create() const
+{
+    return false;
+}
+
+void AcrylicBrush_Composition::ReloadBlurParameters() const
+{
+
+}
+
+HWND AcrylicBrush_Composition::GetWindowHandle() const
+{
+    return nullptr;
+}
+
+int AcrylicBrush_Composition::EventLoopExec() const
+{
+    return -1;
+}
+
+void AcrylicBrush_Composition::Release()
+{
+    --m_refCount;
+    if (m_refCount <= 0) {
+        m_refCount = 0;
+        delete this;
+    }
+}

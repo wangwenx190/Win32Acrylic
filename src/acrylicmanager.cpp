@@ -24,61 +24,17 @@
 
 #include "acrylicmanager.h"
 
-#ifndef WM_DWMCOMPOSITIONCHANGED
-#define WM_DWMCOMPOSITIONCHANGED (0x031E)
-#endif
+static constexpr wchar_t g_forceSystemBackendEnvVar[] = L"ACRYLICMANAGER_FORCE_SYSTEM";
+static constexpr wchar_t g_forceCompositionBackendEnvVar[] = L"ACRYLICMANAGER_FORCE_COMPOSITION";
+static constexpr wchar_t g_forceWinUI3BackendEnvVar[] = L"ACRYLICMANAGER_FORCE_WINUI3";
+static constexpr wchar_t g_forceWinUI2BackendEnvVar[] = L"ACRYLICMANAGER_FORCE_WINUI2";
+static constexpr wchar_t g_forceDirect2DBackendEnvVar[] = L"ACRYLICMANAGER_FORCE_DIRECT2D";
 
-#ifndef WM_DWMCOLORIZATIONCOLORCHANGED
-#define WM_DWMCOLORIZATIONCOLORCHANGED (0x0320)
-#endif
-
-/////////////////////////////////
-/////     Global variables
-/////////////////////////////////
-
-static constexpr wchar_t g_am_ForceOfficialBlurEnvVar_p[] = L"ACRYLICMANAGER_FORCE_OFFICIAL_BLUR";
-static constexpr wchar_t g_am_ForceXAMLIslandEnvVar_p[] = L"ACRYLICMANAGER_FORCE_XAML_ISLAND";
-static constexpr wchar_t g_am_ForceDirect2DEnvVar_p[] = L"ACRYLICMANAGER_FORCE_DIRECT2D";
-
-static bool g_am_AcrylicManagerInitialized_p = false;
-
-static bool g_am_IsUsingOfficialBlur_p = false;
-static bool g_am_IsUsingXAMLIsland_p = false;
-static bool g_am_IsUsingDirect2D_p = false;
-
-/////////////////////////////////
-/////     Helper functions
-/////////////////////////////////
-
-[[nodiscard]] static inline HRESULT am_MoveWindowHelper_p(const HWND hWnd, const int x, const int y)
-{
-    if (!hWnd || (x <= 0) || (y <= 0)) {
-        return E_INVALIDARG;
-    }
-    SIZE size = {};
-    if (FAILED(am_GetWindowSizeHelper_p(hWnd, &size))) {
-        return E_FAIL;
-    }
-    if (MoveWindow(hWnd, x, y, size.cx, size.cy, TRUE) == FALSE) {
-        PRINT_WIN32_ERROR_MESSAGE_AND_RETURN(MoveWindow)
-    }
-    return S_OK;
-}
-
-[[nodiscard]] static inline HRESULT am_ResizeWindowHelper_p(const HWND hWnd, const int w, const int h)
-{
-    if (!hWnd || (w <= 0) || (h <= 0)) {
-        return E_INVALIDARG;
-    }
-    RECT rect = {};
-    if (FAILED(am_GetWindowGeometryHelper_p(hWnd, &rect))) {
-        return E_FAIL;
-    }
-    if (MoveWindow(hWnd, rect.left, rect.top, w, h, TRUE) == FALSE) {
-        PRINT_WIN32_ERROR_MESSAGE_AND_RETURN(MoveWindow)
-    }
-    return S_OK;
-}
+static bool g_isUsingSystemBackend = false;
+static bool g_isUsingCompositionBackend = false;
+static bool g_isUsingWinUI3Backend = false;
+static bool g_isUsingWinUI2Backend = false;
+static bool g_isUsingDirect2DBackend = false;
 
 [[nodiscard]] static inline HRESULT am_CenterWindowHelper_p(const HWND hWnd)
 {
@@ -105,120 +61,12 @@ static bool g_am_IsUsingDirect2D_p = false;
     return S_OK;
 }
 
-[[nodiscard]] static inline HRESULT am_CleanupHelper_p()
-{
-    g_am_IsUsingOfficialBlur_p = false;
-
-    // Host window
-    if (g_am_HostWindowHandle_p && g_am_HostWindowProc_p) {
-        SetWindowLongPtrW(g_am_HostWindowHandle_p, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(g_am_HostWindowProc_p));
-        g_am_HostWindowProc_p = nullptr;
-        g_am_HostWindowHandle_p = nullptr;
-    }
-
-    // Direct2D
-    g_am_D2DBitmapProperties_p = {};
-    g_am_DXGISwapChainDesc_p = {};
-    SAFE_FREE_CHARARRAY(g_am_WallpaperFilePath_p)
-    g_am_DesktopBackgroundColor_p = D2D1::ColorF(D2D1::ColorF::Black);
-    g_am_WallpaperAspectStyle_p = WallpaperAspectStyle::Invalid;
-    g_am_D3DFeatureLevel_p = D3D_FEATURE_LEVEL_1_0_CORE;
-    g_am_IsUsingDirect2D_p = false;
-
-    // XAML Island
-    if (g_am_XAMLSource_p) {
-        g_am_XAMLSource_p.Close();
-        g_am_XAMLSource_p = nullptr;
-    }
-    g_am_RootGrid_p = nullptr;
-    g_am_BackgroundBrush_p = nullptr;
-    if (g_am_XAMLManager_p) {
-        g_am_XAMLManager_p.Close();
-        g_am_XAMLManager_p = nullptr;
-    }
-    g_am_BrushTheme_p = SystemTheme::Invalid;
-    g_am_TintColor_p = {};
-    g_am_TintOpacity_p = 0.0;
-    g_am_TintLuminosityOpacity_p = nullptr;
-    g_am_FallbackColor_p = {};
-    g_am_IsUsingXAMLIsland_p = false;
-
-    // Drag bar window
-    if (g_am_DragBarWindowHandle_p) {
-        if (DestroyWindow(g_am_DragBarWindowHandle_p) == FALSE) {
-            PRINT_WIN32_ERROR_MESSAGE(DestroyWindow)
-        }
-        g_am_DragBarWindowHandle_p = nullptr;
-    }
-    if (g_am_DragBarWindowAtom_p != 0) {
-        if (g_am_DragBarWindowClassName_p) {
-            if (UnregisterClassW(g_am_DragBarWindowClassName_p, HINST_THISCOMPONENT) == FALSE) {
-                PRINT_WIN32_ERROR_MESSAGE(UnregisterClassW)
-            }
-            SAFE_FREE_CHARARRAY(g_am_DragBarWindowClassName_p)
-        }
-        g_am_DragBarWindowAtom_p = 0;
-    }
-
-    // Main window
-    if (g_am_MainWindowHandle_p) {
-        if (DestroyWindow(g_am_MainWindowHandle_p) == FALSE) {
-            PRINT_WIN32_ERROR_MESSAGE(DestroyWindow)
-        }
-        g_am_MainWindowHandle_p = nullptr;
-    }
-    if (g_am_MainWindowAtom_p != 0) {
-        if (g_am_MainWindowClassName_p) {
-            if (UnregisterClassW(g_am_MainWindowClassName_p, HINST_THISCOMPONENT) == FALSE) {
-                PRINT_WIN32_ERROR_MESSAGE(UnregisterClassW)
-            }
-            SAFE_FREE_CHARARRAY(g_am_MainWindowClassName_p)
-        }
-        g_am_MainWindowAtom_p = 0;
-    }
-    g_am_CurrentDpi_p = 0;
-    g_am_CurrentDpr_p = 0.0;
-
-    am_ReleaseAllLoadedModules_p();
-
-    g_am_AcrylicManagerInitialized_p = false;
-
-    return S_OK;
-}
-
 [[nodiscard]] static inline HRESULT am_IsWindowActiveHelper_p(const HWND hWnd, bool *result)
 {
     if (!hWnd || !result) {
         return E_INVALIDARG;
     }
     *result = (GetActiveWindow() == hWnd);
-    return S_OK;
-}
-
-[[nodiscard]] static inline HRESULT am_MainWindowEventLoopHelper_p(int *result)
-{
-    if (!result || !g_am_MainWindowHandle_p) {
-        return E_INVALIDARG;
-    }
-
-    MSG msg = {};
-
-    while (GetMessageW(&msg, nullptr, 0, 0) != FALSE) {
-        BOOL filtered = FALSE;
-        if (g_am_XAMLSource_p) {
-            const auto interop = g_am_XAMLSource_p.as<IDesktopWindowXamlSourceNative2>();
-            if (interop) {
-                winrt::check_hresult(interop->PreTranslateMessage(&msg, &filtered));
-            }
-        }
-        if (filtered == FALSE) {
-            TranslateMessage(&msg);
-            DispatchMessageW(&msg);
-        }
-    }
-
-    *result = static_cast<int>(msg.wParam);
-
     return S_OK;
 }
 
@@ -400,32 +248,6 @@ static bool g_am_IsUsingDirect2D_p = false;
     return S_OK;
 }
 
-HRESULT am_SetWindowCompositionAttribute_p(const HWND hWnd, LPWINDOWCOMPOSITIONATTRIBDATA pwcad)
-{
-    if (!hWnd || !pwcad) {
-        return E_INVALIDARG;
-    }
-    static bool tried = false;
-    using sig = BOOL(WINAPI *)(HWND, LPWINDOWCOMPOSITIONATTRIBDATA);
-    static sig func = nullptr;
-    if (!func) {
-        if (tried) {
-            return E_FAIL;
-        } else {
-            tried = true;
-            FARPROC address = nullptr;
-            if (FAILED(am_GetSymbolAddressFromExecutable_p(L"User32.dll", L"SetWindowCompositionAttribute", true, &address))) {
-                return E_FAIL;
-            }
-            func = reinterpret_cast<sig>(address);
-            if (!func) {
-                return E_FAIL;
-            }
-        }
-    }
-    return ((func(hWnd, pwcad) != FALSE) ? S_OK : E_FAIL);
-}
-
 HRESULT am_WideToMulti_p(LPCWSTR in, const UINT codePage, LPSTR *out)
 {
     if (!in || !out) {
@@ -588,186 +410,9 @@ HRESULT am_GetSymbolAddressFromExecutable_p(LPCWSTR path, LPCWSTR function, cons
     return S_OK;
 }
 
-HRESULT am_ReleaseAllLoadedModules_p()
-{
-    if (g_am_LoadedModuleList_p.empty()) {
-        return S_OK;
-    }
-    for (auto &&module : std::as_const(g_am_LoadedModuleList_p)) {
-        const HMODULE handle = module.second;
-        if (!handle) {
-            PRINT(L"The cached module handle is null.")
-            continue;
-        }
-        if (FreeLibrary(handle) == FALSE) {
-            PRINT_WIN32_ERROR_MESSAGE(FreeLibrary)
-        }
-    }
-    g_am_LoadedModuleList_p.clear();
-    return S_OK;
-}
-
-/////////////////////////////////
-/////     Public interface
-/////////////////////////////////
-
-HRESULT am_GetVersion(LPWSTR *ver)
-{
-    return am_GetLibraryVersion_p(ver);
-}
-
-HRESULT am_CreateWindow(const int x, const int y, const int w, const int h)
-{
-    return am_CreateAcrylicWindow_p(x, y, w, h);
-}
-
-HRESULT am_GetWindowGeometry(RECT *result)
-{
-    return am_GetWindowGeometryHelper_p(g_am_MainWindowHandle_p, result);
-}
-
-HRESULT am_SetWindowGeometry(const int x, const int y, const int w, const int h)
-{
-    return am_SetWindowGeometryHelper_p(g_am_MainWindowHandle_p, x, y, w, h);
-}
-
-HRESULT am_MoveWindow(const int x, const int y)
-{
-    return am_MoveWindowHelper_p(g_am_MainWindowHandle_p, x, y);
-}
-
-HRESULT am_GetWindowSize(SIZE *result)
-{
-    return am_GetWindowSizeHelper_p(g_am_MainWindowHandle_p, result);
-}
-
-HRESULT am_ResizeWindow(const int w, const int h)
-{
-    return am_ResizeWindowHelper_p(g_am_MainWindowHandle_p, w, h);
-}
-
-HRESULT am_CenterWindow()
-{
-    return am_CenterWindowHelper_p(g_am_MainWindowHandle_p);
-}
-
-HRESULT am_GetWindowState(WindowState *result)
-{
-    return am_GetWindowStateHelper_p(g_am_MainWindowHandle_p, result);
-}
-
-HRESULT am_SetWindowState(const WindowState state)
-{
-    return am_SetWindowStateHelper_p(g_am_MainWindowHandle_p, state);
-}
-
-HRESULT am_CloseWindow()
-{
-    return am_Release();
-}
-
-HRESULT am_GetWindowHandle(HWND *result)
-{
-    return am_GetWindowHandleHelper_p(result);
-}
-
-HRESULT am_GetBrushTheme(SystemTheme *result)
-{
-    return am_GetBrushThemeHelper_p(result);
-}
-
-HRESULT am_SetBrushTheme(const SystemTheme theme)
-{
-    return am_SwitchAcrylicBrushThemeHelper_p(theme);
-}
-
-HRESULT am_GetTintColor(int *r, int *g, int *b, int *a)
-{
-    return am_GetTintColorHelper_p(r, g, b, a);
-}
-
-HRESULT am_SetTintColor(const int r, const int g, const int b, const int a)
-{
-    return am_SetTintColorHelper_p(r, g, b, a);
-}
-
-HRESULT am_GetTintOpacity(double *opacity)
-{
-    return am_GetTintOpacityHelper_p(opacity);
-}
-
-HRESULT am_SetTintOpacity(const double opacity)
-{
-    return am_SetTintOpacityHelper_p(opacity);
-}
-
-HRESULT am_GetTintLuminosityOpacity(double *opacity)
-{
-    return am_GetTintLuminosityOpacityHelper_p(opacity);
-}
-
-HRESULT am_SetTintLuminosityOpacity(const double *opacity)
-{
-    return am_SetTintLuminosityOpacityHelper_p(opacity);
-}
-
-HRESULT am_GetFallbackColor(int *r, int *g, int *b, int *a)
-{
-    return am_GetFallbackColorHelper_p(r, g, b, a);
-}
-
-HRESULT am_SetFallbackColor(const int r, const int g, const int b, const int a)
-{
-    return am_SetFallbackColorHelper_p(r, g, b, a);
-}
-
-HRESULT am_EventLoopExec(int *result)
-{
-    return am_MainWindowEventLoopHelper_p(result);
-}
-
-HRESULT am_IsWindowActive(bool *result)
-{
-    return am_IsWindowActiveHelper_p(g_am_MainWindowHandle_p, result);
-}
-
-HRESULT am_FreeStringA(LPSTR str)
-{
-    return am_LocalFreeA_p(str);
-}
-
-HRESULT am_FreeStringW(LPWSTR str)
-{
-    return am_LocalFreeW_p(str);
-}
-
-HRESULT am_Release()
-{
-    return am_CleanupHelper_p();
-}
-
-HRESULT am_SetHostWindow(const HWND hWnd)
-{
-    return am_InstallHostWindowHookHelper_p(hWnd, true);
-}
-
-HRESULT am_GetHostWindow(HWND *result)
-{
-    return am_GetHostWindow_p(result);
-}
-
-HRESULT am_RemoveHostWindow()
-{
-    return am_RemoveHostWindow_p();
-}
-
-/////////////////////////////////
-/////     DLL entry point
-/////////////////////////////////
-
 #ifndef ACRYLICMANAGER_STATIC
 
-[[nodiscard]] ACRYLICMANAGER_API BOOL APIENTRY
+EXTERN_C ACRYLICMANAGER_API BOOL APIENTRY
 DllMain(
     HMODULE hModule,
     DWORD  ul_reason_for_call,
@@ -779,7 +424,6 @@ DllMain(
     case DLL_PROCESS_ATTACH:
         break;
     case DLL_PROCESS_DETACH:
-        am_CleanupHelper_p();
         break;
     }
     return TRUE;

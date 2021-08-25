@@ -33,6 +33,14 @@
 #include <WinRT\Windows.UI.Xaml.Media.h>
 #include <Windows.UI.Xaml.Hosting.DesktopWindowXamlSource.h>
 
+#ifndef WM_DWMCOMPOSITIONCHANGED
+#define WM_DWMCOMPOSITIONCHANGED (0x031E)
+#endif
+
+#ifndef WM_DWMCOLORIZATIONCOLORCHANGED
+#define WM_DWMCOLORIZATIONCOLORCHANGED (0x0320)
+#endif
+
 static const std::wstring g_mainWindowClassNameSuffix = L"@WinUI2MainWindow";
 static const std::wstring g_dragBarWindowClassNameSuffix = L"@WinUI2DragBarWindow";
 static const std::wstring g_mainWindowTitle = L"AcrylicManager WinUI2 Main Window";
@@ -302,18 +310,16 @@ bool AcrylicBrush_WinUI2::RegisterMainWindowClass() const
 {
     g_mainWindowClassName = m_windowClassNamePrefix + Utils::GenerateGUID() + g_mainWindowClassNameSuffix;
 
-    static const HINSTANCE instance = GET_CURRENT_INSTANCE;
-
     WNDCLASSEXW wcex;
     SecureZeroMemory(&wcex, sizeof(wcex));
     wcex.cbSize = sizeof(wcex);
 
     wcex.style = CS_HREDRAW | CS_VREDRAW;
     wcex.lpfnWndProc = MainWindowProc;
-    wcex.hInstance = instance;
+    wcex.hInstance = GET_CURRENT_INSTANCE;
     wcex.hCursor = LoadCursorW(nullptr, IDC_ARROW);
-    wcex.hIcon = LoadIconW(instance, MAKEINTRESOURCEW(IDI_DEFAULTICON));
-    wcex.hIconSm = LoadIconW(instance, MAKEINTRESOURCEW(IDI_DEFAULTICONSM));
+    wcex.hIcon = LoadIconW(GET_CURRENT_INSTANCE, MAKEINTRESOURCEW(IDI_DEFAULTICON));
+    wcex.hIconSm = LoadIconW(GET_CURRENT_INSTANCE, MAKEINTRESOURCEW(IDI_DEFAULTICONSM));
     wcex.hbrBackground = reinterpret_cast<HBRUSH>(COLOR_WINDOW + 1);
     wcex.lpszClassName = g_mainWindowClassName.c_str();
 
@@ -379,15 +385,13 @@ bool AcrylicBrush_WinUI2::RegisterDragBarWindowClass() const
 
     g_dragBarWindowClassName = m_windowClassNamePrefix + Utils::GenerateGUID() + g_dragBarWindowClassNameSuffix;
 
-    static const HINSTANCE instance = GET_CURRENT_INSTANCE;
-
     WNDCLASSEXW wcex;
     SecureZeroMemory(&wcex, sizeof(wcex));
     wcex.cbSize = sizeof(wcex);
 
     wcex.style = CS_HREDRAW | CS_VREDRAW | CS_DBLCLKS;
     wcex.lpfnWndProc = DragBarWindowProc;
-    wcex.hInstance = instance;
+    wcex.hInstance = GET_CURRENT_INSTANCE;
     wcex.hCursor = LoadCursorW(nullptr, IDC_ARROW);
     wcex.hbrBackground = GET_BLACK_BRUSH;
     wcex.lpszClassName = g_dragBarWindowClassName.c_str();

@@ -19,8 +19,11 @@ set(SOURCES
     customframe.cpp
     acrylicbrush.h
     acrylicbrush.cpp
+    acrylicbrush_system.h
     acrylicbrush_system.cpp
-    acrylicbrush_xaml.cpp
+    acrylicbrush_winui2.h
+    acrylicbrush_winui2.cpp
+    acrylicbrush_direct2d.h
     acrylicbrush_direct2d.cpp
     acrylicmanager.h
     acrylicmanager.cpp

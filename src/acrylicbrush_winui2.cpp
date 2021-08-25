@@ -22,10 +22,9 @@
  * SOFTWARE.
  */
 
-#include "acrylicbrush.h"
+#include "acrylicbrush_winui2.h"
 #include "resource.h"
 #include "utils.h"
-#include <Unknwn.h>
 #include <WinRT\Windows.Foundation.Collections.h>
 #include <WinRT\Windows.UI.Xaml.Hosting.h>
 #include <WinRT\Windows.UI.Xaml.Controls.h>
@@ -52,6 +51,8 @@ static winrt::Windows::UI::Xaml::Hosting::WindowsXamlManager g_manager = nullptr
 static winrt::Windows::UI::Xaml::Hosting::DesktopWindowXamlSource g_source = nullptr;
 static winrt::Windows::UI::Xaml::Controls::Grid g_rootGrid = nullptr;
 static winrt::Windows::UI::Xaml::Media::AcrylicBrush g_backgroundBrush = nullptr;
+
+int AcrylicBrush_WinUI2::m_refCount = 0;
 
 EXTERN_C LRESULT CALLBACK DragBarWindowProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
@@ -308,9 +309,6 @@ EXTERN_C LRESULT CALLBACK DragBarWindowProc(HWND hWnd, UINT message, WPARAM wPar
     }
     g_backgroundBrush = {};
     g_backgroundBrush.BackgroundSource(winrt::Windows::UI::Xaml::Media::AcrylicBackgroundSource::HostBackdrop);
-    if (!AcrylicBrush::XAML::ReloadBlurParameters()) {
-        return false;
-    }
     g_rootGrid = {};
     g_rootGrid.Background(g_backgroundBrush);
     //g_rootGrid.Children().Clear();
@@ -321,21 +319,25 @@ EXTERN_C LRESULT CALLBACK DragBarWindowProc(HWND hWnd, UINT message, WPARAM wPar
     return true;
 }
 
-bool AcrylicBrush::XAML::IsSupportedByCurrentOS()
+AcrylicBrush_WinUI2::AcrylicBrush_WinUI2()
+{
+    ++m_refCount;
+}
+
+AcrylicBrush_WinUI2::~AcrylicBrush_WinUI2()
+{
+    --m_refCount;
+}
+
+bool AcrylicBrush_WinUI2::IsSupportedByCurrentOS()
 {
     static const bool result = Utils::IsWindows10_19H1OrGreater();
     return result;
 }
 
-bool AcrylicBrush::XAML::IsBlurEffectEnabled()
+bool AcrylicBrush_WinUI2::Create() const
 {
-    return false;
-}
-
-bool AcrylicBrush::XAML::SetBlurEffectEnabled(const bool enable)
-{
-    if (enable) {
-        if (!RegisterMainWindowClass()) {
+    if (!RegisterMainWindowClass()) {
             return false;
         }
         if (!CreateMainWindow()) {
@@ -350,13 +352,11 @@ bool AcrylicBrush::XAML::SetBlurEffectEnabled(const bool enable)
         if (!CreateXAMLIsland()) {
             return false;
         }
+        ReloadBlurParameters();
         return true;
-    } else {
-        return false;
-    }
 }
 
-bool AcrylicBrush::XAML::ReloadBlurParameters()
+bool AcrylicBrush_WinUI2::ReloadBlurParameters()
 {
     if (!g_backgroundBrush) {
         return false;
@@ -368,7 +368,7 @@ bool AcrylicBrush::XAML::ReloadBlurParameters()
     return true;
 }
 
-HWND AcrylicBrush::XAML::GetWindowHandle()
+HWND AcrylicBrush_WinUI2::GetWindowHandle()
 {
     return g_mainWindowHandle;
 }

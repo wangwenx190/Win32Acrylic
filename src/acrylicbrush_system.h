@@ -22,28 +22,23 @@
  * SOFTWARE.
  */
 
-#include "acrylicbrush_system.h"
-#include "utils.h"
+#pragma once
 
-int AcrylicBrush_System::m_refCount = 0;
+#include "acrylicbrush.h"
 
-AcrylicBrush_System::AcrylicBrush_System()
+class AcrylicBrush_System final : public AcrylicBrush
 {
-    ++m_refCount;
-}
+    // dis copy move
+public:
+    explicit AcrylicBrush_System();
+    ~AcrylicBrush_System();
 
-AcrylicBrush_System::~AcrylicBrush_System()
-{
-    --m_refCount;
-}
+    [[nodiscard]] bool IsSupportedByCurrentOS() const override;
+    [[nodiscard]] bool Create() const override;
+    void ReloadBlurParameters() const override;
+    [[nodiscard]] HWND GetWindowHandle() const override;
+    void Release() override;
 
-bool AcrylicBrush_System::IsSupportedByCurrentOS() const
-{
-    static const bool result = false;
-    return result;
-}
-
-HWND AcrylicBrush_System::GetWindowHandle() const
-{
-    return nullptr;
-}
+private:
+    static int m_refCount;
+};

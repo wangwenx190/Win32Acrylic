@@ -22,7 +22,7 @@
  * SOFTWARE.
  */
 
-#include "acrylicbrush.h"
+#include "acrylicbrush_direct2d.h"
 #include "utils.h"
 #include <wrl\client.h>
 #include <DXGI1_2.h>
@@ -87,23 +87,13 @@ constexpr GUID am_CLSID_D2D1Shadow = {0xC67EA361, 0x1863, 0x4e69, {0x89, 0xDB, 0
 EXTERN_C_END
 #endif
 
-bool AcrylicBrush::Direct2D::IsSupportedByCurrentOS()
+boolAcrylicBrush_Direct2D::IsSupportedByCurrentOS() const
 {
     static const bool result = Utils::IsWindows8OrGreater();
     return result;
 }
 
-bool AcrylicBrush::Direct2D::IsBlurEffectEnabled()
-{
-    return false;
-}
-
-bool AcrylicBrush::Direct2D::SetBlurEffectEnabled(const bool enable)
-{
-    return false;
-}
-
-HWND AcrylicBrush::Direct2D::GetWindowHandle()
+HWNDAcrylicBrush_Direct2D::GetWindowHandle() const
 {
     return nullptr;
 }

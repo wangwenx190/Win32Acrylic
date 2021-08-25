@@ -28,99 +28,37 @@
 #include <WinRT\Windows.UI.h>
 #include <WinRT\Windows.Foundation.Numerics.h>
 
-namespace AcrylicBrush
+class AcrylicBrush
 {
+    // disable copy move
+public:
+    explicit AcrylicBrush();
+    ~AcrylicBrush();
 
-namespace Constants
-{
+    [[nodiscard]] winrt::Windows::UI::Color GetTintColor() const;
+    void SetTintColor(const winrt::Windows::UI::Color &value) const;
 
-namespace Light
-{
+    [[nodiscard]] double GetTintOpacity() const;
+    void SetTintOpacity(const double value) const;
 
-constexpr winrt::Windows::UI::Color DefaultTintColor = {255, 252, 252, 252};
-constexpr double DefaultTintOpacity = 0.0;
-constexpr double DefaultLuminosityOpacity = 0.85;
-constexpr winrt::Windows::UI::Color DefaultFallbackColor = {255, 249, 249, 249};
-constexpr double DefaultBlurRadius = 30.0;
-constexpr double DefaultSaturation = 1.25;
-constexpr double DefaultNoiseOpacity = 0.02;
-constexpr winrt::Windows::UI::Color DefaultExclusionColor = {26, 255, 255, 255};
+    [[nodiscard]] winrt::Windows::Foundation::IReference<double> GetLuminosityOpacity() const;
+    void SetLuminosityOpacity(const winrt::Windows::Foundation::IReference<double> value) const;
 
-}
+    [[nodiscard]] winrt::Windows::UI::Color GetFallbackColor() const;
+    void SetFallbackColor(const winrt::Windows::UI::Color &value) const;
 
-namespace Dark
-{
+    [[nodiscard]] double GetBlurRadius() const;
+    void SetBlurRadius(const double value) const;
 
-constexpr winrt::Windows::UI::Color DefaultTintColor = {255, 44, 44, 44};
-constexpr double DefaultTintOpacity = 0.15;
-constexpr double DefaultLuminosityOpacity = 0.96;
-constexpr winrt::Windows::UI::Color DefaultFallbackColor = {255, 44, 44, 44};
-constexpr double DefaultBlurRadius = 30.0;
-constexpr double DefaultSaturation = 1.25;
-constexpr double DefaultNoiseOpacity = 0.02;
-constexpr winrt::Windows::UI::Color DefaultExclusionColor = {26, 255, 255, 255};
+    [[nodiscard]] double GetSaturation() const;
+    void SetSaturation(const double value) const;
 
-}
+    [[nodiscard]] double GetNoiseOpacity() const;
+    void SetNoiseOpacity(const double value) const;
 
-}
-
-namespace Base
-{
-
-[[nodiscard]] winrt::Windows::UI::Color GetTintColor();
-void SetTintColor(const winrt::Windows::UI::Color &value);
-
-[[nodiscard]] double GetTintOpacity();
-void SetTintOpacity(const double value);
-
-[[nodiscard]] winrt::Windows::Foundation::IReference<double> GetLuminosityOpacity();
-void SetLuminosityOpacity(const winrt::Windows::Foundation::IReference<double> value);
-
-[[nodiscard]] winrt::Windows::UI::Color GetFallbackColor();
-void SetFallbackColor(const winrt::Windows::UI::Color &value);
-
-[[nodiscard]] double GetBlurRadius();
-void SetBlurRadius(const double value);
-
-[[nodiscard]] double GetSaturation();
-void SetSaturation(const double value);
-
-[[nodiscard]] double GetNoiseOpacity();
-void SetNoiseOpacity(const double value);
-
-}
-
-namespace System
-{
-
-[[nodiscard]] bool IsSupportedByCurrentOS();
-[[nodiscard]] bool IsBlurEffectEnabled();
-[[nodiscard]] bool SetBlurEffectEnabled(const bool enable);
-[[nodiscard]] bool ReloadBlurParameters();
-[[nodiscard]] HWND GetWindowHandle();
-
-}
-
-namespace XAML
-{
-
-[[nodiscard]] bool IsSupportedByCurrentOS();
-[[nodiscard]] bool IsBlurEffectEnabled();
-[[nodiscard]] bool SetBlurEffectEnabled(const bool enable);
-[[nodiscard]] bool ReloadBlurParameters();
-[[nodiscard]] HWND GetWindowHandle();
-
-}
-
-namespace Direct2D
-{
-
-[[nodiscard]] bool IsSupportedByCurrentOS();
-[[nodiscard]] bool IsBlurEffectEnabled();
-[[nodiscard]] bool SetBlurEffectEnabled(const bool enable);
-[[nodiscard]] bool ReloadBlurParameters();
-[[nodiscard]] HWND GetWindowHandle();
-
-}
-
-}
+    [[nodiscard]] virtual bool IsSupportedByCurrentOS() const = 0;
+    [[nodiscard]] virtual bool Create() const = 0;
+    virtual void ReloadBlurParameters() const = 0;
+    [[nodiscard]] virtual HWND GetWindowHandle() const = 0;
+    void Release() = 0;
+};

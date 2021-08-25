@@ -31,6 +31,7 @@
 #include <DXGI1_2.h>
 #include <D3D11.h>
 #include <D2D1_2.h>
+#include <D2D1Effects_2.h>
 #include <WinCodec.h>
 
 #ifdef __cplusplus
@@ -46,7 +47,9 @@ constexpr CLSID am_CLSID_D2D1Flood = {0x61c23c20, 0xae69, 0x4d8e, {0x94, 0xcf, 0
 constexpr CLSID am_CLSID_D2D1GaussianBlur = {0x1feb6d69, 0x2fe6, 0x4ac9, {0x8c, 0x58, 0x1d, 0x7f, 0x93, 0xe7, 0xa6, 0xa5}};
 constexpr CLSID am_CLSID_D2D1Saturation = {0x5cb2d9cf, 0x327d, 0x459f, {0xa0, 0xce, 0x40, 0xc0, 0xb2, 0x08, 0x6b, 0xf7}};
 constexpr CLSID am_CLSID_D2D1Shadow = {0xC67EA361, 0x1863, 0x4e69, {0x89, 0xDB, 0x69, 0x5D, 0x3E, 0x9A, 0x5B, 0x6B}};
-// todo, tint, opacity, CrossFade
+constexpr CLSID am_CLSID_D2D1Opacity = {0x811d79a4, 0xde28, 0x4454, {0x80, 0x94, 0xc6, 0x46, 0x85, 0xf8, 0xbd, 0x4c}};
+constexpr CLSID am_CLSID_D2D1CrossFade = {0x12f575e8, 0x4db1, 0x485f, {0x9a, 0x84, 0x03, 0xa0, 0x7d, 0xd3, 0x82, 0x9f}};
+constexpr CLSID am_CLSID_D2D1Tint = {0x36312b17, 0xf7dd, 0x4014, {0x91, 0x5d, 0xff, 0xca, 0x76, 0x8c, 0xf2, 0x11}};
 
 #ifdef __cplusplus
 EXTERN_C_END
@@ -60,6 +63,10 @@ static ATOM g_mainWindowAtom = 0;
 static HWND g_mainWindowHandle = nullptr;
 static UINT g_currentDpi = 0;
 static double g_currentDpr = 0.0;
+
+static std::wstring g_wallpaperFilePath = nullptr;
+static WallpaperAspectStyle g_wallpaperAspectStyle = WallpaperAspectStyle::Invalid;
+static COLORREF g_desktopBackgroundColor = 0;
 
 static Microsoft::WRL::ComPtr<ID2D1Factory2> g_D2DFactory = nullptr;
 static Microsoft::WRL::ComPtr<ID2D1Device1> g_D2DDevice = nullptr;
@@ -104,7 +111,21 @@ int AcrylicBrush_Direct2D::m_refCount = 0;
 
 static inline void Cleanup()
 {
-    //
+    if (g_mainWindowHandle) {
+        DestroyWindow(g_mainWindowHandle);
+        g_mainWindowHandle = nullptr;
+    }
+    if (g_mainWindowAtom != 0) {
+        UnregisterClassW(g_mainWindowClassName.c_str(), GET_CURRENT_INSTANCE);
+        g_mainWindowAtom = 0;
+        g_mainWindowClassName.clear();
+    }
+    if (g_currentDpi != 0) {
+        g_currentDpi = 0;
+    }
+    if (g_currentDpr != 0.0) {
+        g_currentDpr = 0.0;
+    }
 }
 
 EXTERN_C LRESULT CALLBACK MainWindowProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
@@ -175,6 +196,14 @@ EXTERN_C LRESULT CALLBACK MainWindowProc(HWND hWnd, UINT message, WPARAM wParam,
     }
     default:
         break;
+    }
+
+    if ((wallpaperChanged || themeChanged) && !Utils::IsHighContrastModeEnabled()) {
+        const auto window = reinterpret_cast<AcrylicBrush_Direct2D *>(GetWindowLongPtrW(hWnd, GWLP_USERDATA));
+        if (window) {
+            window->ReloadDesktopParameters();
+            window->ReloadBlurParameters();
+        }
     }
 
     return DefWindowProcW(hWnd, message, wParam, lParam);
@@ -300,8 +329,8 @@ bool AcrylicBrush_Direct2D::EnsureWallpaperBrush() const
         PRINT_HR_ERROR_MESSAGE(CoCreateInstance, hr)
         return false;
     }
-    hr = g_WICFactory->CreateDecoderFromFilename(g_wallpaperFilePath, nullptr, GENERIC_READ,
-                                             WICDecodeMetadataCacheOnLoad, &g_WICDecoder);
+    hr = g_WICFactory->CreateDecoderFromFilename(g_wallpaperFilePath.c_str(), nullptr, GENERIC_READ,
+                                                 WICDecodeMetadataCacheOnLoad, &g_WICDecoder);
     if (FAILED(hr)) {
         CoUninitialize();
         PRINT_HR_ERROR_MESSAGE(CreateDecoderFromFilename, hr)
@@ -576,24 +605,21 @@ bool AcrylicBrush_Direct2D::DrawFinalVisual() const
     return true;
 }
 
+void AcrylicBrush_Direct2D::ReloadDesktopParameters() const
+{
+    constexpr int screen = 0; // fixme: use the correct screen id.
+    g_wallpaperFilePath = Utils::GetWallpaperFilePath(screen);
+    g_wallpaperAspectStyle = Utils::GetWallpaperAspectStyle(screen);
+    g_desktopBackgroundColor = Utils::GetDesktopBackgroundColor(screen);
+}
+
 bool AcrylicBrush_Direct2D::InitializeDirect2D() const
 {
-    const int screen = 0; // fixme: use the correct screen id.
-    if (FAILED(am_GetWallpaperFilePath_p(screen, &g_WallpaperFilePath_p))) {
-        PRINT_AND_SAFE_RETURN(L"Failed to retrieve the wallpaper file path.")
-    }
-    COLORREF color = RGB(0, 0, 0);
-    if (FAILED(am_GetDesktopBackgroundColor_p(&color))) {
-        PRINT_AND_SAFE_RETURN(L"Failed to retrieve the desktop background color.")
-    }
-    g_DesktopBackgroundColor_p = D2D1::ColorF(color);
-    if (FAILED(am_GetWallpaperAspectStyle_p(screen, &g_WallpaperAspectStyle_p))) {
-        PRINT_AND_SAFE_RETURN(L"Failed to retrieve the wallpaper aspect style.")
-    }
     HRESULT hr = D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED,
                                    IID_PPV_ARGS(g_D2DFactory.GetAddressOf()));
     if (FAILED(hr)) {
-        PRINT_HR_ERROR_MESSAGE_AND_SAFE_RETURN(D2D1CreateFactory, hr)
+        PRINT_HR_ERROR_MESSAGE(D2D1CreateFactory, hr)
+        return false;
     }
     // This array defines the set of DirectX hardware feature levels this app supports.
     // The ordering is important and you should preserve it.
@@ -615,20 +641,24 @@ bool AcrylicBrush_Direct2D::InitializeDirect2D() const
                            g_D3D11Device.GetAddressOf(), &g_D3DFeatureLevel,
                            g_D3D11Context.GetAddressOf());
     if (FAILED(hr)) {
-        PRINT_HR_ERROR_MESSAGE_AND_SAFE_RETURN(D3D11CreateDevice, hr)
+        PRINT_HR_ERROR_MESSAGE(D3D11CreateDevice, hr)
+        return false;
     }
     hr = g_D3D11Device.As(&g_DXGIDevice);
     if (FAILED(hr)) {
-        PRINT_HR_ERROR_MESSAGE_AND_SAFE_RETURN(As, hr)
+        PRINT_HR_ERROR_MESSAGE(As, hr)
+        return false;
     }
     hr = g_D2DFactory->CreateDevice(g_DXGIDevice.Get(), g_D2DDevice.GetAddressOf());
     if (FAILED(hr)) {
-        PRINT_HR_ERROR_MESSAGE_AND_SAFE_RETURN(CreateDevice, hr)
+        PRINT_HR_ERROR_MESSAGE(CreateDevice, hr)
+        return false;
     }
     hr = g_D2DDevice->CreateDeviceContext(D2D1_DEVICE_CONTEXT_OPTIONS_NONE,
                                                g_D2DContext.GetAddressOf());
     if (FAILED(hr)) {
-        PRINT_HR_ERROR_MESSAGE_AND_SAFE_RETURN(CreateDeviceContext, hr)
+        PRINT_HR_ERROR_MESSAGE(CreateDeviceContext, hr)
+        return false;
     }
     // Selecing a target
     SecureZeroMemory(&g_DXGISwapChainDesc, sizeof(g_DXGISwapChainDesc));
@@ -644,45 +674,53 @@ bool AcrylicBrush_Direct2D::InitializeDirect2D() const
 
     hr = g_DXGIDevice->GetAdapter(g_DXGIAdapter.GetAddressOf());
     if (FAILED(hr)) {
-        PRINT_HR_ERROR_MESSAGE_AND_SAFE_RETURN(GetAdapter, hr)
+        PRINT_HR_ERROR_MESSAGE(GetAdapter, hr)
+        return false;
     }
     hr = g_DXGIAdapter->GetParent(IID_PPV_ARGS(g_DXGIFactory.GetAddressOf()));
     if (FAILED(hr)) {
-        PRINT_HR_ERROR_MESSAGE_AND_SAFE_RETURN(GetParent, hr)
+        PRINT_HR_ERROR_MESSAGE(GetParent, hr)
+        return false;
     }
-    hr = g_DXGIFactory->CreateSwapChainForHwnd(g_D3D11Device.Get(), g_MainWindowHandle,
-                                                    &g_DXGISwapChainDesc, nullptr, nullptr,
-                                                    g_DXGISwapChain.GetAddressOf());
+    hr = g_DXGIFactory->CreateSwapChainForHwnd(g_D3D11Device.Get(), g_mainWindowHandle,
+                                               &g_DXGISwapChainDesc, nullptr, nullptr,
+                                               g_DXGISwapChain.GetAddressOf());
     if (FAILED(hr)) {
-        PRINT_HR_ERROR_MESSAGE_AND_SAFE_RETURN(CreateSwapChainForHwnd, hr)
+        PRINT_HR_ERROR_MESSAGE(CreateSwapChainForHwnd, hr)
+        return false;
     }
 
     hr = g_DXGIDevice->SetMaximumFrameLatency(1);
     if (FAILED(hr)) {
-        PRINT_HR_ERROR_MESSAGE_AND_SAFE_RETURN(SetMaximumFrameLatency, hr)
+        PRINT_HR_ERROR_MESSAGE(SetMaximumFrameLatency, hr)
+        return false;
     }
 
     hr = g_DXGISwapChain->GetBuffer(0, IID_PPV_ARGS(g_D3D11Texture.GetAddressOf()));
     if (FAILED(hr)) {
-        PRINT_HR_ERROR_MESSAGE_AND_SAFE_RETURN(GetBuffer, hr)
+        PRINT_HR_ERROR_MESSAGE(GetBuffer, hr)
+        return false;
     }
 
     SecureZeroMemory(&g_D2DBitmapProperties, sizeof(g_D2DBitmapProperties));
     g_D2DBitmapProperties = D2D1::BitmapProperties1(
                 D2D1_BITMAP_OPTIONS_TARGET | D2D1_BITMAP_OPTIONS_CANNOT_DRAW,
                 D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED),
-                static_cast<float>(g_CurrentDpi), static_cast<float>(g_CurrentDpi));
+                static_cast<float>(g_currentDpi), static_cast<float>(g_currentDpi));
 
     hr = g_DXGISwapChain->GetBuffer(0, IID_PPV_ARGS(g_DXGISurface.GetAddressOf()));
     if (FAILED(hr)) {
-        PRINT_HR_ERROR_MESSAGE_AND_SAFE_RETURN(GetBuffer, hr)
+        PRINT_HR_ERROR_MESSAGE(GetBuffer, hr)
+        return false;
     }
     hr = g_D2DContext->CreateBitmapFromDxgiSurface(g_DXGISurface.Get(),
                                                         &g_D2DBitmapProperties,
                                                         g_D2DTargetBitmap.GetAddressOf());
     if (FAILED(hr)) {
-        PRINT_HR_ERROR_MESSAGE_AND_SAFE_RETURN(CreateBitmapFromDxgiSurface, hr)
+        PRINT_HR_ERROR_MESSAGE(CreateBitmapFromDxgiSurface, hr)
+        return false;
     }
     g_D2DContext->SetTarget(g_D2DTargetBitmap.Get());
-    return S_OK;
+
+    return true;
 }

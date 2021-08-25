@@ -45,7 +45,7 @@ public:
 private:
     [[nodiscard]] bool RegisterMainWindowClass() const;
     [[nodiscard]] bool CreateMainWindow() const;
-
+    void ReloadDesktopParameters() const;
     [[nodiscard]] bool InitializeDirect2D() const;
     [[nodiscard]] bool EnsureWallpaperBrush() const;
     [[nodiscard]] bool EnsureNoiseBrush() const;

@@ -507,7 +507,7 @@ HWND AcrylicBrush::Direct2D::GetWindowHandle()
     SecureZeroMemory(&g_am_D2DBitmapProperties_p, sizeof(g_am_D2DBitmapProperties_p));
     g_am_D2DBitmapProperties_p = D2D1::BitmapProperties1(
                 D2D1_BITMAP_OPTIONS_TARGET | D2D1_BITMAP_OPTIONS_CANNOT_DRAW,
-                D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_IGNORE),
+                D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED),
                 static_cast<float>(g_am_CurrentDpi_p), static_cast<float>(g_am_CurrentDpi_p));
 
     hr = g_am_DXGISwapChain_p->GetBuffer(0, IID_PPV_ARGS(g_am_DXGISurface_p.GetAddressOf()));

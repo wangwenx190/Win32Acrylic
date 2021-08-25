@@ -56,9 +56,20 @@ public:
     [[nodiscard]] double GetNoiseOpacity() const;
     void SetNoiseOpacity(const double value) const;
 
+    [[nodiscard]] winrt::Windows::UI::Color GetExclusionColor() const;
+    void SetExclusionColor(const winrt::Windows::UI::Color &value) const;
+
     [[nodiscard]] virtual bool IsSupportedByCurrentOS() const = 0;
     [[nodiscard]] virtual bool Create() const = 0;
     virtual void ReloadBlurParameters() const = 0;
     [[nodiscard]] virtual HWND GetWindowHandle() const = 0;
-    void Release() = 0;
+    [[nodiscard]] virtual int EventLoopExec() const = 0;
+    virtual void Release() = 0;
+
+protected:
+    winrt::Windows::UI::Color GetEffectiveTintColor() const;
+    winrt::Windows::UI::Color GetEffectiveLuminosityColor() const;
+
+protected:
+    static const std::wstring m_windowClassNamePrefix;
 };

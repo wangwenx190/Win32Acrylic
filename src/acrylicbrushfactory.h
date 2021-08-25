@@ -24,23 +24,18 @@
 
 #pragma once
 
-#ifdef __cplusplus
-EXTERN_C_START
-#endif
+#include "acrylicmanager_global.h"
 
-constexpr GUID IID_ACRYLICBRUSH_SYSTEM;
-constexpr GUID IID_ACRYLICBRUSH_WINUI3;
-constexpr GUID IID_ACRYLICBRUSH_WINUI2;
-constexpr GUID IID_ACRYLICBRUSH_DIRECT2D;
-constexpr GUID IID_ACRYLICBRUSH_NULL;
-
-#ifdef __cplusplus
-EXTERN_C_END
-#endif
+EXTERN_C const IID IID_ACRYLICBRUSH_SYSTEM;
+EXTERN_C const IID IID_ACRYLICBRUSH_COMPOSITION;
+EXTERN_C const IID IID_ACRYLICBRUSH_WINUI3;
+EXTERN_C const IID IID_ACRYLICBRUSH_WINUI2;
+EXTERN_C const IID IID_ACRYLICBRUSH_DIRECT2D;
+EXTERN_C const IID IID_ACRYLICBRUSH_NULL;
 
 namespace AcrylicBrushFactory
 {
 
-[[nodiscard]] HRESULT QueryInterface(REFID iid, void **interface);
+[[nodiscard]] HRESULT QueryInterface(REFIID riid, void **ppInterface);
 
 }

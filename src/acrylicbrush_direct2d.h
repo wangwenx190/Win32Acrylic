@@ -26,6 +26,8 @@
 
 #include "acrylicbrush.h"
 
+class ID2D1Effect;
+
 class AcrylicBrush_Direct2D final : public AcrylicBrush
 {
     // dis copy move
@@ -37,7 +39,20 @@ public:
     [[nodiscard]] bool Create() const override;
     void ReloadBlurParameters() const override;
     [[nodiscard]] HWND GetWindowHandle() const override;
+    [[nodiscard]] int EventLoopExec() const override;
     void Release() override;
+
+private:
+    [[nodiscard]] bool RegisterMainWindowClass() const;
+    [[nodiscard]] bool CreateMainWindow() const;
+
+    [[nodiscard]] bool InitializeDirect2D() const;
+    [[nodiscard]] bool EnsureWallpaperBrush() const;
+    [[nodiscard]] bool EnsureNoiseBrush() const;
+    [[nodiscard]] bool PrepareEffects_Luminosity(ID2D1Effect **output) const;
+    [[nodiscard]] bool PrepareEffects_Legacy(ID2D1Effect **output) const;
+    [[nodiscard]] bool CreateEffects(ID2D1Effect **output) const;
+    [[nodiscard]] bool DrawFinalVisual() const;
 
 private:
     static int m_refCount;

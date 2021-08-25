@@ -22,42 +22,24 @@
  * SOFTWARE.
  */
 
-#include "acrylicbrush_system.h"
-#include "utils.h"
+#pragma once
 
-int AcrylicBrush_System::m_refCount = 0;
+#include "acrylicbrush.h"
 
-AcrylicBrush_System::AcrylicBrush_System()
+class AcrylicBrush_Composition final : public AcrylicBrush
 {
-    ++m_refCount;
-}
+    // dis copy move
+public:
+    explicit AcrylicBrush_Composition();
+    ~AcrylicBrush_Composition();
 
-AcrylicBrush_System::~AcrylicBrush_System()
-{
-    --m_refCount;
-}
+    [[nodiscard]] bool IsSupportedByCurrentOS() const override;
+    [[nodiscard]] bool Create() const override;
+    void ReloadBlurParameters() const override;
+    [[nodiscard]] HWND GetWindowHandle() const override;
+    [[nodiscard]] int EventLoopExec() const override;
+    void Release() override;
 
-bool AcrylicBrush_System::IsSupportedByCurrentOS() const
-{
-    static const bool result = false;
-    return result;
-}
-
-HWND AcrylicBrush_System::GetWindowHandle() const
-{
-    return nullptr;
-}
-
-int AcrylicBrush_System::EventLoopExec() const
-{
-    return 0;
-}
-
-void AcrylicBrush_System::Release()
-{
-    --m_refCount;
-    if (m_refCount <= 0) {
-        m_refCount = 0;
-        delete this;
-    }
-}
+private:
+    static int m_refCount;
+};

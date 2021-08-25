@@ -30,7 +30,7 @@
 #include <cmath>
 
 static constexpr wchar_t g_personalizeRegistryKey[] = LR"(Software\Microsoft\Windows\CurrentVersion\Themes\Personalize)";
-static constexpr wchar_t g_dWMRegistryKey[] = LR"(Software\Microsoft\Windows\DWM)";
+static constexpr wchar_t g_dwmRegistryKey[] = LR"(Software\Microsoft\Windows\DWM)";
 static constexpr wchar_t g_desktopRegistryKey[] = LR"(Control Panel\Desktop)";
 
 [[nodiscard]] static inline bool CompareSystemVersion(const WindowsVersion ver, const VersionCompare comp)
@@ -195,7 +195,16 @@ bool Utils::IsWindows11OrGreater()
 
 std::wstring Utils::GetCurrentDirectoryPath()
 {
-    static const std::wstring result = {};
+    auto buf = new wchar_t[MAX_PATH];
+    SecureZeroMemory(buf, sizeof(buf));
+    if (GetModuleFileNameW(nullptr, buf, MAX_PATH) == 0) {
+        SAFE_FREE_CHARARRAY(buf)
+        PRINT_WIN32_ERROR_MESSAGE(GetModuleFileNameW)
+        return {};
+    }
+    *wcsrchr(buf, L'\\') = L'\0';
+    const std::wstring result = buf;
+    SAFE_FREE_CHARARRAY(buf)
     return result;
 }
 
@@ -384,7 +393,7 @@ ColorizationArea Utils::GetColorizationArea()
     const HKEY rootKey = HKEY_CURRENT_USER;
     const std::wstring keyName = L"ColorPrevalence";
     const int themeValue = GetIntFromRegistry(rootKey, g_personalizeRegistryKey, keyName);
-    const int dwmValue = GetIntFromRegistry(rootKey, g_dWMRegistryKey, keyName);
+    const int dwmValue = GetIntFromRegistry(rootKey, g_dwmRegistryKey, keyName);
     const bool theme = (themeValue != 0);
     const bool dwm = (dwmValue != 0);
     if (theme && dwm) {
@@ -751,7 +760,8 @@ int Utils::GetIntFromEnvironmentVariable(const std::wstring &name)
     if (name.empty()) {
         return 0;
     }
-    //
+    const std::wstring str = GetStringFromEnvironmentVariable(name);
+    return _wtoi(str.c_str());
 }
 
 bool Utils::GetBoolFromEnvironmentVariable(const std::wstring &name)
@@ -759,7 +769,12 @@ bool Utils::GetBoolFromEnvironmentVariable(const std::wstring &name)
     if (name.empty()) {
         return false;
     }
-    //
+    const std::wstring str = GetStringFromEnvironmentVariable(name);
+    return ((_wcsicmp(str.c_str(), L"True") == 0)
+            || (_wcsicmp(str.c_str(), L"Enable") == 0)
+            || (_wcsicmp(str.c_str(), L"On") == 0)
+            || (_wcsicmp(str.c_str(), L"Enabled") == 0)
+            || (_wcsicmp(str.c_str(), L"Yes") == 0));
 }
 
 std::wstring Utils::GetStringFromIniFile(const std::wstring &file, const std::wstring &section, const std::wstring &key)
@@ -797,7 +812,12 @@ bool Utils::GetBoolFromIniFile(const std::wstring &file, const std::wstring &sec
     if (file.empty() || section.empty() || key.empty()) {
         return false;
     }
-    //
+    const std::wstring str = GetStringFromIniFile(file, section, key);
+    return ((_wcsicmp(str.c_str(), L"True") == 0)
+            || (_wcsicmp(str.c_str(), L"Enable") == 0)
+            || (_wcsicmp(str.c_str(), L"On") == 0)
+            || (_wcsicmp(str.c_str(), L"Yes") == 0)
+            || (_wcsicmp(str.c_str(), L"Enabled") == 0));
 }
 
 std::wstring Utils::GetStringFromRegistry(const HKEY rootKey, const std::wstring &subKey, const std::wstring &key)
@@ -821,6 +841,7 @@ std::wstring Utils::GetStringFromRegistry(const HKEY rootKey, const std::wstring
         SAFE_FREE_CHARARRAY(buf)
     }
     if (RegCloseKey(hKey) != ERROR_SUCCESS) {
+        SAFE_FREE_CHARARRAY(buf)
         PRINT_WIN32_ERROR_MESSAGE(RegCloseKey)
         return {};
     }
@@ -1091,4 +1112,21 @@ bool OpenSystemMenu(const HWND hWnd, const POINT pos)
         }
     }
     return true;
+}
+
+bool Utils::IsCompositionEnabled()
+{
+    // DWM composition is always enabled and can't be disabled since Windows 8.
+    if (IsWindows8OrGreater()) {
+        return true;
+    }
+    BOOL enabled = FALSE;
+    const HRESULT hr = DwmIsCompositionEnabled(&enabled);
+    if (SUCCEEDED(hr)) {
+        return (enabled != FALSE);
+    } else {
+        PRINT_HR_ERROR_MESSAGE(DwmIsCompositionEnabled, hr)
+    }
+    const int dwmComp = GetIntFromRegistry(HKEY_CURRENT_USER, g_dwmRegistryKey, L"Composition");
+    return (dwmComp != 0);
 }

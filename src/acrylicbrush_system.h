@@ -37,6 +37,7 @@ public:
     [[nodiscard]] bool Create() const override;
     void ReloadBlurParameters() const override;
     [[nodiscard]] HWND GetWindowHandle() const override;
+    [[nodiscard]] int EventLoopExec() const override;
     void Release() override;
 
 private:

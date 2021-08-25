@@ -24,17 +24,18 @@
 
 #include "acrylicbrush_winui2.h"
 #include "resource.h"
+#include "customframe.h"
 #include "utils.h"
+
 #include <WinRT\Windows.Foundation.Collections.h>
 #include <WinRT\Windows.UI.Xaml.Hosting.h>
 #include <WinRT\Windows.UI.Xaml.Controls.h>
 #include <WinRT\Windows.UI.Xaml.Media.h>
 #include <Windows.UI.Xaml.Hosting.DesktopWindowXamlSource.h>
 
-static const std::wstring g_windowClassNamePrefix = LR"(wangwenx190\AcrylicManager\WindowClass\)";
-static const std::wstring g_mainWindowClassNameSuffix = L"@MainWindow";
-static const std::wstring g_dragBarWindowClassNameSuffix = L"@DragBarWindow";
-static const std::wstring g_mainWindowTitle = L"AcrylicManager Main Window";
+static const std::wstring g_mainWindowClassNameSuffix = L"@WinUI2MainWindow";
+static const std::wstring g_dragBarWindowClassNameSuffix = L"@WinUI2DragBarWindow";
+static const std::wstring g_mainWindowTitle = L"AcrylicManager WinUI2 Main Window";
 static const std::wstring g_dragBarWindowTitle = nullptr;
 
 static std::wstring g_mainWindowClassName = nullptr;
@@ -53,6 +54,184 @@ static winrt::Windows::UI::Xaml::Controls::Grid g_rootGrid = nullptr;
 static winrt::Windows::UI::Xaml::Media::AcrylicBrush g_backgroundBrush = nullptr;
 
 int AcrylicBrush_WinUI2::m_refCount = 0;
+
+static inline void Cleanup()
+{
+    if (g_backgroundBrush) {
+        g_backgroundBrush = nullptr;
+    }
+    if (g_rootGrid) {
+        g_rootGrid = nullptr;
+    }
+    if (g_source) {
+        g_source.Close();
+        g_source = nullptr;
+    }
+    if (g_manager) {
+        g_manager.Close();
+        g_manager = nullptr;
+    }
+    if (g_XAMLIslandWindowHandle) {
+        g_XAMLIslandWindowHandle = nullptr;
+    }
+    if (g_dragBarWindowHandle) {
+        DestroyWindow(g_dragBarWindowHandle);
+        g_dragBarWindowHandle = nullptr;
+    }
+    if (g_dragBarWindowAtom != 0) {
+        UnregisterClassW(g_dragBarWindowClassName.c_str(), GET_CURRENT_INSTANCE);
+        g_dragBarWindowAtom = 0;
+        g_dragBarWindowClassName.clear();
+    }
+    if (g_mainWindowHandle) {
+        DestroyWindow(g_mainWindowHandle);
+        g_mainWindowHandle = nullptr;
+    }
+    if (g_mainWindowAtom != 0) {
+        UnregisterClassW(g_mainWindowClassName.c_str(), GET_CURRENT_INSTANCE);
+        g_mainWindowAtom = 0;
+        g_mainWindowClassName.clear();
+    }
+    if (g_currentDpi != 0) {
+        g_currentDpi = 0;
+    }
+    if (g_currentDpr != 0.0) {
+        g_currentDpr = 0.0;
+    }
+}
+
+EXTERN_C LRESULT CALLBACK MainWindowProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
+{
+    MSG msg;
+    SecureZeroMemory(&msg, sizeof(msg));
+    msg.hwnd = hWnd;
+    msg.message = message;
+    msg.wParam = wParam;
+    msg.lParam = lParam;
+    const DWORD pos = GetMessagePos();
+    msg.pt = {GET_X_LPARAM(pos), GET_Y_LPARAM(pos)};
+    msg.time = GetMessageTime();
+    LRESULT result = 0;
+    if (CustomFrame::HandleWindowProc(&msg, &result)) {
+        return result;
+    }
+
+    bool themeChanged = false;
+
+    switch (message) {
+    case WM_DPICHANGED: {
+        const auto x = static_cast<double>(LOWORD(wParam));
+        const auto y = static_cast<double>(HIWORD(wParam));
+        g_currentDpi = std::round((x + y) / 2.0);
+        g_currentDpr = Utils::GetDevicePixelRatioForWindow(hWnd);
+        const auto prcNewWindow = reinterpret_cast<LPRECT>(lParam);
+        if (MoveWindow(hWnd, prcNewWindow->left, prcNewWindow->top,
+                       GET_RECT_WIDTH(*prcNewWindow), GET_RECT_HEIGHT(*prcNewWindow), TRUE) == FALSE) {
+            PRINT_WIN32_ERROR_MESSAGE(MoveWindow)
+            break;
+        }
+        return 0;
+    } break;
+    case WM_SIZE: {
+        if ((wParam == SIZE_MAXIMIZED) || (wParam == SIZE_RESTORED) || IsFullScreened(hWnd)) {
+            if (!Utils::UpdateFrameMargins(hWnd)) {
+                OutputDebugStringW(L"WM_SIZE: Failed to update frame margins.");
+                break;
+            }
+        }
+        const auto width = LOWORD(lParam);
+        const UINT flags = SWP_NOACTIVATE | SWP_SHOWWINDOW | SWP_NOOWNERZORDER;
+        if (g_XAMLIslandWindowHandle) {
+            // Give enough space to our thin homemade top border.
+            const int borderThickness = Utils::GetWindowVisibleFrameBorderThickness(hWnd);
+            const int height = (HIWORD(lParam) - borderThickness);
+            if (SetWindowPos(g_XAMLIslandWindowHandle, HWND_BOTTOM, 0, borderThickness,
+                             width, height, flags) == FALSE) {
+                PRINT_WIN32_ERROR_MESSAGE(SetWindowPos)
+                break;
+            }
+        }
+        if (g_dragBarWindowHandle) {
+            const int titleBarHeight = Utils::GetTitleBarHeight(hWnd);
+            if (SetWindowPos(g_dragBarWindowHandle, HWND_TOP, 0, 0, width, titleBarHeight, flags) == FALSE) {
+                PRINT_WIN32_ERROR_MESSAGE(SetWindowPos)
+                break;
+            }
+        }
+    } break;
+    case WM_SETFOCUS: {
+        if (g_XAMLIslandWindowHandle) {
+            // Send focus to the XAML Island child window.
+            if (SetFocus(g_XAMLIslandWindowHandle) == nullptr) {
+                PRINT_WIN32_ERROR_MESSAGE(SetFocus)
+                break;
+            }
+            return 0;
+        }
+    } break;
+    case WM_SETCURSOR: {
+        if (LOWORD(lParam) == HTCLIENT) {
+            // Get the cursor position from the _last message_ and not from
+            // `GetCursorPos` (which returns the cursor position _at the
+            // moment_) because if we're lagging behind the cursor's position,
+            // we still want to get the cursor position that was associated
+            // with that message at the time it was sent to handle the message
+            // correctly.
+            const LRESULT hitTestResult = SendMessageW(hWnd, WM_NCHITTEST, 0, GetMessagePos());
+            if (hitTestResult == HTTOP) {
+                // We have to set the vertical resize cursor manually on
+                // the top resize handle because Windows thinks that the
+                // cursor is on the client area because it asked the asked
+                // the drag window with `WM_NCHITTEST` and it returned
+                // `HTCLIENT`.
+                // We don't want to modify the drag window's `WM_NCHITTEST`
+                // handling to return `HTTOP` because otherwise, the system
+                // would resize the drag window instead of the top level
+                // window!
+                SetCursor(LoadCursorW(nullptr, IDC_SIZENS));
+            } else {
+                // Reset cursor
+                SetCursor(LoadCursorW(nullptr, IDC_ARROW));
+            }
+            return TRUE;
+        }
+    } break;
+    case WM_SETTINGCHANGE: {
+        if ((wParam == 0) && (_wcsicmp(reinterpret_cast<LPCWSTR>(lParam), L"ImmersiveColorSet") == 0)) {
+            themeChanged = true;
+        }
+    } break;
+    case WM_THEMECHANGED:
+    case WM_DWMCOLORIZATIONCOLORCHANGED:
+        themeChanged = true;
+        break;
+    case WM_DWMCOMPOSITIONCHANGED: {
+        if (!Utils::IsCompositionEnabled()) {
+            OutputDebugStringW(L"AcrylicManager won't be functional when DWM composition is disabled.");
+            std::exit(-1);
+        }
+    } break;
+    case WM_CLOSE: {
+        Cleanup();
+        return 0;
+    }
+    case WM_DESTROY: {
+        PostQuitMessage(0);
+        return 0;
+    }
+    default:
+        break;
+    }
+
+    if (themeChanged && g_backgroundBrush && !Utils::IsHighContrastModeEnabled()) {
+        const auto window = reinterpret_cast<AcrylicBrush_WinUI2 *>(GetWindowLongPtrW(hWnd, GWLP_USERDATA));
+        if (window) {
+            window->ReloadBlurParameters();
+        }
+    }
+
+    return DefWindowProcW(hWnd, message, wParam, lParam);
+}
 
 EXTERN_C LRESULT CALLBACK DragBarWindowProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
@@ -119,9 +298,9 @@ EXTERN_C LRESULT CALLBACK DragBarWindowProc(HWND hWnd, UINT message, WPARAM wPar
     return DefWindowProcW(hWnd, message, wParam, lParam);
 }
 
-[[nodiscard]] static inline bool RegisterMainWindowClass()
+bool AcrylicBrush_WinUI2::RegisterMainWindowClass() const
 {
-    g_mainWindowClassName = g_windowClassNamePrefix + Utils::GenerateGUID() + g_mainWindowClassNameSuffix;
+    g_mainWindowClassName = m_windowClassNamePrefix + Utils::GenerateGUID() + g_mainWindowClassNameSuffix;
 
     static const HINSTANCE instance = GET_CURRENT_INSTANCE;
 
@@ -148,39 +327,7 @@ EXTERN_C LRESULT CALLBACK DragBarWindowProc(HWND hWnd, UINT message, WPARAM wPar
     return true;
 }
 
-[[nodiscard]] static inline bool RegisterDragBarWindowClass()
-{
-    if (!Utils::IsWindows8OrGreater()) {
-        OutputDebugStringW(L"Drag bar window is only available on Windows 8 and onwards.");
-        return false;
-    }
-
-    g_dragBarWindowClassName = g_windowClassNamePrefix + Utils::GenerateGUID() + g_dragBarWindowClassNameSuffix;
-
-    static const HINSTANCE instance = GET_CURRENT_INSTANCE;
-
-    WNDCLASSEXW wcex;
-    SecureZeroMemory(&wcex, sizeof(wcex));
-    wcex.cbSize = sizeof(wcex);
-
-    wcex.style = CS_HREDRAW | CS_VREDRAW | CS_DBLCLKS;
-    wcex.lpfnWndProc = DragBarWindowProc;
-    wcex.hInstance = instance;
-    wcex.hCursor = LoadCursorW(nullptr, IDC_ARROW);
-    wcex.hbrBackground = GET_BLACK_BRUSH;
-    wcex.lpszClassName = g_dragBarWindowClassName.c_str();
-
-    g_dragBarWindowAtom = RegisterClassExW(&wcex);
-
-    if (g_dragBarWindowAtom == 0) {
-        PRINT_WIN32_ERROR_MESSAGE(RegisterClassExW)
-        return false;
-    }
-
-    return true;
-}
-
-[[nodiscard]] static inline bool CreateMainWindow()
+bool AcrylicBrush_WinUI2::CreateMainWindow() const
 {
     g_mainWindowHandle = CreateWindowExW(0L,
                                          g_mainWindowClassName.c_str(),
@@ -223,7 +370,39 @@ EXTERN_C LRESULT CALLBACK DragBarWindowProc(HWND hWnd, UINT message, WPARAM wPar
     return true;
 }
 
-[[nodiscard]] static inline bool CreateDragBarWindow()
+bool AcrylicBrush_WinUI2::RegisterDragBarWindowClass() const
+{
+    if (!Utils::IsWindows8OrGreater()) {
+        OutputDebugStringW(L"Drag bar window is only available on Windows 8 and onwards.");
+        return false;
+    }
+
+    g_dragBarWindowClassName = m_windowClassNamePrefix + Utils::GenerateGUID() + g_dragBarWindowClassNameSuffix;
+
+    static const HINSTANCE instance = GET_CURRENT_INSTANCE;
+
+    WNDCLASSEXW wcex;
+    SecureZeroMemory(&wcex, sizeof(wcex));
+    wcex.cbSize = sizeof(wcex);
+
+    wcex.style = CS_HREDRAW | CS_VREDRAW | CS_DBLCLKS;
+    wcex.lpfnWndProc = DragBarWindowProc;
+    wcex.hInstance = instance;
+    wcex.hCursor = LoadCursorW(nullptr, IDC_ARROW);
+    wcex.hbrBackground = GET_BLACK_BRUSH;
+    wcex.lpszClassName = g_dragBarWindowClassName.c_str();
+
+    g_dragBarWindowAtom = RegisterClassExW(&wcex);
+
+    if (g_dragBarWindowAtom == 0) {
+        PRINT_WIN32_ERROR_MESSAGE(RegisterClassExW)
+        return false;
+    }
+
+    return true;
+}
+
+bool AcrylicBrush_WinUI2::CreateDragBarWindow() const
 {
     // Please refer to the "IMPORTANT NOTE" section below.
     if (!Utils::IsWindows8OrGreater()) {
@@ -269,7 +448,7 @@ EXTERN_C LRESULT CALLBACK DragBarWindowProc(HWND hWnd, UINT message, WPARAM wPar
     return true;
 }
 
-[[nodiscard]] static inline bool CreateXAMLIsland()
+bool AcrylicBrush_WinUI2::CreateXAMLIsland() const
 {
     // XAML Island is only supported on Windows 10 19H1 and onwards.
     if (!Utils::IsWindows10_19H1OrGreater()) {
@@ -309,6 +488,7 @@ EXTERN_C LRESULT CALLBACK DragBarWindowProc(HWND hWnd, UINT message, WPARAM wPar
     }
     g_backgroundBrush = {};
     g_backgroundBrush.BackgroundSource(winrt::Windows::UI::Xaml::Media::AcrylicBackgroundSource::HostBackdrop);
+    ReloadBlurParameters();
     g_rootGrid = {};
     g_rootGrid.Background(g_backgroundBrush);
     //g_rootGrid.Children().Clear();
@@ -329,7 +509,7 @@ AcrylicBrush_WinUI2::~AcrylicBrush_WinUI2()
     --m_refCount;
 }
 
-bool AcrylicBrush_WinUI2::IsSupportedByCurrentOS()
+bool AcrylicBrush_WinUI2::IsSupportedByCurrentOS() const
 {
     static const bool result = Utils::IsWindows10_19H1OrGreater();
     return result;
@@ -338,39 +518,67 @@ bool AcrylicBrush_WinUI2::IsSupportedByCurrentOS()
 bool AcrylicBrush_WinUI2::Create() const
 {
     if (!RegisterMainWindowClass()) {
-            return false;
-        }
-        if (!CreateMainWindow()) {
-            return false;
-        }
-        if (!RegisterDragBarWindowClass()) {
-            return false;
-        }
-        if (!CreateDragBarWindow()) {
-            return false;
-        }
-        if (!CreateXAMLIsland()) {
-            return false;
-        }
-        ReloadBlurParameters();
-        return true;
-}
-
-bool AcrylicBrush_WinUI2::ReloadBlurParameters()
-{
-    if (!g_backgroundBrush) {
         return false;
     }
-    g_backgroundBrush.TintColor(AcrylicBrush::Base::GetTintColor());
-    g_backgroundBrush.TintOpacity(AcrylicBrush::Base::GetTintOpacity());
-    g_backgroundBrush.TintLuminosityOpacity(AcrylicBrush::Base::GetLuminosityOpacity());
-    g_backgroundBrush.FallbackColor(AcrylicBrush::Base::GetFallbackColor());
+    if (!CreateMainWindow()) {
+        return false;
+    }
+    if (!RegisterDragBarWindowClass()) {
+        return false;
+    }
+    if (!CreateDragBarWindow()) {
+        return false;
+    }
+    if (!CreateXAMLIsland()) {
+        return false;
+    }
     return true;
 }
 
-HWND AcrylicBrush_WinUI2::GetWindowHandle()
+void AcrylicBrush_WinUI2::ReloadBlurParameters() const
+{
+    if (!g_backgroundBrush) {
+        return;
+    }
+    g_backgroundBrush.TintColor(GetTintColor());
+    g_backgroundBrush.TintOpacity(GetTintOpacity());
+    g_backgroundBrush.TintLuminosityOpacity(GetLuminosityOpacity());
+    g_backgroundBrush.FallbackColor(GetFallbackColor());
+}
+
+HWND AcrylicBrush_WinUI2::GetWindowHandle() const
 {
     return g_mainWindowHandle;
+}
+
+int AcrylicBrush_WinUI2::EventLoopExec() const
+{
+    MSG msg = {};
+
+    while (GetMessageW(&msg, nullptr, 0, 0) != FALSE) {
+        BOOL filtered = FALSE;
+        if (g_source) {
+            const auto interop = g_source.as<IDesktopWindowXamlSourceNative2>();
+            if (interop) {
+                winrt::check_hresult(interop->PreTranslateMessage(&msg, &filtered));
+            }
+        }
+        if (filtered == FALSE) {
+            TranslateMessage(&msg);
+            DispatchMessageW(&msg);
+        }
+    }
+
+    return static_cast<int>(msg.wParam);
+}
+
+void AcrylicBrush_WinUI2::Release()
+{
+    --m_refCount;
+    if (m_refCount <= 0) {
+        m_refCount = 0;
+        delete this;
+    }
 }
 
 #if 0

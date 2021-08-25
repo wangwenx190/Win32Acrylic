@@ -21,10 +21,16 @@ set(SOURCES
     acrylicbrush.cpp
     acrylicbrush_system.h
     acrylicbrush_system.cpp
+    acrylicbrush_composition.h
+    acrylicbrush_composition.cpp
+    acrylicbrush_winui3.h
+    acrylicbrush_winui3.cpp
     acrylicbrush_winui2.h
     acrylicbrush_winui2.cpp
     acrylicbrush_direct2d.h
     acrylicbrush_direct2d.cpp
+    acrylicbrushfactory.h
+    acrylicbrushfactory.cpp
     acrylicmanager.h
     acrylicmanager.cpp
 )

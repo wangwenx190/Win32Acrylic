@@ -37,7 +37,15 @@ public:
     [[nodiscard]] bool Create() const override;
     void ReloadBlurParameters() const override;
     [[nodiscard]] HWND GetWindowHandle() const override;
+    [[nodiscard]] int EventLoopExec() const override;
     void Release() override;
+
+private:
+    [[nodiscard]] bool RegisterMainWindowClass() const;
+    [[nodiscard]] bool CreateMainWindow() const;
+    [[nodiscard]] bool RegisterDragBarWindowClass() const;
+    [[nodiscard]] bool CreateDragBarWindow() const;
+    [[nodiscard]] bool CreateXAMLIsland() const;
 
 private:
     static int m_refCount;

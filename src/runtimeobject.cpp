@@ -593,7 +593,7 @@ RoGetParameterizedTypeInstanceIID(
     UINT32                     nameElementCount,
     PCWSTR                     *nameElements,
     const IRoMetaDataLocator   &metaDataLocator,
-    GUID                       *iid,
+    IID                        *iid,
     ROPARAMIIDHANDLE           *pExtra
 )
 {

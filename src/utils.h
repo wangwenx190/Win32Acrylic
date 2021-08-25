@@ -71,5 +71,6 @@ namespace Utils
 [[nodiscard]] bool TriggerFrameChangeForWindow(const HWND hWnd);
 [[nodiscard]] bool UpdateFrameMargins(const HWND hWnd);
 [[nodiscard]] bool OpenSystemMenu(const HWND hWnd, const POINT pos);
+[[nodiscard]] bool IsCompositionEnabled();
 
 }

@@ -22,42 +22,4 @@
  * SOFTWARE.
  */
 
-#include "acrylicbrush_system.h"
-#include "utils.h"
-
-int AcrylicBrush_System::m_refCount = 0;
-
-AcrylicBrush_System::AcrylicBrush_System()
-{
-    ++m_refCount;
-}
-
-AcrylicBrush_System::~AcrylicBrush_System()
-{
-    --m_refCount;
-}
-
-bool AcrylicBrush_System::IsSupportedByCurrentOS() const
-{
-    static const bool result = false;
-    return result;
-}
-
-HWND AcrylicBrush_System::GetWindowHandle() const
-{
-    return nullptr;
-}
-
-int AcrylicBrush_System::EventLoopExec() const
-{
-    return 0;
-}
-
-void AcrylicBrush_System::Release()
-{
-    --m_refCount;
-    if (m_refCount <= 0) {
-        m_refCount = 0;
-        delete this;
-    }
-}
+#include "acrylicbrush_composition.h"

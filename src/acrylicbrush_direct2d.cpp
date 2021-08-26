@@ -63,93 +63,149 @@ constexpr CLSID am_CLSID_D2D1Tint = {0x36312b17, 0xf7dd, 0x4014, {0x91, 0x5d, 0x
 EXTERN_C_END
 #endif
 
-static const std::wstring g_mainWindowClassNameSuffix = L"@Direct2DMainWindow";
-static const std::wstring g_mainWindowTitle = L"AcrylicManager Direct2D Main Window";
+static constexpr wchar_t g_mainWindowTitle[] = L"AcrylicManager Direct2D Main Window";
 
-static std::wstring g_mainWindowClassName = nullptr;
-static ATOM g_mainWindowAtom = 0;
-static HWND g_mainWindowHandle = nullptr;
-static UINT g_currentDpi = 0;
-static double g_currentDpr = 0.0;
+static int g_refCount = 0;
 
-static std::wstring g_wallpaperFilePath = nullptr;
-static WallpaperAspectStyle g_wallpaperAspectStyle = WallpaperAspectStyle::Invalid;
-static COLORREF g_desktopBackgroundColor = 0;
-
-static Microsoft::WRL::ComPtr<ID2D1Factory2> g_D2DFactory = nullptr;
-static Microsoft::WRL::ComPtr<ID2D1Device1> g_D2DDevice = nullptr;
-static Microsoft::WRL::ComPtr<ID2D1DeviceContext1> g_D2DContext = nullptr;
-static Microsoft::WRL::ComPtr<ID2D1Bitmap1> g_D2DTargetBitmap = nullptr;
-static D2D1_BITMAP_PROPERTIES1 g_D2DBitmapProperties = {};
-static Microsoft::WRL::ComPtr<ID2D1Effect> g_D2DWallpaperBitmapSourceEffect = nullptr;
-static Microsoft::WRL::ComPtr<ID2D1Effect> g_D2DTintColorEffect = nullptr;
-static Microsoft::WRL::ComPtr<ID2D1Effect> g_D2DFallbackColorEffect = nullptr;
-static Microsoft::WRL::ComPtr<ID2D1Effect> g_D2DLuminosityColorEffect = nullptr;
-static Microsoft::WRL::ComPtr<ID2D1Effect> g_D2DLuminosityBlendEffect = nullptr;
-static Microsoft::WRL::ComPtr<ID2D1Effect> g_D2DLuminosityColorBlendEffect = nullptr;
-static Microsoft::WRL::ComPtr<ID2D1Effect> g_D2DSaturationEffect = nullptr;
-static Microsoft::WRL::ComPtr<ID2D1Effect> g_D2DGaussianBlurEffect = nullptr;
-static Microsoft::WRL::ComPtr<ID2D1Effect> g_D2DExclusionColorEffect = nullptr;
-static Microsoft::WRL::ComPtr<ID2D1Effect> g_D2DExclusionBlendEffect = nullptr;
-static Microsoft::WRL::ComPtr<ID2D1Effect> g_D2DExclusionBlendEffectInner = nullptr;
-static Microsoft::WRL::ComPtr<ID2D1Effect> g_D2DExclusionCompositeEffect = nullptr;
-static Microsoft::WRL::ComPtr<ID2D1Effect> g_D2DNoiseBitmapSourceEffect = nullptr;
-static Microsoft::WRL::ComPtr<ID2D1Effect> g_D2DNoiseBorderEffect = nullptr;
-static Microsoft::WRL::ComPtr<ID2D1Effect> g_D2DNoiseOpacityEffect = nullptr;
-static Microsoft::WRL::ComPtr<ID2D1Effect> g_D2DNoiseBlendEffectOuter = nullptr;
-static Microsoft::WRL::ComPtr<ID2D1Effect> g_D2DFadeInOutEffect = nullptr;
-static Microsoft::WRL::ComPtr<IWICImagingFactory> g_WICFactory = nullptr;
-static Microsoft::WRL::ComPtr<IWICBitmapDecoder> g_WICDecoder = nullptr;
-static Microsoft::WRL::ComPtr<IWICBitmapFrameDecode> g_WICFrame = nullptr;
-static Microsoft::WRL::ComPtr<IWICStream> g_WICStream = nullptr;
-static Microsoft::WRL::ComPtr<IWICFormatConverter> g_WICConverter = nullptr;
-static Microsoft::WRL::ComPtr<IWICBitmapScaler> g_WICScaler = nullptr;
-static Microsoft::WRL::ComPtr<ID3D11Device> g_D3D11Device = nullptr;
-static Microsoft::WRL::ComPtr<ID3D11DeviceContext> g_D3D11Context = nullptr;
-static Microsoft::WRL::ComPtr<ID3D11Texture2D> g_D3D11Texture = nullptr;
-static Microsoft::WRL::ComPtr<IDXGIDevice1> g_DXGIDevice = nullptr;
-static Microsoft::WRL::ComPtr<IDXGIAdapter> g_DXGIAdapter = nullptr;
-static Microsoft::WRL::ComPtr<IDXGIFactory2> g_DXGIFactory = nullptr;
-static Microsoft::WRL::ComPtr<IDXGISurface> g_DXGISurface = nullptr;
-static Microsoft::WRL::ComPtr<IDXGISwapChain1> g_DXGISwapChain = nullptr;
-static DXGI_SWAP_CHAIN_DESC1 g_DXGISwapChainDesc = {};
-static D3D_FEATURE_LEVEL g_D3DFeatureLevel = D3D_FEATURE_LEVEL_1_0_CORE;
-
-int AcrylicBrush_Direct2D::m_refCount = 0;
-
-static inline void Cleanup()
+class AcrylicBrushDirect2DPrivate
 {
-    if (!g_wallpaperFilePath.empty()) {
-        g_wallpaperFilePath.clear();
+    ACRYLICMANAGER_DISABLE_COPY_MOVE(AcrylicBrushDirect2DPrivate)
+
+public:
+    explicit AcrylicBrushDirect2DPrivate(AcrylicBrushDirect2D *q);
+    ~AcrylicBrushDirect2DPrivate();
+
+    static LRESULT CALLBACK MainWindowProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
+
+    [[nodiscard]] bool CreateMainWindow();
+    [[nodiscard]] HWND GetMainWindowHandle() const;
+    [[nodiscard]] int EventLoop() const;
+    void ReloadBrushParameters();
+    void Cleanup();
+
+private:
+    [[nodiscard]] LRESULT MainWindowMessageHandler(UINT message, WPARAM wParam, LPARAM lParam);
+    [[nodiscard]] bool EnsureWallpaperBrush();
+    [[nodiscard]] bool EnsureNoiseBrush();
+    [[nodiscard]] bool PrepareEffects_Luminosity(ID2D1Effect **output);
+    [[nodiscard]] bool PrepareEffects_Legacy(ID2D1Effect **output);
+    [[nodiscard]] bool CreateEffects(ID2D1Effect **output);
+    [[nodiscard]] bool Initialize();
+    [[nodiscard]] bool DrawFinalVisual();
+    void ReloadDesktopParameters();
+
+private:
+    AcrylicBrushDirect2D *q_ptr = nullptr;
+
+    std::wstring m_mainWindowClassName = nullptr;
+    HWND m_mainWindowHandle = nullptr;
+    UINT m_currentDpi = 0;
+    double m_currentDpr = 0.0;
+
+    std::wstring m_wallpaperFilePath = nullptr;
+    WallpaperAspectStyle m_wallpaperAspectStyle = WallpaperAspectStyle::Invalid;
+    COLORREF m_desktopBackgroundColor = 0;
+
+    Microsoft::WRL::ComPtr<ID2D1Factory2> m_D2DFactory = nullptr;
+    Microsoft::WRL::ComPtr<ID2D1Device1> m_D2DDevice = nullptr;
+    Microsoft::WRL::ComPtr<ID2D1DeviceContext1> m_D2DContext = nullptr;
+    Microsoft::WRL::ComPtr<ID2D1Bitmap1> m_D2DTargetBitmap = nullptr;
+    D2D1_BITMAP_PROPERTIES1 m_D2DBitmapProperties = {};
+    Microsoft::WRL::ComPtr<ID2D1Effect> m_D2DWallpaperBitmapSourceEffect = nullptr;
+    Microsoft::WRL::ComPtr<ID2D1Effect> m_D2DTintColorEffect = nullptr;
+    Microsoft::WRL::ComPtr<ID2D1Effect> m_D2DFallbackColorEffect = nullptr;
+    Microsoft::WRL::ComPtr<ID2D1Effect> m_D2DLuminosityColorEffect = nullptr;
+    Microsoft::WRL::ComPtr<ID2D1Effect> m_D2DLuminosityBlendEffect = nullptr;
+    Microsoft::WRL::ComPtr<ID2D1Effect> m_D2DLuminosityColorBlendEffect = nullptr;
+    Microsoft::WRL::ComPtr<ID2D1Effect> m_D2DSaturationEffect = nullptr;
+    Microsoft::WRL::ComPtr<ID2D1Effect> m_D2DGaussianBlurEffect = nullptr;
+    Microsoft::WRL::ComPtr<ID2D1Effect> m_D2DExclusionColorEffect = nullptr;
+    Microsoft::WRL::ComPtr<ID2D1Effect> m_D2DExclusionBlendEffect = nullptr;
+    Microsoft::WRL::ComPtr<ID2D1Effect> m_D2DExclusionBlendEffectInner = nullptr;
+    Microsoft::WRL::ComPtr<ID2D1Effect> m_D2DExclusionCompositeEffect = nullptr;
+    Microsoft::WRL::ComPtr<ID2D1Effect> m_D2DNoiseBitmapSourceEffect = nullptr;
+    Microsoft::WRL::ComPtr<ID2D1Effect> m_D2DNoiseBorderEffect = nullptr;
+    Microsoft::WRL::ComPtr<ID2D1Effect> m_D2DNoiseOpacityEffect = nullptr;
+    Microsoft::WRL::ComPtr<ID2D1Effect> m_D2DNoiseBlendEffectOuter = nullptr;
+    Microsoft::WRL::ComPtr<ID2D1Effect> m_D2DFadeInOutEffect = nullptr;
+    Microsoft::WRL::ComPtr<IWICImagingFactory> m_WICFactory = nullptr;
+    Microsoft::WRL::ComPtr<IWICBitmapDecoder> m_WICDecoder = nullptr;
+    Microsoft::WRL::ComPtr<IWICBitmapFrameDecode> m_WICFrame = nullptr;
+    Microsoft::WRL::ComPtr<IWICStream> m_WICStream = nullptr;
+    Microsoft::WRL::ComPtr<IWICFormatConverter> m_WICConverter = nullptr;
+    Microsoft::WRL::ComPtr<IWICBitmapScaler> m_WICScaler = nullptr;
+    Microsoft::WRL::ComPtr<ID3D11Device> m_D3D11Device = nullptr;
+    Microsoft::WRL::ComPtr<ID3D11DeviceContext> m_D3D11Context = nullptr;
+    Microsoft::WRL::ComPtr<ID3D11Texture2D> m_D3D11Texture = nullptr;
+    Microsoft::WRL::ComPtr<IDXGIDevice1> m_DXGIDevice = nullptr;
+    Microsoft::WRL::ComPtr<IDXGIAdapter> m_DXGIAdapter = nullptr;
+    Microsoft::WRL::ComPtr<IDXGIFactory2> m_DXGIFactory = nullptr;
+    Microsoft::WRL::ComPtr<IDXGISurface> m_DXGISurface = nullptr;
+    Microsoft::WRL::ComPtr<IDXGISwapChain1> m_DXGISwapChain = nullptr;
+    DXGI_SWAP_CHAIN_DESC1 m_DXGISwapChainDesc = {};
+    D3D_FEATURE_LEVEL m_D3DFeatureLevel = D3D_FEATURE_LEVEL_1_0_CORE;
+};
+
+AcrylicBrushDirect2DPrivate::AcrylicBrushDirect2DPrivate(AcrylicBrushDirect2D *q)
+{
+    q_ptr = q;
+}
+
+AcrylicBrushDirect2DPrivate::~AcrylicBrushDirect2DPrivate()
+{
+}
+
+void AcrylicBrushDirect2DPrivate::Cleanup()
+{
+    if (!m_wallpaperFilePath.empty()) {
+        m_wallpaperFilePath.clear();
     }
-    if (g_wallpaperAspectStyle != WallpaperAspectStyle::Invalid) {
-        g_wallpaperAspectStyle = WallpaperAspectStyle::Invalid;
+    if (m_wallpaperAspectStyle != WallpaperAspectStyle::Invalid) {
+        m_wallpaperAspectStyle = WallpaperAspectStyle::Invalid;
     }
-    if (g_desktopBackgroundColor != 0) {
-        g_desktopBackgroundColor = 0;
+    if (m_desktopBackgroundColor != 0) {
+        m_desktopBackgroundColor = 0;
     }
-    if (g_mainWindowHandle) {
-        DestroyWindow(g_mainWindowHandle);
-        g_mainWindowHandle = nullptr;
+    // todo: release all com ptrs
+    if (m_mainWindowHandle) {
+        DestroyWindow(m_mainWindowHandle);
+        m_mainWindowHandle = nullptr;
     }
-    if (g_mainWindowAtom != 0) {
-        UnregisterClassW(g_mainWindowClassName.c_str(), GET_CURRENT_INSTANCE);
-        g_mainWindowAtom = 0;
-        g_mainWindowClassName.clear();
+    if (!m_mainWindowClassName.empty()) {
+        UnregisterClassW(m_mainWindowClassName.c_str(), GET_CURRENT_INSTANCE);
+        m_mainWindowClassName.clear();
     }
-    if (g_currentDpi != 0) {
-        g_currentDpi = 0;
+    if (m_currentDpi != 0) {
+        m_currentDpi = 0;
     }
-    if (g_currentDpr != 0.0) {
-        g_currentDpr = 0.0;
+    if (m_currentDpr != 0.0) {
+        m_currentDpr = 0.0;
     }
 }
 
-EXTERN_C LRESULT CALLBACK MainWindowProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
+LRESULT CALLBACK AcrylicBrushDirect2DPrivate::MainWindowProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
+{
+    if (message == WM_NCCREATE) {
+        const auto cs = reinterpret_cast<LPCREATESTRUCTW>(lParam);
+        const auto that = static_cast<AcrylicBrushDirect2DPrivate *>(cs->lpCreateParams);
+        if (SetWindowLongPtrW(hWnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(that)) == 0) {
+            PRINT_WIN32_ERROR_MESSAGE(SetWindowLongPtrW)
+        }
+    } else if (message == WM_NCDESTROY) {
+        if (SetWindowLongPtrW(hWnd, GWLP_USERDATA, 0) == 0) {
+            PRINT_WIN32_ERROR_MESSAGE(SetWindowLongPtrW)
+        }
+    } else if (const auto that = reinterpret_cast<AcrylicBrushDirect2DPrivate *>(GetWindowLongPtrW(hWnd, GWLP_USERDATA))) {
+        return that->MainWindowMessageHandler(message, wParam, lParam);
+    }
+    return DefWindowProcW(hWnd, message, wParam, lParam);
+}
+
+LRESULT AcrylicBrushDirect2DPrivate::MainWindowMessageHandler(UINT message, WPARAM wParam, LPARAM lParam)
 {
     MSG msg;
     SecureZeroMemory(&msg, sizeof(msg));
-    msg.hwnd = hWnd;
+    msg.hwnd = m_mainWindowHandle;
     msg.message = message;
     msg.wParam = wParam;
     msg.lParam = lParam;
@@ -175,10 +231,10 @@ EXTERN_C LRESULT CALLBACK MainWindowProc(HWND hWnd, UINT message, WPARAM wParam,
         wallpaperChanged = true;
         const auto x = static_cast<double>(LOWORD(wParam));
         const auto y = static_cast<double>(HIWORD(wParam));
-        g_currentDpi = std::round((x + y) / 2.0);
-        g_currentDpr = Utils::GetDevicePixelRatioForWindow(hWnd);
+        m_currentDpi = std::round((x + y) / 2.0);
+        m_currentDpr = Utils::GetDevicePixelRatioForWindow(m_mainWindowHandle);
         const auto prcNewWindow = reinterpret_cast<LPRECT>(lParam);
-        if (MoveWindow(hWnd, prcNewWindow->left, prcNewWindow->top,
+        if (MoveWindow(m_mainWindowHandle, prcNewWindow->left, prcNewWindow->top,
                        GET_RECT_WIDTH(*prcNewWindow), GET_RECT_HEIGHT(*prcNewWindow), TRUE) == FALSE) {
             PRINT_WIN32_ERROR_MESSAGE(MoveWindow)
             break;
@@ -216,121 +272,58 @@ EXTERN_C LRESULT CALLBACK MainWindowProc(HWND hWnd, UINT message, WPARAM wParam,
     }
 
     if ((wallpaperChanged || themeChanged) && !Utils::IsHighContrastModeEnabled()) {
-        const auto window = reinterpret_cast<AcrylicBrush_Direct2D *>(GetWindowLongPtrW(hWnd, GWLP_USERDATA));
-        if (window) {
-            window->ReloadDesktopParameters();
-            window->ReloadBlurParameters();
-        }
+        ReloadDesktopParameters();
+        ReloadBrushParameters();
     }
 
-    return DefWindowProcW(hWnd, message, wParam, lParam);
+    return DefWindowProcW(m_mainWindowHandle, message, wParam, lParam);
 }
 
-AcrylicBrush_Direct2D::AcrylicBrush_Direct2D()
+bool AcrylicBrushDirect2DPrivate::CreateMainWindow()
 {
-    ++m_refCount;
-}
-
-AcrylicBrush_Direct2D::~AcrylicBrush_Direct2D()
-{
-    --m_refCount;
-}
-
-bool AcrylicBrush_Direct2D::IsSupportedByCurrentOS() const
-{
-    static const bool result = Utils::IsWindows8OrGreater();
-    return result;
-}
-
-HWND AcrylicBrush_Direct2D::GetWindowHandle() const
-{
-    return g_mainWindowHandle;
-}
-
-int AcrylicBrush_Direct2D::EventLoopExec() const
-{
-    MSG msg = {};
-
-    while (GetMessageW(&msg, nullptr, 0, 0) != FALSE) {
-        TranslateMessage(&msg);
-        DispatchMessageW(&msg);
-    }
-
-    return static_cast<int>(msg.wParam);
-}
-
-void AcrylicBrush_Direct2D::Release()
-{
-    --m_refCount;
-    if (m_refCount <= 0) {
-        m_refCount = 0;
-        delete this;
-    }
-}
-
-bool AcrylicBrush_Direct2D::RegisterMainWindowClass() const
-{
-    g_mainWindowClassName = m_windowClassNamePrefix + Utils::GenerateGUID() + g_mainWindowClassNameSuffix;
-
-    WNDCLASSEXW wcex;
-    SecureZeroMemory(&wcex, sizeof(wcex));
-    wcex.cbSize = sizeof(wcex);
-
-    wcex.style = CS_HREDRAW | CS_VREDRAW;
-    wcex.lpfnWndProc = MainWindowProc;
-    wcex.hInstance = GET_CURRENT_INSTANCE;
-    wcex.hCursor = LoadCursorW(nullptr, IDC_ARROW);
-    wcex.hIcon = LoadIconW(GET_CURRENT_INSTANCE, MAKEINTRESOURCEW(IDI_DEFAULTICON));
-    wcex.hIconSm = LoadIconW(GET_CURRENT_INSTANCE, MAKEINTRESOURCEW(IDI_DEFAULTICONSM));
-    wcex.hbrBackground = reinterpret_cast<HBRUSH>(COLOR_WINDOW + 1);
-    wcex.lpszClassName = g_mainWindowClassName.c_str();
-
-    g_mainWindowAtom = RegisterClassExW(&wcex);
-
-    if (g_mainWindowAtom == 0) {
-        PRINT_WIN32_ERROR_MESSAGE(RegisterClassExW)
+    m_mainWindowClassName = Utils::RegisterWindowClass(MainWindowProc);
+    if (m_mainWindowClassName.empty()) {
+        OutputDebugStringW(L"Failed to register main window class.");
         return false;
     }
 
-    return true;
-}
-
-bool AcrylicBrush_Direct2D::CreateMainWindow() const
-{
-    g_mainWindowHandle = CreateWindowExW(0L,
-                                         g_mainWindowClassName.c_str(),
-                                         g_mainWindowTitle.c_str(),
+    m_mainWindowHandle = CreateWindowExW(0L,
+                                         m_mainWindowClassName.c_str(),
+                                         g_mainWindowTitle,
                                          WS_OVERLAPPEDWINDOW,
                                          CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
-                                         nullptr, nullptr, GET_CURRENT_INSTANCE, nullptr);
+                                         nullptr,
+                                         nullptr,
+                                         GET_CURRENT_INSTANCE,
+                                         this);
 
-    if (!g_mainWindowHandle) {
+    if (!m_mainWindowHandle) {
         PRINT_WIN32_ERROR_MESSAGE(CreateWindowExW)
         return false;
     }
 
-    g_currentDpi = Utils::GetDotsPerInchForWindow(g_mainWindowHandle);
-    if (g_currentDpi <= 0) {
-        g_currentDpi = USER_DEFAULT_SCREEN_DPI;
+    m_currentDpi = Utils::GetDotsPerInchForWindow(m_mainWindowHandle);
+    if (m_currentDpi <= 0) {
+        m_currentDpi = USER_DEFAULT_SCREEN_DPI;
     }
-    g_currentDpr = Utils::GetDevicePixelRatioForWindow(g_mainWindowHandle);
-    if (g_currentDpr <= 0.0) {
-        g_currentDpr = 1.0;
+    m_currentDpr = Utils::GetDevicePixelRatioForWindow(m_mainWindowHandle);
+    if (m_currentDpr <= 0.0) {
+        m_currentDpr = 1.0;
     }
 
     // Ensure DWM still draws the top frame by extending the top frame.
     // This also ensures our window still has the frame shadow drawn by DWM.
-    if (!Utils::UpdateFrameMargins(g_mainWindowHandle)) {
+    if (!Utils::UpdateFrameMargins(m_mainWindowHandle)) {
         OutputDebugStringW(L"Failed to update main window's frame margins.");
         return false;
     }
     // Force a WM_NCCALCSIZE processing to make the window become frameless immediately.
-    if (!Utils::TriggerFrameChangeForWindow(g_mainWindowHandle)) {
+    if (!Utils::TriggerFrameChangeForWindow(m_mainWindowHandle)) {
         OutputDebugStringW(L"Failed to trigger frame change event for main window.");
         return false;
     }
     // Ensure our window still has window transitions.
-    if (!Utils::SetWindowTransitionsEnabled(g_mainWindowHandle, true)) {
+    if (!Utils::SetWindowTransitionsEnabled(m_mainWindowHandle, true)) {
         OutputDebugStringW(L"Failed to enable window transitions for main window.");
         return false;
     }
@@ -338,39 +331,44 @@ bool AcrylicBrush_Direct2D::CreateMainWindow() const
     return true;
 }
 
-bool AcrylicBrush_Direct2D::EnsureWallpaperBrush() const
+HWND AcrylicBrushDirect2DPrivate::GetMainWindowHandle() const
+{
+    return m_mainWindowHandle;
+}
+
+bool AcrylicBrushDirect2DPrivate::EnsureWallpaperBrush()
 {
     HRESULT hr = CoInitialize(nullptr);
     if (FAILED(hr)) {
         PRINT_HR_ERROR_MESSAGE(CoInitialize, hr)
         return false;
     }
-    hr = CoCreateInstance(CLSID_WICImagingFactory1, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&g_WICFactory));
+    hr = CoCreateInstance(CLSID_WICImagingFactory1, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&m_WICFactory));
     if (FAILED(hr)) {
         CoUninitialize();
         PRINT_HR_ERROR_MESSAGE(CoCreateInstance, hr)
         return false;
     }
-    hr = g_WICFactory->CreateDecoderFromFilename(g_wallpaperFilePath.c_str(), nullptr, GENERIC_READ,
-                                                 WICDecodeMetadataCacheOnLoad, &g_WICDecoder);
+    hr = m_WICFactory->CreateDecoderFromFilename(m_wallpaperFilePath.c_str(), nullptr, GENERIC_READ,
+                                                 WICDecodeMetadataCacheOnLoad, &m_WICDecoder);
     if (FAILED(hr)) {
         CoUninitialize();
         PRINT_HR_ERROR_MESSAGE(CreateDecoderFromFilename, hr)
         return false;
     }
-    hr = g_WICDecoder->GetFrame(0, &g_WICFrame);
+    hr = m_WICDecoder->GetFrame(0, &m_WICFrame);
     if (FAILED(hr)) {
         CoUninitialize();
         PRINT_HR_ERROR_MESSAGE(GetFrame, hr)
         return false;
     }
-    hr = g_WICFactory->CreateFormatConverter(&g_WICConverter);
+    hr = m_WICFactory->CreateFormatConverter(&m_WICConverter);
     if (FAILED(hr)) {
         CoUninitialize();
         PRINT_HR_ERROR_MESSAGE(CreateFormatConverter, hr)
         return false;
     }
-    hr = g_WICConverter->Initialize(g_WICFrame.Get(), GUID_WICPixelFormat32bppPBGRA,
+    hr = m_WICConverter->Initialize(m_WICFrame.Get(), GUID_WICPixelFormat32bppPBGRA,
                 WICBitmapDitherTypeNone, nullptr, 0.0f, WICBitmapPaletteTypeMedianCut);
     if (FAILED(hr)) {
         CoUninitialize();
@@ -381,240 +379,271 @@ bool AcrylicBrush_Direct2D::EnsureWallpaperBrush() const
     return true;
 }
 
-bool AcrylicBrush_Direct2D::EnsureNoiseBrush() const
+bool AcrylicBrushDirect2DPrivate::EnsureNoiseBrush()
 {
 
 }
 
-bool AcrylicBrush_Direct2D::PrepareEffects_Luminosity(ID2D1Effect **output) const
+bool AcrylicBrushDirect2DPrivate::PrepareEffects_Luminosity(ID2D1Effect **output)
 {
     // Apply luminosity:
 
     // Luminosity Color
-    HRESULT hr = g_D2DContext->CreateEffect(am_CLSID_D2D1Flood, g_D2DLuminosityColorEffect.GetAddressOf());
+    HRESULT hr = m_D2DContext->CreateEffect(am_CLSID_D2D1Flood, m_D2DLuminosityColorEffect.GetAddressOf());
     if (FAILED(hr)) {
-        //
+        PRINT_HR_ERROR_MESSAGE(CreateEffect, hr)
+        return false;
     }
-    hr = g_D2DLuminosityColorEffect->SetValue(D2D1_FLOOD_PROP_COLOR, WINRTCOLOR_TO_D2DCOLOR4F(GetEffectiveLuminosityColor()));
+    hr = m_D2DLuminosityColorEffect->SetValue(D2D1_FLOOD_PROP_COLOR, WINRTCOLOR_TO_D2DCOLOR4F(q_ptr->GetEffectiveLuminosityColor()));
     if (FAILED(hr)) {
-        //
+        PRINT_HR_ERROR_MESSAGE(SetValue, hr)
+        return false;
     }
 
     // Luminosity blend
-    hr = g_D2DContext->CreateEffect(am_CLSID_D2D1Blend, g_D2DLuminosityBlendEffect.GetAddressOf());
+    hr = m_D2DContext->CreateEffect(am_CLSID_D2D1Blend, m_D2DLuminosityBlendEffect.GetAddressOf());
     if (FAILED(hr)) {
-        //
+        PRINT_HR_ERROR_MESSAGE(CreateEffect, hr)
+        return false;
     }
-    hr = g_D2DLuminosityBlendEffect->SetValue(D2D1_BLEND_PROP_MODE, D2D1_BLEND_MODE_LUMINOSITY);
+    hr = m_D2DLuminosityBlendEffect->SetValue(D2D1_BLEND_PROP_MODE, D2D1_BLEND_MODE_LUMINOSITY);
     if (FAILED(hr)) {
-        //
+        PRINT_HR_ERROR_MESSAGE(SetValue, hr)
+        return false;
     }
-    g_D2DLuminosityBlendEffect->SetInputEffect(0, g_D2DGaussianBlurEffect.Get());
-    g_D2DLuminosityBlendEffect->SetInputEffect(1, g_D2DLuminosityColorEffect.Get());
+    m_D2DLuminosityBlendEffect->SetInputEffect(0, m_D2DGaussianBlurEffect.Get());
+    m_D2DLuminosityBlendEffect->SetInputEffect(1, m_D2DLuminosityColorEffect.Get());
 
     // Apply tint:
 
     // Color blend
-    hr = g_D2DContext->CreateEffect(am_CLSID_D2D1Blend, g_D2DLuminosityColorBlendEffect.GetAddressOf());
+    hr = m_D2DContext->CreateEffect(am_CLSID_D2D1Blend, m_D2DLuminosityColorBlendEffect.GetAddressOf());
     if (FAILED(hr)) {
-        //
+        PRINT_HR_ERROR_MESSAGE(CreateEffect, hr)
+        return false;
     }
-    hr = g_D2DLuminosityColorBlendEffect->SetValue(D2D1_BLEND_PROP_MODE, D2D1_BLEND_MODE_COLOR);
+    hr = m_D2DLuminosityColorBlendEffect->SetValue(D2D1_BLEND_PROP_MODE, D2D1_BLEND_MODE_COLOR);
     if (FAILED(hr)) {
-        //
+        PRINT_HR_ERROR_MESSAGE(SetValue, hr)
+        return false;
     }
-    g_D2DLuminosityColorBlendEffect->SetInputEffect(0, g_D2DLuminosityBlendEffect.Get());
-    g_D2DLuminosityColorBlendEffect->SetInputEffect(1, g_D2DTintColorEffect.Get());
+    m_D2DLuminosityColorBlendEffect->SetInputEffect(0, m_D2DLuminosityBlendEffect.Get());
+    m_D2DLuminosityColorBlendEffect->SetInputEffect(1, m_D2DTintColorEffect.Get());
 
-    *output = g_D2DLuminosityColorBlendEffect.Get();
+    *output = m_D2DLuminosityColorBlendEffect.Get();
 
     return true;
 }
 
-bool AcrylicBrush_Direct2D::PrepareEffects_Legacy(ID2D1Effect **output) const
+bool AcrylicBrushDirect2DPrivate::PrepareEffects_Legacy(ID2D1Effect **output)
 {
     // Apply saturation
-    HRESULT hr = g_D2DContext->CreateEffect(am_CLSID_D2D1Saturation, g_D2DSaturationEffect.GetAddressOf());
+    HRESULT hr = m_D2DContext->CreateEffect(am_CLSID_D2D1Saturation, m_D2DSaturationEffect.GetAddressOf());
     if (FAILED(hr)) {
-        //
+        PRINT_HR_ERROR_MESSAGE(CreateEffect, hr)
+        return false;
     }
-    hr = g_D2DSaturationEffect->SetValue(D2D1_SATURATION_PROP_SATURATION, GetSaturation());
+    hr = m_D2DSaturationEffect->SetValue(D2D1_SATURATION_PROP_SATURATION, q_ptr->GetSaturation());
     if (FAILED(hr)) {
-        //
+        PRINT_HR_ERROR_MESSAGE(SetValue, hr)
+        return false;
     }
-    g_D2DSaturationEffect->SetInputEffect(0, g_D2DGaussianBlurEffect.Get());
+    m_D2DSaturationEffect->SetInputEffect(0, m_D2DGaussianBlurEffect.Get());
 
     // Apply exclusion:
     // Exclusion Color
-    hr = g_D2DContext->CreateEffect(am_CLSID_D2D1Flood, g_D2DExclusionColorEffect.GetAddressOf());
+    hr = m_D2DContext->CreateEffect(am_CLSID_D2D1Flood, m_D2DExclusionColorEffect.GetAddressOf());
     if (FAILED(hr)) {
-        //
+        PRINT_HR_ERROR_MESSAGE(CreateEffect, hr)
+        return false;
     }
-    hr = g_D2DExclusionColorEffect->SetValue(D2D1_FLOOD_PROP_COLOR, WINRTCOLOR_TO_D2DCOLOR4F(GetExclusionColor()));
+    hr = m_D2DExclusionColorEffect->SetValue(D2D1_FLOOD_PROP_COLOR, WINRTCOLOR_TO_D2DCOLOR4F(q_ptr->GetExclusionColor()));
     if (FAILED(hr)) {
-        //
+        PRINT_HR_ERROR_MESSAGE(SetValue, hr)
+        return false;
     }
     // Exclusion blend
-    hr = g_D2DContext->CreateEffect(am_CLSID_D2D1Blend, g_D2DExclusionBlendEffectInner.GetAddressOf());
+    hr = m_D2DContext->CreateEffect(am_CLSID_D2D1Blend, m_D2DExclusionBlendEffectInner.GetAddressOf());
     if (FAILED(hr)) {
-        //
+        PRINT_HR_ERROR_MESSAGE(CreateEffect, hr)
+        return false;
     }
-    hr = g_D2DExclusionBlendEffectInner->SetValue(D2D1_BLEND_PROP_MODE, D2D1_BLEND_MODE_EXCLUSION);
+    hr = m_D2DExclusionBlendEffectInner->SetValue(D2D1_BLEND_PROP_MODE, D2D1_BLEND_MODE_EXCLUSION);
     if (FAILED(hr)) {
-        //
+        PRINT_HR_ERROR_MESSAGE(SetValue, hr)
+        return false;
     }
-    g_D2DExclusionBlendEffectInner->SetInputEffect(0, g_D2DSaturationEffect.Get());
-    g_D2DExclusionBlendEffectInner->SetInputEffect(1, g_D2DExclusionColorEffect.Get());
+    m_D2DExclusionBlendEffectInner->SetInputEffect(0, m_D2DSaturationEffect.Get());
+    m_D2DExclusionBlendEffectInner->SetInputEffect(1, m_D2DExclusionColorEffect.Get());
 
     // Apply tint
-    hr = g_D2DContext->CreateEffect(am_CLSID_D2D1Composite, g_D2DExclusionCompositeEffect.GetAddressOf());
+    hr = m_D2DContext->CreateEffect(am_CLSID_D2D1Composite, m_D2DExclusionCompositeEffect.GetAddressOf());
     if (FAILED(hr)) {
-        //
+        PRINT_HR_ERROR_MESSAGE(CreateEffect, hr)
+        return false;
     }
-    hr = g_D2DExclusionCompositeEffect->SetValue(D2D1_COMPOSITE_PROP_MODE, D2D1_COMPOSITE_MODE_SOURCE_OVER);
+    hr = m_D2DExclusionCompositeEffect->SetValue(D2D1_COMPOSITE_PROP_MODE, D2D1_COMPOSITE_MODE_SOURCE_OVER);
     if (FAILED(hr)) {
-        //
+        PRINT_HR_ERROR_MESSAGE(SetValue, hr)
+        return false;
     }
-    g_D2DExclusionCompositeEffect->SetInputEffect(0, g_D2DExclusionBlendEffectInner.Get());
-    g_D2DExclusionCompositeEffect->SetInputEffect(1, g_D2DTintColorEffect.Get());
+    m_D2DExclusionCompositeEffect->SetInputEffect(0, m_D2DExclusionBlendEffectInner.Get());
+    m_D2DExclusionCompositeEffect->SetInputEffect(1, m_D2DTintColorEffect.Get());
 
-    *output = g_D2DExclusionCompositeEffect.Get();
+    *output = m_D2DExclusionCompositeEffect.Get();
 
     return true;
 }
 
-bool AcrylicBrush_Direct2D::CreateEffects(ID2D1Effect **output) const
+bool AcrylicBrushDirect2DPrivate::CreateEffects(ID2D1Effect **output)
 {
-    HRESULT hr = g_D2DContext->CreateEffect(am_CLSID_D2D1BitmapSource, g_D2DWallpaperBitmapSourceEffect.GetAddressOf());
+    HRESULT hr = m_D2DContext->CreateEffect(am_CLSID_D2D1BitmapSource, m_D2DWallpaperBitmapSourceEffect.GetAddressOf());
     if (FAILED(hr)) {
         PRINT_HR_ERROR_MESSAGE(CreateEffect, hr)
         return false;
     }
-    hr = g_D2DWallpaperBitmapSourceEffect->SetValue(D2D1_BITMAPSOURCE_PROP_WIC_BITMAP_SOURCE, g_WICConverter.Get());
+    hr = m_D2DWallpaperBitmapSourceEffect->SetValue(D2D1_BITMAPSOURCE_PROP_WIC_BITMAP_SOURCE, m_WICConverter.Get());
     if (FAILED(hr)) {
         PRINT_HR_ERROR_MESSAGE(SetValue, hr)
         return false;
     }
-    hr = g_D2DContext->CreateEffect(am_CLSID_D2D1Flood, g_D2DTintColorEffect.GetAddressOf());
-    if (FAILED(hr)) {
-        //
-    }
-    hr = g_D2DTintColorEffect->SetValue(D2D1_FLOOD_PROP_COLOR, WINRTCOLOR_TO_D2DCOLOR4F(GetTintColor()));
-    if (FAILED(hr)) {
-        //
-    }
-    hr = g_D2DContext->CreateEffect(am_CLSID_D2D1GaussianBlur, g_D2DGaussianBlurEffect.GetAddressOf());
+    hr = m_D2DContext->CreateEffect(am_CLSID_D2D1Flood, m_D2DTintColorEffect.GetAddressOf());
     if (FAILED(hr)) {
         PRINT_HR_ERROR_MESSAGE(CreateEffect, hr)
         return false;
     }
-    hr = g_D2DGaussianBlurEffect->SetValue(D2D1_GAUSSIANBLUR_PROP_BORDER_MODE, D2D1_BORDER_MODE_HARD);
-    if (FAILED(hr)) {
-        //
-    }
-    hr = g_D2DGaussianBlurEffect->SetValue(D2D1_GAUSSIANBLUR_PROP_OPTIMIZATION, D2D1_DIRECTIONALBLUR_OPTIMIZATION_QUALITY);
-    if (FAILED(hr)) {
-        //
-    }
-    hr = g_D2DGaussianBlurEffect->SetValue(D2D1_GAUSSIANBLUR_PROP_STANDARD_DEVIATION, GetBlurRadius());
+    hr = m_D2DTintColorEffect->SetValue(D2D1_FLOOD_PROP_COLOR, WINRTCOLOR_TO_D2DCOLOR4F(q_ptr->GetTintColor()));
     if (FAILED(hr)) {
         PRINT_HR_ERROR_MESSAGE(SetValue, hr)
         return false;
     }
-    g_D2DGaussianBlurEffect->SetInputEffect(0, g_D2DWallpaperBitmapSourceEffect.Get());
+    hr = m_D2DContext->CreateEffect(am_CLSID_D2D1GaussianBlur, m_D2DGaussianBlurEffect.GetAddressOf());
+    if (FAILED(hr)) {
+        PRINT_HR_ERROR_MESSAGE(CreateEffect, hr)
+        return false;
+    }
+    hr = m_D2DGaussianBlurEffect->SetValue(D2D1_GAUSSIANBLUR_PROP_BORDER_MODE, D2D1_BORDER_MODE_HARD);
+    if (FAILED(hr)) {
+        PRINT_HR_ERROR_MESSAGE(SetValue, hr)
+        return false;
+    }
+    hr = m_D2DGaussianBlurEffect->SetValue(D2D1_GAUSSIANBLUR_PROP_OPTIMIZATION, D2D1_DIRECTIONALBLUR_OPTIMIZATION_QUALITY);
+    if (FAILED(hr)) {
+        PRINT_HR_ERROR_MESSAGE(SetValue, hr)
+        return false;
+    }
+    hr = m_D2DGaussianBlurEffect->SetValue(D2D1_GAUSSIANBLUR_PROP_STANDARD_DEVIATION, q_ptr->GetBlurRadius());
+    if (FAILED(hr)) {
+        PRINT_HR_ERROR_MESSAGE(SetValue, hr)
+        return false;
+    }
+    m_D2DGaussianBlurEffect->SetInputEffect(0, m_D2DWallpaperBitmapSourceEffect.Get());
 
     ID2D1Effect *tintOutput = nullptr;
     if (Utils::IsWindows1019H1OrGreater()) {
         if (!PrepareEffects_Luminosity(&tintOutput)) {
-            //
+            OutputDebugStringW(L"Failed to create the luminosity based D2D effects.");
+            return false;
         }
     } else {
         if (!PrepareEffects_Legacy(&tintOutput)) {
-            //
+            OutputDebugStringW(L"Failed to create the legacy D2D effects.");
+            return false;
         }
     }
 
     // Create noise with alpha and wrap:
     // Noise image BorderEffect (infinitely tiles noise image)
-    hr = g_D2DContext->CreateEffect(am_CLSID_D2D1Border, g_D2DNoiseBorderEffect.GetAddressOf());
+    hr = m_D2DContext->CreateEffect(am_CLSID_D2D1Border, m_D2DNoiseBorderEffect.GetAddressOf());
     if (FAILED(hr)) {
-        //
+        PRINT_HR_ERROR_MESSAGE(CreateEffect, hr)
+        return false;
     }
-    hr = g_D2DNoiseBorderEffect->SetValue(D2D1_BORDER_PROP_EDGE_MODE_X, D2D1_BORDER_EDGE_MODE_WRAP);
+    hr = m_D2DNoiseBorderEffect->SetValue(D2D1_BORDER_PROP_EDGE_MODE_X, D2D1_BORDER_EDGE_MODE_WRAP);
     if (FAILED(hr)) {
-        //
+        PRINT_HR_ERROR_MESSAGE(SetValue, hr)
+        return false;
     }
-    hr = g_D2DNoiseBorderEffect->SetValue(D2D1_BORDER_PROP_EDGE_MODE_Y, D2D1_BORDER_EDGE_MODE_WRAP);
+    hr = m_D2DNoiseBorderEffect->SetValue(D2D1_BORDER_PROP_EDGE_MODE_Y, D2D1_BORDER_EDGE_MODE_WRAP);
     if (FAILED(hr)) {
-        //
+        PRINT_HR_ERROR_MESSAGE(SetValue, hr)
+        return false;
     }
-    g_D2DNoiseBorderEffect->SetInputEffect(0, g_D2DNoiseBitmapSourceEffect.Get());
+    m_D2DNoiseBorderEffect->SetInputEffect(0, m_D2DNoiseBitmapSourceEffect.Get());
     // OpacityEffect applied to wrapped noise
-    hr = g_D2DContext->CreateEffect(am_CLSID_D2D1Opacity, g_D2DNoiseOpacityEffect.GetAddressOf());
+    hr = m_D2DContext->CreateEffect(am_CLSID_D2D1Opacity, m_D2DNoiseOpacityEffect.GetAddressOf());
     if (FAILED(hr)) {
-        //
+        PRINT_HR_ERROR_MESSAGE(CreateEffect, hr)
+        return false;
     }
-    hr = g_D2DNoiseOpacityEffect->SetValue(D2D1_OPACITY_PROP_OPACITY, GetNoiseOpacity());
+    hr = m_D2DNoiseOpacityEffect->SetValue(D2D1_OPACITY_PROP_OPACITY, q_ptr->GetNoiseOpacity());
     if (FAILED(hr)) {
-        //
+        PRINT_HR_ERROR_MESSAGE(SetValue, hr)
+        return false;
     }
-    g_D2DNoiseOpacityEffect->SetInputEffect(0, g_D2DNoiseBorderEffect.Get());
+    m_D2DNoiseOpacityEffect->SetInputEffect(0, m_D2DNoiseBorderEffect.Get());
 
     // Blend noise on top of tint
-    hr = g_D2DContext->CreateEffect(am_CLSID_D2D1Composite, g_D2DNoiseBlendEffectOuter.GetAddressOf());
+    hr = m_D2DContext->CreateEffect(am_CLSID_D2D1Composite, m_D2DNoiseBlendEffectOuter.GetAddressOf());
     if (FAILED(hr)) {
-        //
+        PRINT_HR_ERROR_MESSAGE(CreateEffect, hr)
+        return false;
     }
-    hr = g_D2DNoiseBlendEffectOuter->SetValue(D2D1_COMPOSITE_PROP_MODE, D2D1_COMPOSITE_MODE_SOURCE_OVER);
+    hr = m_D2DNoiseBlendEffectOuter->SetValue(D2D1_COMPOSITE_PROP_MODE, D2D1_COMPOSITE_MODE_SOURCE_OVER);
     if (FAILED(hr)) {
-        //
+        PRINT_HR_ERROR_MESSAGE(SetValue, hr)
+        return false;
     }
-    g_D2DNoiseBlendEffectOuter->SetInputEffect(0, tintOutput);
-    g_D2DNoiseBlendEffectOuter->SetInputEffect(1, g_D2DNoiseOpacityEffect.Get());
+    m_D2DNoiseBlendEffectOuter->SetInputEffect(0, tintOutput);
+    m_D2DNoiseBlendEffectOuter->SetInputEffect(1, m_D2DNoiseOpacityEffect.Get());
 
     // Fallback color
-    hr = g_D2DContext->CreateEffect(am_CLSID_D2D1Flood, g_D2DFallbackColorEffect.GetAddressOf());
+    hr = m_D2DContext->CreateEffect(am_CLSID_D2D1Flood, m_D2DFallbackColorEffect.GetAddressOf());
     if (FAILED(hr)) {
-        //
+        PRINT_HR_ERROR_MESSAGE(CreateEffect, hr)
+        return false;
     }
-    hr = g_D2DFallbackColorEffect->SetValue(D2D1_FLOOD_PROP_COLOR, WINRTCOLOR_TO_D2DCOLOR4F(GetFallbackColor()));
+    hr = m_D2DFallbackColorEffect->SetValue(D2D1_FLOOD_PROP_COLOR, WINRTCOLOR_TO_D2DCOLOR4F(q_ptr->GetFallbackColor()));
     if (FAILED(hr)) {
-        //
+        PRINT_HR_ERROR_MESSAGE(SetValue, hr)
+        return false;
     }
     // CrossFade with the fallback color. Weight = 0 means full fallback, 1 means full acrylic.
-    hr = g_D2DContext->CreateEffect(am_CLSID_D2D1CrossFade, g_D2DFadeInOutEffect.GetAddressOf());
+    hr = m_D2DContext->CreateEffect(am_CLSID_D2D1CrossFade, m_D2DFadeInOutEffect.GetAddressOf());
     if (FAILED(hr)) {
-        //
+        PRINT_HR_ERROR_MESSAGE(CreateEffect, hr)
+        return false;
     }
-    hr = g_D2DFadeInOutEffect->SetValue(D2D1_CROSSFADE_PROP_WEIGHT, 1.0f);
+    hr = m_D2DFadeInOutEffect->SetValue(D2D1_CROSSFADE_PROP_WEIGHT, 1.0f);
     if (FAILED(hr)) {
-        //
+        PRINT_HR_ERROR_MESSAGE(SetValue, hr)
+        return false;
     }
     // fixme: check which one is destination (index 0), which one is source (index 1)
-    g_D2DFadeInOutEffect->SetInputEffect(0, g_D2DNoiseBlendEffectOuter.Get());
-    g_D2DFadeInOutEffect->SetInputEffect(1, g_D2DFallbackColorEffect.Get());
+    m_D2DFadeInOutEffect->SetInputEffect(0, m_D2DNoiseBlendEffectOuter.Get());
+    m_D2DFadeInOutEffect->SetInputEffect(1, m_D2DFallbackColorEffect.Get());
 
-    *output = g_D2DFadeInOutEffect.Get();
+    *output = m_D2DFadeInOutEffect.Get();
 
     return true;
 }
 
-bool AcrylicBrush_Direct2D::DrawFinalVisual() const
+bool AcrylicBrushDirect2DPrivate::DrawFinalVisual()
 {
-    const SIZE windowSize = GET_WINDOW_CLIENT_SIZE(g_mainWindowHandle);
-    const int borderThickness = Utils::GetWindowVisibleFrameBorderThickness(g_mainWindowHandle);
-    g_D2DContext->BeginDraw();
-    g_D2DContext->Clear(D2D1::ColorF(0.0, 0.0, 0.0, 0.0));
-    g_D2DContext->DrawImage(g_D2DGaussianBlurEffect.Get(),
-                                 D2D1::Point2F(0.0, static_cast<float>(borderThickness)),
-                                 D2D1::RectF(0.0, 0.0,
-                                             static_cast<float>(windowSize.cx), static_cast<float>(windowSize.cy)));
-    HRESULT hr = g_D2DContext->EndDraw();
+    const SIZE windowSize = GET_WINDOW_CLIENT_SIZE(m_mainWindowHandle);
+    const int borderThickness = Utils::GetWindowVisibleFrameBorderThickness(m_mainWindowHandle);
+    m_D2DContext->BeginDraw();
+    m_D2DContext->Clear(D2D1::ColorF(0.0, 0.0, 0.0, 0.0));
+    m_D2DContext->DrawImage(m_D2DGaussianBlurEffect.Get(),
+                            D2D1::Point2F(0.0, static_cast<float>(borderThickness)),
+                            D2D1::RectF(0.0, 0.0,
+                                        static_cast<float>(windowSize.cx), static_cast<float>(windowSize.cy)));
+    HRESULT hr = m_D2DContext->EndDraw();
     if (FAILED(hr)) {
         PRINT_HR_ERROR_MESSAGE(EndDraw, hr)
         return false;
     }
-    hr = g_DXGISwapChain->Present(1, 0);
+    hr = m_DXGISwapChain->Present(1, 0);
     if (FAILED(hr)) {
         PRINT_HR_ERROR_MESSAGE(Present, hr)
         return false;
@@ -627,18 +656,17 @@ bool AcrylicBrush_Direct2D::DrawFinalVisual() const
     return true;
 }
 
-void AcrylicBrush_Direct2D::ReloadDesktopParameters() const
+void AcrylicBrushDirect2DPrivate::ReloadDesktopParameters()
 {
     constexpr int screen = 0; // fixme: use the correct screen id.
-    g_wallpaperFilePath = Utils::GetWallpaperFilePath(screen);
-    g_wallpaperAspectStyle = Utils::GetWallpaperAspectStyle(screen);
-    g_desktopBackgroundColor = Utils::GetDesktopBackgroundColor(screen);
+    m_wallpaperFilePath = Utils::GetWallpaperFilePath(screen);
+    m_wallpaperAspectStyle = Utils::GetWallpaperAspectStyle(screen);
+    m_desktopBackgroundColor = Utils::GetDesktopBackgroundColor(screen);
 }
 
-bool AcrylicBrush_Direct2D::InitializeDirect2D() const
+bool AcrylicBrushDirect2DPrivate::Initialize()
 {
-    HRESULT hr = D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED,
-                                   IID_PPV_ARGS(g_D2DFactory.GetAddressOf()));
+    HRESULT hr = D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED, IID_PPV_ARGS(m_D2DFactory.GetAddressOf()));
     if (FAILED(hr)) {
         PRINT_HR_ERROR_MESSAGE(D2D1CreateFactory, hr)
         return false;
@@ -660,89 +688,151 @@ bool AcrylicBrush_Direct2D::InitializeDirect2D() const
     };
     hr = D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr, D3D11_CREATE_DEVICE_BGRA_SUPPORT,
                            featureLevels, ARRAYSIZE(featureLevels), D3D11_SDK_VERSION,
-                           g_D3D11Device.GetAddressOf(), &g_D3DFeatureLevel,
-                           g_D3D11Context.GetAddressOf());
+                           m_D3D11Device.GetAddressOf(), &m_D3DFeatureLevel,
+                           m_D3D11Context.GetAddressOf());
     if (FAILED(hr)) {
         PRINT_HR_ERROR_MESSAGE(D3D11CreateDevice, hr)
         return false;
     }
-    hr = g_D3D11Device.As(&g_DXGIDevice);
+    hr = m_D3D11Device.As(&m_DXGIDevice);
     if (FAILED(hr)) {
         PRINT_HR_ERROR_MESSAGE(As, hr)
         return false;
     }
-    hr = g_D2DFactory->CreateDevice(g_DXGIDevice.Get(), g_D2DDevice.GetAddressOf());
+    hr = m_D2DFactory->CreateDevice(m_DXGIDevice.Get(), m_D2DDevice.GetAddressOf());
     if (FAILED(hr)) {
         PRINT_HR_ERROR_MESSAGE(CreateDevice, hr)
         return false;
     }
-    hr = g_D2DDevice->CreateDeviceContext(D2D1_DEVICE_CONTEXT_OPTIONS_NONE,
-                                               g_D2DContext.GetAddressOf());
+    hr = m_D2DDevice->CreateDeviceContext(D2D1_DEVICE_CONTEXT_OPTIONS_NONE, m_D2DContext.GetAddressOf());
     if (FAILED(hr)) {
         PRINT_HR_ERROR_MESSAGE(CreateDeviceContext, hr)
         return false;
     }
-    // Selecing a target
-    SecureZeroMemory(&g_DXGISwapChainDesc, sizeof(g_DXGISwapChainDesc));
-    g_DXGISwapChainDesc.Width = 0; // Use automatic sizing
-    g_DXGISwapChainDesc.Height = 0; // Use automatic sizing
-    g_DXGISwapChainDesc.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
-    g_DXGISwapChainDesc.Stereo = FALSE;
-    g_DXGISwapChainDesc.SampleDesc.Count = 1;
-    g_DXGISwapChainDesc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
-    g_DXGISwapChainDesc.BufferCount = 2;
-    g_DXGISwapChainDesc.Scaling = DXGI_SCALING_NONE;
-    g_DXGISwapChainDesc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL;
-
-    hr = g_DXGIDevice->GetAdapter(g_DXGIAdapter.GetAddressOf());
+    SecureZeroMemory(&m_DXGISwapChainDesc, sizeof(m_DXGISwapChainDesc));
+    m_DXGISwapChainDesc.Width = 0; // Use automatic sizing.
+    m_DXGISwapChainDesc.Height = 0; // Use automatic sizing.
+    m_DXGISwapChainDesc.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
+    m_DXGISwapChainDesc.Stereo = FALSE;
+    m_DXGISwapChainDesc.SampleDesc.Count = 1;
+    m_DXGISwapChainDesc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
+    m_DXGISwapChainDesc.BufferCount = 2;
+    m_DXGISwapChainDesc.Scaling = DXGI_SCALING_NONE;
+    m_DXGISwapChainDesc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL;
+    hr = m_DXGIDevice->GetAdapter(m_DXGIAdapter.GetAddressOf());
     if (FAILED(hr)) {
         PRINT_HR_ERROR_MESSAGE(GetAdapter, hr)
         return false;
     }
-    hr = g_DXGIAdapter->GetParent(IID_PPV_ARGS(g_DXGIFactory.GetAddressOf()));
+    hr = m_DXGIAdapter->GetParent(IID_PPV_ARGS(m_DXGIFactory.GetAddressOf()));
     if (FAILED(hr)) {
         PRINT_HR_ERROR_MESSAGE(GetParent, hr)
         return false;
     }
-    hr = g_DXGIFactory->CreateSwapChainForHwnd(g_D3D11Device.Get(), g_mainWindowHandle,
-                                               &g_DXGISwapChainDesc, nullptr, nullptr,
-                                               g_DXGISwapChain.GetAddressOf());
+    hr = m_DXGIFactory->CreateSwapChainForHwnd(m_D3D11Device.Get(), m_mainWindowHandle,
+                                               &m_DXGISwapChainDesc, nullptr, nullptr,
+                                               m_DXGISwapChain.GetAddressOf());
     if (FAILED(hr)) {
         PRINT_HR_ERROR_MESSAGE(CreateSwapChainForHwnd, hr)
         return false;
     }
-
-    hr = g_DXGIDevice->SetMaximumFrameLatency(1);
+    hr = m_DXGIDevice->SetMaximumFrameLatency(1);
     if (FAILED(hr)) {
         PRINT_HR_ERROR_MESSAGE(SetMaximumFrameLatency, hr)
         return false;
     }
-
-    hr = g_DXGISwapChain->GetBuffer(0, IID_PPV_ARGS(g_D3D11Texture.GetAddressOf()));
+    hr = m_DXGISwapChain->GetBuffer(0, IID_PPV_ARGS(m_D3D11Texture.GetAddressOf()));
     if (FAILED(hr)) {
         PRINT_HR_ERROR_MESSAGE(GetBuffer, hr)
         return false;
     }
-
-    SecureZeroMemory(&g_D2DBitmapProperties, sizeof(g_D2DBitmapProperties));
-    g_D2DBitmapProperties = D2D1::BitmapProperties1(
+    SecureZeroMemory(&m_D2DBitmapProperties, sizeof(m_D2DBitmapProperties));
+    m_D2DBitmapProperties = D2D1::BitmapProperties1(
                 D2D1_BITMAP_OPTIONS_TARGET | D2D1_BITMAP_OPTIONS_CANNOT_DRAW,
                 D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED),
-                static_cast<float>(g_currentDpi), static_cast<float>(g_currentDpi));
-
-    hr = g_DXGISwapChain->GetBuffer(0, IID_PPV_ARGS(g_DXGISurface.GetAddressOf()));
+                static_cast<float>(m_currentDpi), static_cast<float>(m_currentDpi));
+    hr = m_DXGISwapChain->GetBuffer(0, IID_PPV_ARGS(m_DXGISurface.GetAddressOf()));
     if (FAILED(hr)) {
         PRINT_HR_ERROR_MESSAGE(GetBuffer, hr)
         return false;
     }
-    hr = g_D2DContext->CreateBitmapFromDxgiSurface(g_DXGISurface.Get(),
-                                                        &g_D2DBitmapProperties,
-                                                        g_D2DTargetBitmap.GetAddressOf());
+    hr = m_D2DContext->CreateBitmapFromDxgiSurface(m_DXGISurface.Get(), &m_D2DBitmapProperties,
+                                                   m_D2DTargetBitmap.GetAddressOf());
     if (FAILED(hr)) {
         PRINT_HR_ERROR_MESSAGE(CreateBitmapFromDxgiSurface, hr)
         return false;
     }
-    g_D2DContext->SetTarget(g_D2DTargetBitmap.Get());
-
+    m_D2DContext->SetTarget(m_D2DTargetBitmap.Get());
     return true;
+}
+
+int AcrylicBrushDirect2DPrivate::EventLoop() const
+{
+    MSG msg = {};
+    while (GetMessageW(&msg, nullptr, 0, 0) != FALSE) {
+        TranslateMessage(&msg);
+        DispatchMessageW(&msg);
+    }
+    return static_cast<int>(msg.wParam);
+}
+
+void AcrylicBrushDirect2DPrivate::ReloadBrushParameters()
+{
+
+}
+
+AcrylicBrushDirect2D::AcrylicBrushDirect2D()
+{
+    d_ptr = std::make_unique<AcrylicBrushDirect2DPrivate>(this);
+}
+
+AcrylicBrushDirect2D::~AcrylicBrushDirect2D()
+{
+}
+
+int AcrylicBrushDirect2D::AddRef() const
+{
+    ++g_refCount;
+}
+
+void AcrylicBrushDirect2D::Release()
+{
+    --g_refCount;
+    if (g_refCount <= 0) {
+        g_refCount = 0;
+        delete this;
+    }
+}
+
+bool AcrylicBrushDirect2D::IsSupportedByCurrentOS() const
+{
+    static const bool result = Utils::IsWindows8OrGreater();
+    return result;
+}
+
+bool AcrylicBrushDirect2D::Create() const
+{
+    return false;
+}
+
+bool AcrylicBrushDirect2D::Destroy() const
+{
+    d_ptr->Cleanup();
+    return true;
+}
+
+bool AcrylicBrushDirect2D::RefreshBrush() const
+{
+    d_ptr->ReloadBrushParameters();
+    return true;
+}
+
+HWND AcrylicBrushDirect2D::GetWindowHandle() const
+{
+    return d_ptr->GetMainWindowHandle();
+}
+
+int AcrylicBrushDirect2D::EventLoop() const
+{
+    return d_ptr->EventLoop();
 }

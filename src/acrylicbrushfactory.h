@@ -36,6 +36,6 @@ EXTERN_C const IID IID_ACRYLICBRUSH_NULL;
 namespace AcrylicBrushFactory
 {
 
-[[nodiscard]] HRESULT QueryInterface(REFIID riid, void **ppInterface);
+[[nodiscard]] HRESULT CreateInstance(REFIID riid, void **ppInstance);
 
 }

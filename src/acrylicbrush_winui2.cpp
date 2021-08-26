@@ -44,7 +44,7 @@
 static constexpr wchar_t g_mainWindowTitle[] = L"AcrylicManager WinUI2 Main Window";
 static constexpr wchar_t g_dragBarWindowTitle[] = L"";
 
-static bool g_WinRTInitialized = false;
+static bool g_winRTInitialized = false;
 static winrt::Windows::UI::Xaml::Hosting::WindowsXamlManager g_manager = nullptr;
 
 static int g_refCount = 0;
@@ -67,6 +67,10 @@ public:
     [[nodiscard]] int EventLoop() const;
     void ReloadBrushParameters();
     void Cleanup();
+
+private:
+    [[nodiscard]] LRESULT MainWindowMessageHandler(UINT message, WPARAM wParam, LPARAM lParam);
+    [[nodiscard]] LRESULT DragBarWindowMessageHandler(UINT message, WPARAM wParam, LPARAM lParam);
 
 private:
     AcrylicBrushWinUI2 *q_ptr = nullptr;
@@ -95,195 +99,36 @@ AcrylicBrushWinUI2Private::~AcrylicBrushWinUI2Private()
 
 LRESULT CALLBACK AcrylicBrushWinUI2Private::MainWindowProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
-    MSG msg;
-    SecureZeroMemory(&msg, sizeof(msg));
-    msg.hwnd = hWnd;
-    msg.message = message;
-    msg.wParam = wParam;
-    msg.lParam = lParam;
-    const DWORD pos = GetMessagePos();
-    msg.pt = {GET_X_LPARAM(pos), GET_Y_LPARAM(pos)};
-    msg.time = GetMessageTime();
-    LRESULT result = 0;
-    if (CustomFrame::HandleWindowProc(&msg, &result)) {
-        return result;
+    if (message == WM_NCCREATE) {
+        const auto cs = reinterpret_cast<LPCREATESTRUCTW>(lParam);
+        const auto that = static_cast<AcrylicBrushWinUI2Private *>(cs->lpCreateParams);
+        if (SetWindowLongPtrW(hWnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(that)) == 0) {
+            PRINT_WIN32_ERROR_MESSAGE(SetWindowLongPtrW)
+        }
+    } else if (message == WM_NCDESTROY) {
+        if (SetWindowLongPtrW(hWnd, GWLP_USERDATA, 0) == 0) {
+            PRINT_WIN32_ERROR_MESSAGE(SetWindowLongPtrW)
+        }
+    } else if (const auto that = reinterpret_cast<AcrylicBrushWinUI2Private *>(GetWindowLongPtrW(hWnd, GWLP_USERDATA))) {
+        return that->MainWindowMessageHandler(message, wParam, lParam);
     }
-
-    const auto data = reinterpret_cast<AcrylicBrushWinUI2Private *>(GetWindowLongPtrW(hWnd, GWLP_USERDATA));
-
-    bool themeChanged = false;
-
-    switch (message) {
-    case WM_DPICHANGED: {
-        const auto x = static_cast<double>(LOWORD(wParam));
-        const auto y = static_cast<double>(HIWORD(wParam));
-        data->m_currentDpi = std::round((x + y) / 2.0);
-        data->m_currentDpr = Utils::GetDevicePixelRatioForWindow(hWnd);
-        const auto prcNewWindow = reinterpret_cast<LPRECT>(lParam);
-        if (MoveWindow(hWnd, prcNewWindow->left, prcNewWindow->top,
-                       GET_RECT_WIDTH(*prcNewWindow), GET_RECT_HEIGHT(*prcNewWindow), TRUE) == FALSE) {
-            PRINT_WIN32_ERROR_MESSAGE(MoveWindow)
-            break;
-        }
-        return 0;
-    } break;
-    case WM_SIZE: {
-        if ((wParam == SIZE_MAXIMIZED) || (wParam == SIZE_RESTORED) || IsFullScreened(hWnd)) {
-            if (!Utils::UpdateFrameMargins(hWnd)) {
-                OutputDebugStringW(L"WM_SIZE: Failed to update frame margins.");
-                break;
-            }
-        }
-        const auto width = LOWORD(lParam);
-        const UINT flags = SWP_NOACTIVATE | SWP_SHOWWINDOW | SWP_NOOWNERZORDER;
-        if (data->m_XAMLIslandWindowHandle) {
-            // Give enough space to our thin homemade top border.
-            const int borderThickness = Utils::GetWindowVisibleFrameBorderThickness(hWnd);
-            const int height = (HIWORD(lParam) - borderThickness);
-            if (SetWindowPos(data->m_XAMLIslandWindowHandle, HWND_BOTTOM, 0, borderThickness,
-                             width, height, flags) == FALSE) {
-                PRINT_WIN32_ERROR_MESSAGE(SetWindowPos)
-                break;
-            }
-        }
-        if (data->m_dragBarWindowHandle) {
-            const int titleBarHeight = Utils::GetTitleBarHeight(hWnd);
-            if (SetWindowPos(data->m_dragBarWindowHandle, HWND_TOP, 0, 0, width, titleBarHeight, flags) == FALSE) {
-                PRINT_WIN32_ERROR_MESSAGE(SetWindowPos)
-                break;
-            }
-        }
-    } break;
-    case WM_SETFOCUS: {
-        if (data->m_XAMLIslandWindowHandle) {
-            // Send focus to the XAML Island child window.
-            if (SetFocus(data->m_XAMLIslandWindowHandle) == nullptr) {
-                PRINT_WIN32_ERROR_MESSAGE(SetFocus)
-                break;
-            }
-            return 0;
-        }
-    } break;
-    case WM_SETCURSOR: {
-        if (LOWORD(lParam) == HTCLIENT) {
-            // Get the cursor position from the _last message_ and not from
-            // `GetCursorPos` (which returns the cursor position _at the
-            // moment_) because if we're lagging behind the cursor's position,
-            // we still want to get the cursor position that was associated
-            // with that message at the time it was sent to handle the message
-            // correctly.
-            const LRESULT hitTestResult = SendMessageW(hWnd, WM_NCHITTEST, 0, GetMessagePos());
-            if (hitTestResult == HTTOP) {
-                // We have to set the vertical resize cursor manually on
-                // the top resize handle because Windows thinks that the
-                // cursor is on the client area because it asked the asked
-                // the drag window with `WM_NCHITTEST` and it returned
-                // `HTCLIENT`.
-                // We don't want to modify the drag window's `WM_NCHITTEST`
-                // handling to return `HTTOP` because otherwise, the system
-                // would resize the drag window instead of the top level
-                // window!
-                SetCursor(LoadCursorW(nullptr, IDC_SIZENS));
-            } else {
-                // Reset cursor
-                SetCursor(LoadCursorW(nullptr, IDC_ARROW));
-            }
-            return TRUE;
-        }
-    } break;
-    case WM_SETTINGCHANGE: {
-        if ((wParam == 0) && (_wcsicmp(reinterpret_cast<LPCWSTR>(lParam), L"ImmersiveColorSet") == 0)) {
-            themeChanged = true;
-        }
-    } break;
-    case WM_THEMECHANGED:
-    case WM_DWMCOLORIZATIONCOLORCHANGED:
-        themeChanged = true;
-        break;
-    case WM_DWMCOMPOSITIONCHANGED: {
-        if (!Utils::IsCompositionEnabled()) {
-            OutputDebugStringW(L"AcrylicManager won't be functional when DWM composition is disabled.");
-            std::exit(-1);
-        }
-    } break;
-    case WM_CLOSE: {
-        data->Cleanup();
-        return 0;
-    }
-    case WM_DESTROY: {
-        PostQuitMessage(0);
-        return 0;
-    }
-    default:
-        break;
-    }
-
-    if (themeChanged && data->m_backgroundBrush && !Utils::IsHighContrastModeEnabled()) {
-        data->ReloadBrushParameters();
-    }
-
     return DefWindowProcW(hWnd, message, wParam, lParam);
 }
 
 LRESULT CALLBACK AcrylicBrushWinUI2Private::DragBarWindowProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
-    const auto data = reinterpret_cast<AcrylicBrushWinUI2Private *>(GetWindowLongPtrW(hWnd, GWLP_USERDATA));
-
-    std::optional<UINT> nonClientMessage = std::nullopt;
-    switch (message)
-    {
-    // Translate WM_* messages on the window to WM_NC* on the top level window.
-    case WM_LBUTTONDOWN:
-        nonClientMessage = WM_NCLBUTTONDOWN;
-        break;
-    case WM_LBUTTONUP:
-        nonClientMessage = WM_NCLBUTTONUP;
-        break;
-    case WM_LBUTTONDBLCLK:
-        nonClientMessage = WM_NCLBUTTONDBLCLK;
-        break;
-    case WM_MBUTTONDOWN:
-        nonClientMessage = WM_NCMBUTTONDOWN;
-        break;
-    case WM_MBUTTONUP:
-        nonClientMessage = WM_NCMBUTTONUP;
-        break;
-    case WM_MBUTTONDBLCLK:
-        nonClientMessage = WM_NCMBUTTONDBLCLK;
-        break;
-    case WM_RBUTTONDOWN:
-        nonClientMessage = WM_NCRBUTTONDOWN;
-        break;
-    case WM_RBUTTONUP:
-        nonClientMessage = WM_NCRBUTTONUP;
-        break;
-    case WM_RBUTTONDBLCLK:
-        nonClientMessage = WM_NCRBUTTONDBLCLK;
-        break;
-    case WM_XBUTTONDOWN:
-        nonClientMessage = WM_NCXBUTTONDOWN;
-        break;
-    case WM_XBUTTONUP:
-        nonClientMessage = WM_NCXBUTTONUP;
-        break;
-    case WM_XBUTTONDBLCLK:
-        nonClientMessage = WM_NCXBUTTONDBLCLK;
-        break;
-    default:
-        break;
-    }
-    if (nonClientMessage.has_value() && data->m_mainWindowHandle) {
-        POINT pos = {GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)};
-        if (ClientToScreen(hWnd, &pos) == FALSE) {
-            PRINT_WIN32_ERROR_MESSAGE(ClientToScreen)
-            return 0;
+    if (message == WM_NCCREATE) {
+        const auto cs = reinterpret_cast<LPCREATESTRUCTW>(lParam);
+        const auto that = static_cast<AcrylicBrushWinUI2Private *>(cs->lpCreateParams);
+        if (SetWindowLongPtrW(hWnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(that)) == 0) {
+            PRINT_WIN32_ERROR_MESSAGE(SetWindowLongPtrW)
         }
-        const LPARAM newLParam = MAKELPARAM(pos.x, pos.y);
-        // Hit test the parent window at the screen coordinates the user clicked in the drag input sink window,
-        // then pass that click through as an NC click in that location.
-        const LRESULT hitTestResult = SendMessageW(data->m_mainWindowHandle, WM_NCHITTEST, 0, newLParam);
-        SendMessageW(data->m_mainWindowHandle, nonClientMessage.value(), hitTestResult, newLParam);
-        return 0;
+    } else if (message == WM_NCDESTROY) {
+        if (SetWindowLongPtrW(hWnd, GWLP_USERDATA, 0) == 0) {
+            PRINT_WIN32_ERROR_MESSAGE(SetWindowLongPtrW)
+        }
+    } else if (const auto that = reinterpret_cast<AcrylicBrushWinUI2Private *>(GetWindowLongPtrW(hWnd, GWLP_USERDATA))) {
+        return that->DragBarWindowMessageHandler(message, wParam, lParam);
     }
     return DefWindowProcW(hWnd, message, wParam, lParam);
 }
@@ -377,7 +222,10 @@ bool AcrylicBrushWinUI2Private::CreateMainWindow()
                                          g_mainWindowTitle,
                                          WS_OVERLAPPEDWINDOW,
                                          CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
-                                         nullptr, nullptr, GET_CURRENT_INSTANCE, nullptr);
+                                         nullptr,
+                                         nullptr,
+                                         GET_CURRENT_INSTANCE,
+                                         this);
 
     if (!m_mainWindowHandle) {
         PRINT_WIN32_ERROR_MESSAGE(CreateWindowExW)
@@ -440,7 +288,10 @@ bool AcrylicBrushWinUI2Private::CreateDragBarWindow()
                                             g_dragBarWindowTitle,
                                             WS_CHILD,
                                             CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
-                                            m_mainWindowHandle, nullptr, GET_CURRENT_INSTANCE, nullptr);
+                                            m_mainWindowHandle,
+                                            nullptr,
+                                            GET_CURRENT_INSTANCE,
+                                            this);
 
     if (!m_dragBarWindowHandle) {
         PRINT_WIN32_ERROR_MESSAGE(CreateWindowExW)
@@ -478,7 +329,7 @@ bool AcrylicBrushWinUI2Private::CreateXAMLIsland()
         return false;
     }
 
-    if (!g_WinRTInitialized) {
+    if (!g_winRTInitialized) {
         winrt::init_apartment(winrt::apartment_type::single_threaded);
     }
     if (!g_manager) {
@@ -518,6 +369,197 @@ bool AcrylicBrushWinUI2Private::CreateXAMLIsland()
     m_source.Content(m_rootGrid);
 
     return true;
+}
+
+LRESULT AcrylicBrushWinUI2Private::MainWindowMessageHandler(UINT message, WPARAM wParam, LPARAM lParam)
+{
+    MSG msg;
+    SecureZeroMemory(&msg, sizeof(msg));
+    msg.hwnd = m_mainWindowHandle;
+    msg.message = message;
+    msg.wParam = wParam;
+    msg.lParam = lParam;
+    const DWORD pos = GetMessagePos();
+    msg.pt = {GET_X_LPARAM(pos), GET_Y_LPARAM(pos)};
+    msg.time = GetMessageTime();
+    LRESULT result = 0;
+    if (CustomFrame::HandleWindowProc(&msg, &result)) {
+        return result;
+    }
+
+    bool themeChanged = false;
+
+    switch (message) {
+    case WM_DPICHANGED: {
+        const auto x = static_cast<double>(LOWORD(wParam));
+        const auto y = static_cast<double>(HIWORD(wParam));
+        m_currentDpi = std::round((x + y) / 2.0);
+        m_currentDpr = Utils::GetDevicePixelRatioForWindow(m_mainWindowHandle);
+        const auto prcNewWindow = reinterpret_cast<LPRECT>(lParam);
+        if (MoveWindow(m_mainWindowHandle, prcNewWindow->left, prcNewWindow->top,
+                       GET_RECT_WIDTH(*prcNewWindow), GET_RECT_HEIGHT(*prcNewWindow), TRUE) == FALSE) {
+            PRINT_WIN32_ERROR_MESSAGE(MoveWindow)
+            break;
+        }
+        return 0;
+    } break;
+    case WM_SIZE: {
+        if ((wParam == SIZE_MAXIMIZED) || (wParam == SIZE_RESTORED) || IsFullScreened(m_mainWindowHandle)) {
+            if (!Utils::UpdateFrameMargins(m_mainWindowHandle)) {
+                OutputDebugStringW(L"WM_SIZE: Failed to update frame margins.");
+                break;
+            }
+        }
+        const auto width = LOWORD(lParam);
+        const UINT flags = SWP_NOACTIVATE | SWP_SHOWWINDOW | SWP_NOOWNERZORDER;
+        if (m_XAMLIslandWindowHandle) {
+            // Give enough space to our thin homemade top border.
+            const int borderThickness = Utils::GetWindowVisibleFrameBorderThickness(m_mainWindowHandle);
+            const int height = (HIWORD(lParam) - borderThickness);
+            if (SetWindowPos(m_XAMLIslandWindowHandle, HWND_BOTTOM, 0, borderThickness,
+                             width, height, flags) == FALSE) {
+                PRINT_WIN32_ERROR_MESSAGE(SetWindowPos)
+                break;
+            }
+        }
+        if (m_dragBarWindowHandle) {
+            const int titleBarHeight = Utils::GetTitleBarHeight(m_mainWindowHandle);
+            if (SetWindowPos(m_dragBarWindowHandle, HWND_TOP, 0, 0, width, titleBarHeight, flags) == FALSE) {
+                PRINT_WIN32_ERROR_MESSAGE(SetWindowPos)
+                break;
+            }
+        }
+    } break;
+    case WM_SETFOCUS: {
+        if (m_XAMLIslandWindowHandle) {
+            // Send focus to the XAML Island child window.
+            if (SetFocus(m_XAMLIslandWindowHandle) == nullptr) {
+                PRINT_WIN32_ERROR_MESSAGE(SetFocus)
+                break;
+            }
+            return 0;
+        }
+    } break;
+    case WM_SETCURSOR: {
+        if (LOWORD(lParam) == HTCLIENT) {
+            // Get the cursor position from the _last message_ and not from
+            // `GetCursorPos` (which returns the cursor position _at the
+            // moment_) because if we're lagging behind the cursor's position,
+            // we still want to get the cursor position that was associated
+            // with that message at the time it was sent to handle the message
+            // correctly.
+            const LRESULT hitTestResult = SendMessageW(m_mainWindowHandle, WM_NCHITTEST, 0, GetMessagePos());
+            if (hitTestResult == HTTOP) {
+                // We have to set the vertical resize cursor manually on
+                // the top resize handle because Windows thinks that the
+                // cursor is on the client area because it asked the asked
+                // the drag window with `WM_NCHITTEST` and it returned
+                // `HTCLIENT`.
+                // We don't want to modify the drag window's `WM_NCHITTEST`
+                // handling to return `HTTOP` because otherwise, the system
+                // would resize the drag window instead of the top level
+                // window!
+                SetCursor(LoadCursorW(nullptr, IDC_SIZENS));
+            } else {
+                // Reset cursor
+                SetCursor(LoadCursorW(nullptr, IDC_ARROW));
+            }
+            return TRUE;
+        }
+    } break;
+    case WM_SETTINGCHANGE: {
+        if ((wParam == 0) && (_wcsicmp(reinterpret_cast<LPCWSTR>(lParam), L"ImmersiveColorSet") == 0)) {
+            themeChanged = true;
+        }
+    } break;
+    case WM_THEMECHANGED:
+    case WM_DWMCOLORIZATIONCOLORCHANGED:
+        themeChanged = true;
+        break;
+    case WM_DWMCOMPOSITIONCHANGED: {
+        if (!Utils::IsCompositionEnabled()) {
+            OutputDebugStringW(L"AcrylicManager won't be functional when DWM composition is disabled.");
+            std::exit(-1);
+        }
+    } break;
+    case WM_CLOSE: {
+        Cleanup();
+        return 0;
+    }
+    case WM_DESTROY: {
+        PostQuitMessage(0);
+        return 0;
+    }
+    default:
+        break;
+    }
+
+    if (themeChanged && m_backgroundBrush && !Utils::IsHighContrastModeEnabled()) {
+        ReloadBrushParameters();
+    }
+
+    return DefWindowProcW(m_mainWindowHandle, message, wParam, lParam);
+}
+
+LRESULT AcrylicBrushWinUI2Private::DragBarWindowMessageHandler(UINT message, WPARAM wParam, LPARAM lParam)
+{
+    std::optional<UINT> nonClientMessage = std::nullopt;
+    switch (message)
+    {
+    // Translate WM_* messages on the window to WM_NC* on the top level window.
+    case WM_LBUTTONDOWN:
+        nonClientMessage = WM_NCLBUTTONDOWN;
+        break;
+    case WM_LBUTTONUP:
+        nonClientMessage = WM_NCLBUTTONUP;
+        break;
+    case WM_LBUTTONDBLCLK:
+        nonClientMessage = WM_NCLBUTTONDBLCLK;
+        break;
+    case WM_MBUTTONDOWN:
+        nonClientMessage = WM_NCMBUTTONDOWN;
+        break;
+    case WM_MBUTTONUP:
+        nonClientMessage = WM_NCMBUTTONUP;
+        break;
+    case WM_MBUTTONDBLCLK:
+        nonClientMessage = WM_NCMBUTTONDBLCLK;
+        break;
+    case WM_RBUTTONDOWN:
+        nonClientMessage = WM_NCRBUTTONDOWN;
+        break;
+    case WM_RBUTTONUP:
+        nonClientMessage = WM_NCRBUTTONUP;
+        break;
+    case WM_RBUTTONDBLCLK:
+        nonClientMessage = WM_NCRBUTTONDBLCLK;
+        break;
+    case WM_XBUTTONDOWN:
+        nonClientMessage = WM_NCXBUTTONDOWN;
+        break;
+    case WM_XBUTTONUP:
+        nonClientMessage = WM_NCXBUTTONUP;
+        break;
+    case WM_XBUTTONDBLCLK:
+        nonClientMessage = WM_NCXBUTTONDBLCLK;
+        break;
+    default:
+        break;
+    }
+    if (nonClientMessage.has_value() && m_mainWindowHandle) {
+        POINT pos = {GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)};
+        if (ClientToScreen(m_dragBarWindowHandle, &pos) == FALSE) {
+            PRINT_WIN32_ERROR_MESSAGE(ClientToScreen)
+            return 0;
+        }
+        const LPARAM newLParam = MAKELPARAM(pos.x, pos.y);
+        // Hit test the parent window at the screen coordinates the user clicked in the drag input sink window,
+        // then pass that click through as an NC click in that location.
+        const LRESULT hitTestResult = SendMessageW(m_mainWindowHandle, WM_NCHITTEST, 0, newLParam);
+        SendMessageW(m_mainWindowHandle, nonClientMessage.value(), hitTestResult, newLParam);
+        return 0;
+    }
+    return DefWindowProcW(m_dragBarWindowHandle, message, wParam, lParam);
 }
 
 AcrylicBrushWinUI2::AcrylicBrushWinUI2()

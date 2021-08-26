@@ -26,20 +26,26 @@
 
 #include "acrylicbrush.h"
 
-class AcrylicBrush_Composition final : public AcrylicBrush
+class AcrylicBrushCompositionPrivate;
+
+class AcrylicBrushComposition final : public AcrylicBrush
 {
-    // dis copy move
+    ACRYLICMANAGER_DISABLE_COPY_MOVE(AcrylicBrushComposition)
+
 public:
-    explicit AcrylicBrush_Composition();
-    ~AcrylicBrush_Composition();
+    explicit AcrylicBrushComposition();
+    ~AcrylicBrushComposition();
+
+    [[nodiscard]] int AddRef() const override;
+    void Release() override;
 
     [[nodiscard]] bool IsSupportedByCurrentOS() const override;
     [[nodiscard]] bool Create() const override;
-    void ReloadBlurParameters() const override;
+    [[nodiscard]] bool Destroy() const override;
+    [[nodiscard]] bool RefreshBrush() const override;
     [[nodiscard]] HWND GetWindowHandle() const override;
-    [[nodiscard]] int EventLoopExec() const override;
-    void Release() override;
+    [[nodiscard]] int EventLoop() const override;
 
 private:
-    static int m_refCount;
+    std::unique_ptr<AcrylicBrushCompositionPrivate> d_ptr;
 };

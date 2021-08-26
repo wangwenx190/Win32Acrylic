@@ -37,7 +37,6 @@ public:
     ~AcrylicBrushSystem();
 
     int AddRef() const override;
-    int GetRefCount() const override;
     void Release() override;
 
     [[nodiscard]] bool IsSupportedByCurrentOS() const override;
@@ -46,12 +45,6 @@ public:
     [[nodiscard]] bool RefreshBrush() const override;
     [[nodiscard]] HWND GetWindowHandle() const override;
     [[nodiscard]] int EventLoop() const override;
-
-private:
-    [[nodiscard]] bool RegisterMainWindowClass() const;
-    [[nodiscard]] bool CreateMainWindow() const;
-    [[nodiscard]] bool InitializeInternalAPI() const;
-    [[nodiscard]] bool SetBlurBehindWindowEnabled(const bool enable, const winrt::Windows::UI::Color &color);
 
 private:
     std::unique_ptr<AcrylicBrushSystemPrivate> d_ptr;

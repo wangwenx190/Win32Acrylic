@@ -26,34 +26,26 @@
 
 #include "acrylicbrush.h"
 
-struct ID2D1Effect;
+class AcrylicBrushDirect2DPrivate;
 
-class AcrylicBrush_Direct2D final : public AcrylicBrush
+class AcrylicBrushDirect2D final : public AcrylicBrush
 {
-    // dis copy move
+    ACRYLICMANAGER_DISABLE_COPY_MOVE(AcrylicBrushDirect2D)
+
 public:
-    explicit AcrylicBrush_Direct2D();
-    ~AcrylicBrush_Direct2D();
+    explicit AcrylicBrushDirect2D();
+    ~AcrylicBrushDirect2D();
+
+    [[nodiscard]] int AddRef() const override;
+    void Release() override;
 
     [[nodiscard]] bool IsSupportedByCurrentOS() const override;
     [[nodiscard]] bool Create() const override;
-    void ReloadBlurParameters() const override;
+    [[nodiscard]] bool Destroy() const override;
+    [[nodiscard]] bool RefreshBrush() const override;
     [[nodiscard]] HWND GetWindowHandle() const override;
-    [[nodiscard]] int EventLoopExec() const override;
-    void Release() override;
+    [[nodiscard]] int EventLoop() const override;
 
 private:
-    [[nodiscard]] bool RegisterMainWindowClass() const;
-    [[nodiscard]] bool CreateMainWindow() const;
-    void ReloadDesktopParameters() const;
-    [[nodiscard]] bool InitializeDirect2D() const;
-    [[nodiscard]] bool EnsureWallpaperBrush() const;
-    [[nodiscard]] bool EnsureNoiseBrush() const;
-    [[nodiscard]] bool PrepareEffects_Luminosity(ID2D1Effect **output) const;
-    [[nodiscard]] bool PrepareEffects_Legacy(ID2D1Effect **output) const;
-    [[nodiscard]] bool CreateEffects(ID2D1Effect **output) const;
-    [[nodiscard]] bool DrawFinalVisual() const;
-
-private:
-    static int m_refCount;
+    std::unique_ptr<AcrylicBrushDirect2DPrivate> d_ptr;
 };

@@ -38,11 +38,9 @@
 
 using SetWindowCompositionAttributeSignature = BOOL(WINAPI *)(HWND, WINDOWCOMPOSITIONATTRIBDATA *);
 
-static const std::wstring g_mainWindowClassNameSuffix = L"@SystemMainWindow";
-static const std::wstring g_mainWindowTitle = L"AcrylicManager System Main Window";
+static constexpr wchar_t g_mainWindowTitle[] = L"AcrylicManager System Main Window";
 
 static std::wstring g_mainWindowClassName = nullptr;
-static ATOM g_mainWindowAtom = 0;
 static HWND g_mainWindowHandle = nullptr;
 static UINT g_currentDpi = 0;
 static double g_currentDpr = 0.0;

@@ -26,20 +26,26 @@
 
 #include "acrylicbrush.h"
 
-class AcrylicBrush_WinUI3 final : public AcrylicBrush
+class AcrylicBrushWinUI3Private;
+
+class AcrylicBrushWinUI3 final : public AcrylicBrush
 {
-    // dis copy move
+    ACRYLICMANAGER_DISABLE_COPY_MOVE(AcrylicBrushWinUI3)
+
 public:
-    explicit AcrylicBrush_WinUI3();
-    ~AcrylicBrush_WinUI3();
+    explicit AcrylicBrushWinUI3();
+    ~AcrylicBrushWinUI3();
+
+    [[nodiscard]] int AddRef() const override;
+    void Release() override;
 
     [[nodiscard]] bool IsSupportedByCurrentOS() const override;
     [[nodiscard]] bool Create() const override;
-    void ReloadBlurParameters() const override;
+    [[nodiscard]] bool Destroy() const override;
+    [[nodiscard]] bool RefreshBrush() const override;
     [[nodiscard]] HWND GetWindowHandle() const override;
-    [[nodiscard]] int EventLoopExec() const override;
-    void Release() override;
+    [[nodiscard]] int EventLoop() const override;
 
 private:
-    static int m_refCount;
+    std::unique_ptr<AcrylicBrushWinUI3Private> d_ptr;
 };

@@ -44,29 +44,30 @@ constexpr IID IID_ACRYLICBRUSH_NULL = {0xb1c629f0, 0x3262, 0x4d75, {0xac, 0x75, 
 EXTERN_C_END
 #endif
 
-HRESULT AcrylicBrushFactory::QueryInterface(REFIID riid, void **ppInterface)
+HRESULT AcrylicBrushFactory::CreateInstance(REFIID riid, void **ppInstance)
 {
-    if (!ppInterface) {
+    if (!ppInstance) {
         return E_INVALIDARG;
     }
     AcrylicBrush *brush = nullptr;
     if (riid == IID_ACRYLICBRUSH_SYSTEM) {
-        brush = new AcrylicBrush_System;
+        brush = new AcrylicBrushSystem;
     } else if (riid == IID_ACRYLICBRUSH_COMPOSITION) {
-        brush = new AcrylicBrush_Composition;
+        brush = new AcrylicBrushComposition;
     } else if (riid == IID_ACRYLICBRUSH_WINUI3) {
-        brush = new AcrylicBrush_WinUI3;
+        brush = new AcrylicBrushWinUI3;
     } else if (riid == IID_ACRYLICBRUSH_WINUI2) {
-        brush = new AcrylicBrush_WinUI2;
+        brush = new AcrylicBrushWinUI2;
     } else if (riid == IID_ACRYLICBRUSH_DIRECT2D) {
-        brush = new AcrylicBrush_Direct2D;
+        brush = new AcrylicBrushDirect2D;
     } else if (riid == IID_ACRYLICBRUSH_NULL) {
         return S_OK;
     } else {
         return E_FAIL; // fixme: use wrong iid error
     }
     if (brush->IsSupportedByCurrentOS()) {
-        *ppInterface = brush;
+        brush->AddRef();
+        *ppInstance = brush;
         return S_OK;
     } else {
         brush->Release();

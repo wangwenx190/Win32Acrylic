@@ -24,49 +24,58 @@
 
 #include "acrylicbrush_composition.h"
 
-int AcrylicBrush_Composition::m_refCount = 0;
+static int g_refCount = 0;
 
-AcrylicBrush_Composition::AcrylicBrush_Composition()
+AcrylicBrushComposition::AcrylicBrushComposition()
 {
-    ++m_refCount;
+    d_ptr = std::make_unique<AcrylicBrushCompositionPrivate>(this);
 }
 
-AcrylicBrush_Composition::~AcrylicBrush_Composition()
+AcrylicBrushComposition::~AcrylicBrushComposition()
 {
-    --m_refCount;
 }
 
-bool AcrylicBrush_Composition::IsSupportedByCurrentOS() const
+int AcrylicBrushComposition::AddRef() const
+{
+    ++g_refCount;
+}
+
+void AcrylicBrushComposition::Release()
+{
+    --g_refCount;
+    if (g_refCount <= 0) {
+        g_refCount = 0;
+        delete this;
+    }
+}
+
+bool AcrylicBrushComposition::IsSupportedByCurrentOS() const
 {
     static const bool result = false;
     return result;
 }
 
-bool AcrylicBrush_Composition::Create() const
+bool AcrylicBrushComposition::Create() const
 {
     return false;
 }
 
-void AcrylicBrush_Composition::ReloadBlurParameters() const
+bool AcrylicBrushComposition::Destroy() const
 {
-
+    return false;
 }
 
-HWND AcrylicBrush_Composition::GetWindowHandle() const
+bool AcrylicBrushComposition::RefreshBrush() const
+{
+    return false;
+}
+
+HWND AcrylicBrushComposition::GetWindowHandle() const
 {
     return nullptr;
 }
 
-int AcrylicBrush_Composition::EventLoopExec() const
+int AcrylicBrushComposition::EventLoop() const
 {
     return -1;
-}
-
-void AcrylicBrush_Composition::Release()
-{
-    --m_refCount;
-    if (m_refCount <= 0) {
-        m_refCount = 0;
-        delete this;
-    }
 }

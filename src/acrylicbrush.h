@@ -40,6 +40,13 @@ public:
     [[nodiscard]] virtual int AddRef() const = 0;
     virtual void Release() = 0;
 
+    [[nodiscard]] virtual bool IsSupportedByCurrentOS() const = 0;
+    [[nodiscard]] virtual bool Create() const = 0;
+    [[nodiscard]] virtual bool Destroy() const = 0;
+    [[nodiscard]] virtual bool RefreshBrush() const = 0;
+    [[nodiscard]] virtual HWND GetWindowHandle() const = 0;
+    [[nodiscard]] virtual int EventLoop() const = 0;
+
     [[nodiscard]] winrt::Windows::UI::Color GetTintColor() const;
     void SetTintColor(const winrt::Windows::UI::Color &value) const;
 
@@ -61,17 +68,9 @@ public:
     [[nodiscard]] double GetNoiseOpacity() const;
     void SetNoiseOpacity(const double value) const;
 
-    [[nodiscard]] winrt::Windows::UI::Color GetExclusionColor() const;
-    void SetExclusionColor(const winrt::Windows::UI::Color &value) const;
-
-    [[nodiscard]] virtual bool IsSupportedByCurrentOS() const = 0;
-    [[nodiscard]] virtual bool Create() const = 0;
-    [[nodiscard]] virtual bool Destroy() const = 0;
-    [[nodiscard]] virtual bool RefreshBrush() const = 0;
-    [[nodiscard]] virtual HWND GetWindowHandle() const = 0;
-    [[nodiscard]] virtual int EventLoop() const = 0;
-
-protected:
     winrt::Windows::UI::Color GetEffectiveTintColor() const;
     winrt::Windows::UI::Color GetEffectiveLuminosityColor() const;
+
+    [[nodiscard]] winrt::Windows::UI::Color GetExclusionColor() const;
+    void SetExclusionColor(const winrt::Windows::UI::Color &value) const;
 };

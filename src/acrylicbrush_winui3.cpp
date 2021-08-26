@@ -24,49 +24,58 @@
 
 #include "acrylicbrush_winui3.h"
 
-int AcrylicBrush_WinUI3::m_refCount = 0;
+static int g_refCount = 0;
 
-AcrylicBrush_WinUI3::AcrylicBrush_WinUI3()
+AcrylicBrushWinUI3::AcrylicBrushWinUI3()
 {
-    ++m_refCount;
+    d_ptr = std::make_unique<AcrylicBrushWinUI3Private>(this);
 }
 
-AcrylicBrush_WinUI3::~AcrylicBrush_WinUI3()
+AcrylicBrushWinUI3::~AcrylicBrushWinUI3()
 {
-    --m_refCount;
 }
 
-bool AcrylicBrush_WinUI3::IsSupportedByCurrentOS() const
+int AcrylicBrushWinUI3::AddRef() const
+{
+    ++g_refCount;
+}
+
+void AcrylicBrushWinUI3::Release()
+{
+    --g_refCount;
+    if (g_refCount <= 0) {
+        g_refCount = 0;
+        delete this;
+    }
+}
+
+bool AcrylicBrushWinUI3::IsSupportedByCurrentOS() const
 {
     static const bool result = false;
     return result;
 }
 
-bool AcrylicBrush_WinUI3::Create() const
+bool AcrylicBrushWinUI3::Create() const
 {
     return false;
 }
 
-void AcrylicBrush_WinUI3::ReloadBlurParameters() const
+bool AcrylicBrushWinUI3::Destroy() const
 {
-
+    return false;
 }
 
-HWND AcrylicBrush_WinUI3::GetWindowHandle() const
+bool AcrylicBrushWinUI3::RefreshBrush() const
+{
+    return false;
+}
+
+HWND AcrylicBrushWinUI3::GetWindowHandle() const
 {
     return nullptr;
 }
 
-int AcrylicBrush_WinUI3::EventLoopExec() const
+int AcrylicBrushWinUI3::EventLoop() const
 {
     return -1;
-}
-
-void AcrylicBrush_WinUI3::Release()
-{
-    --m_refCount;
-    if (m_refCount <= 0) {
-        m_refCount = 0;
-        delete this;
-    }
 }

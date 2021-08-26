@@ -23,7 +23,6 @@
  */
 
 #include "acrylicbrush_winui2.h"
-#include "resource.h"
 #include "customframe.h"
 #include "utils.h"
 

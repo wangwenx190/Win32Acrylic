@@ -738,8 +738,8 @@ typedef enum _ACCENT_STATE
 
 typedef struct _ACCENT_POLICY
 {
-    ACCENT_STATE AccentState;
-    DWORD AccentFlags;
+    ACCENT_STATE State;
+    DWORD Flags;
     COLORREF GradientColor;
     DWORD AnimationId;
 } ACCENT_POLICY, *PACCENT_POLICY, *LPACCENT_POLICY;

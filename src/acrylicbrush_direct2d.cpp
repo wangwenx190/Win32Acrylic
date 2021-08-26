@@ -23,7 +23,6 @@
  */
 
 #include "acrylicbrush_direct2d.h"
-#include "resource.h"
 #include "customframe.h"
 #include "utils.h"
 #include <DwmApi.h>
@@ -91,7 +90,7 @@ private:
     [[nodiscard]] bool PrepareEffects_Legacy(ID2D1Effect **output);
     [[nodiscard]] bool CreateEffects(ID2D1Effect **output);
     [[nodiscard]] bool Initialize();
-    [[nodiscard]] bool DrawFinalVisual();
+    [[nodiscard]] bool DrawFinalVisual() const;
     void ReloadDesktopParameters();
 
 private:
@@ -628,7 +627,7 @@ bool AcrylicBrushDirect2DPrivate::CreateEffects(ID2D1Effect **output)
     return true;
 }
 
-bool AcrylicBrushDirect2DPrivate::DrawFinalVisual()
+bool AcrylicBrushDirect2DPrivate::DrawFinalVisual() const
 {
     const SIZE windowSize = GET_WINDOW_CLIENT_SIZE(m_mainWindowHandle);
     const int borderThickness = Utils::GetWindowVisibleFrameBorderThickness(m_mainWindowHandle);

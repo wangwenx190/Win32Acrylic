@@ -76,5 +76,6 @@ namespace Utils
 [[nodiscard]] bool IsCompositionEnabled();
 [[nodiscard]] bool ExcludeWindowFromLivePreview(const HWND hWnd);
 [[nodiscard]] bool RemoveWindowFromTaskListAndTaskBar(const HWND hWnd);
+[[nodiscard]] std::wstring RegisterWindowClass(const WNDPROC wndproc);
 
 }

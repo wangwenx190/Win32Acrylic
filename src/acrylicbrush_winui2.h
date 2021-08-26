@@ -26,27 +26,27 @@
 
 #include "acrylicbrush.h"
 
-class AcrylicBrush_WinUI2 final : public AcrylicBrush
+class AcrylicBrushWinUI2Private;
+
+class AcrylicBrushWinUI2 final : public AcrylicBrush
 {
-    // dis copy move
+    ACRYLICMANAGER_DISABLE_COPY_MOVE(AcrylicBrushWinUI2)
+
 public:
-    explicit AcrylicBrush_WinUI2();
-    ~AcrylicBrush_WinUI2();
+    explicit AcrylicBrushWinUI2();
+    ~AcrylicBrushWinUI2();
+
+    int AddRef() const override;
+    int GetRefCount() const override;
+    void Release() override;
 
     [[nodiscard]] bool IsSupportedByCurrentOS() const override;
     [[nodiscard]] bool Create() const override;
-    void ReloadBlurParameters() const override;
+    [[nodiscard]] bool Destroy() const override;
+    [[nodiscard]] bool RefreshBrush() const override;
     [[nodiscard]] HWND GetWindowHandle() const override;
-    [[nodiscard]] int EventLoopExec() const override;
-    void Release() override;
+    [[nodiscard]] int EventLoop() const override;
 
 private:
-    [[nodiscard]] bool RegisterMainWindowClass() const;
-    [[nodiscard]] bool CreateMainWindow() const;
-    [[nodiscard]] bool RegisterDragBarWindowClass() const;
-    [[nodiscard]] bool CreateDragBarWindow() const;
-    [[nodiscard]] bool CreateXAMLIsland() const;
-
-private:
-    static int m_refCount;
+    std::unique_ptr<AcrylicBrushWinUI2Private> d_ptr;
 };

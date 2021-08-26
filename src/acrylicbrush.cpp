@@ -68,8 +68,6 @@ static std::optional<double> g_saturation = std::nullopt;
 static std::optional<double> g_noiseOpacity = std::nullopt;
 static std::optional<winrt::Windows::UI::Color> g_exclusionColor = std::nullopt;
 
-const std::wstring AcrylicBrush::m_windowClassNamePrefix = LR"(wangwenx190\AcrylicManager\WindowClass\)";
-
 [[nodiscard]] static inline double GetTintOpacityModifier(const winrt::Windows::UI::Color &tintColor)
 {
     // TintOpacityModifier affects the 19H1+ Luminosity-based recipe only

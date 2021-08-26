@@ -23,6 +23,7 @@
  */
 
 #include "utils.h"
+#include "resource.h"
 #include <wininet.h>
 #include <ShlObj_Core.h>
 #include <ShellScalingApi.h>
@@ -32,6 +33,7 @@
 static constexpr wchar_t g_personalizeRegistryKey[] = LR"(Software\Microsoft\Windows\CurrentVersion\Themes\Personalize)";
 static constexpr wchar_t g_dwmRegistryKey[] = LR"(Software\Microsoft\Windows\DWM)";
 static constexpr wchar_t g_desktopRegistryKey[] = LR"(Control Panel\Desktop)";
+static constexpr wchar_t g_windowClassNamePrefix[] = LR"(wangwenx190\AcrylicManager\WindowClasses\)";
 
 bool Utils::CompareSystemVersion(const WindowsVersion ver, const VersionCompare comp)
 {
@@ -1158,4 +1160,28 @@ bool Utils::RemoveWindowFromTaskListAndTaskBar(const HWND hWnd)
     }
     // todo
     return true;
+}
+
+std::wstring Utils::RegisterWindowClass(const WNDPROC wndproc)
+{
+    if (!wndproc) {
+        return {};
+    }
+    const std::wstring className = g_windowClassNamePrefix + GenerateGUID();
+    WNDCLASSEXW wcex;
+    SecureZeroMemory(&wcex, sizeof(wcex));
+    wcex.cbSize = sizeof(wcex);
+    wcex.style = CS_HREDRAW | CS_VREDRAW | CS_DBLCLKS; // todo move CS_DBLCLKS
+    wcex.lpfnWndProc = wndproc;
+    wcex.hInstance = GET_CURRENT_INSTANCE;
+    wcex.hCursor = LoadCursorW(nullptr, IDC_ARROW);
+    wcex.hIcon = LoadIconW(GET_CURRENT_INSTANCE, MAKEINTRESOURCEW(IDI_DEFAULTICON));
+    wcex.hIconSm = LoadIconW(GET_CURRENT_INSTANCE, MAKEINTRESOURCEW(IDI_DEFAULTICONSM));
+    wcex.hbrBackground = reinterpret_cast<HBRUSH>(COLOR_WINDOW + 1);
+    wcex.lpszClassName = className.c_str();
+    if (RegisterClassExW(&wcex) == 0) {
+        PRINT_WIN32_ERROR_MESSAGE(RegisterClassExW)
+        return {};
+    }
+    return className;
 }

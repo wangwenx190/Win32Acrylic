@@ -24,16 +24,22 @@
 
 #pragma once
 
+#include "acrylicmanager_global.h"
 #include <Unknwn.h>
 #include <WinRT\Windows.UI.h>
 #include <WinRT\Windows.Foundation.Numerics.h>
 
 class AcrylicBrush
 {
-    // disable copy move
+    ACRYLICMANAGER_DISABLE_COPY_MOVE(AcrylicBrush)
+
 public:
     explicit AcrylicBrush();
     ~AcrylicBrush();
+
+    virtual int AddRef() const = 0;
+    virtual int GetRefCount() const = 0;
+    virtual void Release() = 0;
 
     [[nodiscard]] winrt::Windows::UI::Color GetTintColor() const;
     void SetTintColor(const winrt::Windows::UI::Color &value) const;
@@ -61,15 +67,12 @@ public:
 
     [[nodiscard]] virtual bool IsSupportedByCurrentOS() const = 0;
     [[nodiscard]] virtual bool Create() const = 0;
-    virtual void ReloadBlurParameters() const = 0;
+    [[nodiscard]] virtual bool Destroy() const = 0;
+    [[nodiscard]] virtual bool RefreshBrush() const = 0;
     [[nodiscard]] virtual HWND GetWindowHandle() const = 0;
-    [[nodiscard]] virtual int EventLoopExec() const = 0;
-    virtual void Release() = 0;
+    [[nodiscard]] virtual int EventLoop() const = 0;
 
 protected:
     winrt::Windows::UI::Color GetEffectiveTintColor() const;
     winrt::Windows::UI::Color GetEffectiveLuminosityColor() const;
-
-protected:
-    static const std::wstring m_windowClassNamePrefix;
 };

@@ -50,8 +50,6 @@ static double g_currentDpr = 0.0;
 static HMODULE g_user32Module = nullptr;
 static SetWindowCompositionAttributeSignature SetWindowCompositionAttribute = nullptr;
 
-int AcrylicBrush_System::m_refCount = 0;
-
 static inline void Cleanup()
 {
     if (g_mainWindowHandle) {
@@ -104,17 +102,15 @@ EXTERN_C LRESULT CALLBACK MainWindowProc(HWND hWnd, UINT message, WPARAM wParam,
     return DefWindowProcW(hWnd, message, wParam, lParam);
 }
 
-AcrylicBrush_System::AcrylicBrush_System()
+AcrylicBrushSystem::AcrylicBrushSystem()
 {
-    ++m_refCount;
 }
 
-AcrylicBrush_System::~AcrylicBrush_System()
+AcrylicBrushSystem::~AcrylicBrushSystem()
 {
-    --m_refCount;
 }
 
-bool AcrylicBrush_System::IsSupportedByCurrentOS() const
+bool AcrylicBrushSystem::IsSupportedByCurrentOS() const
 {
     static const bool result = (Utils::IsWindows11OrGreater()
                                 || (Utils::CompareSystemVersion(WindowsVersion::Windows10_RS2, VersionCompare::Greater)
@@ -122,12 +118,12 @@ bool AcrylicBrush_System::IsSupportedByCurrentOS() const
     return result;
 }
 
-HWND AcrylicBrush_System::GetWindowHandle() const
+HWND AcrylicBrushSystem::GetWindowHandle() const
 {
     return g_mainWindowHandle;
 }
 
-int AcrylicBrush_System::EventLoopExec() const
+int AcrylicBrushSystem::EventLoopExec() const
 {
     MSG msg = {};
 
@@ -139,7 +135,7 @@ int AcrylicBrush_System::EventLoopExec() const
     return static_cast<int>(msg.wParam);
 }
 
-void AcrylicBrush_System::Release()
+void AcrylicBrushSystem::Release()
 {
     --m_refCount;
     if (m_refCount <= 0) {
@@ -148,7 +144,7 @@ void AcrylicBrush_System::Release()
     }
 }
 
-bool AcrylicBrush_System::RegisterMainWindowClass() const
+bool AcrylicBrushSystem::RegisterMainWindowClass() const
 {
     g_mainWindowClassName = m_windowClassNamePrefix + Utils::GenerateGUID() + g_mainWindowClassNameSuffix;
 
@@ -175,7 +171,7 @@ bool AcrylicBrush_System::RegisterMainWindowClass() const
     return true;
 }
 
-bool AcrylicBrush_System::CreateMainWindow() const
+bool AcrylicBrushSystem::CreateMainWindow() const
 {
     g_mainWindowHandle = CreateWindowExW(0L,
                                          g_mainWindowClassName.c_str(),
@@ -218,7 +214,7 @@ bool AcrylicBrush_System::CreateMainWindow() const
     return true;
 }
 
-bool AcrylicBrush_System::InitializeInternalAPI() const
+bool AcrylicBrushSystem::InitializeInternalAPI() const
 {
     g_user32Module = LoadLibraryExW(L"User32.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
     if (!g_user32Module) {
@@ -231,7 +227,7 @@ bool AcrylicBrush_System::InitializeInternalAPI() const
     return true;
 }
 
-bool AcrylicBrush_System::SetBlurBehindWindowEnabled(const bool enable, const winrt::Windows::UI::Color &color)
+bool AcrylicBrushSystem::SetBlurBehindWindowEnabled(const bool enable, const winrt::Windows::UI::Color &color)
 {
     // We prefer using DwmEnableBlurBehindWindow() on Windows 7.
     if (Utils::IsWindows8OrGreater()) {

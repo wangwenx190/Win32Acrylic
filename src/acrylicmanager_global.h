@@ -586,6 +586,14 @@ EXTERN_C IMAGE_DOS_HEADER __ImageBase;
 }
 #endif
 
+#ifndef ACRYLICMANAGER_DISABLE_COPY_MOVE
+#define ACRYLICMANAGER_DISABLE_COPY_MOVE(class) \
+class(const class &) = delete; \
+class &operator=(const class &) = delete; \
+class(class &&) = delete; \
+class &operator=(class &&) = delete;
+#endif
+
 enum class WindowsVersion : int
 {
     WindowsVista = 0,

@@ -26,19 +26,26 @@
 
 #include "acrylicbrush.h"
 
-class AcrylicBrush_System final : public AcrylicBrush
+class AcrylicBrushSystemPrivate;
+
+class AcrylicBrushSystem final : public AcrylicBrush
 {
-    // dis copy move
+    ACRYLICMANAGER_DISABLE_COPY_MOVE(AcrylicBrushSystem)
+
 public:
-    explicit AcrylicBrush_System();
-    ~AcrylicBrush_System();
+    explicit AcrylicBrushSystem();
+    ~AcrylicBrushSystem();
+
+    int AddRef() const override;
+    int GetRefCount() const override;
+    void Release() override;
 
     [[nodiscard]] bool IsSupportedByCurrentOS() const override;
     [[nodiscard]] bool Create() const override;
-    void ReloadBlurParameters() const override;
+    [[nodiscard]] bool Destroy() const override;
+    [[nodiscard]] bool RefreshBrush() const override;
     [[nodiscard]] HWND GetWindowHandle() const override;
-    [[nodiscard]] int EventLoopExec() const override;
-    void Release() override;
+    [[nodiscard]] int EventLoop() const override;
 
 private:
     [[nodiscard]] bool RegisterMainWindowClass() const;
@@ -47,5 +54,5 @@ private:
     [[nodiscard]] bool SetBlurBehindWindowEnabled(const bool enable, const winrt::Windows::UI::Color &color);
 
 private:
-    static int m_refCount;
+    std::unique_ptr<AcrylicBrushSystemPrivate> d_ptr;
 };

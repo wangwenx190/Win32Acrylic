@@ -37,8 +37,7 @@ public:
     explicit AcrylicBrush();
     ~AcrylicBrush();
 
-    virtual int AddRef() const = 0;
-    virtual int GetRefCount() const = 0;
+    [[nodiscard]] virtual int AddRef() const = 0;
     virtual void Release() = 0;
 
     [[nodiscard]] winrt::Windows::UI::Color GetTintColor() const;

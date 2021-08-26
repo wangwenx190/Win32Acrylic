@@ -44,52 +44,10 @@
 static constexpr wchar_t g_mainWindowTitle[] = L"AcrylicManager WinUI2 Main Window";
 static constexpr wchar_t g_dragBarWindowTitle[] = L"";
 
+static bool g_WinRTInitialized = false;
 static winrt::Windows::UI::Xaml::Hosting::WindowsXamlManager g_manager = nullptr;
 
-static inline void Cleanup()
-{
-    if (g_backgroundBrush) {
-        g_backgroundBrush = nullptr;
-    }
-    if (g_rootGrid) {
-        g_rootGrid = nullptr;
-    }
-    if (g_source) {
-        g_source.Close();
-        g_source = nullptr;
-    }
-    if (g_manager) {
-        g_manager.Close();
-        g_manager = nullptr;
-    }
-    if (g_XAMLIslandWindowHandle) {
-        g_XAMLIslandWindowHandle = nullptr;
-    }
-    if (g_dragBarWindowHandle) {
-        DestroyWindow(g_dragBarWindowHandle);
-        g_dragBarWindowHandle = nullptr;
-    }
-    if (g_dragBarWindowAtom != 0) {
-        UnregisterClassW(g_dragBarWindowClassName.c_str(), GET_CURRENT_INSTANCE);
-        g_dragBarWindowAtom = 0;
-        g_dragBarWindowClassName.clear();
-    }
-    if (g_mainWindowHandle) {
-        DestroyWindow(g_mainWindowHandle);
-        g_mainWindowHandle = nullptr;
-    }
-    if (g_mainWindowAtom != 0) {
-        UnregisterClassW(g_mainWindowClassName.c_str(), GET_CURRENT_INSTANCE);
-        g_mainWindowAtom = 0;
-        g_mainWindowClassName.clear();
-    }
-    if (g_currentDpi != 0) {
-        g_currentDpi = 0;
-    }
-    if (g_currentDpr != 0.0) {
-        g_currentDpr = 0.0;
-    }
-}
+static int g_refCount = 0;
 
 class AcrylicBrushWinUI2Private
 {
@@ -102,12 +60,13 @@ public:
     static LRESULT CALLBACK MainWindowProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
     static LRESULT CALLBACK DragBarWindowProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
 
-    void Cleanup();
-
-private:
     [[nodiscard]] bool CreateMainWindow();
     [[nodiscard]] bool CreateDragBarWindow();
     [[nodiscard]] bool CreateXAMLIsland();
+    [[nodiscard]] HWND GetMainWindowHandle() const;
+    [[nodiscard]] int EventLoop() const;
+    void ReloadBrushParameters();
+    void Cleanup();
 
 private:
     AcrylicBrushWinUI2 *q_ptr = nullptr;
@@ -125,6 +84,15 @@ private:
     winrt::Windows::UI::Xaml::Media::AcrylicBrush m_backgroundBrush = nullptr;
 };
 
+AcrylicBrushWinUI2Private::AcrylicBrushWinUI2Private(AcrylicBrushWinUI2 *q)
+{
+    q_ptr = q;
+}
+
+AcrylicBrushWinUI2Private::~AcrylicBrushWinUI2Private()
+{
+}
+
 LRESULT CALLBACK AcrylicBrushWinUI2Private::MainWindowProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
     MSG msg;
@@ -141,14 +109,16 @@ LRESULT CALLBACK AcrylicBrushWinUI2Private::MainWindowProc(HWND hWnd, UINT messa
         return result;
     }
 
+    const auto data = reinterpret_cast<AcrylicBrushWinUI2Private *>(GetWindowLongPtrW(hWnd, GWLP_USERDATA));
+
     bool themeChanged = false;
 
     switch (message) {
     case WM_DPICHANGED: {
         const auto x = static_cast<double>(LOWORD(wParam));
         const auto y = static_cast<double>(HIWORD(wParam));
-        g_currentDpi = std::round((x + y) / 2.0);
-        g_currentDpr = Utils::GetDevicePixelRatioForWindow(hWnd);
+        data->m_currentDpi = std::round((x + y) / 2.0);
+        data->m_currentDpr = Utils::GetDevicePixelRatioForWindow(hWnd);
         const auto prcNewWindow = reinterpret_cast<LPRECT>(lParam);
         if (MoveWindow(hWnd, prcNewWindow->left, prcNewWindow->top,
                        GET_RECT_WIDTH(*prcNewWindow), GET_RECT_HEIGHT(*prcNewWindow), TRUE) == FALSE) {
@@ -166,28 +136,28 @@ LRESULT CALLBACK AcrylicBrushWinUI2Private::MainWindowProc(HWND hWnd, UINT messa
         }
         const auto width = LOWORD(lParam);
         const UINT flags = SWP_NOACTIVATE | SWP_SHOWWINDOW | SWP_NOOWNERZORDER;
-        if (g_XAMLIslandWindowHandle) {
+        if (data->m_XAMLIslandWindowHandle) {
             // Give enough space to our thin homemade top border.
             const int borderThickness = Utils::GetWindowVisibleFrameBorderThickness(hWnd);
             const int height = (HIWORD(lParam) - borderThickness);
-            if (SetWindowPos(g_XAMLIslandWindowHandle, HWND_BOTTOM, 0, borderThickness,
+            if (SetWindowPos(data->m_XAMLIslandWindowHandle, HWND_BOTTOM, 0, borderThickness,
                              width, height, flags) == FALSE) {
                 PRINT_WIN32_ERROR_MESSAGE(SetWindowPos)
                 break;
             }
         }
-        if (g_dragBarWindowHandle) {
+        if (data->m_dragBarWindowHandle) {
             const int titleBarHeight = Utils::GetTitleBarHeight(hWnd);
-            if (SetWindowPos(g_dragBarWindowHandle, HWND_TOP, 0, 0, width, titleBarHeight, flags) == FALSE) {
+            if (SetWindowPos(data->m_dragBarWindowHandle, HWND_TOP, 0, 0, width, titleBarHeight, flags) == FALSE) {
                 PRINT_WIN32_ERROR_MESSAGE(SetWindowPos)
                 break;
             }
         }
     } break;
     case WM_SETFOCUS: {
-        if (g_XAMLIslandWindowHandle) {
+        if (data->m_XAMLIslandWindowHandle) {
             // Send focus to the XAML Island child window.
-            if (SetFocus(g_XAMLIslandWindowHandle) == nullptr) {
+            if (SetFocus(data->m_XAMLIslandWindowHandle) == nullptr) {
                 PRINT_WIN32_ERROR_MESSAGE(SetFocus)
                 break;
             }
@@ -237,7 +207,7 @@ LRESULT CALLBACK AcrylicBrushWinUI2Private::MainWindowProc(HWND hWnd, UINT messa
         }
     } break;
     case WM_CLOSE: {
-        Cleanup();
+        data->Cleanup();
         return 0;
     }
     case WM_DESTROY: {
@@ -248,11 +218,8 @@ LRESULT CALLBACK AcrylicBrushWinUI2Private::MainWindowProc(HWND hWnd, UINT messa
         break;
     }
 
-    if (themeChanged && g_backgroundBrush && !Utils::IsHighContrastModeEnabled()) {
-        const auto window = reinterpret_cast<AcrylicBrush_WinUI2 *>(GetWindowLongPtrW(hWnd, GWLP_USERDATA));
-        if (window) {
-            window->ReloadBlurParameters();
-        }
+    if (themeChanged && data->m_backgroundBrush && !Utils::IsHighContrastModeEnabled()) {
+        data->ReloadBrushParameters();
     }
 
     return DefWindowProcW(hWnd, message, wParam, lParam);
@@ -260,8 +227,9 @@ LRESULT CALLBACK AcrylicBrushWinUI2Private::MainWindowProc(HWND hWnd, UINT messa
 
 LRESULT CALLBACK AcrylicBrushWinUI2Private::DragBarWindowProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
-    std::optional<UINT> nonClientMessage = std::nullopt;
+    const auto data = reinterpret_cast<AcrylicBrushWinUI2Private *>(GetWindowLongPtrW(hWnd, GWLP_USERDATA));
 
+    std::optional<UINT> nonClientMessage = std::nullopt;
     switch (message)
     {
     // Translate WM_* messages on the window to WM_NC* on the top level window.
@@ -304,9 +272,7 @@ LRESULT CALLBACK AcrylicBrushWinUI2Private::DragBarWindowProc(HWND hWnd, UINT me
     default:
         break;
     }
-
-    if (nonClientMessage.has_value() && g_mainWindowHandle)
-    {
+    if (nonClientMessage.has_value() && data->m_mainWindowHandle) {
         POINT pos = {GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)};
         if (ClientToScreen(hWnd, &pos) == FALSE) {
             PRINT_WIN32_ERROR_MESSAGE(ClientToScreen)
@@ -315,50 +281,131 @@ LRESULT CALLBACK AcrylicBrushWinUI2Private::DragBarWindowProc(HWND hWnd, UINT me
         const LPARAM newLParam = MAKELPARAM(pos.x, pos.y);
         // Hit test the parent window at the screen coordinates the user clicked in the drag input sink window,
         // then pass that click through as an NC click in that location.
-        const LRESULT hitTestResult = SendMessageW(g_mainWindowHandle, WM_NCHITTEST, 0, newLParam);
-        SendMessageW(g_mainWindowHandle, nonClientMessage.value(), hitTestResult, newLParam);
+        const LRESULT hitTestResult = SendMessageW(data->m_mainWindowHandle, WM_NCHITTEST, 0, newLParam);
+        SendMessageW(data->m_mainWindowHandle, nonClientMessage.value(), hitTestResult, newLParam);
         return 0;
     }
-
     return DefWindowProcW(hWnd, message, wParam, lParam);
 }
 
-bool AcrylicBrushWinUI2::CreateMainWindow() const
+HWND AcrylicBrushWinUI2Private::GetMainWindowHandle() const
 {
-    g_mainWindowHandle = CreateWindowExW(0L,
-                                         g_mainWindowClassName.c_str(),
-                                         g_mainWindowTitle.c_str(),
+    return m_mainWindowHandle;
+}
+
+int AcrylicBrushWinUI2Private::EventLoop() const
+{
+    MSG msg = {};
+    while (GetMessageW(&msg, nullptr, 0, 0) != FALSE) {
+        BOOL filtered = FALSE;
+        if (m_source) {
+            const auto interop = m_source.as<IDesktopWindowXamlSourceNative2>();
+            if (interop) {
+                winrt::check_hresult(interop->PreTranslateMessage(&msg, &filtered));
+            } else {
+                OutputDebugStringW(L"Failed to retrieve IDesktopWindowXamlSourceNative2.");
+            }
+        }
+        if (filtered == FALSE) {
+            TranslateMessage(&msg);
+            DispatchMessageW(&msg);
+        }
+    }
+    return static_cast<int>(msg.wParam);
+}
+
+void AcrylicBrushWinUI2Private::ReloadBrushParameters()
+{
+    if (!m_backgroundBrush) {
+        return;
+    }
+    m_backgroundBrush.TintColor(q_ptr->GetTintColor());
+    m_backgroundBrush.TintOpacity(q_ptr->GetTintOpacity());
+    m_backgroundBrush.TintLuminosityOpacity(q_ptr->GetLuminosityOpacity());
+    m_backgroundBrush.FallbackColor(q_ptr->GetFallbackColor());
+}
+
+void AcrylicBrushWinUI2Private::Cleanup()
+{
+    if (m_backgroundBrush) {
+        m_backgroundBrush = nullptr;
+    }
+    if (m_rootGrid) {
+        m_rootGrid = nullptr;
+    }
+    if (m_source) {
+        m_source.Close();
+        m_source = nullptr;
+    }
+    if (m_XAMLIslandWindowHandle) {
+        m_XAMLIslandWindowHandle = nullptr;
+    }
+    if (m_dragBarWindowHandle) {
+        DestroyWindow(m_dragBarWindowHandle);
+        m_dragBarWindowHandle = nullptr;
+    }
+    if (!m_dragBarWindowClassName.empty()) {
+        UnregisterClassW(m_dragBarWindowClassName.c_str(), GET_CURRENT_INSTANCE);
+        m_dragBarWindowClassName.clear();
+    }
+    if (m_mainWindowHandle) {
+        DestroyWindow(m_mainWindowHandle);
+        m_mainWindowHandle = nullptr;
+    }
+    if (!m_mainWindowClassName.empty()) {
+        UnregisterClassW(m_mainWindowClassName.c_str(), GET_CURRENT_INSTANCE);
+        m_mainWindowClassName.clear();
+    }
+    if (m_currentDpi != 0) {
+        m_currentDpi = 0;
+    }
+    if (m_currentDpr != 0.0) {
+        m_currentDpr = 0.0;
+    }
+}
+
+bool AcrylicBrushWinUI2Private::CreateMainWindow()
+{
+    m_mainWindowClassName = Utils::RegisterWindowClass(MainWindowProc);
+    if (m_mainWindowClassName.empty()) {
+        OutputDebugStringW(L"Failed to register the main window class.");
+        return false;
+    }
+
+    m_mainWindowHandle = CreateWindowExW(0L,
+                                         m_mainWindowClassName.c_str(),
+                                         g_mainWindowTitle,
                                          WS_OVERLAPPEDWINDOW,
                                          CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
                                          nullptr, nullptr, GET_CURRENT_INSTANCE, nullptr);
 
-    if (!g_mainWindowHandle) {
+    if (!m_mainWindowHandle) {
         PRINT_WIN32_ERROR_MESSAGE(CreateWindowExW)
         return false;
     }
 
-    g_currentDpi = Utils::GetDotsPerInchForWindow(g_mainWindowHandle);
-    if (g_currentDpi <= 0) {
-        g_currentDpi = USER_DEFAULT_SCREEN_DPI;
+    m_currentDpi = Utils::GetDotsPerInchForWindow(m_mainWindowHandle);
+    if (m_currentDpi <= 0) {
+        m_currentDpi = USER_DEFAULT_SCREEN_DPI;
     }
-    g_currentDpr = Utils::GetDevicePixelRatioForWindow(g_mainWindowHandle);
-    if (g_currentDpr <= 0.0) {
-        g_currentDpr = 1.0;
+    m_currentDpr = Utils::GetDevicePixelRatioForWindow(m_mainWindowHandle);
+    if (m_currentDpr <= 0.0) {
+        m_currentDpr = 1.0;
     }
 
     // Ensure DWM still draws the top frame by extending the top frame.
     // This also ensures our window still has the frame shadow drawn by DWM.
-    if (!Utils::UpdateFrameMargins(g_mainWindowHandle)) {
+    if (!Utils::UpdateFrameMargins(m_mainWindowHandle)) {
         OutputDebugStringW(L"Failed to update main window's frame margins.");
         return false;
     }
     // Force a WM_NCCALCSIZE processing to make the window become frameless immediately.
-    if (!Utils::TriggerFrameChangeForWindow(g_mainWindowHandle)) {
+    if (!Utils::TriggerFrameChangeForWindow(m_mainWindowHandle)) {
         OutputDebugStringW(L"Failed to trigger frame change event for main window.");
         return false;
     }
     // Ensure our window still has window transitions.
-    if (!Utils::SetWindowTransitionsEnabled(g_mainWindowHandle, true)) {
+    if (!Utils::SetWindowTransitionsEnabled(m_mainWindowHandle, true)) {
         OutputDebugStringW(L"Failed to enable window transitions for main window.");
         return false;
     }
@@ -366,11 +413,17 @@ bool AcrylicBrushWinUI2::CreateMainWindow() const
     return true;
 }
 
-bool AcrylicBrushWinUI2::CreateDragBarWindow() const
+bool AcrylicBrushWinUI2Private::CreateDragBarWindow()
 {
     // Please refer to the "IMPORTANT NOTE" section below.
     if (!Utils::IsWindows8OrGreater()) {
         OutputDebugStringW(L"Drag bar window is only available on Windows 8 and onwards.");
+        return false;
+    }
+
+    m_dragBarWindowClassName = Utils::RegisterWindowClass(DragBarWindowProc);
+    if (m_dragBarWindowClassName.empty()) {
+        OutputDebugStringW(L"Failed to register the drag bar window class.");
         return false;
     }
 
@@ -382,28 +435,28 @@ bool AcrylicBrushWinUI2::CreateDragBarWindow() const
     // IMPORTANT NOTE: The WS_EX_LAYERED style is supported for both top-level
     // windows and child windows since Windows 8. Previous Windows versions support
     // WS_EX_LAYERED only for top-level windows.
-    g_dragBarWindowHandle = CreateWindowExW(WS_EX_LAYERED | WS_EX_NOREDIRECTIONBITMAP,
-                                            g_dragBarWindowClassName.c_str(),
-                                            g_dragBarWindowTitle.c_str(),
+    m_dragBarWindowHandle = CreateWindowExW(WS_EX_LAYERED | WS_EX_NOREDIRECTIONBITMAP,
+                                            m_dragBarWindowClassName.c_str(),
+                                            g_dragBarWindowTitle,
                                             WS_CHILD,
                                             CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
-                                            g_mainWindowHandle, nullptr, GET_CURRENT_INSTANCE, nullptr);
+                                            m_mainWindowHandle, nullptr, GET_CURRENT_INSTANCE, nullptr);
 
-    if (!g_dragBarWindowHandle) {
+    if (!m_dragBarWindowHandle) {
         PRINT_WIN32_ERROR_MESSAGE(CreateWindowExW)
         return false;
     }
 
     // Layered window won't be visible until we call SetLayeredWindowAttributes()
     // or UpdateLayeredWindow().
-    if (SetLayeredWindowAttributes(g_dragBarWindowHandle, RGB(0, 0, 0), 255, LWA_ALPHA) == FALSE) {
+    if (SetLayeredWindowAttributes(m_dragBarWindowHandle, RGB(0, 0, 0), 255, LWA_ALPHA) == FALSE) {
         PRINT_WIN32_ERROR_MESSAGE(SetLayeredWindowAttributes)
         return false;
     }
 
-    const SIZE size = GET_WINDOW_CLIENT_SIZE(g_mainWindowHandle);
-    const int titleBarHeight = Utils::GetTitleBarHeight(g_mainWindowHandle);
-    if (SetWindowPos(g_dragBarWindowHandle, HWND_TOP, 0, 0, size.cx, titleBarHeight,
+    const SIZE size = GET_WINDOW_CLIENT_SIZE(m_mainWindowHandle);
+    const int titleBarHeight = Utils::GetTitleBarHeight(m_mainWindowHandle);
+    if (SetWindowPos(m_dragBarWindowHandle, HWND_TOP, 0, 0, size.cx, titleBarHeight,
                      SWP_NOACTIVATE | SWP_SHOWWINDOW | SWP_NOOWNERZORDER) == FALSE) {
         PRINT_WIN32_ERROR_MESSAGE(SetWindowPos)
         return false;
@@ -412,7 +465,7 @@ bool AcrylicBrushWinUI2::CreateDragBarWindow() const
     return true;
 }
 
-bool AcrylicBrushWinUI2::CreateXAMLIsland() const
+bool AcrylicBrushWinUI2Private::CreateXAMLIsland()
 {
     // XAML Island is only supported on Windows 10 19H1 and onwards.
     if (!Utils::IsWindows1019H1OrGreater()) {
@@ -425,52 +478,70 @@ bool AcrylicBrushWinUI2::CreateXAMLIsland() const
         return false;
     }
 
-    winrt::init_apartment(winrt::apartment_type::single_threaded);
-    g_manager = winrt::Windows::UI::Xaml::Hosting::WindowsXamlManager::InitializeForCurrentThread();
+    if (!g_WinRTInitialized) {
+        winrt::init_apartment(winrt::apartment_type::single_threaded);
+    }
+    if (!g_manager) {
+        g_manager = winrt::Windows::UI::Xaml::Hosting::WindowsXamlManager::InitializeForCurrentThread();
+    }
 
-    g_source = {};
-    const auto interop = g_source.as<IDesktopWindowXamlSourceNative>();
+    m_source = {};
+    const auto interop = m_source.as<IDesktopWindowXamlSourceNative>();
     if (!interop) {
         OutputDebugStringW(L"Failed to retrieve IDesktopWindowXamlSourceNative.");
         return false;
     }
-    winrt::check_hresult(interop->AttachToWindow(g_mainWindowHandle));
-    winrt::check_hresult(interop->get_WindowHandle(&g_XAMLIslandWindowHandle));
-    if (!g_XAMLIslandWindowHandle) {
+    winrt::check_hresult(interop->AttachToWindow(m_mainWindowHandle));
+    winrt::check_hresult(interop->get_WindowHandle(&m_XAMLIslandWindowHandle));
+    if (!m_XAMLIslandWindowHandle) {
         OutputDebugStringW(L"Failed to retrieve XAML Island window handle.");
         return false;
     }
     // Update the XAML Island window size because initially it is 0x0.
     // And give enough space to our thin homemade top border.
-    const int borderThickness = Utils::GetWindowVisibleFrameBorderThickness(g_mainWindowHandle);
-    const SIZE size = GET_WINDOW_CLIENT_SIZE(g_mainWindowHandle);
-    if (SetWindowPos(g_XAMLIslandWindowHandle, HWND_BOTTOM, 0,
+    const int borderThickness = Utils::GetWindowVisibleFrameBorderThickness(m_mainWindowHandle);
+    const SIZE size = GET_WINDOW_CLIENT_SIZE(m_mainWindowHandle);
+    if (SetWindowPos(m_XAMLIslandWindowHandle, HWND_BOTTOM, 0,
                      borderThickness, size.cx, (size.cy - borderThickness),
                      SWP_NOACTIVATE | SWP_SHOWWINDOW | SWP_NOOWNERZORDER) == FALSE) {
         PRINT_WIN32_ERROR_MESSAGE(SetWindowPos)
         return false;
     }
-    g_backgroundBrush = {};
-    g_backgroundBrush.BackgroundSource(winrt::Windows::UI::Xaml::Media::AcrylicBackgroundSource::HostBackdrop);
-    ReloadBlurParameters();
-    g_rootGrid = {};
-    g_rootGrid.Background(g_backgroundBrush);
-    //g_rootGrid.Children().Clear();
-    //g_rootGrid.Children().Append(/* some UWP control */);
-    //g_rootGrid.UpdateLayout();
-    g_source.Content(g_rootGrid);
+    m_backgroundBrush = {};
+    m_backgroundBrush.BackgroundSource(winrt::Windows::UI::Xaml::Media::AcrylicBackgroundSource::HostBackdrop);
+    ReloadBrushParameters();
+    m_rootGrid = {};
+    m_rootGrid.Background(m_backgroundBrush);
+    //m_rootGrid.Children().Clear();
+    //m_rootGrid.Children().Append(/* some UWP control */);
+    //m_rootGrid.UpdateLayout();
+    m_source.Content(m_rootGrid);
 
     return true;
 }
 
-AcrylicBrushWinUI2::AcrylicBrush_WinUI2()
+AcrylicBrushWinUI2::AcrylicBrushWinUI2()
 {
-    ++m_refCount;
+    d_ptr = std::make_unique<AcrylicBrushWinUI2Private>(this);
 }
 
-AcrylicBrushWinUI2::~AcrylicBrush_WinUI2()
+AcrylicBrushWinUI2::~AcrylicBrushWinUI2()
 {
-    --m_refCount;
+}
+
+int AcrylicBrushWinUI2::AddRef() const
+{
+    ++g_refCount;
+    return g_refCount;
+}
+
+void AcrylicBrushWinUI2::Release()
+{
+    --g_refCount;
+    if (g_refCount <= 0) {
+        g_refCount = 0;
+        delete this;
+    }
 }
 
 bool AcrylicBrushWinUI2::IsSupportedByCurrentOS() const
@@ -481,68 +552,41 @@ bool AcrylicBrushWinUI2::IsSupportedByCurrentOS() const
 
 bool AcrylicBrushWinUI2::Create() const
 {
-    if (!RegisterMainWindowClass()) {
+    if (!d_ptr->CreateMainWindow()) {
+        OutputDebugStringW(L"Failed to create main window.");
         return false;
     }
-    if (!CreateMainWindow()) {
+    if (!d_ptr->CreateDragBarWindow()) {
+        OutputDebugStringW(L"Failed to create drag bar window.");
         return false;
     }
-    if (!RegisterDragBarWindowClass()) {
-        return false;
-    }
-    if (!CreateDragBarWindow()) {
-        return false;
-    }
-    if (!CreateXAMLIsland()) {
+    if (!d_ptr->CreateXAMLIsland()) {
+        OutputDebugStringW(L"Failed to create XAML Island.");
         return false;
     }
     return true;
 }
 
-void AcrylicBrushWinUI2::ReloadBlurParameters() const
+bool AcrylicBrushWinUI2::Destroy() const
 {
-    if (!g_backgroundBrush) {
-        return;
-    }
-    g_backgroundBrush.TintColor(GetTintColor());
-    g_backgroundBrush.TintOpacity(GetTintOpacity());
-    g_backgroundBrush.TintLuminosityOpacity(GetLuminosityOpacity());
-    g_backgroundBrush.FallbackColor(GetFallbackColor());
+    d_ptr->Cleanup();
+    return true;
+}
+
+bool AcrylicBrushWinUI2::RefreshBrush() const
+{
+    d_ptr->ReloadBrushParameters();
+    return true;
 }
 
 HWND AcrylicBrushWinUI2::GetWindowHandle() const
 {
-    return g_mainWindowHandle;
+    return d_ptr->GetMainWindowHandle();
 }
 
-int AcrylicBrushWinUI2::EventLoopExec() const
+int AcrylicBrushWinUI2::EventLoop() const
 {
-    MSG msg = {};
-
-    while (GetMessageW(&msg, nullptr, 0, 0) != FALSE) {
-        BOOL filtered = FALSE;
-        if (g_source) {
-            const auto interop = g_source.as<IDesktopWindowXamlSourceNative2>();
-            if (interop) {
-                winrt::check_hresult(interop->PreTranslateMessage(&msg, &filtered));
-            }
-        }
-        if (filtered == FALSE) {
-            TranslateMessage(&msg);
-            DispatchMessageW(&msg);
-        }
-    }
-
-    return static_cast<int>(msg.wParam);
-}
-
-void AcrylicBrushWinUI2::Release()
-{
-    --m_refCount;
-    if (m_refCount <= 0) {
-        m_refCount = 0;
-        delete this;
-    }
+    return d_ptr->EventLoop();
 }
 
 #if 0

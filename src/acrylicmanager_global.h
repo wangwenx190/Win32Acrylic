@@ -574,6 +574,29 @@ EXTERN_C IMAGE_DOS_HEADER __ImageBase;
 }()
 #endif
 
+#ifndef WINRTCOLOR_TO_WIN32COLOR
+#define WINRTCOLOR_TO_WIN32COLOR(color) \
+[=]{ \
+    constexpr double __max = 255.0; \
+    const auto __a = static_cast<double>(color.A); \
+    const auto __r = static_cast<int>(std::round((static_cast<double>(color.R) * (__a / __max)) + __max - __a)); \
+    const auto __g = static_cast<int>(std::round((static_cast<double>(color.G) * (__a / __max)) + __max - __a)); \
+    const auto __b = static_cast<int>(std::round((static_cast<double>(color.B) * (__a / __max)) + __max - __a)); \
+    return RGB(__r, __g, __b); \
+}()
+#endif
+
+#ifndef WIN32COLOR_TO_WINRTCOLOR
+#define WIN32COLOR_TO_WINRTCOLOR(color) \
+[=]{ \
+    const auto __r = static_cast<uint8_t>(GetRValue(color)); \
+    const auto __g = static_cast<uint8_t>(GetGValue(color)); \
+    const auto __b = static_cast<uint8_t>(GetBValue(color)); \
+    constexpr uint8_t __a = 255; \
+    return winrt::Windows::UI::ColorHelper::FromArgb(__a, __r, __g, __b); \
+}()
+#endif
+
 #ifndef COM_SAFE_RELEASE
 #define COM_SAFE_RELEASE(pInterface) \
 { \

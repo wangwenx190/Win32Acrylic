@@ -442,6 +442,26 @@ void CustomFrame::OnNCRButtonUp(const HWND hWnd, const WPARAM wParam, const LPAR
     }
 }
 
+void CustomFrame::OnCreate(const HWND hWnd, const LPARAM lParam) noexcept
+{
+    if (!Utils::UpdateFrameMargins(hWnd)) {
+        OutputDebugStringW(L"Failed to update frame margins.");
+    }
+    constexpr UINT flags = (SWP_FRAMECHANGED | SWP_NOACTIVATE | SWP_NOSIZE | SWP_NOMOVE | SWP_NOZORDER | SWP_NOOWNERZORDER);
+    if (SetWindowPos(hWnd, nullptr, 0, 0, 0, 0, flags) == FALSE) {
+        PRINT_WIN32_ERROR_MESSAGE(SetWindowPos)
+    }
+}
+
+void CustomFrame::OnSize(const HWND hWnd, const WPARAM wParam, const LPARAM lParam) noexcept
+{
+    if ((wParam == SIZE_MAXIMIZED) || (wParam == SIZE_RESTORED) || IsFullScreened(hWnd)) {
+        if (!Utils::UpdateFrameMargins(hWnd)) {
+            OutputDebugStringW(L"Failed to update frame margins.");
+        }
+    }
+}
+
 void CustomFrame::OnSettingChange(const HWND hWnd, const WPARAM wParam, const LPARAM lParam) noexcept
 {
     if (!Utils::IsWindows10OrGreater()) {

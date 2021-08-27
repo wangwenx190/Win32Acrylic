@@ -73,19 +73,20 @@ static SetWindowCompositionAttributeSignature g_setWindowCompositionAttributePfn
     // We prefer using DwmEnableBlurBehindWindow() on Windows 7.
     if (Utils::IsWindows8OrGreater()) {
         ACCENT_POLICY policy = {};
-        policy.Flags = 2; // Magic number, don't know the exact meaning.
+        policy.Flags = (enable ? 2 : 0); // Magic number, don't know the exact meaning.
         if (enable) {
             // The gradient color must be set otherwise it'll look like a classic blur.
             // Use semi-transparent gradient color to get better appearance.
-            policy.GradientColor = qRgba(gradientColor.blue(), gradientColor.green(), gradientColor.red(), gradientColor.alpha());
             if (IsAcrylicBlurAvailableForWin32()) {
                 policy.State = ACCENT_ENABLE_ACRYLICBLURBEHIND;
+                policy.GradientColor = 0x01FFFFFF;
             } else {
                 policy.State = ACCENT_ENABLE_BLURBEHIND;
+                policy.GradientColor = WINRTCOLOR_TO_WIN32COLOR(color);
             }
         } else {
             policy.State = ACCENT_DISABLED;
-            policy.GradientColor = 0x01FFFFFF;
+            policy.GradientColor = 0;
         }
         WINDOWCOMPOSITIONATTRIBDATA data = {};
         data.Attrib = WCA_ACCENT_POLICY;

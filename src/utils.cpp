@@ -1009,21 +1009,6 @@ std::wstring Utils::GenerateGUID()
     return result;
 }
 
-#if 0
-bool Utils::TriggerFrameChangeForWindow(const HWND hWnd)
-{
-    if (!hWnd) {
-        return false;
-    }
-    if (SetWindowPos(hWnd, nullptr, 0, 0, 0, 0,
-              SWP_FRAMECHANGED | SWP_NOACTIVATE | SWP_NOSIZE | SWP_NOMOVE | SWP_NOZORDER | SWP_NOOWNERZORDER) == FALSE) {
-        PRINT_WIN32_ERROR_MESSAGE(SetWindowPos)
-        return false;
-    }
-    return true;
-}
-#endif
-
 bool Utils::UpdateFrameMargins(const HWND hWnd)
 {
     if (!hWnd) {

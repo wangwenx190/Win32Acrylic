@@ -359,30 +359,10 @@ bool AcrylicBrushWinUI2Private::CreateXAMLIsland()
 
 LRESULT AcrylicBrushWinUI2Private::MainWindowMessageHandler(UINT message, WPARAM wParam, LPARAM lParam)
 {
-    MSG msg;
-    SecureZeroMemory(&msg, sizeof(msg));
-    msg.hwnd = m_mainWindowHandle;
-    msg.message = message;
-    msg.wParam = wParam;
-    msg.lParam = lParam;
-    const DWORD pos = GetMessagePos();
-    msg.pt = {GET_X_LPARAM(pos), GET_Y_LPARAM(pos)};
-    msg.time = GetMessageTime();
-    LRESULT result = 0;
-    if (CustomFrame::HandleWindowProc(&msg, &result)) {
-        return result;
-    }
-
     bool themeChanged = false;
 
     switch (message) {
     case WM_SIZE: {
-        if ((wParam == SIZE_MAXIMIZED) || (wParam == SIZE_RESTORED) || IsFullScreened(m_mainWindowHandle)) {
-            if (!Utils::UpdateFrameMargins(m_mainWindowHandle)) {
-                OutputDebugStringW(L"WM_SIZE: Failed to update frame margins.");
-                break;
-            }
-        }
         const auto width = LOWORD(lParam);
         const UINT flags = SWP_NOACTIVATE | SWP_SHOWWINDOW | SWP_NOOWNERZORDER;
         if (m_XAMLIslandWindowHandle) {
@@ -449,20 +429,6 @@ LRESULT AcrylicBrushWinUI2Private::MainWindowMessageHandler(UINT message, WPARAM
     case WM_DWMCOLORIZATIONCOLORCHANGED:
         themeChanged = true;
         break;
-    case WM_DWMCOMPOSITIONCHANGED: {
-        if (!Utils::IsCompositionEnabled()) {
-            OutputDebugStringW(L"AcrylicManager won't be functional when DWM composition is disabled.");
-            std::exit(-1);
-        }
-    } break;
-    case WM_CLOSE: {
-        Cleanup();
-        return 0;
-    }
-    case WM_DESTROY: {
-        PostQuitMessage(0);
-        return 0;
-    }
     default:
         break;
     }

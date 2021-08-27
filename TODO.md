@@ -10,3 +10,4 @@
 - winui3发布后添加对应后端
 - 添加Windows.UI.Composition后端
 - 调查Microsoft Edge Update Installer (Google Chrome Update Installer) 是如何在win7系统上也保留系统边框的
+- 后端所有的函数执行前都先判断下是否应直接返回

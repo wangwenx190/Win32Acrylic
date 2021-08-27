@@ -50,6 +50,8 @@ protected:
     [[nodiscard]] static LRESULT OnNCCalcSize(const HWND hWnd, const WPARAM wParam, const LPARAM lParam) noexcept;
     [[nodiscard]] static LRESULT OnNCHitTest(const HWND hWnd, const LPARAM lParam) noexcept;
     static void OnNCRButtonUp(const HWND hWnd, const WPARAM wParam, const LPARAM lParam) noexcept;
+    static void OnCreate(const HWND hWnd, const LPARAM lParam) noexcept;
+    static void OnSize(const HWND hWnd, const WPARAM wParam, const LPARAM lParam) noexcept;
     static void OnPaint(const HWND hWnd) noexcept;
     static void OnSettingChange(const HWND hWnd, const WPARAM wParam, const LPARAM lParam) noexcept;
     static void OnDwmCompositionChanged() noexcept;
@@ -79,8 +81,6 @@ protected:
             return false;
         }
         SetWindowHandle(hWnd);
-        m_dpi = 0; // fixme
-        m_dpr = 0.0; // fixme
         return true;
     }
 
@@ -106,6 +106,12 @@ protected:
             return OnNCHitTest(hWnd, lParam);
         case WM_NCRBUTTONUP:
             OnNCRButtonUp(hWnd, wParam, lParam);
+            break;
+        case WM_CREATE:
+            OnCreate(hWnd, lParam);
+            break;
+        case WM_SIZE:
+            OnSize(hWnd, wParam, lParam);
             break;
         case WM_PAINT:
             OnPaint(hWnd);

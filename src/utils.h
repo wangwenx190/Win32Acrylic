@@ -68,7 +68,6 @@ namespace Utils
 [[nodiscard]] bool SetDpiAwarenessForWindow(const HWND hWnd, const DpiAwareness awareness);
 [[nodiscard]] std::wstring TranslateErrorCodeToMessage(const std::wstring &function, const HRESULT hr);
 [[nodiscard]] std::wstring GenerateGUID();
-//[[nodiscard]] bool TriggerFrameChangeForWindow(const HWND hWnd);
 [[nodiscard]] bool UpdateFrameMargins(const HWND hWnd);
 [[nodiscard]] bool OpenSystemMenu(const HWND hWnd, const POINT pos);
 [[nodiscard]] bool IsCompositionEnabled();

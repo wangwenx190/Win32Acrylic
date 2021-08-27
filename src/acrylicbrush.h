@@ -35,7 +35,7 @@ class AcrylicBrush
 
 public:
     explicit AcrylicBrush();
-    ~AcrylicBrush();
+    virtual ~AcrylicBrush();
 
     [[nodiscard]] virtual bool IsSupportedByCurrentOS() const = 0;
     [[nodiscard]] virtual bool Initialize() const = 0;

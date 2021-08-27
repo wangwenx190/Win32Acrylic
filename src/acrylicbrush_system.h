@@ -34,7 +34,7 @@ class AcrylicBrushSystem final : public AcrylicBrush
 
 public:
     explicit AcrylicBrushSystem();
-    ~AcrylicBrushSystem();
+    ~AcrylicBrushSystem() override;
 
     [[nodiscard]] bool IsSupportedByCurrentOS() const override;
     [[nodiscard]] bool Initialize() const override;

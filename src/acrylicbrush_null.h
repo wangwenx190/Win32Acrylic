@@ -34,7 +34,7 @@ class AcrylicBrushNull final : public AcrylicBrush
 
 public:
     explicit AcrylicBrushNull();
-    ~AcrylicBrushNull();
+    ~AcrylicBrushNull() override;
 
     [[nodiscard]] bool IsSupportedByCurrentOS() const override;
     [[nodiscard]] bool Initialize() const override;

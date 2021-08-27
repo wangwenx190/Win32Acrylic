@@ -582,7 +582,7 @@ bool AcrylicBrushDirect2DPrivate::InitializeGraphicsInfrastructure()
         return false;
     }
     SecureZeroMemory(&m_D2DBitmapProperties, sizeof(m_D2DBitmapProperties));
-    const auto dpiF = static_cast<float>(GetCurrentDPI());
+    const auto dpiF = static_cast<float>(GetCurrentDpi());
     m_D2DBitmapProperties = D2D1::BitmapProperties1(
                 D2D1_BITMAP_OPTIONS_TARGET | D2D1_BITMAP_OPTIONS_CANNOT_DRAW,
                 D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED),

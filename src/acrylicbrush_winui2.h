@@ -34,7 +34,7 @@ class AcrylicBrushWinUI2 final : public AcrylicBrush
 
 public:
     explicit AcrylicBrushWinUI2();
-    ~AcrylicBrushWinUI2();
+    ~AcrylicBrushWinUI2() override;
 
     [[nodiscard]] bool IsSupportedByCurrentOS() const override;
     [[nodiscard]] bool Initialize() const override;

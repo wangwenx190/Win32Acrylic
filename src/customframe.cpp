@@ -48,7 +48,7 @@ bool CustomFrame::__RegisterWindowClass(const WNDPROC wndProc) noexcept
     if (!wndProc) {
         return false;
     }
-    m_class = g_classNamePrefix + Utils::GenerateGUID();
+    m_windowClass = g_classNamePrefix + Utils::GenerateGUID();
     WNDCLASSEXW wcex;
     SecureZeroMemory(&wcex, sizeof(wcex));
     wcex.cbSize = sizeof(wcex);
@@ -59,7 +59,7 @@ bool CustomFrame::__RegisterWindowClass(const WNDPROC wndProc) noexcept
     wcex.hIcon = LoadIconW(GET_CURRENT_INSTANCE, MAKEINTRESOURCEW(IDI_DEFAULTICON));
     wcex.hIconSm = LoadIconW(GET_CURRENT_INSTANCE, MAKEINTRESOURCEW(IDI_DEFAULTICONSM));
     wcex.hbrBackground = reinterpret_cast<HBRUSH>(COLOR_WINDOW + 1);
-    wcex.lpszClassName = m_class.c_str();
+    wcex.lpszClassName = m_windowClass.c_str();
     if (RegisterClassExW(&wcex) == 0) {
         PRINT_WIN32_ERROR_MESSAGE(RegisterClassExW)
         return false;
@@ -67,10 +67,10 @@ bool CustomFrame::__RegisterWindowClass(const WNDPROC wndProc) noexcept
     return true;
 }
 
-bool CustomFrame::__CreateMyWindow() noexcept
+bool CustomFrame::__CreateWindow() noexcept
 {
     m_window = CreateWindowExW(0L,
-                               m_class.c_str(),
+                               m_windowClass.c_str(),
                                g_windowTitle,
                                WS_OVERLAPPEDWINDOW,
                                CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
@@ -84,6 +84,11 @@ bool CustomFrame::__CreateMyWindow() noexcept
         return false;
     }
     return true;
+}
+
+std::wstring CustomFrame::__GetWindowClassName() const noexcept
+{
+    return m_windowClass;
 }
 
 int CustomFrame::MessageLoop() const noexcept
@@ -435,7 +440,7 @@ void CustomFrame::OnNCRButtonUp(const HWND hWnd, const WPARAM wParam, const LPAR
     }
 }
 
-void CustomFrame::OnCreate(const HWND hWnd, const LPARAM lParam) noexcept
+void CustomFrame::OnCreate(const HWND hWnd, const LPARAM lParam, UINT *dpi) noexcept
 {
     if (!Utils::UpdateFrameMargins(hWnd)) {
         OutputDebugStringW(L"Failed to update frame margins.");
@@ -444,7 +449,9 @@ void CustomFrame::OnCreate(const HWND hWnd, const LPARAM lParam) noexcept
     if (SetWindowPos(hWnd, nullptr, 0, 0, 0, 0, flags) == FALSE) {
         PRINT_WIN32_ERROR_MESSAGE(SetWindowPos)
     }
-    m_dpi = Utils::GetDotsPerInchForWindow(hWnd);
+    if (dpi) {
+        *dpi = Utils::GetDotsPerInchForWindow(hWnd);
+    }
 }
 
 void CustomFrame::OnSize(const HWND hWnd, const WPARAM wParam, const LPARAM lParam) noexcept
@@ -492,13 +499,15 @@ void OnDPIChanged(const HWND hWnd, const WPARAM wParam, const LPARAM lParam, UIN
     }
 }
 
-void CustomFrame::OnClose(const HWND hWnd) noexcept
+void CustomFrame::OnClose(const HWND hWnd, const std::wstring &className) noexcept
 {
     if (DestroyWindow(hWnd) == FALSE) {
         PRINT_WIN32_ERROR_MESSAGE(DestroyWindow)
     }
-    if (UnregisterClassW(m_class.c_str(), GET_CURRENT_INSTANCE) == FALSE) {
-        PRINT_WIN32_ERROR_MESSAGE(UnregisterClassW)
+    if (!className.empty()) {
+        if (UnregisterClassW(className.c_str(), GET_CURRENT_INSTANCE) == FALSE) {
+            PRINT_WIN32_ERROR_MESSAGE(UnregisterClassW)
+        }
     }
 }
 

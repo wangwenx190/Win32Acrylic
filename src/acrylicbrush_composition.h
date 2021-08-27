@@ -34,7 +34,7 @@ class AcrylicBrushComposition final : public AcrylicBrush
 
 public:
     explicit AcrylicBrushComposition();
-    ~AcrylicBrushComposition();
+    ~AcrylicBrushComposition() override;
 
     [[nodiscard]] bool IsSupportedByCurrentOS() const override;
     [[nodiscard]] bool Initialize() const override;

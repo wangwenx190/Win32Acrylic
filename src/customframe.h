@@ -38,6 +38,7 @@ public:
 protected:
     [[nodiscard]] bool __RegisterWindowClass(const WNDPROC wndProc) noexcept;
     [[nodiscard]] bool __CreateWindow() noexcept;
+    [[nodiscard]] std::wstring __GetWindowClassName() const noexcept;
 
     [[nodiscard]] int MessageLoop() const noexcept;
 
@@ -48,17 +49,17 @@ protected:
     [[nodiscard]] static LRESULT OnNCCalcSize(const HWND hWnd, const WPARAM wParam, const LPARAM lParam) noexcept;
     [[nodiscard]] static LRESULT OnNCHitTest(const HWND hWnd, const LPARAM lParam) noexcept;
     static void OnNCRButtonUp(const HWND hWnd, const WPARAM wParam, const LPARAM lParam) noexcept;
-    static void OnCreate(const HWND hWnd, const LPARAM lParam) noexcept;
+    static void OnCreate(const HWND hWnd, const LPARAM lParam, UINT *dpi) noexcept;
     static void OnSize(const HWND hWnd, const WPARAM wParam, const LPARAM lParam) noexcept;
     static void OnPaint(const HWND hWnd) noexcept;
     static void OnSettingChange(const HWND hWnd, const WPARAM wParam, const LPARAM lParam) noexcept;
     static void OnDwmCompositionChanged() noexcept;
     static void OnDPIChanged(const HWND hWnd, const WPARAM wParam, const LPARAM lParam, UINT *newDpi) noexcept;
-    static void OnClose(const HWND hWnd) noexcept;
+    static void OnClose(const HWND hWnd, const std::wstring &className) noexcept;
     static void OnDestroy() noexcept;
 
 private:
-    std::wstring m_class = nullptr;
+    std::wstring m_windowClass = nullptr;
     HWND m_window = nullptr;
 };
 
@@ -105,7 +106,7 @@ protected:
             OnNCRButtonUp(hWnd, wParam, lParam);
             break;
         case WM_CREATE:
-            OnCreate(hWnd, lParam);
+            OnCreate(hWnd, lParam, &m_dpi);
             break;
         case WM_SIZE:
             OnSize(hWnd, wParam, lParam);
@@ -123,7 +124,7 @@ protected:
             OnDwmCompositionChanged();
             break;
         case WM_CLOSE:
-            OnClose(hWnd, m_className);
+            OnClose(hWnd, __GetWindowClassName());
             break;
         case WM_DESTROY:
             OnDestroy();

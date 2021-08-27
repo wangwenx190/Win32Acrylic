@@ -34,7 +34,7 @@ class AcrylicBrushDirect2D final : public AcrylicBrush
 
 public:
     explicit AcrylicBrushDirect2D();
-    ~AcrylicBrushDirect2D();
+    ~AcrylicBrushDirect2D() override;
 
     [[nodiscard]] bool IsSupportedByCurrentOS() const override;
     [[nodiscard]] bool Initialize() const override;

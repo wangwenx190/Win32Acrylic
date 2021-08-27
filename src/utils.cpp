@@ -23,7 +23,6 @@
  */
 
 #include "utils.h"
-#include "resource.h"
 #include <wininet.h>
 #include <ShlObj_Core.h>
 #include <ShellScalingApi.h>
@@ -33,7 +32,6 @@
 static constexpr wchar_t g_personalizeRegistryKey[] = LR"(Software\Microsoft\Windows\CurrentVersion\Themes\Personalize)";
 static constexpr wchar_t g_dwmRegistryKey[] = LR"(Software\Microsoft\Windows\DWM)";
 static constexpr wchar_t g_desktopRegistryKey[] = LR"(Control Panel\Desktop)";
-static constexpr wchar_t g_windowClassNamePrefix[] = LR"(wangwenx190\AcrylicManager\WindowClasses\)";
 
 bool Utils::CompareSystemVersion(const WindowsVersion ver, const VersionCompare comp)
 {
@@ -314,12 +312,14 @@ double Utils::GetDevicePixelRatioForWindow(const HWND hWnd)
     default:
         return 1.0;
     }
+    return 1.0;
 }
 
 int Utils::GetResizeBorderThickness(const HWND hWnd)
 {
     if (!hWnd) {
-        return 8;
+        // The padded border will disappear if DWM composition is disabled.
+        return (IsCompositionEnabled() ? 8 : 4);
     }
     const UINT dpi = GetDotsPerInchForWindow(hWnd);
     const int result_dpi = (GetSystemMetricsForDpi(SM_CXPADDEDBORDER, dpi)
@@ -342,18 +342,24 @@ int Utils::GetCaptionHeight(const HWND hWnd)
 
 int Utils::GetTitleBarHeight(const HWND hWnd)
 {
+    // The padded border will disappear if DWM composition is disabled.
+    const int presetTitleBarHeight = (IsCompositionEnabled() ? 31 : 27);
     if (!hWnd) {
-        return 31;
+        return presetTitleBarHeight;
     }
+    // todo adjustwindowrectfordpi
     const int result = (GetResizeBorderThickness(hWnd) + GetCaptionHeight(hWnd));
     const double dpr = GetDevicePixelRatioForWindow(hWnd);
-    return ((result > 0) ? result : std::round(31.0 * ((dpr > 0.0) ? dpr : 1.0)));
+    return ((result > 0) ? result : std::round(static_cast<double>(presetTitleBarHeight) * ((dpr > 0.0) ? dpr : 1.0)));
 }
 
 int Utils::GetWindowVisibleFrameBorderThickness(const HWND hWnd)
 {
     if (!hWnd) {
-        return 1;
+        return 0;
+    }
+    if (!IsWindows10OrGreater()) {
+        return 0;
     }
     UINT value = 0;
     const HRESULT hr = DwmGetWindowAttribute(hWnd, static_cast<DWORD>(DwmWindowAttribute::VISIBLE_FRAME_BORDER_THICKNESS), &value, sizeof(value));
@@ -370,12 +376,18 @@ int Utils::GetWindowVisibleFrameBorderThickness(const HWND hWnd)
 
 bool Utils::ShouldAppsUseDarkMode()
 {
+    if (!IsWindows10RS1OrGreater()) {
+        return false;
+    }
     const int value = GetIntFromRegistry(HKEY_CURRENT_USER, g_personalizeRegistryKey, L"AppsUseLightTheme");
     return (value == 0);
 }
 
 bool Utils::ShouldSystemUsesDarkMode()
 {
+    if (!IsWindows10RS1OrGreater()) {
+        return false;
+    }
     const int value = GetIntFromRegistry(HKEY_CURRENT_USER, g_personalizeRegistryKey, L"SystemUsesLightTheme");
     return (value == 0);
 }
@@ -431,6 +443,9 @@ bool Utils::IsWindowDarkFrameBorderEnabled(const HWND hWnd)
     if (!hWnd) {
         return false;
     }
+    if (!IsWindows10RS1OrGreater()) {
+        return false;
+    }
     BOOL enabled = FALSE;
     HRESULT hr = DwmGetWindowAttribute(hWnd, static_cast<DWORD>(DwmWindowAttribute::USE_IMMERSIVE_DARK_MODE_BEFORE_20H1), &enabled, sizeof(enabled));
     if (SUCCEEDED(hr)) {
@@ -456,6 +471,9 @@ bool Utils::SetWindowDarkFrameBorderEnabled(const HWND hWnd, const bool enable)
     if (!hWnd) {
         return false;
     }
+    if (!IsWindows10RS1OrGreater()) {
+        return false;
+    }
     const BOOL enabled = (enable ? TRUE : FALSE);
     HRESULT hr = DwmSetWindowAttribute(hWnd, static_cast<DWORD>(DwmWindowAttribute::USE_IMMERSIVE_DARK_MODE_BEFORE_20H1), &enabled, sizeof(enabled));
     if (SUCCEEDED(hr)) {
@@ -474,34 +492,6 @@ bool Utils::SetWindowDarkFrameBorderEnabled(const HWND hWnd, const bool enable)
         // a "parameter error" (code: 87) on systems before that value was introduced.
     }
     return false;
-}
-
-bool Utils::IsWindowTransitionsEnabled(const HWND hWnd)
-{
-    if (!hWnd) {
-        return false;
-    }
-    BOOL disabled = FALSE;
-    const HRESULT hr = DwmGetWindowAttribute(hWnd, static_cast<DWORD>(DwmWindowAttribute::TRANSITIONS_FORCEDISABLED), &disabled, sizeof(disabled));
-    if (FAILED(hr)) {
-        PRINT_HR_ERROR_MESSAGE(DwmGetWindowAttribute, hr)
-        return false;
-    }
-    return (disabled == FALSE);
-}
-
-bool Utils::SetWindowTransitionsEnabled(const HWND hWnd, const bool enable)
-{
-    if (!hWnd) {
-        return false;
-    }
-    const BOOL disabled = (enable ? FALSE : TRUE);
-    const HRESULT hr = DwmSetWindowAttribute(hWnd, static_cast<DWORD>(DwmWindowAttribute::TRANSITIONS_FORCEDISABLED), &disabled, sizeof(disabled));
-    if (FAILED(hr)) {
-        PRINT_HR_ERROR_MESSAGE(DwmSetWindowAttribute, hr)
-        return false;
-    }
-    return true;
 }
 
 std::wstring Utils::GetWallpaperFilePath(const int screen)
@@ -1019,6 +1009,7 @@ std::wstring Utils::GenerateGUID()
     return result;
 }
 
+#if 0
 bool Utils::TriggerFrameChangeForWindow(const HWND hWnd)
 {
     if (!hWnd) {
@@ -1031,13 +1022,19 @@ bool Utils::TriggerFrameChangeForWindow(const HWND hWnd)
     }
     return true;
 }
+#endif
 
 bool Utils::UpdateFrameMargins(const HWND hWnd)
 {
     if (!hWnd) {
         return false;
     }
+    // DwmExtendFrameIntoClientArea() will always fail if DWM composition is disabled.
+    if (!IsCompositionEnabled()) {
+        return false;
+    }
     const int topFrameMargin = (IsWindowNoState(hWnd) ? Utils::GetWindowVisibleFrameBorderThickness(hWnd) : 0);
+    const int leftFrameMargin = (IsWindows10OrGreater() ? 0 : 1);
     // We removed the whole top part of the frame (see handling of
     // WM_NCCALCSIZE) so the top border is missing now. We add it back here.
     // Note #1: You might wonder why we don't remove just the title bar instead
@@ -1053,7 +1050,7 @@ bool Utils::UpdateFrameMargins(const HWND hWnd)
     //  at the top) in the WM_PAINT handler. This eliminates the transparency
     //  bug and it's what a lot of Win32 apps that customize the title bar do
     //  so it should work fine.
-    const MARGINS margins = {0, 0, topFrameMargin, 0};
+    const MARGINS margins = {leftFrameMargin, leftFrameMargin, topFrameMargin, leftFrameMargin};
     const HRESULT hr = DwmExtendFrameIntoClientArea(hWnd, &margins);
     if (FAILED(hr)) {
         PRINT_HR_ERROR_MESSAGE(DwmExtendFrameIntoClientArea, hr)
@@ -1139,12 +1136,13 @@ bool Utils::IsCompositionEnabled()
     return (dwmComp != 0);
 }
 
-bool Utils::ExcludeWindowFromLivePreview(const HWND hWnd)
+bool Utils::SetWindowExcludedFromLivePreview(const HWND hWnd, const bool enable)
 {
     if (!hWnd) {
         return false;
     }
-    const BOOL value = TRUE;
+    // todo: is it needed to check the dwm composition state?
+    const BOOL value = (enable ? TRUE : FALSE);
     const HRESULT hr = DwmSetWindowAttribute(hWnd, static_cast<DWORD>(DwmWindowAttribute::EXCLUDED_FROM_PEEK), &value, sizeof(value));
     if (FAILED(hr)) {
         PRINT_HR_ERROR_MESSAGE(DwmSetWindowAttribute, hr)
@@ -1159,29 +1157,5 @@ bool Utils::RemoveWindowFromTaskListAndTaskBar(const HWND hWnd)
         return false;
     }
     // todo
-    return true;
-}
-
-std::wstring Utils::RegisterWindowClass(const WNDPROC wndproc)
-{
-    if (!wndproc) {
-        return {};
-    }
-    const std::wstring className = g_windowClassNamePrefix + GenerateGUID();
-    WNDCLASSEXW wcex;
-    SecureZeroMemory(&wcex, sizeof(wcex));
-    wcex.cbSize = sizeof(wcex);
-    wcex.style = CS_HREDRAW | CS_VREDRAW | CS_DBLCLKS; // todo move CS_DBLCLKS
-    wcex.lpfnWndProc = wndproc;
-    wcex.hInstance = GET_CURRENT_INSTANCE;
-    wcex.hCursor = LoadCursorW(nullptr, IDC_ARROW);
-    wcex.hIcon = LoadIconW(GET_CURRENT_INSTANCE, MAKEINTRESOURCEW(IDI_DEFAULTICON));
-    wcex.hIconSm = LoadIconW(GET_CURRENT_INSTANCE, MAKEINTRESOURCEW(IDI_DEFAULTICONSM));
-    wcex.hbrBackground = reinterpret_cast<HBRUSH>(COLOR_WINDOW + 1);
-    wcex.lpszClassName = className.c_str();
-    if (RegisterClassExW(&wcex) == 0) {
-        PRINT_WIN32_ERROR_MESSAGE(RegisterClassExW)
-        return {};
-    }
-    return className;
+    return false;
 }

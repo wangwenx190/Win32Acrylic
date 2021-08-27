@@ -28,10 +28,7 @@
 #include "acrylicbrush_winui3.h"
 #include "acrylicbrush_winui2.h"
 #include "acrylicbrush_direct2d.h"
-
-#ifdef __cplusplus
-EXTERN_C_START
-#endif
+#include "acrylicbrush_null.h"
 
 constexpr IID IID_ACRYLICBRUSH_SYSTEM = {0x2f2c9d3d, 0xc9d1, 0x4218, {0x89, 0x15, 0xb5, 0x52, 0xfd, 0xa8, 0x69, 0x39}};
 constexpr IID IID_ACRYLICBRUSH_COMPOSITION = {0xcfe22b95, 0x3e46, 0x4add, {0x81, 0x55, 0x89, 0x7b, 0xdb, 0x7b, 0xb3, 0x0}};
@@ -39,10 +36,6 @@ constexpr IID IID_ACRYLICBRUSH_WINUI3 = {0xe6ebc6a6, 0xfde7, 0x4f1e, {0x89, 0x96
 constexpr IID IID_ACRYLICBRUSH_WINUI2 = {0xaf69d050, 0x500a, 0x417b, {0xa1, 0x8c, 0x32, 0x93, 0x89, 0x12, 0xac, 0x36}};
 constexpr IID IID_ACRYLICBRUSH_DIRECT2D = {0x55269e0f, 0xdd0, 0x4ba1, {0x89, 0xf, 0x74, 0x68, 0x64, 0x55, 0xdc, 0x4e}};
 constexpr IID IID_ACRYLICBRUSH_NULL = {0xb1c629f0, 0x3262, 0x4d75, {0xac, 0x75, 0xd2, 0xc7, 0x85, 0x3c, 0x38, 0x8f}};
-
-#ifdef __cplusplus
-EXTERN_C_END
-#endif
 
 HRESULT AcrylicBrushFactory::CreateInstance(REFIID riid, void **ppInstance)
 {
@@ -61,12 +54,11 @@ HRESULT AcrylicBrushFactory::CreateInstance(REFIID riid, void **ppInstance)
     } else if (riid == IID_ACRYLICBRUSH_DIRECT2D) {
         brush = new AcrylicBrushDirect2D;
     } else if (riid == IID_ACRYLICBRUSH_NULL) {
-        return S_OK;
+        brush = new AcrylicBrushNull;
     } else {
         return E_FAIL; // fixme: use wrong iid error
     }
     if (brush->IsSupportedByCurrentOS()) {
-        brush->AddRef();
         *ppInstance = brush;
         return S_OK;
     } else {

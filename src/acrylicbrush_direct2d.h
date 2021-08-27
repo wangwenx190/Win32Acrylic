@@ -36,7 +36,6 @@ public:
     explicit AcrylicBrushDirect2D();
     ~AcrylicBrushDirect2D();
 
-    [[nodiscard]] int AddRef() const override;
     void Release() override;
 
     [[nodiscard]] bool IsSupportedByCurrentOS() const override;

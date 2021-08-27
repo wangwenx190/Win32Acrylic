@@ -24,8 +24,6 @@
 
 #include "acrylicbrush_winui3.h"
 
-static int g_refCount = 0;
-
 AcrylicBrushWinUI3::AcrylicBrushWinUI3()
 {
     d_ptr = std::make_unique<AcrylicBrushWinUI3Private>(this);
@@ -35,18 +33,12 @@ AcrylicBrushWinUI3::~AcrylicBrushWinUI3()
 {
 }
 
-int AcrylicBrushWinUI3::AddRef() const
-{
-    ++g_refCount;
-}
-
 void AcrylicBrushWinUI3::Release()
 {
-    --g_refCount;
-    if (g_refCount <= 0) {
-        g_refCount = 0;
-        delete this;
+    if (!Destroy()) {
+        OutputDebugStringW(L"Failed to destroy.");
     }
+    delete this;
 }
 
 bool AcrylicBrushWinUI3::IsSupportedByCurrentOS() const

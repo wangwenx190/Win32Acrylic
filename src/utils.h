@@ -53,8 +53,6 @@ namespace Utils
 [[nodiscard]] bool IsHighContrastModeEnabled();
 [[nodiscard]] bool IsWindowDarkFrameBorderEnabled(const HWND hWnd);
 [[nodiscard]] bool SetWindowDarkFrameBorderEnabled(const HWND hWnd, const bool enable);
-[[nodiscard]] bool IsWindowTransitionsEnabled(const HWND hWnd);
-[[nodiscard]] bool SetWindowTransitionsEnabled(const HWND hWnd, const bool enable);
 [[nodiscard]] std::wstring GetWallpaperFilePath(const int screen);
 [[nodiscard]] COLORREF GetDesktopBackgroundColor(const int screen);
 [[nodiscard]] WallpaperAspectStyle GetWallpaperAspectStyle(const int screen);
@@ -70,12 +68,11 @@ namespace Utils
 [[nodiscard]] bool SetDpiAwarenessForWindow(const HWND hWnd, const DpiAwareness awareness);
 [[nodiscard]] std::wstring TranslateErrorCodeToMessage(const std::wstring &function, const HRESULT hr);
 [[nodiscard]] std::wstring GenerateGUID();
-[[nodiscard]] bool TriggerFrameChangeForWindow(const HWND hWnd);
+//[[nodiscard]] bool TriggerFrameChangeForWindow(const HWND hWnd);
 [[nodiscard]] bool UpdateFrameMargins(const HWND hWnd);
 [[nodiscard]] bool OpenSystemMenu(const HWND hWnd, const POINT pos);
 [[nodiscard]] bool IsCompositionEnabled();
-[[nodiscard]] bool ExcludeWindowFromLivePreview(const HWND hWnd);
+[[nodiscard]] bool SetWindowExcludedFromLivePreview(const HWND hWnd, const bool enable);
 [[nodiscard]] bool RemoveWindowFromTaskListAndTaskBar(const HWND hWnd);
-[[nodiscard]] std::wstring RegisterWindowClass(const WNDPROC wndproc);
 
 }

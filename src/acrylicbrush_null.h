@@ -26,15 +26,15 @@
 
 #include "acrylicbrush.h"
 
-class AcrylicBrushWinUI2Private;
+class AcrylicBrushNullPrivate;
 
-class AcrylicBrushWinUI2 final : public AcrylicBrush
+class AcrylicBrushNull final : public AcrylicBrush
 {
-    ACRYLICMANAGER_DISABLE_COPY_MOVE(AcrylicBrushWinUI2)
+    ACRYLICMANAGER_DISABLE_COPY_MOVE(AcrylicBrushNull)
 
 public:
-    explicit AcrylicBrushWinUI2();
-    ~AcrylicBrushWinUI2();
+    explicit AcrylicBrushNull();
+    ~AcrylicBrushNull();
 
     void Release() override;
 
@@ -46,5 +46,5 @@ public:
     [[nodiscard]] int EventLoop() const override;
 
 private:
-    std::unique_ptr<AcrylicBrushWinUI2Private> d_ptr;
+    std::unique_ptr<AcrylicBrushNullPrivate> d_ptr;
 };

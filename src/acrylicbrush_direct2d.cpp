@@ -33,18 +33,6 @@
 #include <D2D1Effects_2.h>
 #include <WinCodec.h>
 
-#ifndef WM_DWMCOMPOSITIONCHANGED
-#define WM_DWMCOMPOSITIONCHANGED (0x031E)
-#endif
-
-#ifndef WM_DWMCOLORIZATIONCOLORCHANGED
-#define WM_DWMCOLORIZATIONCOLORCHANGED (0x0320)
-#endif
-
-#ifdef __cplusplus
-EXTERN_C_START
-#endif
-
 constexpr CLSID am_CLSID_D2D1Atlas = {0x913e2be4, 0xfdcf, 0x4fe2, {0xa5, 0xf0, 0x24, 0x54, 0xf1, 0x4f, 0xf4, 0x8}};
 constexpr CLSID am_CLSID_D2D1BitmapSource = {0x5fb6c24d, 0xc6dd, 0x4231, {0x94, 0x4,  0x50, 0xf4, 0xd5, 0xc3, 0x25, 0x2d}};
 constexpr CLSID am_CLSID_D2D1Blend = {0x81c5b77b, 0x13f8, 0x4cdd, {0xad, 0x20, 0xc8, 0x90, 0x54, 0x7a, 0xc6, 0x5d}};
@@ -58,15 +46,7 @@ constexpr CLSID am_CLSID_D2D1Opacity = {0x811d79a4, 0xde28, 0x4454, {0x80, 0x94,
 constexpr CLSID am_CLSID_D2D1CrossFade = {0x12f575e8, 0x4db1, 0x485f, {0x9a, 0x84, 0x03, 0xa0, 0x7d, 0xd3, 0x82, 0x9f}};
 constexpr CLSID am_CLSID_D2D1Tint = {0x36312b17, 0xf7dd, 0x4014, {0x91, 0x5d, 0xff, 0xca, 0x76, 0x8c, 0xf2, 0x11}};
 
-#ifdef __cplusplus
-EXTERN_C_END
-#endif
-
-static constexpr wchar_t g_mainWindowTitle[] = L"AcrylicManager Direct2D Main Window";
-
-static int g_refCount = 0;
-
-class AcrylicBrushDirect2DPrivate
+class AcrylicBrushDirect2DPrivate : public CustomFrameT<AcrylicBrushDirect2DPrivate>
 {
     ACRYLICMANAGER_DISABLE_COPY_MOVE(AcrylicBrushDirect2DPrivate)
 
@@ -74,32 +54,25 @@ public:
     explicit AcrylicBrushDirect2DPrivate(AcrylicBrushDirect2D *q);
     ~AcrylicBrushDirect2DPrivate();
 
-    static LRESULT CALLBACK MainWindowProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
-
-    [[nodiscard]] bool CreateMainWindow();
-    [[nodiscard]] HWND GetMainWindowHandle() const;
-    [[nodiscard]] int EventLoop() const;
+    [[nodiscard]] bool Initialize();
+    [[nodiscard]] int GetExecResult() const;
+    [[nodiscard]] HWND GetWindow() const;
     void ReloadBrushParameters();
-    void Cleanup();
+
+    [[nodiscard]] LRESULT MessageHandler(UINT message, WPARAM wParam, LPARAM lParam) noexcept;
 
 private:
-    [[nodiscard]] LRESULT MainWindowMessageHandler(UINT message, WPARAM wParam, LPARAM lParam);
     [[nodiscard]] bool EnsureWallpaperBrush();
     [[nodiscard]] bool EnsureNoiseBrush();
     [[nodiscard]] bool PrepareEffects_Luminosity(ID2D1Effect **output);
     [[nodiscard]] bool PrepareEffects_Legacy(ID2D1Effect **output);
     [[nodiscard]] bool CreateEffects(ID2D1Effect **output);
-    [[nodiscard]] bool Initialize();
+    [[nodiscard]] bool InitializeGraphicsInfrastructure();
     [[nodiscard]] bool DrawFinalVisual() const;
     void ReloadDesktopParameters();
 
 private:
     AcrylicBrushDirect2D *q_ptr = nullptr;
-
-    std::wstring m_mainWindowClassName = nullptr;
-    HWND m_mainWindowHandle = nullptr;
-    UINT m_currentDpi = 0;
-    double m_currentDpr = 0.0;
 
     std::wstring m_wallpaperFilePath = nullptr;
     WallpaperAspectStyle m_wallpaperAspectStyle = WallpaperAspectStyle::Invalid;
@@ -127,6 +100,7 @@ private:
     Microsoft::WRL::ComPtr<ID2D1Effect> m_D2DNoiseOpacityEffect = nullptr;
     Microsoft::WRL::ComPtr<ID2D1Effect> m_D2DNoiseBlendEffectOuter = nullptr;
     Microsoft::WRL::ComPtr<ID2D1Effect> m_D2DFadeInOutEffect = nullptr;
+    Microsoft::WRL::ComPtr<ID2D1Effect> m_D2DFinalBrushEffect = nullptr;
     Microsoft::WRL::ComPtr<IWICImagingFactory> m_WICFactory = nullptr;
     Microsoft::WRL::ComPtr<IWICBitmapDecoder> m_WICDecoder = nullptr;
     Microsoft::WRL::ComPtr<IWICBitmapFrameDecode> m_WICFrame = nullptr;
@@ -154,91 +128,16 @@ AcrylicBrushDirect2DPrivate::~AcrylicBrushDirect2DPrivate()
 {
 }
 
-void AcrylicBrushDirect2DPrivate::Cleanup()
+LRESULT AcrylicBrushDirect2DPrivate::MessageHandler(UINT message, WPARAM wParam, LPARAM lParam) noexcept
 {
-    if (!m_wallpaperFilePath.empty()) {
-        m_wallpaperFilePath.clear();
-    }
-    if (m_wallpaperAspectStyle != WallpaperAspectStyle::Invalid) {
-        m_wallpaperAspectStyle = WallpaperAspectStyle::Invalid;
-    }
-    if (m_desktopBackgroundColor != 0) {
-        m_desktopBackgroundColor = 0;
-    }
-    // todo: release all com ptrs
-    if (m_mainWindowHandle) {
-        DestroyWindow(m_mainWindowHandle);
-        m_mainWindowHandle = nullptr;
-    }
-    if (!m_mainWindowClassName.empty()) {
-        UnregisterClassW(m_mainWindowClassName.c_str(), GET_CURRENT_INSTANCE);
-        m_mainWindowClassName.clear();
-    }
-    if (m_currentDpi != 0) {
-        m_currentDpi = 0;
-    }
-    if (m_currentDpr != 0.0) {
-        m_currentDpr = 0.0;
-    }
-}
-
-LRESULT CALLBACK AcrylicBrushDirect2DPrivate::MainWindowProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
-{
-    if (message == WM_NCCREATE) {
-        const auto cs = reinterpret_cast<LPCREATESTRUCTW>(lParam);
-        const auto that = static_cast<AcrylicBrushDirect2DPrivate *>(cs->lpCreateParams);
-        if (SetWindowLongPtrW(hWnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(that)) == 0) {
-            PRINT_WIN32_ERROR_MESSAGE(SetWindowLongPtrW)
-        }
-    } else if (message == WM_NCDESTROY) {
-        if (SetWindowLongPtrW(hWnd, GWLP_USERDATA, 0) == 0) {
-            PRINT_WIN32_ERROR_MESSAGE(SetWindowLongPtrW)
-        }
-    } else if (const auto that = reinterpret_cast<AcrylicBrushDirect2DPrivate *>(GetWindowLongPtrW(hWnd, GWLP_USERDATA))) {
-        return that->MainWindowMessageHandler(message, wParam, lParam);
-    }
-    return DefWindowProcW(hWnd, message, wParam, lParam);
-}
-
-LRESULT AcrylicBrushDirect2DPrivate::MainWindowMessageHandler(UINT message, WPARAM wParam, LPARAM lParam)
-{
-    MSG msg;
-    SecureZeroMemory(&msg, sizeof(msg));
-    msg.hwnd = m_mainWindowHandle;
-    msg.message = message;
-    msg.wParam = wParam;
-    msg.lParam = lParam;
-    const DWORD pos = GetMessagePos();
-    msg.pt = {GET_X_LPARAM(pos), GET_Y_LPARAM(pos)};
-    msg.time = GetMessageTime();
-    LRESULT result = 0;
-    if (CustomFrame::HandleWindowProc(&msg, &result)) {
-        return result;
-    }
-
     bool wallpaperChanged = false;
     bool themeChanged = false;
 
     switch (message) {
     case WM_PAINT: {
-        // generate brushes
-        // create effects
-        // draw final visual
-        return 0;
-    } break;
-    case WM_DPICHANGED: {
-        wallpaperChanged = true;
-        const auto x = static_cast<double>(LOWORD(wParam));
-        const auto y = static_cast<double>(HIWORD(wParam));
-        m_currentDpi = std::round((x + y) / 2.0);
-        m_currentDpr = Utils::GetDevicePixelRatioForWindow(m_mainWindowHandle);
-        const auto prcNewWindow = reinterpret_cast<LPRECT>(lParam);
-        if (MoveWindow(m_mainWindowHandle, prcNewWindow->left, prcNewWindow->top,
-                       GET_RECT_WIDTH(*prcNewWindow), GET_RECT_HEIGHT(*prcNewWindow), TRUE) == FALSE) {
-            PRINT_WIN32_ERROR_MESSAGE(MoveWindow)
-            break;
+        if (!DrawFinalVisual()) {
+            //
         }
-        return 0;
     } break;
     case WM_SETTINGCHANGE: {
         if (wParam == SPI_SETDESKWALLPAPER) {
@@ -252,20 +151,6 @@ LRESULT AcrylicBrushDirect2DPrivate::MainWindowMessageHandler(UINT message, WPAR
     case WM_DWMCOLORIZATIONCOLORCHANGED:
         themeChanged = true;
         break;
-    case WM_DWMCOMPOSITIONCHANGED: {
-        if (!Utils::IsCompositionEnabled()) {
-            OutputDebugStringW(L"AcrylicManager won't be functional when DWM composition is disabled.");
-            std::exit(-1);
-        }
-    } break;
-    case WM_CLOSE: {
-        Cleanup();
-        return 0;
-    }
-    case WM_DESTROY: {
-        PostQuitMessage(0);
-        return 0;
-    }
     default:
         break;
     }
@@ -275,64 +160,12 @@ LRESULT AcrylicBrushDirect2DPrivate::MainWindowMessageHandler(UINT message, WPAR
         ReloadBrushParameters();
     }
 
-    return DefWindowProcW(m_mainWindowHandle, message, wParam, lParam);
+    return base_type::MessageHandler(message, wParam, lParam);
 }
 
-bool AcrylicBrushDirect2DPrivate::CreateMainWindow()
+HWND AcrylicBrushDirect2DPrivate::GetWindow() const
 {
-    m_mainWindowClassName = Utils::RegisterWindowClass(MainWindowProc);
-    if (m_mainWindowClassName.empty()) {
-        OutputDebugStringW(L"Failed to register main window class.");
-        return false;
-    }
-
-    m_mainWindowHandle = CreateWindowExW(0L,
-                                         m_mainWindowClassName.c_str(),
-                                         g_mainWindowTitle,
-                                         WS_OVERLAPPEDWINDOW,
-                                         CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
-                                         nullptr,
-                                         nullptr,
-                                         GET_CURRENT_INSTANCE,
-                                         this);
-
-    if (!m_mainWindowHandle) {
-        PRINT_WIN32_ERROR_MESSAGE(CreateWindowExW)
-        return false;
-    }
-
-    m_currentDpi = Utils::GetDotsPerInchForWindow(m_mainWindowHandle);
-    if (m_currentDpi <= 0) {
-        m_currentDpi = USER_DEFAULT_SCREEN_DPI;
-    }
-    m_currentDpr = Utils::GetDevicePixelRatioForWindow(m_mainWindowHandle);
-    if (m_currentDpr <= 0.0) {
-        m_currentDpr = 1.0;
-    }
-
-    // Ensure DWM still draws the top frame by extending the top frame.
-    // This also ensures our window still has the frame shadow drawn by DWM.
-    if (!Utils::UpdateFrameMargins(m_mainWindowHandle)) {
-        OutputDebugStringW(L"Failed to update main window's frame margins.");
-        return false;
-    }
-    // Force a WM_NCCALCSIZE processing to make the window become frameless immediately.
-    if (!Utils::TriggerFrameChangeForWindow(m_mainWindowHandle)) {
-        OutputDebugStringW(L"Failed to trigger frame change event for main window.");
-        return false;
-    }
-    // Ensure our window still has window transitions.
-    if (!Utils::SetWindowTransitionsEnabled(m_mainWindowHandle, true)) {
-        OutputDebugStringW(L"Failed to enable window transitions for main window.");
-        return false;
-    }
-
-    return true;
-}
-
-HWND AcrylicBrushDirect2DPrivate::GetMainWindowHandle() const
-{
-    return m_mainWindowHandle;
+    return GetWindowHandle();
 }
 
 bool AcrylicBrushDirect2DPrivate::EnsureWallpaperBrush()
@@ -380,7 +213,7 @@ bool AcrylicBrushDirect2DPrivate::EnsureWallpaperBrush()
 
 bool AcrylicBrushDirect2DPrivate::EnsureNoiseBrush()
 {
-
+    // todo
 }
 
 bool AcrylicBrushDirect2DPrivate::PrepareEffects_Luminosity(ID2D1Effect **output)
@@ -511,7 +344,7 @@ bool AcrylicBrushDirect2DPrivate::CreateEffects(ID2D1Effect **output)
         PRINT_HR_ERROR_MESSAGE(CreateEffect, hr)
         return false;
     }
-    hr = m_D2DTintColorEffect->SetValue(D2D1_FLOOD_PROP_COLOR, WINRTCOLOR_TO_D2DCOLOR4F(q_ptr->GetTintColor()));
+    hr = m_D2DTintColorEffect->SetValue(D2D1_FLOOD_PROP_COLOR, WINRTCOLOR_TO_D2DCOLOR4F(q_ptr->GetEffectiveTintColor()));
     if (FAILED(hr)) {
         PRINT_HR_ERROR_MESSAGE(SetValue, hr)
         return false;
@@ -629,24 +462,27 @@ bool AcrylicBrushDirect2DPrivate::CreateEffects(ID2D1Effect **output)
 
 bool AcrylicBrushDirect2DPrivate::DrawFinalVisual() const
 {
-    const SIZE windowSize = GET_WINDOW_CLIENT_SIZE(m_mainWindowHandle);
-    const int borderThickness = Utils::GetWindowVisibleFrameBorderThickness(m_mainWindowHandle);
+    const HWND hWnd = GetWindowHandle();
+    const SIZE windowSize = GET_WINDOW_CLIENT_SIZE(hWnd);
+    const int borderThickness = Utils::GetWindowVisibleFrameBorderThickness(hWnd);
     m_D2DContext->BeginDraw();
-    m_D2DContext->Clear(D2D1::ColorF(0.0, 0.0, 0.0, 0.0));
-    m_D2DContext->DrawImage(m_D2DGaussianBlurEffect.Get(),
+    m_D2DContext->Clear(D2D1::ColorF(0.0, 0.0, 0.0, 0.0)); // todo: check: fully transparent color.
+    m_D2DContext->DrawImage(m_D2DFinalBrushEffect.Get(),
                             D2D1::Point2F(0.0, static_cast<float>(borderThickness)),
                             D2D1::RectF(0.0, 0.0,
-                                        static_cast<float>(windowSize.cx), static_cast<float>(windowSize.cy)));
+                                        static_cast<float>(windowSize.cx), static_cast<float>(windowSize.cy - borderThickness)));
     HRESULT hr = m_D2DContext->EndDraw();
     if (FAILED(hr)) {
         PRINT_HR_ERROR_MESSAGE(EndDraw, hr)
         return false;
     }
+    // Without this step, nothing will be visible to the user.
     hr = m_DXGISwapChain->Present(1, 0);
     if (FAILED(hr)) {
         PRINT_HR_ERROR_MESSAGE(Present, hr)
         return false;
     }
+    // Try to reduce flicker as much as possible.
     hr = DwmFlush();
     if (FAILED(hr)) {
         PRINT_HR_ERROR_MESSAGE(DwmFlush, hr)
@@ -663,7 +499,7 @@ void AcrylicBrushDirect2DPrivate::ReloadDesktopParameters()
     m_desktopBackgroundColor = Utils::GetDesktopBackgroundColor(screen);
 }
 
-bool AcrylicBrushDirect2DPrivate::Initialize()
+bool AcrylicBrushDirect2DPrivate::InitializeGraphicsInfrastructure()
 {
     HRESULT hr = D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED, IID_PPV_ARGS(m_D2DFactory.GetAddressOf()));
     if (FAILED(hr)) {
@@ -728,7 +564,7 @@ bool AcrylicBrushDirect2DPrivate::Initialize()
         PRINT_HR_ERROR_MESSAGE(GetParent, hr)
         return false;
     }
-    hr = m_DXGIFactory->CreateSwapChainForHwnd(m_D3D11Device.Get(), m_mainWindowHandle,
+    hr = m_DXGIFactory->CreateSwapChainForHwnd(m_D3D11Device.Get(), GetWindowHandle(),
                                                &m_DXGISwapChainDesc, nullptr, nullptr,
                                                m_DXGISwapChain.GetAddressOf());
     if (FAILED(hr)) {
@@ -746,10 +582,11 @@ bool AcrylicBrushDirect2DPrivate::Initialize()
         return false;
     }
     SecureZeroMemory(&m_D2DBitmapProperties, sizeof(m_D2DBitmapProperties));
+    const auto dpiF = static_cast<float>(GetCurrentDPI());
     m_D2DBitmapProperties = D2D1::BitmapProperties1(
                 D2D1_BITMAP_OPTIONS_TARGET | D2D1_BITMAP_OPTIONS_CANNOT_DRAW,
                 D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED),
-                static_cast<float>(m_currentDpi), static_cast<float>(m_currentDpi));
+                dpiF, dpiF);
     hr = m_DXGISwapChain->GetBuffer(0, IID_PPV_ARGS(m_DXGISurface.GetAddressOf()));
     if (FAILED(hr)) {
         PRINT_HR_ERROR_MESSAGE(GetBuffer, hr)
@@ -765,19 +602,31 @@ bool AcrylicBrushDirect2DPrivate::Initialize()
     return true;
 }
 
-int AcrylicBrushDirect2DPrivate::EventLoop() const
+bool AcrylicBrushDirect2DPrivate::Initialize()
 {
-    MSG msg = {};
-    while (GetMessageW(&msg, nullptr, 0, 0) != FALSE) {
-        TranslateMessage(&msg);
-        DispatchMessageW(&msg);
+    if (!Create()) {
+        OutputDebugStringW(L"Failed to create the background window.");
+        return false;
     }
-    return static_cast<int>(msg.wParam);
+    if (!InitializeGraphicsInfrastructure()) {
+        OutputDebugStringW(L"Failed to initialize the graphics infrastructure.");
+        return false;
+    }
+    if (!CreateEffects(m_D2DFinalBrushEffect.GetAddressOf())) {
+        OutputDebugStringW(L"Failed to create the homemade acrylic brush.");
+        return false;
+    }
+    return true;
+}
+
+int AcrylicBrushDirect2DPrivate::GetExecResult() const
+{
+    return MessageLoop();
 }
 
 void AcrylicBrushDirect2DPrivate::ReloadBrushParameters()
 {
-
+    // todo
 }
 
 AcrylicBrushDirect2D::AcrylicBrushDirect2D()
@@ -789,18 +638,12 @@ AcrylicBrushDirect2D::~AcrylicBrushDirect2D()
 {
 }
 
-int AcrylicBrushDirect2D::AddRef() const
-{
-    ++g_refCount;
-}
-
 void AcrylicBrushDirect2D::Release()
 {
-    --g_refCount;
-    if (g_refCount <= 0) {
-        g_refCount = 0;
-        delete this;
+    if (!Destroy()) {
+        OutputDebugStringW(L"Failed to destroy.");
     }
+    delete this;
 }
 
 bool AcrylicBrushDirect2D::IsSupportedByCurrentOS() const
@@ -811,13 +654,13 @@ bool AcrylicBrushDirect2D::IsSupportedByCurrentOS() const
 
 bool AcrylicBrushDirect2D::Create() const
 {
-    return false;
+    return d_ptr->Initialize();
 }
 
 bool AcrylicBrushDirect2D::Destroy() const
 {
-    d_ptr->Cleanup();
-    return true;
+    // todo
+    return false;
 }
 
 bool AcrylicBrushDirect2D::RefreshBrush() const
@@ -828,10 +671,10 @@ bool AcrylicBrushDirect2D::RefreshBrush() const
 
 HWND AcrylicBrushDirect2D::GetWindowHandle() const
 {
-    return d_ptr->GetMainWindowHandle();
+    return d_ptr->GetWindow();
 }
 
 int AcrylicBrushDirect2D::EventLoop() const
 {
-    return d_ptr->EventLoop();
+    return d_ptr->GetExecResult();
 }

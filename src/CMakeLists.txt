@@ -29,6 +29,8 @@ set(SOURCES
     acrylicbrush_winui2.cpp
     acrylicbrush_direct2d.h
     acrylicbrush_direct2d.cpp
+    acrylicbrush_null.h
+    acrylicbrush_null.cpp
     acrylicbrushfactory.h
     acrylicbrushfactory.cpp
     acrylicmanager.h

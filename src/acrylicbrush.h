@@ -27,7 +27,7 @@
 #include "acrylicmanager_global.h"
 #include <Unknwn.h>
 #include <WinRT\Windows.UI.h>
-#include <WinRT\Windows.Foundation.Numerics.h>
+//#include <WinRT\Windows.Foundation.Numerics.h>
 
 class AcrylicBrush
 {
@@ -37,7 +37,6 @@ public:
     explicit AcrylicBrush();
     ~AcrylicBrush();
 
-    [[nodiscard]] virtual int AddRef() const = 0;
     virtual void Release() = 0;
 
     [[nodiscard]] virtual bool IsSupportedByCurrentOS() const = 0;
@@ -53,8 +52,8 @@ public:
     [[nodiscard]] double GetTintOpacity() const;
     void SetTintOpacity(const double value) const;
 
-    [[nodiscard]] winrt::Windows::Foundation::IReference<double> GetLuminosityOpacity() const;
-    void SetLuminosityOpacity(const winrt::Windows::Foundation::IReference<double> value) const;
+    [[nodiscard]] double GetLuminosityOpacity() const;
+    void SetLuminosityOpacity(const double value) const;
 
     [[nodiscard]] winrt::Windows::UI::Color GetFallbackColor() const;
     void SetFallbackColor(const winrt::Windows::UI::Color &value) const;

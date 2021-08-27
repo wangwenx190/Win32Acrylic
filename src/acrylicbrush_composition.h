@@ -36,7 +36,6 @@ public:
     explicit AcrylicBrushComposition();
     ~AcrylicBrushComposition();
 
-    [[nodiscard]] int AddRef() const override;
     void Release() override;
 
     [[nodiscard]] bool IsSupportedByCurrentOS() const override;

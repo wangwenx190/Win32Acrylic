@@ -32,21 +32,8 @@
 #include <WinRT\Windows.UI.Xaml.Media.h>
 #include <Windows.UI.Xaml.Hosting.DesktopWindowXamlSource.h>
 
-#ifndef WM_DWMCOMPOSITIONCHANGED
-#define WM_DWMCOMPOSITIONCHANGED (0x031E)
-#endif
-
-#ifndef WM_DWMCOLORIZATIONCOLORCHANGED
-#define WM_DWMCOLORIZATIONCOLORCHANGED (0x0320)
-#endif
-
-static constexpr wchar_t g_mainWindowTitle[] = L"AcrylicManager WinUI2 Main Window";
-static constexpr wchar_t g_dragBarWindowTitle[] = L"";
-
 static bool g_winRTInitialized = false;
 static winrt::Windows::UI::Xaml::Hosting::WindowsXamlManager g_manager = nullptr;
-
-static int g_refCount = 0;
 
 class AcrylicBrushWinUI2Private
 {
@@ -163,7 +150,7 @@ void AcrylicBrushWinUI2Private::ReloadBrushParameters()
     if (!m_backgroundBrush) {
         return;
     }
-    m_backgroundBrush.TintColor(q_ptr->GetTintColor());
+    m_backgroundBrush.TintColor(q_ptr->GetEffectiveTintColor());
     m_backgroundBrush.TintOpacity(q_ptr->GetTintOpacity());
     m_backgroundBrush.TintLuminosityOpacity(q_ptr->GetLuminosityOpacity());
     m_backgroundBrush.FallbackColor(q_ptr->GetFallbackColor());
@@ -389,19 +376,6 @@ LRESULT AcrylicBrushWinUI2Private::MainWindowMessageHandler(UINT message, WPARAM
     bool themeChanged = false;
 
     switch (message) {
-    case WM_DPICHANGED: {
-        const auto x = static_cast<double>(LOWORD(wParam));
-        const auto y = static_cast<double>(HIWORD(wParam));
-        m_currentDpi = std::round((x + y) / 2.0);
-        m_currentDpr = Utils::GetDevicePixelRatioForWindow(m_mainWindowHandle);
-        const auto prcNewWindow = reinterpret_cast<LPRECT>(lParam);
-        if (MoveWindow(m_mainWindowHandle, prcNewWindow->left, prcNewWindow->top,
-                       GET_RECT_WIDTH(*prcNewWindow), GET_RECT_HEIGHT(*prcNewWindow), TRUE) == FALSE) {
-            PRINT_WIN32_ERROR_MESSAGE(MoveWindow)
-            break;
-        }
-        return 0;
-    } break;
     case WM_SIZE: {
         if ((wParam == SIZE_MAXIMIZED) || (wParam == SIZE_RESTORED) || IsFullScreened(m_mainWindowHandle)) {
             if (!Utils::UpdateFrameMargins(m_mainWindowHandle)) {

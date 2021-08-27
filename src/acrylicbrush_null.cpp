@@ -22,29 +22,52 @@
  * SOFTWARE.
  */
 
-#pragma once
+#include "acrylicbrush_null.h"
 
-#include "acrylicbrush.h"
-
-class AcrylicBrushWinUI2Private;
-
-class AcrylicBrushWinUI2 final : public AcrylicBrush
+AcrylicBrushNull::AcrylicBrushNull()
 {
-    ACRYLICMANAGER_DISABLE_COPY_MOVE(AcrylicBrushWinUI2)
+    d_ptr = std::make_unique<AcrylicBrushNullPrivate>(this);
+}
 
-public:
-    explicit AcrylicBrushWinUI2();
-    ~AcrylicBrushWinUI2();
+AcrylicBrushNull::~AcrylicBrushNull()
+{
+}
 
-    void Release() override;
+void AcrylicBrushNull::Release()
+{
+    if (!Destroy()) {
+        OutputDebugStringW(L"Failed to destroy.");
+    }
+    delete this;
+}
 
-    [[nodiscard]] bool IsSupportedByCurrentOS() const override;
-    [[nodiscard]] bool Create() const override;
-    [[nodiscard]] bool Destroy() const override;
-    [[nodiscard]] bool RefreshBrush() const override;
-    [[nodiscard]] HWND GetWindowHandle() const override;
-    [[nodiscard]] int EventLoop() const override;
+bool AcrylicBrushNull::IsSupportedByCurrentOS() const
+{
+    static const bool result = false;
+    return result;
+}
 
-private:
-    std::unique_ptr<AcrylicBrushWinUI2Private> d_ptr;
-};
+bool AcrylicBrushNull::Create() const
+{
+    return false;
+}
+
+bool AcrylicBrushNull::Destroy() const
+{
+    return false;
+}
+
+bool AcrylicBrushNull::RefreshBrush() const
+{
+    return false;
+}
+
+HWND AcrylicBrushNull::GetWindowHandle() const
+{
+    return nullptr;
+}
+
+int AcrylicBrushNull::EventLoop() const
+{
+    return -1;
+}

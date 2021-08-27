@@ -36,7 +36,6 @@ public:
     explicit AcrylicBrushWinUI3();
     ~AcrylicBrushWinUI3();
 
-    [[nodiscard]] int AddRef() const override;
     void Release() override;
 
     [[nodiscard]] bool IsSupportedByCurrentOS() const override;

@@ -197,10 +197,10 @@ double AcrylicBrush::GetTintOpacity() const
 
 void AcrylicBrush::SetTintOpacity(const double value) const
 {
-    g_tintOpacity = value;
+    g_tintOpacity = std::clamp(value, 0.0, 1.0);
 }
 
-winrt::Windows::Foundation::IReference<double> AcrylicBrush::GetLuminosityOpacity() const
+double AcrylicBrush::GetLuminosityOpacity() const
 {
     if (g_luminosityOpacity.has_value()) {
         return g_luminosityOpacity.value();
@@ -213,10 +213,10 @@ winrt::Windows::Foundation::IReference<double> AcrylicBrush::GetLuminosityOpacit
     }
 }
 
-void AcrylicBrush::SetLuminosityOpacity(const winrt::Windows::Foundation::IReference<double> value) const
+void AcrylicBrush::SetLuminosityOpacity(const double value) const
 {
-    if (value != nullptr) {
-        g_luminosityOpacity = value.GetDouble();
+    if (value >= 0.0) {
+        g_luminosityOpacity = std::clamp(value, 0.0, 1.0);
     } else {
         g_luminosityOpacity = std::nullopt;
     }
@@ -255,7 +255,7 @@ double AcrylicBrush::GetBlurRadius() const
 
 void AcrylicBrush::SetBlurRadius(const double value) const
 {
-    g_blurRadius = value;
+    g_blurRadius = value; // fixme: what's the valid range
 }
 
 double AcrylicBrush::GetSaturation() const
@@ -273,7 +273,7 @@ double AcrylicBrush::GetSaturation() const
 
 void AcrylicBrush::SetSaturation(const double value) const
 {
-    g_saturation = value;
+    g_saturation = value; // fixme: what's the valid range
 }
 
 double AcrylicBrush::GetNoiseOpacity() const
@@ -291,7 +291,7 @@ double AcrylicBrush::GetNoiseOpacity() const
 
 void AcrylicBrush::SetNoiseOpacity(const double value) const
 {
-    g_noiseOpacity = value;
+    g_noiseOpacity = std::clamp(value, 0.0, 1.0);
 }
 
 winrt::Windows::UI::Color AcrylicBrush::GetExclusionColor() const

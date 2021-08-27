@@ -24,8 +24,6 @@
 
 #include "acrylicbrush_composition.h"
 
-static int g_refCount = 0;
-
 AcrylicBrushComposition::AcrylicBrushComposition()
 {
     d_ptr = std::make_unique<AcrylicBrushCompositionPrivate>(this);
@@ -35,18 +33,12 @@ AcrylicBrushComposition::~AcrylicBrushComposition()
 {
 }
 
-int AcrylicBrushComposition::AddRef() const
-{
-    ++g_refCount;
-}
-
 void AcrylicBrushComposition::Release()
 {
-    --g_refCount;
-    if (g_refCount <= 0) {
-        g_refCount = 0;
-        delete this;
+    if (!Destroy()) {
+        OutputDebugStringW(L"Failed to destroy.");
     }
+    delete this;
 }
 
 bool AcrylicBrushComposition::IsSupportedByCurrentOS() const

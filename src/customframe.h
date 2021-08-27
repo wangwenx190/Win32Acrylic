@@ -77,6 +77,7 @@ protected:
         }
         if (!__CreateWindow()) {
             OutputDebugStringW(L"Failed to create window.");
+            // todo: unreg window class
             return false;
         }
         return true;

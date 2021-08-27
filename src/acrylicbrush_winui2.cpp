@@ -304,9 +304,9 @@ bool AcrylicBrushWinUI2Private::CreateDragBarWindow()
 
 bool AcrylicBrushWinUI2Private::CreateXAMLIsland()
 {
-    // XAML Island is only supported on Windows 10 19H1 and onwards.
-    if (!Utils::IsWindows1019H1OrGreater()) {
-        OutputDebugStringW(L"XAML Island is only supported on Windows 10 19H1 and onwards.");
+    // XAML Island is only supported on Windows 10 RS5 and onwards.
+    if (!Utils::IsWindows10RS5OrGreater()) {
+        OutputDebugStringW(L"XAML Island is only supported on Windows 10 RS5 and onwards.");
         return false;
     }
 
@@ -512,7 +512,7 @@ AcrylicBrushWinUI2::~AcrylicBrushWinUI2()
 
 bool AcrylicBrushWinUI2::IsSupportedByCurrentOS() const
 {
-    static const bool result = Utils::IsWindows1019H1OrGreater();
+    static const bool result = Utils::IsWindows10RS5OrGreater();
     return result;
 }
 

@@ -23,6 +23,7 @@
  */
 
 #include "acrylicbrush_winui3.h"
+#include "utils.h"
 
 AcrylicBrushWinUI3::AcrylicBrushWinUI3()
 {
@@ -35,7 +36,7 @@ AcrylicBrushWinUI3::~AcrylicBrushWinUI3()
 
 bool AcrylicBrushWinUI3::IsSupportedByCurrentOS() const
 {
-    static const bool result = false;
+    static const bool result = Utils::IsWindows10RS5OrGreater();
     return result;
 }
 

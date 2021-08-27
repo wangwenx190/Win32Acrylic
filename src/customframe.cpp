@@ -45,6 +45,10 @@ CustomFrame::~CustomFrame() = default;
 
 bool CustomFrame::__RegisterWindowClass(const WNDPROC wndProc) noexcept
 {
+    if (!Utils::IsCompositionEnabled()) {
+        OutputDebugStringW(L"DWM composition is disabled.");
+        return false;
+    }
     if (!wndProc) {
         return false;
     }

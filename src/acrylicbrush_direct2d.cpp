@@ -55,8 +55,8 @@ public:
     ~AcrylicBrushDirect2DPrivate();
 
     [[nodiscard]] bool Initialize();
-    [[nodiscard]] int GetExecResult() const;
-    [[nodiscard]] HWND GetWindow() const;
+    [[nodiscard]] int GetMessageLoopResult() const;
+    [[nodiscard]] HWND GetWindowHandle() const;
     void ReloadBrushParameters();
 
     [[nodiscard]] LRESULT MessageHandler(UINT message, WPARAM wParam, LPARAM lParam) noexcept;
@@ -163,9 +163,9 @@ LRESULT AcrylicBrushDirect2DPrivate::MessageHandler(UINT message, WPARAM wParam,
     return base_type::MessageHandler(message, wParam, lParam);
 }
 
-HWND AcrylicBrushDirect2DPrivate::GetWindow() const
+HWND AcrylicBrushDirect2DPrivate::GetWindowHandle() const
 {
-    return GetWindowHandle();
+    return GetHandle();
 }
 
 bool AcrylicBrushDirect2DPrivate::EnsureWallpaperBrush()
@@ -619,7 +619,7 @@ bool AcrylicBrushDirect2DPrivate::Initialize()
     return true;
 }
 
-int AcrylicBrushDirect2DPrivate::GetExecResult() const
+int AcrylicBrushDirect2DPrivate::GetMessageLoopResult() const
 {
     return MessageLoop();
 }
@@ -638,29 +638,15 @@ AcrylicBrushDirect2D::~AcrylicBrushDirect2D()
 {
 }
 
-void AcrylicBrushDirect2D::Release()
-{
-    if (!Destroy()) {
-        OutputDebugStringW(L"Failed to destroy.");
-    }
-    delete this;
-}
-
 bool AcrylicBrushDirect2D::IsSupportedByCurrentOS() const
 {
     static const bool result = Utils::IsWindows8OrGreater();
     return result;
 }
 
-bool AcrylicBrushDirect2D::Create() const
+bool AcrylicBrushDirect2D::Initialize() const
 {
     return d_ptr->Initialize();
-}
-
-bool AcrylicBrushDirect2D::Destroy() const
-{
-    // todo
-    return false;
 }
 
 bool AcrylicBrushDirect2D::RefreshBrush() const
@@ -671,10 +657,10 @@ bool AcrylicBrushDirect2D::RefreshBrush() const
 
 HWND AcrylicBrushDirect2D::GetWindowHandle() const
 {
-    return d_ptr->GetWindow();
+    return d_ptr->GetWindowHandle();
 }
 
-int AcrylicBrushDirect2D::EventLoop() const
+int AcrylicBrushDirect2D::MessageLoop() const
 {
-    return d_ptr->GetExecResult();
+    return d_ptr->GetMessageLoopResult();
 }

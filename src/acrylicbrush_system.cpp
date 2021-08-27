@@ -137,8 +137,8 @@ public:
     [[nodiscard]] LRESULT MessageHandler(UINT message, WPARAM wParam, LPARAM lParam) noexcept;
 
     [[nodiscard]] bool Initialize();
-    [[nodiscard]] HWND GetWindow() const;
-    [[nodiscard]] int GetExecResult() const;
+    [[nodiscard]] HWND GetWindowHandle() const;
+    [[nodiscard]] int GetMessageLoopResult() const;
     void ReloadBrushParameters();
 
 private:
@@ -164,12 +164,12 @@ void AcrylicBrushSystemPrivate::ReloadBrushParameters()
 
 }
 
-HWND AcrylicBrushSystemPrivate::GetWindow() const
+HWND AcrylicBrushSystemPrivate::GetWindowHandle() const
 {
-    return GetWindowHandle();
+    return GetHandle();
 }
 
-int AcrylicBrushSystemPrivate::GetExecResult() const
+int AcrylicBrushSystemPrivate::GetMessageLoopResult() const
 {
     return MessageLoop();
 }
@@ -200,33 +200,20 @@ AcrylicBrushSystem::~AcrylicBrushSystem()
 {
 }
 
-void AcrylicBrushSystem::Release()
-{
-    if (!Destroy()) {
-        OutputDebugStringW(L"Failed to destroy.");
-    }
-    delete this;
-}
-
 bool AcrylicBrushSystem::IsSupportedByCurrentOS() const
 {
     static const bool result = Utils::IsWindows7OrGreater();
     return result;
 }
 
-bool AcrylicBrushSystem::Create() const
+bool AcrylicBrushSystem::Initialize() const
 {
     return d_ptr->Initialize();
 }
 
-bool AcrylicBrushSystem::Destroy() const
-{
-    return false;
-}
-
 HWND AcrylicBrushSystem::GetWindowHandle() const
 {
-    return d_ptr->GetWindow();
+    return d_ptr->GetWindowHandle();
 }
 
 bool AcrylicBrushSystem::RefreshBrush() const
@@ -235,7 +222,7 @@ bool AcrylicBrushSystem::RefreshBrush() const
     return true;
 }
 
-int AcrylicBrushSystem::EventLoop() const
+int AcrylicBrushSystem::MessageLoop() const
 {
-    return d_ptr->GetExecResult();
+    return d_ptr->GetMessageLoopResult();
 }

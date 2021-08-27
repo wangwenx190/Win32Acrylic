@@ -27,23 +27,28 @@
 #include "utils.h"
 #include <ShellApi.h>
 #include <UxTheme.h>
+#include <cmath>
 
 #ifndef ABM_GETAUTOHIDEBAREX
 #define ABM_GETAUTOHIDEBAREX (0x0000000b)
 #endif
 
 static constexpr wchar_t g_classNamePrefix[] = LR"(wangwenx190\AcrylicManager\WindowClasses\)";
-static constexpr wchar_t g_windowTitle[] = L"AcrylicManager Window";
+static constexpr wchar_t g_windowTitle[] = L"AcrylicManager Background Window";
 
 // The thickness of an auto-hide taskbar in pixels.
 static constexpr int g_autoHideTaskbarThickness = 2;
 
-std::wstring __RegisterMyWindowClass(const WNDPROC wndProc)
+CustomFrame::CustomFrame() = default;
+
+CustomFrame::~CustomFrame() = default;
+
+bool CustomFrame::__RegisterWindowClass(const WNDPROC wndProc) noexcept
 {
     if (!wndProc) {
-        return nullptr;
+        return false;
     }
-    const std::wstring className = g_classNamePrefix + Utils::GenerateGUID();
+    m_class = g_classNamePrefix + Utils::GenerateGUID();
     WNDCLASSEXW wcex;
     SecureZeroMemory(&wcex, sizeof(wcex));
     wcex.cbSize = sizeof(wcex);
@@ -54,41 +59,34 @@ std::wstring __RegisterMyWindowClass(const WNDPROC wndProc)
     wcex.hIcon = LoadIconW(GET_CURRENT_INSTANCE, MAKEINTRESOURCEW(IDI_DEFAULTICON));
     wcex.hIconSm = LoadIconW(GET_CURRENT_INSTANCE, MAKEINTRESOURCEW(IDI_DEFAULTICONSM));
     wcex.hbrBackground = reinterpret_cast<HBRUSH>(COLOR_WINDOW + 1);
-    wcex.lpszClassName = className.c_str();
+    wcex.lpszClassName = m_class.c_str();
     if (RegisterClassExW(&wcex) == 0) {
         PRINT_WIN32_ERROR_MESSAGE(RegisterClassExW)
-        return nullptr;
+        return false;
     }
-    return className;
+    return true;
 }
 
-HWND __CreateMyWindow(const std::wstring &className, LPVOID data)
+bool CustomFrame::__CreateMyWindow() noexcept
 {
-    if (className.empty() || !data) {
-        return nullptr;
-    }
-    const HWND hWnd = CreateWindowExW(0L,
-                                      className.c_str(),
-                                      g_windowTitle,
-                                      WS_OVERLAPPEDWINDOW,
-                                      CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
-                                      nullptr,
-                                      nullptr,
-                                      GET_CURRENT_INSTANCE,
-                                      data);
+    m_window = CreateWindowExW(0L,
+                               m_class.c_str(),
+                               g_windowTitle,
+                               WS_OVERLAPPEDWINDOW,
+                               CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
+                               nullptr,
+                               nullptr,
+                               GET_CURRENT_INSTANCE,
+                               this);
 
-    if (!hWnd) {
+    if (!m_window) {
         PRINT_WIN32_ERROR_MESSAGE(CreateWindowExW)
-        return nullptr;
+        return false;
     }
-    return hWnd;
+    return true;
 }
 
-CustomFrame::CustomFrame() = default;
-
-CustomFrame::~CustomFrame() = default;
-
-int CustomFrame::MessageLoop() const
+int CustomFrame::MessageLoop() const noexcept
 {
     MSG msg = {};
     while (GetMessageW(&msg, nullptr, 0, 0) != FALSE) {
@@ -98,14 +96,9 @@ int CustomFrame::MessageLoop() const
     return static_cast<int>(msg.wParam);
 }
 
-HWND CustomFrame::GetWindowHandle() const
+HWND CustomFrame::GetHandle() const noexcept
 {
     return m_window;
-}
-
-void CustomFrame::SetWindowHandle(const HWND hWnd)
-{
-    m_window = hWnd;
 }
 
 void CustomFrame::OnNCCreate(const HWND hWnd, const LPARAM lParam) noexcept
@@ -451,6 +444,7 @@ void CustomFrame::OnCreate(const HWND hWnd, const LPARAM lParam) noexcept
     if (SetWindowPos(hWnd, nullptr, 0, 0, 0, 0, flags) == FALSE) {
         PRINT_WIN32_ERROR_MESSAGE(SetWindowPos)
     }
+    m_dpi = Utils::GetDotsPerInchForWindow(hWnd);
 }
 
 void CustomFrame::OnSize(const HWND hWnd, const WPARAM wParam, const LPARAM lParam) noexcept
@@ -484,12 +478,26 @@ void CustomFrame::OnDwmCompositionChanged() noexcept
     }
 }
 
-void CustomFrame::OnClose(const HWND hWnd, const std::wstring &className) noexcept
+void OnDPIChanged(const HWND hWnd, const WPARAM wParam, const LPARAM lParam, UINT *newDpi) noexcept
+{
+    if (newDpi) {
+        const auto x = static_cast<double>(LOWORD(wParam));
+        const auto y = static_cast<double>(HIWORD(wParam));
+        *newDpi = static_cast<int>(std::round((x + y) / 2.0));
+    }
+    const auto prcNewWindow = reinterpret_cast<LPRECT>(lParam);
+    if (MoveWindow(hWnd, prcNewWindow->left, prcNewWindow->top,
+                   GET_RECT_WIDTH(*prcNewWindow), GET_RECT_HEIGHT(*prcNewWindow), TRUE) == FALSE) {
+        PRINT_WIN32_ERROR_MESSAGE(MoveWindow)
+    }
+}
+
+void CustomFrame::OnClose(const HWND hWnd) noexcept
 {
     if (DestroyWindow(hWnd) == FALSE) {
         PRINT_WIN32_ERROR_MESSAGE(DestroyWindow)
     }
-    if (UnregisterClassW(className.c_str(), GET_CURRENT_INSTANCE) == FALSE) {
+    if (UnregisterClassW(m_class.c_str(), GET_CURRENT_INSTANCE) == FALSE) {
         PRINT_WIN32_ERROR_MESSAGE(UnregisterClassW)
     }
 }

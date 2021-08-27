@@ -37,14 +37,11 @@ public:
     explicit AcrylicBrush();
     ~AcrylicBrush();
 
-    virtual void Release() = 0;
-
     [[nodiscard]] virtual bool IsSupportedByCurrentOS() const = 0;
-    [[nodiscard]] virtual bool Create() const = 0;
-    [[nodiscard]] virtual bool Destroy() const = 0;
+    [[nodiscard]] virtual bool Initialize() const = 0;
     [[nodiscard]] virtual bool RefreshBrush() const = 0;
     [[nodiscard]] virtual HWND GetWindowHandle() const = 0;
-    [[nodiscard]] virtual int EventLoop() const = 0;
+    [[nodiscard]] virtual int MessageLoop() const = 0;
 
     [[nodiscard]] winrt::Windows::UI::Color GetTintColor() const;
     void SetTintColor(const winrt::Windows::UI::Color &value) const;

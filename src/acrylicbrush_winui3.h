@@ -36,14 +36,11 @@ public:
     explicit AcrylicBrushWinUI3();
     ~AcrylicBrushWinUI3();
 
-    void Release() override;
-
     [[nodiscard]] bool IsSupportedByCurrentOS() const override;
-    [[nodiscard]] bool Create() const override;
-    [[nodiscard]] bool Destroy() const override;
+    [[nodiscard]] bool Initialize() const override;
     [[nodiscard]] bool RefreshBrush() const override;
     [[nodiscard]] HWND GetWindowHandle() const override;
-    [[nodiscard]] int EventLoop() const override;
+    [[nodiscard]] int MessageLoop() const override;
 
 private:
     std::unique_ptr<AcrylicBrushWinUI3Private> d_ptr;

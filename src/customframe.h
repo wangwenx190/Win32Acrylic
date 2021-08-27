@@ -25,11 +25,7 @@
 #pragma once
 
 #include "acrylicmanager_global.h"
-#include <cmath>
 #include <string>
-
-std::wstring __RegisterMyWindowClass(const WNDPROC wndProc);
-HWND __CreateMyWindow(const std::wstring &className, LPVOID data);
 
 class CustomFrame
 {
@@ -40,10 +36,12 @@ public:
     ~CustomFrame();
 
 protected:
-    [[nodiscard]] int MessageLoop() const;
+    [[nodiscard]] bool __RegisterWindowClass(const WNDPROC wndProc) noexcept;
+    [[nodiscard]] bool __CreateWindow() noexcept;
 
-    [[nodiscard]] HWND GetWindowHandle() const;
-    void SetWindowHandle(const HWND hWnd);
+    [[nodiscard]] int MessageLoop() const noexcept;
+
+    [[nodiscard]] HWND GetHandle() const noexcept;
 
     static void OnNCCreate(const HWND hWnd, const LPARAM lParam) noexcept;
     static void OnNCDestroy(const HWND hWnd) noexcept;
@@ -55,10 +53,12 @@ protected:
     static void OnPaint(const HWND hWnd) noexcept;
     static void OnSettingChange(const HWND hWnd, const WPARAM wParam, const LPARAM lParam) noexcept;
     static void OnDwmCompositionChanged() noexcept;
-    static void OnClose(const HWND hWnd, const std::wstring &className) noexcept;
+    static void OnDPIChanged(const HWND hWnd, const WPARAM wParam, const LPARAM lParam, UINT *newDpi) noexcept;
+    static void OnClose(const HWND hWnd) noexcept;
     static void OnDestroy() noexcept;
 
 private:
+    std::wstring m_class = nullptr;
     HWND m_window = nullptr;
 };
 
@@ -70,17 +70,14 @@ protected:
 
     [[nodiscard]] bool Create() noexcept
     {
-        m_className = __RegisterMyWindowClass(WindowProc);
-        if (m_className.empty()) {
+        if (!__RegisterWindowClass(WindowProc)) {
             OutputDebugStringW(L"Failed to register window class.");
             return false;
         }
-        const HWND hWnd = __CreateMyWindow(m_className, this);
-        if (!hWnd) {
+        if (!__CreateWindow()) {
             OutputDebugStringW(L"Failed to create window.");
             return false;
         }
-        SetWindowHandle(hWnd);
         return true;
     }
 
@@ -120,7 +117,7 @@ protected:
             OnSettingChange(hWnd, wParam, lParam);
             break;
         case WM_DPICHANGED:
-            OnDPIChanged(hWnd, wParam, lParam);
+            OnDPIChanged(hWnd, wParam, lParam, &m_dpi);
             break;
         case WM_DWMCOMPOSITIONCHANGED:
             OnDwmCompositionChanged();
@@ -137,31 +134,11 @@ protected:
         return DefWindowProcW(hWnd, message, wParam, lParam);
     }
 
-    void OnDPIChanged(const HWND hWnd, const WPARAM wParam, const LPARAM lParam) noexcept
-    {
-        const auto x = static_cast<double>(LOWORD(wParam));
-        const auto y = static_cast<double>(HIWORD(wParam));
-        m_dpi = std::round((x + y) / 2.0);
-        m_dpr = (static_cast<double>(m_dpi) / static_cast<double>(USER_DEFAULT_SCREEN_DPI));
-        const auto prcNewWindow = reinterpret_cast<LPRECT>(lParam);
-        if (MoveWindow(hWnd, prcNewWindow->left, prcNewWindow->top,
-                       RECTWIDTH(*prcNewWindow), GET_RECT_HEIGHT(*prcNewWindow), TRUE) == FALSE) {
-            //PRINT_WIN32_ERROR_MESSAGE(MoveWindow)
-        }
-    }
-
-    [[nodiscard]] UINT GetCurrentDPI() const
+    [[nodiscard]] UINT GetCurrentDpi() const noexcept
     {
         return m_dpi;
     }
 
-    [[nodiscard]] double GetCurrentDPR() const
-    {
-        return m_dpr;
-    }
-
 private:
-    std::wstring m_className = nullptr;
     UINT m_dpi = 0;
-    double m_dpr = 0.0;
 };

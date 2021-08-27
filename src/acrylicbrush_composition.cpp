@@ -33,26 +33,13 @@ AcrylicBrushComposition::~AcrylicBrushComposition()
 {
 }
 
-void AcrylicBrushComposition::Release()
-{
-    if (!Destroy()) {
-        OutputDebugStringW(L"Failed to destroy.");
-    }
-    delete this;
-}
-
 bool AcrylicBrushComposition::IsSupportedByCurrentOS() const
 {
     static const bool result = false;
     return result;
 }
 
-bool AcrylicBrushComposition::Create() const
-{
-    return false;
-}
-
-bool AcrylicBrushComposition::Destroy() const
+bool AcrylicBrushComposition::Initialize() const
 {
     return false;
 }
@@ -67,7 +54,7 @@ HWND AcrylicBrushComposition::GetWindowHandle() const
     return nullptr;
 }
 
-int AcrylicBrushComposition::EventLoop() const
+int AcrylicBrushComposition::MessageLoop() const
 {
     return -1;
 }

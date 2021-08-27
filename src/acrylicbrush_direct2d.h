@@ -36,14 +36,11 @@ public:
     explicit AcrylicBrushDirect2D();
     ~AcrylicBrushDirect2D();
 
-    void Release() override;
-
     [[nodiscard]] bool IsSupportedByCurrentOS() const override;
-    [[nodiscard]] bool Create() const override;
-    [[nodiscard]] bool Destroy() const override;
+    [[nodiscard]] bool Initialize() const override;
     [[nodiscard]] bool RefreshBrush() const override;
     [[nodiscard]] HWND GetWindowHandle() const override;
-    [[nodiscard]] int EventLoop() const override;
+    [[nodiscard]] int MessageLoop() const override;
 
 private:
     std::unique_ptr<AcrylicBrushDirect2DPrivate> d_ptr;

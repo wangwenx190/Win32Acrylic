@@ -510,28 +510,13 @@ AcrylicBrushWinUI2::~AcrylicBrushWinUI2()
 {
 }
 
-int AcrylicBrushWinUI2::AddRef() const
-{
-    ++g_refCount;
-    return g_refCount;
-}
-
-void AcrylicBrushWinUI2::Release()
-{
-    --g_refCount;
-    if (g_refCount <= 0) {
-        g_refCount = 0;
-        delete this;
-    }
-}
-
 bool AcrylicBrushWinUI2::IsSupportedByCurrentOS() const
 {
     static const bool result = Utils::IsWindows1019H1OrGreater();
     return result;
 }
 
-bool AcrylicBrushWinUI2::Create() const
+bool AcrylicBrushWinUI2::Initialize() const
 {
     if (!d_ptr->CreateMainWindow()) {
         OutputDebugStringW(L"Failed to create main window.");
@@ -548,12 +533,6 @@ bool AcrylicBrushWinUI2::Create() const
     return true;
 }
 
-bool AcrylicBrushWinUI2::Destroy() const
-{
-    d_ptr->Cleanup();
-    return true;
-}
-
 bool AcrylicBrushWinUI2::RefreshBrush() const
 {
     d_ptr->ReloadBrushParameters();
@@ -562,12 +541,12 @@ bool AcrylicBrushWinUI2::RefreshBrush() const
 
 HWND AcrylicBrushWinUI2::GetWindowHandle() const
 {
-    return d_ptr->GetMainWindowHandle();
+    return d_ptr->GetWindowHandle();
 }
 
-int AcrylicBrushWinUI2::EventLoop() const
+int AcrylicBrushWinUI2::MessageLoop() const
 {
-    return d_ptr->EventLoop();
+    return d_ptr->GetMessageLoopResult();
 }
 
 #if 0

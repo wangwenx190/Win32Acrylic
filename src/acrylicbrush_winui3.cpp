@@ -33,26 +33,13 @@ AcrylicBrushWinUI3::~AcrylicBrushWinUI3()
 {
 }
 
-void AcrylicBrushWinUI3::Release()
-{
-    if (!Destroy()) {
-        OutputDebugStringW(L"Failed to destroy.");
-    }
-    delete this;
-}
-
 bool AcrylicBrushWinUI3::IsSupportedByCurrentOS() const
 {
     static const bool result = false;
     return result;
 }
 
-bool AcrylicBrushWinUI3::Create() const
-{
-    return false;
-}
-
-bool AcrylicBrushWinUI3::Destroy() const
+bool AcrylicBrushWinUI3::Initialize() const
 {
     return false;
 }
@@ -67,7 +54,7 @@ HWND AcrylicBrushWinUI3::GetWindowHandle() const
     return nullptr;
 }
 
-int AcrylicBrushWinUI3::EventLoop() const
+int AcrylicBrushWinUI3::MessageLoop() const
 {
     return -1;
 }

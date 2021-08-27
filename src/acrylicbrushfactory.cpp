@@ -62,7 +62,7 @@ HRESULT AcrylicBrushFactory::CreateInstance(REFIID riid, void **ppInstance)
         *ppInstance = brush;
         return S_OK;
     } else {
-        brush->Release();
+        delete brush;
         brush = nullptr;
         return E_FAIL;
     }

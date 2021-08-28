@@ -35,15 +35,13 @@
 static bool g_winRTInitialized = false;
 static winrt::Windows::UI::Xaml::Hosting::WindowsXamlManager g_manager = nullptr;
 
-class AcrylicBrushWinUI2Private : public CustomFrameT<AcrylicBrushWinUI2Private>
+class AcrylicBrushWinUI2Private final : public CustomFrameT<AcrylicBrushWinUI2Private>
 {
     ACRYLICMANAGER_DISABLE_COPY_MOVE(AcrylicBrushWinUI2Private)
 
 public:
     explicit AcrylicBrushWinUI2Private(AcrylicBrushWinUI2 *q);
     ~AcrylicBrushWinUI2Private() override;
-
-    [[nodiscard]] LRESULT MessageHandler(UINT message, WPARAM wParam, LPARAM lParam) noexcept;
 
     [[nodiscard]] bool Initialize();
     [[nodiscard]] HWND GetWindowHandle() const;
@@ -54,7 +52,9 @@ protected:
     bool FilterMessage(const MSG *msg) const noexcept override;
 
 private:
-    static LRESULT CALLBACK DragBarWindowProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
+    [[nodiscard]] LRESULT MessageHandler(UINT message, WPARAM wParam, LPARAM lParam) noexcept;
+    static LRESULT CALLBACK DragBarWindowProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) noexcept;
+    [[nodiscard]] LRESULT DragBarMessageHandler(UINT message, WPARAM wParam, LPARAM lParam) noexcept;
     [[nodiscard]] bool CreateDragBarWindow();
     [[nodiscard]] bool CreateXAMLIsland();
     void Cleanup();
@@ -152,11 +152,13 @@ bool AcrylicBrushWinUI2Private::CreateDragBarWindow()
         return false;
     }
 
-    m_dragBarWindowClassName = Utils::RegisterWindowClass(DragBarWindowProc);
+    m_dragBarWindowClassName = __RegisterWindowClass(DragBarWindowProc);
     if (m_dragBarWindowClassName.empty()) {
         OutputDebugStringW(L"Failed to register the drag bar window class.");
         return false;
     }
+
+    const HWND mainWindowHandle = GetHandle();
 
     // The drag bar window is a child window of the top level window that is put
     // right on top of the drag bar. The XAML island window "steals" our mouse
@@ -166,18 +168,13 @@ bool AcrylicBrushWinUI2Private::CreateDragBarWindow()
     // IMPORTANT NOTE: The WS_EX_LAYERED style is supported for both top-level
     // windows and child windows since Windows 8. Previous Windows versions support
     // WS_EX_LAYERED only for top-level windows.
-    m_dragBarWindowHandle = CreateWindowExW(WS_EX_LAYERED | WS_EX_NOREDIRECTIONBITMAP,
-                                            m_dragBarWindowClassName.c_str(),
-                                            g_dragBarWindowTitle,
-                                            WS_CHILD,
-                                            CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
-                                            m_mainWindowHandle,
-                                            nullptr,
-                                            GET_CURRENT_INSTANCE,
-                                            this);
-
+    m_dragBarWindowHandle = __CreateWindow(m_dragBarWindowClassName,
+                                           WS_CHILD,
+                                           (WS_EX_LAYERED | WS_EX_NOREDIRECTIONBITMAP),
+                                           mainWindowHandle,
+                                           this);
     if (!m_dragBarWindowHandle) {
-        PRINT_WIN32_ERROR_MESSAGE(CreateWindowExW)
+        OutputDebugStringW(L"Failed to create the drag bar window.");
         return false;
     }
 
@@ -188,8 +185,8 @@ bool AcrylicBrushWinUI2Private::CreateDragBarWindow()
         return false;
     }
 
-    const SIZE size = GET_WINDOW_CLIENT_SIZE(m_mainWindowHandle);
-    const int titleBarHeight = Utils::GetTitleBarHeight(m_mainWindowHandle);
+    const SIZE size = GET_WINDOW_CLIENT_SIZE(mainWindowHandle);
+    const int titleBarHeight = Utils::GetTitleBarHeight(mainWindowHandle);
     if (SetWindowPos(m_dragBarWindowHandle, HWND_TOP, 0, 0, size.cx, titleBarHeight,
                      SWP_NOACTIVATE | SWP_SHOWWINDOW | SWP_NOOWNERZORDER) == FALSE) {
         PRINT_WIN32_ERROR_MESSAGE(SetWindowPos)
@@ -345,7 +342,19 @@ LRESULT AcrylicBrushWinUI2Private::MessageHandler(UINT message, WPARAM wParam, L
     return result;
 }
 
-LRESULT CALLBACK AcrylicBrushWinUI2Private::DragBarWindowProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
+LRESULT CALLBACK AcrylicBrushWinUI2Private::DragBarWindowProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) noexcept
+{
+    if (message == WM_NCCREATE) {
+        OnNCCreate(hWnd, lParam);
+    } else if (message == WM_NCDESTROY) {
+        OnNCDestroy(hWnd);
+    } else if (const auto that = GetThisFromHandle(hWnd)) {
+        return that->DragBarMessageHandler(message, wParam, lParam);
+    }
+    return DefWindowProcW(hWnd, message, wParam, lParam);
+}
+
+LRESULT AcrylicBrushWinUI2Private::DragBarMessageHandler(UINT message, WPARAM wParam, LPARAM lParam) noexcept
 {
     std::optional<UINT> nonClientMessage = std::nullopt;
     switch (message)
@@ -390,7 +399,8 @@ LRESULT CALLBACK AcrylicBrushWinUI2Private::DragBarWindowProc(HWND hWnd, UINT me
     default:
         break;
     }
-    if (nonClientMessage.has_value() && m_mainWindowHandle) {
+    const HWND mainWindowHandle = GetHandle();
+    if (nonClientMessage.has_value() && mainWindowHandle) {
         POINT pos = {GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)};
         if (ClientToScreen(m_dragBarWindowHandle, &pos) == FALSE) {
             PRINT_WIN32_ERROR_MESSAGE(ClientToScreen)
@@ -399,8 +409,8 @@ LRESULT CALLBACK AcrylicBrushWinUI2Private::DragBarWindowProc(HWND hWnd, UINT me
         const LPARAM newLParam = MAKELPARAM(pos.x, pos.y);
         // Hit test the parent window at the screen coordinates the user clicked in the drag input sink window,
         // then pass that click through as an NC click in that location.
-        const LRESULT hitTestResult = SendMessageW(m_mainWindowHandle, WM_NCHITTEST, 0, newLParam);
-        SendMessageW(m_mainWindowHandle, nonClientMessage.value(), hitTestResult, newLParam);
+        const LRESULT hitTestResult = SendMessageW(mainWindowHandle, WM_NCHITTEST, 0, newLParam);
+        SendMessageW(mainWindowHandle, nonClientMessage.value(), hitTestResult, newLParam);
         return 0;
     }
     return DefWindowProcW(m_dragBarWindowHandle, message, wParam, lParam);
@@ -409,15 +419,15 @@ LRESULT CALLBACK AcrylicBrushWinUI2Private::DragBarWindowProc(HWND hWnd, UINT me
 bool AcrylicBrushWinUI2Private::Initialize()
 {
     if (!CreateFramelessWindow()) {
-        OutputDebugStringW(L"");
+        OutputDebugStringW(L"Failed to create the background window.");
         return false;
     }
     if (!CreateDragBarWindow()) {
-        OutputDebugStringW(L"");
+        OutputDebugStringW(L"Failed to create the drag bar window.");
         return false;
     }
     if (!CreateXAMLIsland()) {
-        OutputDebugStringW(L"");
+        OutputDebugStringW(L"Failed to create the XAML Island.");
         return false;
     }
     return true;

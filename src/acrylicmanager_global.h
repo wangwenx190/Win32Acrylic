@@ -383,6 +383,7 @@ EXTERN_C IMAGE_DOS_HEADER __ImageBase;
     SecureZeroMemory(&__wp, sizeof(__wp)); \
     __wp.length = sizeof(__wp); \
     if (GetWindowPlacement(window, &__wp) == FALSE) { \
+        PRINT_WIN32_ERROR_MESSAGE(GetWindowPlacement) \
         return false; \
     } \
     return (__wp.showCmd == SW_NORMAL); \
@@ -414,7 +415,7 @@ EXTERN_C IMAGE_DOS_HEADER __ImageBase;
 #endif
 
 #ifndef GET_RECT_SIZE
-#define GET_RECT_SIZE(rect) SIZE{GET_RECT_WIDTH(rect), GET_RECT_HEIGHT(rect)}
+#define GET_RECT_SIZE(rect) (SIZE{GET_RECT_WIDTH(rect), GET_RECT_HEIGHT(rect)})
 #endif
 
 #ifndef GET_BLACK_BRUSH
@@ -439,6 +440,7 @@ EXTERN_C IMAGE_DOS_HEADER __ImageBase;
     SecureZeroMemory(&__mi, sizeof(__mi)); \
     __mi.cbSize = sizeof(__mi); \
     if (GetMonitorInfoW(monitor, &__mi) == FALSE) { \
+        PRINT_WIN32_ERROR_MESSAGE(GetMonitorInfoW) \
         return MONITORINFO{}; \
     } \
     return __mi; \
@@ -453,6 +455,7 @@ EXTERN_C IMAGE_DOS_HEADER __ImageBase;
     } \
     RECT __rect = {0, 0, 0, 0}; \
     if (GetWindowRect(window, &__rect) == FALSE) { \
+        PRINT_WIN32_ERROR_MESSAGE(GetWindowRect) \
         return RECT{}; \
     } \
     return __rect; \
@@ -478,6 +481,7 @@ EXTERN_C IMAGE_DOS_HEADER __ImageBase;
     } \
     RECT __rect = {0, 0, 0, 0}; \
     if (GetClientRect(window, &__rect) == FALSE) { \
+        PRINT_WIN32_ERROR_MESSAGE(GetClientRect) \
         return SIZE{}; \
     } \
     return GET_RECT_SIZE(__rect); \
@@ -694,6 +698,28 @@ enum class DpiAwareness : int
     System,
     PerMonitor,
     PerMonitorV2
+};
+
+enum class WindowState : int
+{
+    Invalid = -1,
+    Normal,
+    Maximized,
+    Minimized,
+    FullScreened,
+    Hidden,
+    Shown
+};
+
+enum class BrushType : int
+{
+    Auto = 0,
+    Null,
+    Direct2D,
+    WinUI2,
+    WinUI3,
+    Composition,
+    System
 };
 
 enum class DwmWindowAttribute : int

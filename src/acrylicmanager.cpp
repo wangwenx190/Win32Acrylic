@@ -23,391 +23,247 @@
  */
 
 #include "acrylicmanager.h"
+#include "acrylicbrush.h"
+#include "acrylicbrushfactory.h"
+#include "utils.h"
 
-static constexpr wchar_t g_forceSystemBackendEnvVar[] = L"ACRYLICMANAGER_FORCE_SYSTEM";
-static constexpr wchar_t g_forceCompositionBackendEnvVar[] = L"ACRYLICMANAGER_FORCE_COMPOSITION";
-static constexpr wchar_t g_forceWinUI3BackendEnvVar[] = L"ACRYLICMANAGER_FORCE_WINUI3";
-static constexpr wchar_t g_forceWinUI2BackendEnvVar[] = L"ACRYLICMANAGER_FORCE_WINUI2";
-static constexpr wchar_t g_forceDirect2DBackendEnvVar[] = L"ACRYLICMANAGER_FORCE_DIRECT2D";
+static constexpr wchar_t g_forceSystemBrushEnvVar[] = L"ACRYLICMANAGER_FORCE_SYSTEM_BRUSH";
+static constexpr wchar_t g_forceCompositionBrushEnvVar[] = L"ACRYLICMANAGER_FORCE_COMPOSITION_BRUSH";
+static constexpr wchar_t g_forceWinUI3BrushEnvVar[] = L"ACRYLICMANAGER_FORCE_WINUI3_BRUSH";
+static constexpr wchar_t g_forceWinUI2BrushEnvVar[] = L"ACRYLICMANAGER_FORCE_WINUI2_BRUSH";
+static constexpr wchar_t g_forceDirect2DBrushEnvVar[] = L"ACRYLICMANAGER_FORCE_DIRECT2D_BRUSH";
+static constexpr wchar_t g_forceNullBrushEnvVar[] = L"ACRYLICMANAGER_FORCE_NULL_BRUSH";
 
-static bool g_isUsingSystemBackend = false;
-static bool g_isUsingCompositionBackend = false;
-static bool g_isUsingWinUI3Backend = false;
-static bool g_isUsingWinUI2Backend = false;
-static bool g_isUsingDirect2DBackend = false;
+static std::unordered_map<std::wstring, AcrylicBrush *> g_brushList = {};
 
-[[nodiscard]] static inline HRESULT am_CenterWindowHelper_p(const HWND hWnd)
+[[nodiscard]] static inline BrushType PickUpTheAppropriateBrushType()
 {
-    if (!hWnd) {
-        return E_INVALIDARG;
-    }
-    RECT windowRect = {0, 0, 0, 0};
-    if (GetWindowRect(hWnd, &windowRect) == FALSE) {
-        PRINT_WIN32_ERROR_MESSAGE_AND_RETURN(GetWindowRect)
-    }
-    const int windowWidth = GET_RECT_WIDTH(windowRect);
-    const int windowHeight = GET_RECT_HEIGHT(windowRect);
-    RECT screenRect = {};
-    if (FAILED(am_GetScreenGeometry_p(hWnd, &screenRect))) {
-        return E_FAIL;
-    }
-    const int screenWidth = GET_RECT_WIDTH(screenRect);
-    const int screenHeight = GET_RECT_HEIGHT(screenRect);
-    const int newX = (screenWidth - windowWidth) / 2;
-    const int newY = (screenHeight - windowHeight) / 2;
-    if (MoveWindow(hWnd, newX, newY, windowWidth, windowHeight, TRUE) == FALSE) {
-        PRINT_WIN32_ERROR_MESSAGE_AND_RETURN(MoveWindow)
-    }
-    return S_OK;
+    // todo
+    return BrushType::Null;
 }
 
-[[nodiscard]] static inline HRESULT am_IsWindowActiveHelper_p(const HWND hWnd, bool *result)
+[[nodiscard]] static inline AcrylicBrush *ExtractBrushFromList(LPCWSTR id)
 {
-    if (!hWnd || !result) {
-        return E_INVALIDARG;
+    if (!id) {
+        return nullptr;
     }
-    *result = (GetActiveWindow() == hWnd);
-    return S_OK;
+    const auto search = g_brushList.find(id);
+    return ((search == g_brushList.end()) ? nullptr : search->second);
 }
 
-[[nodiscard]] static inline LRESULT CALLBACK am_HookWindowProcHelper_p(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
+bool am_CreateWindow(const BrushType type, LPWSTR *id)
 {
-    const auto getOriginalResult = [hWnd, uMsg, wParam, lParam]() {
-        if (g_am_HostWindowProc_p) {
-            return CallWindowProcW(g_am_HostWindowProc_p, hWnd, uMsg, wParam, lParam);
-        } else {
-            return DefWindowProcW(hWnd, uMsg, wParam, lParam);
-        }
-    };
-
-    if (!g_am_MainWindowHandle_p) {
-        return getOriginalResult();
+    if (!id || !(*id)) {
+        return false;
     }
-
-    switch (uMsg) {
-    case WM_WINDOWPOSCHANGED: {
-        const auto newPos = reinterpret_cast<LPWINDOWPOS>(lParam);
-        // We'll also get the "WM_WINDOWPOSCHANGED" message if the Z order of our window changes.
-        // So we have to make sure the background window's Z order is updated in time as well.
-        if (SetWindowPos(g_am_MainWindowHandle_p, hWnd,
-                         newPos->x, newPos->y, newPos->cx, newPos->cy,
-                         SWP_NOACTIVATE | SWP_NOOWNERZORDER) == FALSE) {
-            PRINT_WIN32_ERROR_MESSAGE(SetWindowPos)
-        }
-    } break;
-    case WM_ACTIVATE: {
-        // todo
-    } break;
-    case WM_CLOSE: {
-        SendMessageW(g_am_MainWindowHandle_p, WM_CLOSE, 0, 0);
-    } break;
-    default:
+    BrushType realType = type;
+    if (realType == BrushType::Auto) {
+        realType = PickUpTheAppropriateBrushType();
+    }
+    assert(realType != BrushType::Auto);
+    if (realType == BrushType::Auto) {
+        return false;
+    }
+    HRESULT hr = E_FAIL;
+    AcrylicBrush *brush = nullptr;
+    switch (realType) {
+    case BrushType::System:
+        hr = AcrylicBrushFactory::CreateInstance(IID_ACRYLICBRUSH_SYSTEM, &brush);
         break;
+    case BrushType::Composition:
+        hr = AcrylicBrushFactory::CreateInstance(IID_ACRYLICBRUSH_COMPOSITION, &brush);
+        break;
+    case BrushType::WinUI3:
+        hr = AcrylicBrushFactory::CreateInstance(IID_ACRYLICBRUSH_WINUI3, &brush);
+        break;
+    case BrushType::WinUI2:
+        hr = AcrylicBrushFactory::CreateInstance(IID_ACRYLICBRUSH_WINUI2, &brush);
+        break;
+    case BrushType::Direct2D:
+        hr = AcrylicBrushFactory::CreateInstance(IID_ACRYLICBRUSH_DIRECT2D, &brush);
+        break;
+    case BrushType::Null:
+        hr = AcrylicBrushFactory::CreateInstance(IID_ACRYLICBRUSH_NULL, &brush);
+        break;
+    default:
+        assert(false);
+        return false;
     }
-
-    return getOriginalResult();
+    if (FAILED(hr)) {
+        PRINT_HR_ERROR_MESSAGE(CreateInstance, hr)
+        return false;
+    }
+    assert(brush);
+    if (!brush) {
+        return false;
+    }
+    const auto cleanup = [&brush](){
+        if (brush) {
+            delete brush;
+            brush = nullptr;
+        }
+    };
+    if (!brush->IsSupportedByCurrentOS()) {
+        OutputDebugStringW(L"The selected brush type is not supported by the current system.");
+        cleanup();
+        return false;
+    }
+    if (!brush->Initialize()) {
+        OutputDebugStringW(L"Failed to initialize the acrylic brush.");
+        cleanup();
+        return false;
+    }
+    const std::wstring guid = Utils::GenerateGUID();
+    SecureZeroMemory((*id), sizeof((*id)));
+    wcscpy((*id), guid.c_str());
+    g_brushList.insert({guid, brush});
+    return true;
 }
 
-[[nodiscard]] static inline HRESULT am_InitializeAcrylicManagerHelper_p(const int x, const int y, const int w, const int h)
+bool am_DestroyWindow(LPCWSTR id)
 {
-    if (g_am_AcrylicManagerInitialized_p) {
-        return E_FAIL;
+    AcrylicBrush *brush = ExtractBrushFromList(id);
+    if (!brush) {
+        return false;
     }
-    if (FAILED(am_RegisterMainWindowClassHelper_p())) {
-        PRINT_AND_RETURN(L"Failed to register main window class.")
+    SendMessageW(brush->GetWindowHandle(), WM_SYSCOMMAND, SC_CLOSE, 0);
+    delete brush;
+    brush = nullptr;
+    g_brushList.erase(id);
+    return true;
+}
+
+RECT am_GetWindowGeometry(LPCWSTR id)
+{
+    const auto brush = ExtractBrushFromList(id);
+    if (!brush) {
+        return {};
     }
-    if (FAILED(am_CreateMainWindowHelper_p(x, y, w, h))) {
-        PRINT_AND_RETURN(L"Failed to create main window.")
+    return GET_WINDOW_RECT(brush->GetWindowHandle());
+}
+
+bool am_SetWindowGeometry(LPCWSTR id, const RECT geometry)
+{
+    const auto brush = ExtractBrushFromList(id);
+    if (!brush) {
+        return false;
     }
-    const auto official = []() -> HRESULT {
+    if (MoveWindow(brush->GetWindowHandle(), geometry.left, geometry.top,
+                   GET_RECT_WIDTH(geometry), GET_RECT_HEIGHT(geometry), TRUE) == FALSE) {
+        PRINT_WIN32_ERROR_MESSAGE(MoveWindow)
+        return false;
+    }
+    return true;
+}
+
+POINT am_GetWindowPos(LPCWSTR id)
+{
+    const auto brush = ExtractBrushFromList(id);
+    if (!brush) {
+        return {};
+    }
+    const RECT rect = am_GetWindowGeometry(id);
+    return {rect.left, rect.top};
+}
+
+bool am_SetWindowPos(LPCWSTR id, const POINT pos)
+{
+    const auto brush = ExtractBrushFromList(id);
+    if (!brush) {
+        return false;
+    }
+    const SIZE size = am_GetWindowSize(id);
+    return am_SetWindowGeometry(id, {pos.x, pos.y, size.cx, size.cy});
+}
+
+SIZE am_GetWindowSize(LPCWSTR id)
+{
+    const auto brush = ExtractBrushFromList(id);
+    if (!brush) {
+        return {};
+    }
+    return GET_WINDOW_SIZE(brush->GetWindowHandle());
+}
+
+bool am_SetWindowSize(LPCWSTR id, const SIZE size)
+{
+    const auto brush = ExtractBrushFromList(id);
+    if (!brush) {
+        return false;
+    }
+    const POINT pos = am_GetWindowPos(id);
+    return am_SetWindowGeometry(id, {pos.x, pos.y, size.cx, size.cy});
+}
+
+WindowState am_GetWindowState(LPCWSTR id)
+{
+    const auto brush = ExtractBrushFromList(id);
+    if (!brush) {
+        return WindowState::Invalid;
+    }
+    const HWND hWnd = brush->GetWindowHandle();
+    if (IsMinimized(hWnd)) {
+        return WindowState::Minimized;
+    } else if (IsWindowNoState(hWnd)) {
+        return WindowState::Normal;
+    } else if (IsMaximized(hWnd)) {
+        return WindowState::Maximized;
+    } else if (IsFullScreened(hWnd)) {
+        return WindowState::FullScreened;
+    } else if (IsWindowHidden(hWnd)) {
+        return WindowState::Hidden;
+    } else if (IsWindowShown(hWnd)) {
+        return WindowState::Shown;
+    } else {
+        return WindowState::Invalid;
+    }
+}
+
+bool am_SetWindowState(LPCWSTR id, const WindowState state)
+{
+    const auto brush = ExtractBrushFromList(id);
+    if (!brush) {
+        return false;
+    }
+    const HWND hWnd = brush->GetWindowHandle();
+    switch (state) {
+    case WindowState::Minimized:
+        ShowWindow(hWnd, SW_MINIMIZE);
+        break;
+    case WindowState::Normal:
+        ShowWindow(hWnd, SW_RESTORE);
+        break;
+    case WindowState::Maximized:
+        ShowWindow(hWnd, SW_MAXIMIZE);
+        break;
+    case WindowState::FullScreened:
         // todo
-        g_am_IsUsingOfficialBlur_p = false;
-        return E_FAIL;
-    };
-    const auto xamlIsland = []() -> HRESULT {
-        if (SUCCEEDED(am_CreateXAMLIslandHelper_p())) {
-            if (SUCCEEDED(am_RegisterDragBarWindowClassHelper_p())) {
-                if (SUCCEEDED(am_CreateDragBarWindowHelper_p())) {
-                    g_am_IsUsingXAMLIsland_p = true;
-                    g_am_AcrylicManagerInitialized_p = true;
-                    return S_OK;
-                } else {
-                    PRINT_AND_RETURN(L"Failed to create drag bar window.")
-                }
-            } else {
-                PRINT_AND_RETURN(L"Failed to register drag bar window class.")
-            }
-        } else {
-            PRINT_AND_RETURN(L"Failed to create XAML Island.")
-        }
-    };
-    const auto direct2d = []() -> HRESULT {
-        if (SUCCEEDED(am_InitializeDirect2DInfrastructureHelper_p())) {
-            g_am_IsUsingDirect2D_p = true;
-            g_am_AcrylicManagerInitialized_p = true;
-            return S_OK;
-        } else {
-            PRINT_AND_RETURN(L"Failed to initialize the Direct2D infrastructure.")
-        }
-    };
-    if (g_am_IsForceOfficialBlur_p) {
-        return official();
+        break;
+    case WindowState::Hidden:
+        ShowWindow(hWnd, SW_HIDE);
+        break;
+    case WindowState::Shown:
+        ShowWindow(hWnd, SW_SHOW);
+        break;
+    default:
+        assert(false);
+        return false;
     }
-    if (g_am_IsForceXAMLIsland_p) {
-        return xamlIsland();
-    }
-    if (g_am_IsForceDirect2D_p) {
-        return direct2d();
-    }
-    if (g_am_IsOfficialBlurAvailable_p) {
-        return official();
-    }
-    if (g_am_IsXAMLIslandAvailable_p) {
-        return xamlIsland();
-    }
-    if (g_am_IsDirect2DAvailable_p) {
-        return direct2d();
-    }
-    // Just don't crash.
-    return S_OK;
+    return true;
 }
 
-[[nodiscard]] static inline HRESULT am_InstallHostWindowHookHelper_p(const HWND hWnd, const bool enable)
+bool am_MoveToScreenCenter(LPCWSTR id)
 {
-    if (!g_am_MainWindowHandle_p || !hWnd || g_am_HostWindowHandle_p || g_am_HostWindowProc_p) {
-        return E_INVALIDARG;
+    const auto brush = ExtractBrushFromList(id);
+    if (!brush) {
+        return false;
     }
-    const auto exStyle = static_cast<DWORD>(GetWindowLongPtrW(g_am_MainWindowHandle_p, GWL_EXSTYLE));
-    if (enable) {
-        const auto hostWndProc = reinterpret_cast<WNDPROC>(GetWindowLongPtrW(hWnd, GWLP_WNDPROC));
-        if (!hostWndProc) {
-            PRINT_WIN32_ERROR_MESSAGE_AND_RETURN(GetWindowLongPtrW)
-        }
-        if (SetWindowLongPtrW(hWnd, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(am_HookWindowProcHelper_p)) == 0) {
-            PRINT_WIN32_ERROR_MESSAGE_AND_RETURN(SetWindowLongPtrW)
-        }
-        if (SetWindowLongPtrW(g_am_MainWindowHandle_p, GWL_EXSTYLE, static_cast<LONG_PTR>(exStyle | WS_EX_NOACTIVATE)) == 0) {
-            PRINT_WIN32_ERROR_MESSAGE_AND_RETURN(SetWindowLongPtrW)
-        }
-        g_am_HostWindowHandle_p = hWnd;
-        g_am_HostWindowProc_p = hostWndProc;
-    } else {
-        if (SetWindowLongPtrW(g_am_MainWindowHandle_p, GWL_EXSTYLE, static_cast<LONG_PTR>(exStyle & ~WS_EX_NOACTIVATE)) == 0) {
-            PRINT_WIN32_ERROR_MESSAGE_AND_RETURN(SetWindowLongPtrW)
-        }
-        if (SetWindowLongPtrW(hWnd, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(g_am_HostWindowProc_p)) == 0) {
-            PRINT_WIN32_ERROR_MESSAGE_AND_RETURN(SetWindowLongPtrW)
-        }
-        g_am_HostWindowProc_p = nullptr;
-        g_am_HostWindowHandle_p = nullptr;
-    }
-    return S_OK;
-}
-
-[[nodiscard]] static inline HRESULT am_GetLibraryVersion_p(LPWSTR *ver)
-{
-    if (!ver) {
-        return E_INVALIDARG;
-    }
-    const auto str = new wchar_t[20]; // 20 should be enough for a version string...
-    SecureZeroMemory(str, sizeof(str));
-    wcscpy(str, ACRYLICMANAGER_VERSION_STR);
-    *ver = str;
-    return S_OK;
-}
-
-[[nodiscard]] static inline HRESULT am_CreateAcrylicWindow_p(const int x, const int y, const int w, const int h)
-{
-    if (!g_am_IsWindows7OrGreater_p) {
-        PRINT_AND_RETURN(L"AcrylicManager won't be functional on such old systems.")
-    }
-
-    bool dwmComp = false;
-    if (FAILED(am_IsCompositionEnabled_p(&dwmComp)) || !dwmComp) {
-        PRINT_AND_RETURN(L"AcrylicManager won't be functional when DWM composition is disabled.")
-    }
-
-    return am_InitializeAcrylicManagerHelper_p(x, y, w, h);
-}
-
-[[nodiscard]] static inline HRESULT am_LocalFreeA_p(LPSTR str)
-{
-    if (!str) {
-        return E_INVALIDARG;
-    }
-    SAFE_FREE_CHARARRAY(str)
-    return S_OK;
-}
-
-[[nodiscard]] static inline HRESULT am_LocalFreeW_p(LPWSTR str)
-{
-    if (!str) {
-        return E_INVALIDARG;
-    }
-    SAFE_FREE_CHARARRAY(str)
-    return S_OK;
-}
-
-HRESULT am_WideToMulti_p(LPCWSTR in, const UINT codePage, LPSTR *out)
-{
-    if (!in || !out) {
-        return E_INVALIDARG;
-    }
-    const int required = WideCharToMultiByte(codePage, 0, in, -1, nullptr, 0, nullptr, nullptr);
-    const auto result = new char[required];
-    WideCharToMultiByte(codePage, 0, in, -1, result, required, nullptr, nullptr);
-    *out = result;
-    return S_OK;
-}
-
-HRESULT am_MultiToWide_p(LPCSTR in, const UINT codePage, LPWSTR *out)
-{
-    if (!in || !out) {
-        return E_INVALIDARG;
-    }
-    const int required = MultiByteToWideChar(codePage, 0, in, -1, nullptr, 0);
-    const auto result = new wchar_t[required];
-    MultiByteToWideChar(codePage, 0, in, -1, result, required);
-    *out = result;
-    return S_OK;
-}
-
-HRESULT am_IsWindowBackgroundTranslucent_p(const HWND hWnd, bool *result)
-{
-    if (!hWnd || !result) {
-        return E_INVALIDARG;
-    }
-    BOOL enabled = FALSE;
-    if (SUCCEEDED(DwmGetWindowAttribute(hWnd, static_cast<DWORD>(DwmWindowAttribute::USE_HOSTBACKDROPBRUSH), &enabled, sizeof(enabled)))) {
-        *result = (enabled != FALSE);
-        return S_OK;
-    } else {
-        // We just eat this error because this enum value was introduced in a very
-        // late Windows 10 version, so querying it's value will always result in
-        // a "parameter error" (code: 87) on systems before that value was introduced.
-    }
-    // todo: GetWindowCompositionAttribute()
-    const DWORD exStyle = GetWindowLongPtrW(hWnd, GWL_EXSTYLE);
-    *result = (exStyle & WS_EX_LAYERED);
-    return S_OK;
-}
-
-HRESULT am_SetWindowTranslucentBackgroundEnabled_p(const HWND hWnd, const bool enable)
-{
-    if (!hWnd) {
-        return E_INVALIDARG;
-    }
-    const BOOL enabled = enable ? TRUE : FALSE;
-    if (SUCCEEDED(DwmSetWindowAttribute(hWnd, static_cast<DWORD>(DwmWindowAttribute::USE_HOSTBACKDROPBRUSH), &enabled, sizeof(enabled)))) {
-        return S_OK;
-    } else {
-        // We just eat this error because this enum value was introduced in a very
-        // late Windows 10 version, so changing it's value will always result in
-        // a "parameter error" (code: 87) on systems before that value was introduced.
-    }
-    ACCENT_POLICY policy;
-    SecureZeroMemory(&policy, sizeof(policy));
-    policy.AccentState = enable ? ACCENT_ENABLE_HOSTBACKDROP : ACCENT_DISABLED;
-    WINDOWCOMPOSITIONATTRIBDATA data = {};
-    data.Attrib = WCA_ACCENT_POLICY;
-    data.pvData = &policy;
-    data.cbData = sizeof(policy);
-    if (SUCCEEDED(am_SetWindowCompositionAttribute_p(hWnd, &data))) {
-        return S_OK;
-    } else {
-        // We just eat this error because this enum value was introduced in a very
-        // late Windows 10 version, so changing it's value will always result in
-        // a "parameter error" (code: 87) on systems before that value was introduced.
-        policy.AccentState = enable ? ACCENT_INVALID_STATE : ACCENT_DISABLED;
-        if (SUCCEEDED(am_SetWindowCompositionAttribute_p(hWnd, &data))) {
-            return S_OK;
-        } else {
-            // We just eat this error because this enum value was introduced in a very
-            // late Windows 10 version, so changing it's value will always result in
-            // a "parameter error" (code: 87) on systems before that value was introduced.
-        }
-    }
-    const DWORD exStyle = GetWindowLongPtrW(hWnd, GWL_EXSTYLE);
-    const COLORREF colorKey = RGB(0, 0, 0);
-    const BYTE alpha = enable ? 0 : 255;
-    if (!enable) {
-        if (!(exStyle & WS_EX_LAYERED)) {
-            PRINT_AND_RETURN(L"Can't change alpha channel for non-layered window.")
-        }
-        if (SetLayeredWindowAttributes(hWnd, colorKey, alpha, LWA_COLORKEY) == FALSE) {
-            PRINT_WIN32_ERROR_MESSAGE_AND_RETURN(SetLayeredWindowAttributes)
-        }
-    }
-    if (SetWindowLongPtrW(hWnd, GWL_EXSTYLE, (enable ? (exStyle | WS_EX_LAYERED) : (exStyle & ~WS_EX_LAYERED))) == 0) {
-        PRINT_WIN32_ERROR_MESSAGE_AND_RETURN(SetWindowLongPtrW)
-    }
-    if (enable) {
-        if (SetLayeredWindowAttributes(hWnd, colorKey, alpha, LWA_COLORKEY) == FALSE) {
-            PRINT_WIN32_ERROR_MESSAGE_AND_RETURN(SetLayeredWindowAttributes)
-        }
-    }
-    return S_OK;
-}
-
-HRESULT am_GetSymbolAddressFromExecutable_p(LPCWSTR path, LPCWSTR function, const bool system, FARPROC *result)
-{
-    if (!path || !function || !result) {
-        return E_INVALIDARG;
-    }
-    HMODULE module = nullptr;
-    const auto search = g_am_LoadedModuleList_p.find(path);
-    if (search == g_am_LoadedModuleList_p.end()) {
-        const DWORD flag = (system ? LOAD_LIBRARY_SEARCH_SYSTEM32 : LOAD_LIBRARY_SEARCH_APPLICATION_DIR);
-#if WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_DESKTOP)
-        module = LoadLibraryExW(path, nullptr, flag);
-#else
-        static bool tried = false;
-        using sig = decltype(&::LoadLibraryExW);
-        static sig func = nullptr;
-        if (!func) {
-            if (tried) {
-                return E_FAIL;
-            } else {
-                tried = true;
-                MEMORY_BASIC_INFORMATION mbi;
-                SecureZeroMemory(&mbi, sizeof(mbi));
-                if (VirtualQuery(reinterpret_cast<LPCVOID>(&VirtualQuery), &mbi, sizeof(mbi)) == 0) {
-                    PRINT_WIN32_ERROR_MESSAGE_AND_RETURN(VirtualQuery)
-                }
-                const auto kernel32 = static_cast<HMODULE>(mbi.AllocationBase);
-                if (!kernel32) {
-                    PRINT_AND_RETURN(L"Failed to retrieve the Kernel32.dll's base address.")
-                }
-                func = reinterpret_cast<sig>(GetProcAddress(kernel32, "LoadLibraryExW"));
-                if (!func) {
-                    PRINT_WIN32_ERROR_MESSAGE_AND_RETURN(GetProcAddress)
-                }
-            }
-        }
-        module = func(path, nullptr, flag);
-#endif
-        if (module) {
-            g_am_LoadedModuleList_p.insert({path, module});
-        } else {
-            PRINT_WIN32_ERROR_MESSAGE_AND_RETURN(LoadLibraryExW)
-        }
-    } else {
-        module = search->second;
-        if (!module) {
-            PRINT_AND_RETURN(L"The cached module handle is null.")
-        }
-    }
-    LPSTR functionNameAnsi = nullptr;
-    if (FAILED(am_WideToMulti_p(function, CP_UTF8, &functionNameAnsi))) {
-        PRINT_AND_RETURN(L"Failed to convert a wide string to multibyte string.")
-    }
-    const FARPROC address = GetProcAddress(module, functionNameAnsi);
-    SAFE_FREE_CHARARRAY(functionNameAnsi)
-    if (!address) {
-        PRINT_WIN32_ERROR_MESSAGE_AND_RETURN(GetProcAddress)
-    }
-    *result = address;
-    return S_OK;
+    const HWND hWnd = brush->GetWindowHandle();
+    const SIZE windowSize = am_GetWindowSize(id);
+    const SIZE screenSize = GET_RECT_SIZE(GET_SCREEN_GEOMETRY(GET_CURRENT_SCREEN(hWnd)));
+    const auto newX = static_cast<int>(std::round(static_cast<double>(screenSize.cx - windowSize.cx) / 2.0));
+    const auto newY = static_cast<int>(std::round(static_cast<double>(screenSize.cy - windowSize.cy) / 2.0));
+    return am_SetWindowPos(id, {newX, newY});
 }
 
 #ifndef ACRYLICMANAGER_STATIC

@@ -23,8 +23,7 @@
  */
 
 #include <Windows.h>
-#include <cstdio>
-#include "am_apis.hpp"
+#include <acrylicmanager.h>
 
 EXTERN_C int APIENTRY
 wWinMain(

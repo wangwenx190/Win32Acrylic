@@ -37,7 +37,7 @@ constexpr IID IID_ACRYLICBRUSH_WINUI2 = {0xaf69d050, 0x500a, 0x417b, {0xa1, 0x8c
 constexpr IID IID_ACRYLICBRUSH_DIRECT2D = {0x55269e0f, 0xdd0, 0x4ba1, {0x89, 0xf, 0x74, 0x68, 0x64, 0x55, 0xdc, 0x4e}};
 constexpr IID IID_ACRYLICBRUSH_NULL = {0xb1c629f0, 0x3262, 0x4d75, {0xac, 0x75, 0xd2, 0xc7, 0x85, 0x3c, 0x38, 0x8f}};
 
-HRESULT AcrylicBrushFactory::CreateInstance(REFIID riid, void **ppInstance)
+HRESULT AcrylicBrushFactory::CreateInstance(REFIID riid, AcrylicBrush **ppInstance)
 {
     if (!ppInstance) {
         return E_INVALIDARG;

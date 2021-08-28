@@ -43,56 +43,72 @@ CustomFrame::CustomFrame() = default;
 
 CustomFrame::~CustomFrame() = default;
 
-bool CustomFrame::__RegisterWindowClass(const WNDPROC wndProc) noexcept
+std::wstring CustomFrame::__RegisterWindowClass(const WNDPROC wndProc) noexcept
 {
     if (!Utils::IsCompositionEnabled()) {
         OutputDebugStringW(L"DWM composition is disabled.");
-        return false;
+        return nullptr;
     }
     if (!wndProc) {
-        return false;
+        return nullptr;
     }
-    m_windowClass = g_classNamePrefix + Utils::GenerateGUID();
+    const std::wstring className = g_classNamePrefix + Utils::GenerateGUID();
     WNDCLASSEXW wcex;
     SecureZeroMemory(&wcex, sizeof(wcex));
     wcex.cbSize = sizeof(wcex);
-    wcex.style = CS_HREDRAW | CS_VREDRAW | CS_DBLCLKS; // todo move CS_DBLCLKS
+    wcex.style = CS_HREDRAW | CS_VREDRAW;
     wcex.lpfnWndProc = wndProc;
     wcex.hInstance = GET_CURRENT_INSTANCE;
     wcex.hCursor = LoadCursorW(nullptr, IDC_ARROW);
     wcex.hIcon = LoadIconW(GET_CURRENT_INSTANCE, MAKEINTRESOURCEW(IDI_DEFAULTICON));
     wcex.hIconSm = LoadIconW(GET_CURRENT_INSTANCE, MAKEINTRESOURCEW(IDI_DEFAULTICONSM));
     wcex.hbrBackground = reinterpret_cast<HBRUSH>(COLOR_WINDOW + 1);
-    wcex.lpszClassName = m_windowClass.c_str();
+    wcex.lpszClassName = className.c_str();
     if (RegisterClassExW(&wcex) == 0) {
         PRINT_WIN32_ERROR_MESSAGE(RegisterClassExW)
-        return false;
+        return nullptr;
     }
-    return true;
+    return className;
 }
 
-bool CustomFrame::__CreateWindow() noexcept
+HWND CustomFrame::__CreateWindow(const std::wstring &className, const DWORD style,
+                                 const DWORD exStyle, const HWND parent,
+                                 LPVOID data) noexcept
 {
-    m_window = CreateWindowExW(0L,
-                               m_windowClass.c_str(),
-                               g_windowTitle,
-                               WS_OVERLAPPEDWINDOW,
-                               CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
-                               nullptr,
-                               nullptr,
-                               GET_CURRENT_INSTANCE,
-                               this);
+    if (!Utils::IsCompositionEnabled()) {
+        OutputDebugStringW(L"DWM composition is disabled.");
+        return nullptr;
+    }
+    if (className.empty()) {
+        OutputDebugStringW(L"The given window class name is empty.");
+        return nullptr;
+    }
 
-    if (!m_window) {
+    const HWND window = CreateWindowExW(exStyle,
+                                        className.c_str(),
+                                        g_windowTitle,
+                                        style,
+                                        CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
+                                        parent,
+                                        nullptr,
+                                        GET_CURRENT_INSTANCE,
+                                        data);
+
+    if (!window) {
         PRINT_WIN32_ERROR_MESSAGE(CreateWindowExW)
-        return false;
+        return nullptr;
     }
-    return true;
+    return window;
 }
 
-std::wstring CustomFrame::__GetWindowClassName() const noexcept
+void CustomFrame::__SetWindowClassName(const std::wstring &className) noexcept
 {
-    return m_windowClass;
+    m_windowClass = className;
+}
+
+void CustomFrame::__SetWindowHandle(const HWND hWnd) noexcept
+{
+    m_window = hWnd;
 }
 
 bool CustomFrame::FilterMessage(const MSG *msg) const noexcept
@@ -453,6 +469,13 @@ void CustomFrame::OnNCRButtonUp(const HWND hWnd, const WPARAM wParam, const LPAR
 
 void CustomFrame::OnCreate(const HWND hWnd, const LPARAM lParam, UINT *dpi) noexcept
 {
+    if (!Utils::SetDpiAwarenessForWindow(hWnd, DpiAwareness::PerMonitorV2)) {
+        // Setting the DPI awareness for window may fail in many different reasons,
+        // no need to print any debug messages for it.
+        // PerMonitorV2 implies the non-client area dpi scaling so we only have to
+        // enable it if we cannot enable PerMonitorV2.
+        EnableNonClientDpiScaling(hWnd);
+    }
     if (!Utils::UpdateFrameMargins(hWnd)) {
         OutputDebugStringW(L"Failed to update frame margins.");
     }

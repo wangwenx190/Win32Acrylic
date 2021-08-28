@@ -39,9 +39,11 @@ public:
     [[nodiscard]] int MessageLoop() const noexcept;
 
 protected:
-    [[nodiscard]] bool __RegisterWindowClass(const WNDPROC wndProc) noexcept;
-    [[nodiscard]] bool __CreateWindow() noexcept;
+    [[nodiscard]] static std::wstring __RegisterWindowClass(const WNDPROC wndProc) noexcept;
+    [[nodiscard]] static HWND __CreateWindow(const std::wstring &className, const DWORD style, const DWORD exStyle, const HWND parent, LPVOID data) noexcept;
     [[nodiscard]] std::wstring __GetWindowClassName() const noexcept;
+    void __SetWindowClassName(const std::wstring &className) noexcept;
+    void __SetWindowHandle(const HWND hWnd) noexcept;
 
     [[nodiscard]] virtual bool FilterMessage(const MSG *msg) const noexcept;
 
@@ -76,17 +78,26 @@ public:
 protected:
     using base_type = CustomFrameT<T>;
 
+    [[nodiscard]] static T *GetThisFromHandle(const HWND hWnd) noexcept
+    {
+        return (hWnd ? reinterpret_cast<T *>(GetWindowLongPtrW(hWnd, GWLP_USERDATA)) : nullptr);
+    }
+
     [[nodiscard]] bool CreateFramelessWindow() noexcept
     {
-        if (!__RegisterWindowClass(WindowProc)) {
+        const std::wstring className = __RegisterWindowClass(WindowProc);
+        if (className.empty()) {
             OutputDebugStringW(L"Failed to register window class.");
             return false;
         }
-        if (!__CreateWindow()) {
+        __SetWindowClassName(className);
+        const HWND window = __CreateWindow(className, WS_OVERLAPPEDWINDOW, 0L, nullptr, this);
+        if (!window) {
             OutputDebugStringW(L"Failed to create window.");
             // todo: unreg window class
             return false;
         }
+        __SetWindowHandle(window);
         return true;
     }
 
@@ -96,7 +107,7 @@ protected:
             OnNCCreate(hWnd, lParam);
         } else if (message == WM_NCDESTROY) {
             OnNCDestroy(hWnd);
-        } else if (const auto that = reinterpret_cast<T *>(GetWindowLongPtrW(hWnd, GWLP_USERDATA))) {
+        } else if (const auto that = GetThisFromHandle(hWnd)) {
             return that->MessageHandler(message, wParam, lParam);
         }
         return DefWindowProcW(hWnd, message, wParam, lParam);

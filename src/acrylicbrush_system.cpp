@@ -120,7 +120,7 @@
     }
 }
 
-class AcrylicBrushSystemPrivate : public CustomFrameT<AcrylicBrushSystemPrivate>
+class AcrylicBrushSystemPrivate final : public CustomFrameT<AcrylicBrushSystemPrivate>
 {
     ACRYLICMANAGER_DISABLE_COPY_MOVE(AcrylicBrushSystemPrivate)
 
@@ -128,12 +128,13 @@ public:
     explicit AcrylicBrushSystemPrivate(AcrylicBrushSystem *q);
     ~AcrylicBrushSystemPrivate() override;
 
-    [[nodiscard]] LRESULT MessageHandler(UINT message, WPARAM wParam, LPARAM lParam) noexcept;
-
     [[nodiscard]] bool Initialize();
     [[nodiscard]] HWND GetWindowHandle() const;
     [[nodiscard]] int GetMessageLoopResult() const;
     void ReloadBrushParameters();
+
+private:
+    [[nodiscard]] LRESULT MessageHandler(UINT message, WPARAM wParam, LPARAM lParam) noexcept;
 
 private:
     AcrylicBrushSystem *q_ptr = nullptr;

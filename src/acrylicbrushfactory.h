@@ -33,9 +33,11 @@ extern const IID IID_ACRYLICBRUSH_WINUI2;
 extern const IID IID_ACRYLICBRUSH_DIRECT2D;
 extern const IID IID_ACRYLICBRUSH_NULL;
 
+class AcrylicBrush;
+
 namespace AcrylicBrushFactory
 {
 
-[[nodiscard]] HRESULT CreateInstance(REFIID riid, void **ppInstance);
+[[nodiscard]] HRESULT CreateInstance(REFIID riid, AcrylicBrush **ppInstance);
 
 }

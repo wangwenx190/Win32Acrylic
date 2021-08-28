@@ -44,7 +44,7 @@ BEGIN
         BLOCK "040904b0"
         BEGIN
             VALUE "CompanyName",      "wangwenx190\0"
-            VALUE "FileDescription",  "Acrylic Demo Application\0"
+            VALUE "FileDescription",  "AcrylicManager Demo Application\0"
             VALUE "FileVersion",      "1.0.0.0\0"
             VALUE "LegalCopyright",   "MIT License\0"
             #ifdef _DEBUG
@@ -52,10 +52,8 @@ BEGIN
             #else
             VALUE "OriginalFilename", "Demo.exe\0"
             #endif
-            VALUE "ProductName",      "Acrylic Demo Application\0"
+            VALUE "ProductName",      "Demo\0"
             VALUE "ProductVersion",   "1.0.0.0\0"
-            VALUE "Comments",         "Based on the technology of XAML Island.\0"
-            VALUE "InternalName",     "acrylicdemo\0"
         END
     END
     BLOCK "VarFileInfo"

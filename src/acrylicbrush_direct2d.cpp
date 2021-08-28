@@ -46,7 +46,7 @@ constexpr CLSID am_CLSID_D2D1Opacity = {0x811d79a4, 0xde28, 0x4454, {0x80, 0x94,
 constexpr CLSID am_CLSID_D2D1CrossFade = {0x12f575e8, 0x4db1, 0x485f, {0x9a, 0x84, 0x03, 0xa0, 0x7d, 0xd3, 0x82, 0x9f}};
 constexpr CLSID am_CLSID_D2D1Tint = {0x36312b17, 0xf7dd, 0x4014, {0x91, 0x5d, 0xff, 0xca, 0x76, 0x8c, 0xf2, 0x11}};
 
-class AcrylicBrushDirect2DPrivate : public CustomFrameT<AcrylicBrushDirect2DPrivate>
+class AcrylicBrushDirect2DPrivate final : public CustomFrameT<AcrylicBrushDirect2DPrivate>
 {
     ACRYLICMANAGER_DISABLE_COPY_MOVE(AcrylicBrushDirect2DPrivate)
 
@@ -59,9 +59,8 @@ public:
     [[nodiscard]] HWND GetWindowHandle() const;
     void ReloadBrushParameters();
 
-    [[nodiscard]] LRESULT MessageHandler(UINT message, WPARAM wParam, LPARAM lParam) noexcept;
-
 private:
+    [[nodiscard]] LRESULT MessageHandler(UINT message, WPARAM wParam, LPARAM lParam) noexcept;
     [[nodiscard]] bool EnsureWallpaperBrush();
     [[nodiscard]] bool EnsureNoiseBrush();
     [[nodiscard]] bool PrepareEffects_Luminosity(ID2D1Effect **output);

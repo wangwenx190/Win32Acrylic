@@ -36,6 +36,7 @@ namespace Utils
 [[nodiscard]] bool IsWindows8Point1OrGreater();
 [[nodiscard]] bool IsWindows10OrGreater();
 [[nodiscard]] bool IsWindows10RS1OrGreater();
+[[nodiscard]] bool IsWindows10RS2OrGreater();
 [[nodiscard]] bool IsWindows10RS5OrGreater();
 [[nodiscard]] bool IsWindows1019H1OrGreater();
 [[nodiscard]] bool IsWindows11OrGreater();

@@ -150,7 +150,31 @@ AcrylicBrushSystemPrivate::~AcrylicBrushSystemPrivate()
 
 LRESULT AcrylicBrushSystemPrivate::MessageHandler(UINT message, WPARAM wParam, LPARAM lParam) noexcept
 {
-    return base_type::MessageHandler(message, wParam, lParam);
+    const LRESULT result = base_type::MessageHandler(message, wParam, lParam);
+
+    bool themeChanged = false;
+
+    switch (message) {
+    case WM_SETTINGCHANGE: {
+        if ((wParam == 0) && (_wcsicmp(reinterpret_cast<LPCWSTR>(lParam), L"ImmersiveColorSet") == 0)) {
+            themeChanged = true;
+        }
+    } break;
+    case WM_THEMECHANGED:
+    case WM_DWMCOLORIZATIONCOLORCHANGED:
+        themeChanged = true;
+        break;
+    default:
+        break;
+    }
+
+    if (themeChanged && !Utils::IsHighContrastModeEnabled()) {
+        if (!SetBlurBehindWindowEnabled(GetHandle(), true, q_ptr->GetEffectiveTintColor())) {
+            OutputDebugStringW(L"Failed to update the blur parameters.");
+        }
+    }
+
+    return result;
 }
 
 void AcrylicBrushSystemPrivate::ReloadBrushParameters()
@@ -170,11 +194,11 @@ int AcrylicBrushSystemPrivate::GetMessageLoopResult() const
 
 bool AcrylicBrushSystemPrivate::Initialize()
 {
-    if (!Create()) {
+    if (!CreateFramelessWindow()) {
         OutputDebugStringW(L"Failed to create the background window.");
         return false;
     }
-    if (!SetBlurBehindWindowEnabled(GetWindowHandle(), true, q_ptr->GetEffectiveTintColor())) {
+    if (!SetBlurBehindWindowEnabled(GetHandle(), true, q_ptr->GetEffectiveTintColor())) {
         OutputDebugStringW(L"Failed to enable blur behind window.");
         return false;
     }

@@ -161,6 +161,12 @@ GetMessagePos()
     ACRYLICMANAGER_TRY_EXECUTE_USER_INT_FUNCTION(GetMessagePos)
 }
 
+LONG WINAPI
+GetMessageTime()
+{
+    ACRYLICMANAGER_TRY_EXECUTE_USER_INT_FUNCTION(GetMessageTime)
+}
+
 LRESULT WINAPI
 SendMessageW(
     HWND   hWnd,

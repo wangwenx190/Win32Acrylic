@@ -25,6 +25,7 @@
 #include "acrylicbrush.h"
 #include "utils.h"
 #include "colorconversion.h"
+#include <WinRT\Windows.Foundation.Numerics.h>
 
 namespace Constants
 {
@@ -319,7 +320,7 @@ winrt::Windows::UI::Color AcrylicBrush::GetEffectiveTintColor() const
 
     // Update tintColor's alpha with the combined opacity value
     // If LuminosityOpacity was specified, we don't intervene into users parameters
-    if (GetLuminosityOpacity() != nullptr) {
+    if (GetLuminosityOpacity() < 0.0) {
         tintColor.A = static_cast<uint8_t>(std::round(tintColor.A * tintOpacity));
     } else {
         const double tintOpacityModifier = GetTintOpacityModifier(tintColor);

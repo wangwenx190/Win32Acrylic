@@ -158,8 +158,13 @@ LRESULT AcrylicBrushDirect2DPrivate::MessageHandler(UINT message, WPARAM wParam,
     }
 
     if ((wallpaperChanged || themeChanged) && !Utils::IsHighContrastModeEnabled()) {
-        ReloadDesktopParameters();
-        ReloadBrushParameters();
+        if (wallpaperChanged) {
+            ReloadDesktopParameters();
+            // todo: refresh d2d bitmapsource.
+        }
+        if (themeChanged) {
+            ReloadBrushParameters();
+        }
     }
 
     return result;
@@ -577,6 +582,7 @@ void AcrylicBrushDirect2DPrivate::ReloadDesktopParameters()
 
 void AcrylicBrushDirect2DPrivate::ReloadBrushParameters()
 {
+    // todo: check the existence of these pointers first.
     HRESULT hr = m_D2DLuminosityColorEffect->SetValue(D2D1_FLOOD_PROP_COLOR, WINRTCOLOR_TO_D2DCOLOR4F(q_ptr->GetEffectiveLuminosityColor()));
     if (FAILED(hr)) {
         PRINT_HR_ERROR_MESSAGE(SetValue, hr)
@@ -616,7 +622,7 @@ void AcrylicBrushDirect2DPrivate::ReloadBrushParameters()
 
 bool AcrylicBrushDirect2DPrivate::Initialize()
 {
-    if (!Create()) {
+    if (!CreateFramelessWindow()) {
         OutputDebugStringW(L"Failed to create the background window.");
         return false;
     }

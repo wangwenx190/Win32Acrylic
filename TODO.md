@@ -12,4 +12,4 @@
 - 调查Microsoft Edge Update Installer (Google Chrome Update Installer) 是如何在win7系统上也保留系统边框的
 - 后端所有的函数执行前都先判断下是否应直接返回
 - DWM 函数失败后直接读取注册表，尽量返回一个有效值而不是直接报错
-- 检测深色主题的函数，在合适的系统版本上使用非公开函数，在不合适的系统上直接读注册表
+- dynamicapis只包含基本的win32函数（user32、shell32、gdi32等），图形函数移动到对应的后端去加载

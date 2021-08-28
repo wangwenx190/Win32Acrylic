@@ -35,39 +35,36 @@
 static bool g_winRTInitialized = false;
 static winrt::Windows::UI::Xaml::Hosting::WindowsXamlManager g_manager = nullptr;
 
-class AcrylicBrushWinUI2Private
+class AcrylicBrushWinUI2Private : public CustomFrameT<AcrylicBrushWinUI2Private>
 {
     ACRYLICMANAGER_DISABLE_COPY_MOVE(AcrylicBrushWinUI2Private)
 
 public:
     explicit AcrylicBrushWinUI2Private(AcrylicBrushWinUI2 *q);
-    ~AcrylicBrushWinUI2Private();
+    ~AcrylicBrushWinUI2Private() override;
 
-    static LRESULT CALLBACK MainWindowProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
-    static LRESULT CALLBACK DragBarWindowProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
+    [[nodiscard]] LRESULT MessageHandler(UINT message, WPARAM wParam, LPARAM lParam) noexcept;
 
-    [[nodiscard]] bool CreateMainWindow();
-    [[nodiscard]] bool CreateDragBarWindow();
-    [[nodiscard]] bool CreateXAMLIsland();
-    [[nodiscard]] HWND GetMainWindowHandle() const;
-    [[nodiscard]] int EventLoop() const;
+    [[nodiscard]] bool Initialize();
+    [[nodiscard]] HWND GetWindowHandle() const;
+    [[nodiscard]] int GetMessageLoopResult() const;
     void ReloadBrushParameters();
-    void Cleanup();
+
+protected:
+    bool FilterMessage(const MSG *msg) const noexcept override;
 
 private:
-    [[nodiscard]] LRESULT MainWindowMessageHandler(UINT message, WPARAM wParam, LPARAM lParam);
-    [[nodiscard]] LRESULT DragBarWindowMessageHandler(UINT message, WPARAM wParam, LPARAM lParam);
+    static LRESULT CALLBACK DragBarWindowProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
+    [[nodiscard]] bool CreateDragBarWindow();
+    [[nodiscard]] bool CreateXAMLIsland();
+    void Cleanup();
 
 private:
     AcrylicBrushWinUI2 *q_ptr = nullptr;
 
-    std::wstring m_mainWindowClassName = nullptr;
     std::wstring m_dragBarWindowClassName = nullptr;
-    HWND m_mainWindowHandle = nullptr;
-    HWND m_XAMLIslandWindowHandle = nullptr;
     HWND m_dragBarWindowHandle = nullptr;
-    UINT m_currentDpi = 0;
-    double m_currentDpr = 0.0;
+    HWND m_XAMLIslandWindowHandle = nullptr;
 
     winrt::Windows::UI::Xaml::Hosting::DesktopWindowXamlSource m_source = nullptr;
     winrt::Windows::UI::Xaml::Controls::Grid m_rootGrid = nullptr;
@@ -83,66 +80,28 @@ AcrylicBrushWinUI2Private::~AcrylicBrushWinUI2Private()
 {
 }
 
-LRESULT CALLBACK AcrylicBrushWinUI2Private::MainWindowProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
+HWND AcrylicBrushWinUI2Private::GetWindowHandle() const
 {
-    if (message == WM_NCCREATE) {
-        const auto cs = reinterpret_cast<LPCREATESTRUCTW>(lParam);
-        const auto that = static_cast<AcrylicBrushWinUI2Private *>(cs->lpCreateParams);
-        if (SetWindowLongPtrW(hWnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(that)) == 0) {
-            PRINT_WIN32_ERROR_MESSAGE(SetWindowLongPtrW)
-        }
-    } else if (message == WM_NCDESTROY) {
-        if (SetWindowLongPtrW(hWnd, GWLP_USERDATA, 0) == 0) {
-            PRINT_WIN32_ERROR_MESSAGE(SetWindowLongPtrW)
-        }
-    } else if (const auto that = reinterpret_cast<AcrylicBrushWinUI2Private *>(GetWindowLongPtrW(hWnd, GWLP_USERDATA))) {
-        return that->MainWindowMessageHandler(message, wParam, lParam);
-    }
-    return DefWindowProcW(hWnd, message, wParam, lParam);
+    return GetHandle();
 }
 
-LRESULT CALLBACK AcrylicBrushWinUI2Private::DragBarWindowProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
+bool AcrylicBrushWinUI2Private::FilterMessage(const MSG *msg) const noexcept
 {
-    if (message == WM_NCCREATE) {
-        const auto cs = reinterpret_cast<LPCREATESTRUCTW>(lParam);
-        const auto that = static_cast<AcrylicBrushWinUI2Private *>(cs->lpCreateParams);
-        if (SetWindowLongPtrW(hWnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(that)) == 0) {
-            PRINT_WIN32_ERROR_MESSAGE(SetWindowLongPtrW)
-        }
-    } else if (message == WM_NCDESTROY) {
-        if (SetWindowLongPtrW(hWnd, GWLP_USERDATA, 0) == 0) {
-            PRINT_WIN32_ERROR_MESSAGE(SetWindowLongPtrW)
-        }
-    } else if (const auto that = reinterpret_cast<AcrylicBrushWinUI2Private *>(GetWindowLongPtrW(hWnd, GWLP_USERDATA))) {
-        return that->DragBarWindowMessageHandler(message, wParam, lParam);
-    }
-    return DefWindowProcW(hWnd, message, wParam, lParam);
-}
-
-HWND AcrylicBrushWinUI2Private::GetMainWindowHandle() const
-{
-    return m_mainWindowHandle;
-}
-
-int AcrylicBrushWinUI2Private::EventLoop() const
-{
-    MSG msg = {};
-    while (GetMessageW(&msg, nullptr, 0, 0) != FALSE) {
-        BOOL filtered = FALSE;
-        if (m_source) {
-            const auto interop = m_source.as<IDesktopWindowXamlSourceNative2>();
-            if (interop) {
-                winrt::check_hresult(interop->PreTranslateMessage(&msg, &filtered));
-            } else {
-                OutputDebugStringW(L"Failed to retrieve IDesktopWindowXamlSourceNative2.");
-            }
-        }
-        if (filtered == FALSE) {
-            TranslateMessage(&msg);
-            DispatchMessageW(&msg);
+    BOOL filtered = FALSE;
+    if (m_source) {
+        const auto interop = m_source.as<IDesktopWindowXamlSourceNative2>();
+        if (interop) {
+            winrt::check_hresult(interop->PreTranslateMessage(msg, &filtered));
+        } else {
+            OutputDebugStringW(L"Failed to retrieve IDesktopWindowXamlSourceNative2.");
         }
     }
-    return static_cast<int>(msg.wParam);
+    return (filtered != FALSE);
+}
+
+int AcrylicBrushWinUI2Private::GetMessageLoopResult() const
+{
+    return MessageLoop();
 }
 
 void AcrylicBrushWinUI2Private::ReloadBrushParameters()
@@ -172,79 +131,17 @@ void AcrylicBrushWinUI2Private::Cleanup()
         m_XAMLIslandWindowHandle = nullptr;
     }
     if (m_dragBarWindowHandle) {
-        DestroyWindow(m_dragBarWindowHandle);
+        if (DestroyWindow(m_dragBarWindowHandle) == FALSE) {
+            PRINT_WIN32_ERROR_MESSAGE(DestroyWindow)
+        }
         m_dragBarWindowHandle = nullptr;
     }
     if (!m_dragBarWindowClassName.empty()) {
-        UnregisterClassW(m_dragBarWindowClassName.c_str(), GET_CURRENT_INSTANCE);
+        if (UnregisterClassW(m_dragBarWindowClassName.c_str(), GET_CURRENT_INSTANCE) == FALSE) {
+            PRINT_WIN32_ERROR_MESSAGE(UnregisterClassW)
+        }
         m_dragBarWindowClassName.clear();
     }
-    if (m_mainWindowHandle) {
-        DestroyWindow(m_mainWindowHandle);
-        m_mainWindowHandle = nullptr;
-    }
-    if (!m_mainWindowClassName.empty()) {
-        UnregisterClassW(m_mainWindowClassName.c_str(), GET_CURRENT_INSTANCE);
-        m_mainWindowClassName.clear();
-    }
-    if (m_currentDpi != 0) {
-        m_currentDpi = 0;
-    }
-    if (m_currentDpr != 0.0) {
-        m_currentDpr = 0.0;
-    }
-}
-
-bool AcrylicBrushWinUI2Private::CreateMainWindow()
-{
-    m_mainWindowClassName = Utils::RegisterWindowClass(MainWindowProc);
-    if (m_mainWindowClassName.empty()) {
-        OutputDebugStringW(L"Failed to register the main window class.");
-        return false;
-    }
-
-    m_mainWindowHandle = CreateWindowExW(0L,
-                                         m_mainWindowClassName.c_str(),
-                                         g_mainWindowTitle,
-                                         WS_OVERLAPPEDWINDOW,
-                                         CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
-                                         nullptr,
-                                         nullptr,
-                                         GET_CURRENT_INSTANCE,
-                                         this);
-
-    if (!m_mainWindowHandle) {
-        PRINT_WIN32_ERROR_MESSAGE(CreateWindowExW)
-        return false;
-    }
-
-    m_currentDpi = Utils::GetDotsPerInchForWindow(m_mainWindowHandle);
-    if (m_currentDpi <= 0) {
-        m_currentDpi = USER_DEFAULT_SCREEN_DPI;
-    }
-    m_currentDpr = Utils::GetDevicePixelRatioForWindow(m_mainWindowHandle);
-    if (m_currentDpr <= 0.0) {
-        m_currentDpr = 1.0;
-    }
-
-    // Ensure DWM still draws the top frame by extending the top frame.
-    // This also ensures our window still has the frame shadow drawn by DWM.
-    if (!Utils::UpdateFrameMargins(m_mainWindowHandle)) {
-        OutputDebugStringW(L"Failed to update main window's frame margins.");
-        return false;
-    }
-    // Force a WM_NCCALCSIZE processing to make the window become frameless immediately.
-    if (!Utils::TriggerFrameChangeForWindow(m_mainWindowHandle)) {
-        OutputDebugStringW(L"Failed to trigger frame change event for main window.");
-        return false;
-    }
-    // Ensure our window still has window transitions.
-    if (!Utils::SetWindowTransitionsEnabled(m_mainWindowHandle, true)) {
-        OutputDebugStringW(L"Failed to enable window transitions for main window.");
-        return false;
-    }
-
-    return true;
 }
 
 bool AcrylicBrushWinUI2Private::CreateDragBarWindow()
@@ -304,9 +201,9 @@ bool AcrylicBrushWinUI2Private::CreateDragBarWindow()
 
 bool AcrylicBrushWinUI2Private::CreateXAMLIsland()
 {
-    // XAML Island is only supported on Windows 10 RS5 and onwards.
-    if (!Utils::IsWindows10RS5OrGreater()) {
-        OutputDebugStringW(L"XAML Island is only supported on Windows 10 RS5 and onwards.");
+    // WinUI2 is only supported on Windows 10 RS2 and onwards.
+    if (!Utils::IsWindows10RS2OrGreater()) {
+        OutputDebugStringW(L"WinUI2 is only supported on Windows 10 RS2 and onwards.");
         return false;
     }
 
@@ -328,7 +225,8 @@ bool AcrylicBrushWinUI2Private::CreateXAMLIsland()
         OutputDebugStringW(L"Failed to retrieve IDesktopWindowXamlSourceNative.");
         return false;
     }
-    winrt::check_hresult(interop->AttachToWindow(m_mainWindowHandle));
+    const HWND mainWindowHandle = GetHandle();
+    winrt::check_hresult(interop->AttachToWindow(mainWindowHandle));
     winrt::check_hresult(interop->get_WindowHandle(&m_XAMLIslandWindowHandle));
     if (!m_XAMLIslandWindowHandle) {
         OutputDebugStringW(L"Failed to retrieve XAML Island window handle.");
@@ -336,8 +234,8 @@ bool AcrylicBrushWinUI2Private::CreateXAMLIsland()
     }
     // Update the XAML Island window size because initially it is 0x0.
     // And give enough space to our thin homemade top border.
-    const int borderThickness = Utils::GetWindowVisibleFrameBorderThickness(m_mainWindowHandle);
-    const SIZE size = GET_WINDOW_CLIENT_SIZE(m_mainWindowHandle);
+    const int borderThickness = Utils::GetWindowVisibleFrameBorderThickness(mainWindowHandle);
+    const SIZE size = GET_WINDOW_CLIENT_SIZE(mainWindowHandle);
     if (SetWindowPos(m_XAMLIslandWindowHandle, HWND_BOTTOM, 0,
                      borderThickness, size.cx, (size.cy - borderThickness),
                      SWP_NOACTIVATE | SWP_SHOWWINDOW | SWP_NOOWNERZORDER) == FALSE) {
@@ -350,24 +248,31 @@ bool AcrylicBrushWinUI2Private::CreateXAMLIsland()
     m_rootGrid = {};
     m_rootGrid.Background(m_backgroundBrush);
     //m_rootGrid.Children().Clear();
-    //m_rootGrid.Children().Append(/* some UWP control */);
+    //m_rootGrid.Children().Append(/* WinUI2 control 1 */);
+    //m_rootGrid.Children().Append(/* WinUI2 control 2 */);
+    //m_rootGrid.Children().Append(/* WinUI2 control ... */);
+    //m_rootGrid.Children().Append(/* WinUI2 control n */);
     //m_rootGrid.UpdateLayout();
     m_source.Content(m_rootGrid);
 
     return true;
 }
 
-LRESULT AcrylicBrushWinUI2Private::MainWindowMessageHandler(UINT message, WPARAM wParam, LPARAM lParam)
+LRESULT AcrylicBrushWinUI2Private::MessageHandler(UINT message, WPARAM wParam, LPARAM lParam) noexcept
 {
+    const LRESULT result = base_type::MessageHandler(message, wParam, lParam);
+
+    const HWND mainWindowHandle = GetHandle();
+
     bool themeChanged = false;
 
     switch (message) {
     case WM_SIZE: {
         const auto width = LOWORD(lParam);
-        const UINT flags = SWP_NOACTIVATE | SWP_SHOWWINDOW | SWP_NOOWNERZORDER;
+        constexpr UINT flags = (SWP_NOACTIVATE | SWP_SHOWWINDOW | SWP_NOOWNERZORDER);
         if (m_XAMLIslandWindowHandle) {
             // Give enough space to our thin homemade top border.
-            const int borderThickness = Utils::GetWindowVisibleFrameBorderThickness(m_mainWindowHandle);
+            const int borderThickness = Utils::GetWindowVisibleFrameBorderThickness(mainWindowHandle);
             const int height = (HIWORD(lParam) - borderThickness);
             if (SetWindowPos(m_XAMLIslandWindowHandle, HWND_BOTTOM, 0, borderThickness,
                              width, height, flags) == FALSE) {
@@ -376,7 +281,7 @@ LRESULT AcrylicBrushWinUI2Private::MainWindowMessageHandler(UINT message, WPARAM
             }
         }
         if (m_dragBarWindowHandle) {
-            const int titleBarHeight = Utils::GetTitleBarHeight(m_mainWindowHandle);
+            const int titleBarHeight = Utils::GetTitleBarHeight(mainWindowHandle);
             if (SetWindowPos(m_dragBarWindowHandle, HWND_TOP, 0, 0, width, titleBarHeight, flags) == FALSE) {
                 PRINT_WIN32_ERROR_MESSAGE(SetWindowPos)
                 break;
@@ -401,7 +306,7 @@ LRESULT AcrylicBrushWinUI2Private::MainWindowMessageHandler(UINT message, WPARAM
             // we still want to get the cursor position that was associated
             // with that message at the time it was sent to handle the message
             // correctly.
-            const LRESULT hitTestResult = SendMessageW(m_mainWindowHandle, WM_NCHITTEST, 0, GetMessagePos());
+            const LRESULT hitTestResult = SendMessageW(mainWindowHandle, WM_NCHITTEST, 0, GetMessagePos());
             if (hitTestResult == HTTOP) {
                 // We have to set the vertical resize cursor manually on
                 // the top resize handle because Windows thinks that the
@@ -437,10 +342,10 @@ LRESULT AcrylicBrushWinUI2Private::MainWindowMessageHandler(UINT message, WPARAM
         ReloadBrushParameters();
     }
 
-    return DefWindowProcW(m_mainWindowHandle, message, wParam, lParam);
+    return result;
 }
 
-LRESULT AcrylicBrushWinUI2Private::DragBarWindowMessageHandler(UINT message, WPARAM wParam, LPARAM lParam)
+LRESULT CALLBACK AcrylicBrushWinUI2Private::DragBarWindowProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
     std::optional<UINT> nonClientMessage = std::nullopt;
     switch (message)
@@ -501,6 +406,23 @@ LRESULT AcrylicBrushWinUI2Private::DragBarWindowMessageHandler(UINT message, WPA
     return DefWindowProcW(m_dragBarWindowHandle, message, wParam, lParam);
 }
 
+bool AcrylicBrushWinUI2Private::Initialize()
+{
+    if (!CreateFramelessWindow()) {
+        OutputDebugStringW(L"");
+        return false;
+    }
+    if (!CreateDragBarWindow()) {
+        OutputDebugStringW(L"");
+        return false;
+    }
+    if (!CreateXAMLIsland()) {
+        OutputDebugStringW(L"");
+        return false;
+    }
+    return true;
+}
+
 AcrylicBrushWinUI2::AcrylicBrushWinUI2()
 {
     d_ptr = std::make_unique<AcrylicBrushWinUI2Private>(this);
@@ -512,25 +434,13 @@ AcrylicBrushWinUI2::~AcrylicBrushWinUI2()
 
 bool AcrylicBrushWinUI2::IsSupportedByCurrentOS() const
 {
-    static const bool result = Utils::IsWindows10RS5OrGreater();
+    static const bool result = Utils::IsWindows10RS2OrGreater();
     return result;
 }
 
 bool AcrylicBrushWinUI2::Initialize() const
 {
-    if (!d_ptr->CreateMainWindow()) {
-        OutputDebugStringW(L"Failed to create main window.");
-        return false;
-    }
-    if (!d_ptr->CreateDragBarWindow()) {
-        OutputDebugStringW(L"Failed to create drag bar window.");
-        return false;
-    }
-    if (!d_ptr->CreateXAMLIsland()) {
-        OutputDebugStringW(L"Failed to create XAML Island.");
-        return false;
-    }
-    return true;
+    return d_ptr->Initialize();
 }
 
 bool AcrylicBrushWinUI2::RefreshBrush() const

@@ -35,15 +35,15 @@ public:
     explicit CustomFrame();
     virtual ~CustomFrame();
 
+    [[nodiscard]] HWND GetHandle() const noexcept;
+    [[nodiscard]] int MessageLoop() const noexcept;
+
 protected:
     [[nodiscard]] bool __RegisterWindowClass(const WNDPROC wndProc) noexcept;
     [[nodiscard]] bool __CreateWindow() noexcept;
     [[nodiscard]] std::wstring __GetWindowClassName() const noexcept;
 
     [[nodiscard]] virtual bool FilterMessage(const MSG *msg) const noexcept;
-    [[nodiscard]] int MessageLoop() const noexcept;
-
-    [[nodiscard]] HWND GetHandle() const noexcept;
 
     static void OnNCCreate(const HWND hWnd, const LPARAM lParam) noexcept;
     static void OnNCDestroy(const HWND hWnd) noexcept;
@@ -67,10 +67,16 @@ private:
 template <typename T>
 struct CustomFrameT : public CustomFrame
 {
+public:
+    [[nodiscard]] UINT GetCurrentDpi() const noexcept
+    {
+        return m_dpi;
+    }
+
 protected:
     using base_type = CustomFrameT<T>;
 
-    [[nodiscard]] bool Create() noexcept
+    [[nodiscard]] bool CreateFramelessWindow() noexcept
     {
         if (!__RegisterWindowClass(WindowProc)) {
             OutputDebugStringW(L"Failed to register window class.");
@@ -135,11 +141,6 @@ protected:
             break;
         }
         return DefWindowProcW(hWnd, message, wParam, lParam);
-    }
-
-    [[nodiscard]] UINT GetCurrentDpi() const noexcept
-    {
-        return m_dpi;
     }
 
 private:

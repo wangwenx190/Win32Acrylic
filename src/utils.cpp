@@ -181,6 +181,12 @@ bool Utils::IsWindows10RS1OrGreater()
     return result;
 }
 
+bool Utils::IsWindows10RS2OrGreater()
+{
+    static const bool result = CompareSystemVersion(WindowsVersion::Windows10_1703, VersionCompare::GreaterOrEqual);
+    return result;
+}
+
 bool Utils::IsWindows10RS5OrGreater()
 {
     static const bool result = CompareSystemVersion(WindowsVersion::Windows10_1809, VersionCompare::GreaterOrEqual);

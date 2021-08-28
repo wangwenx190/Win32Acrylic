@@ -3,10 +3,8 @@ enable_language(RC)
 set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>" CACHE STRING "" FORCE)
 set(CMAKE_CXX_STANDARD_LIBRARIES "kernel32.lib" CACHE STRING "" FORCE)
 
-configure_file(acrylicmanager.rc.in ${PROJECT_BINARY_DIR}/acrylicmanager.rc @ONLY)
-
 set(SOURCES
-    ${PROJECT_BINARY_DIR}/acrylicmanager.rc
+    acrylicmanager.rc
     acrylicmanager_global.h
     resource.h
     runtimeobject.cpp
@@ -57,7 +55,6 @@ target_compile_definitions(${PROJECT_NAME} PRIVATE
     _CRT_NON_CONFORMING_SWPRINTFS
     _CRT_SECURE_NO_WARNINGS
     ACRYLICMANAGER_BUILD_LIBRARY
-    ACRYLICMANAGER_VERSION_STR=L\"${PROJECT_VERSION}\"
 )
 unset(NTDDI_WIN10_19H1)
 

@@ -52,7 +52,7 @@ class AcrylicBrushDirect2DPrivate : public CustomFrameT<AcrylicBrushDirect2DPriv
 
 public:
     explicit AcrylicBrushDirect2DPrivate(AcrylicBrushDirect2D *q);
-    ~AcrylicBrushDirect2DPrivate();
+    ~AcrylicBrushDirect2DPrivate() override;
 
     [[nodiscard]] bool Initialize();
     [[nodiscard]] int GetMessageLoopResult() const;
@@ -130,6 +130,8 @@ AcrylicBrushDirect2DPrivate::~AcrylicBrushDirect2DPrivate()
 
 LRESULT AcrylicBrushDirect2DPrivate::MessageHandler(UINT message, WPARAM wParam, LPARAM lParam) noexcept
 {
+    const LRESULT result = base_type::MessageHandler(message, wParam, lParam);
+
     bool wallpaperChanged = false;
     bool themeChanged = false;
 
@@ -160,7 +162,7 @@ LRESULT AcrylicBrushDirect2DPrivate::MessageHandler(UINT message, WPARAM wParam,
         ReloadBrushParameters();
     }
 
-    return base_type::MessageHandler(message, wParam, lParam);
+    return result;
 }
 
 HWND AcrylicBrushDirect2DPrivate::GetWindowHandle() const
@@ -226,11 +228,6 @@ bool AcrylicBrushDirect2DPrivate::PrepareEffects_Luminosity(ID2D1Effect **output
         PRINT_HR_ERROR_MESSAGE(CreateEffect, hr)
         return false;
     }
-    hr = m_D2DLuminosityColorEffect->SetValue(D2D1_FLOOD_PROP_COLOR, WINRTCOLOR_TO_D2DCOLOR4F(q_ptr->GetEffectiveLuminosityColor()));
-    if (FAILED(hr)) {
-        PRINT_HR_ERROR_MESSAGE(SetValue, hr)
-        return false;
-    }
 
     // Luminosity blend
     hr = m_D2DContext->CreateEffect(am_CLSID_D2D1Blend, m_D2DLuminosityBlendEffect.GetAddressOf());
@@ -275,11 +272,6 @@ bool AcrylicBrushDirect2DPrivate::PrepareEffects_Legacy(ID2D1Effect **output)
         PRINT_HR_ERROR_MESSAGE(CreateEffect, hr)
         return false;
     }
-    hr = m_D2DSaturationEffect->SetValue(D2D1_SATURATION_PROP_SATURATION, q_ptr->GetSaturation());
-    if (FAILED(hr)) {
-        PRINT_HR_ERROR_MESSAGE(SetValue, hr)
-        return false;
-    }
     m_D2DSaturationEffect->SetInputEffect(0, m_D2DGaussianBlurEffect.Get());
 
     // Apply exclusion:
@@ -287,11 +279,6 @@ bool AcrylicBrushDirect2DPrivate::PrepareEffects_Legacy(ID2D1Effect **output)
     hr = m_D2DContext->CreateEffect(am_CLSID_D2D1Flood, m_D2DExclusionColorEffect.GetAddressOf());
     if (FAILED(hr)) {
         PRINT_HR_ERROR_MESSAGE(CreateEffect, hr)
-        return false;
-    }
-    hr = m_D2DExclusionColorEffect->SetValue(D2D1_FLOOD_PROP_COLOR, WINRTCOLOR_TO_D2DCOLOR4F(q_ptr->GetExclusionColor()));
-    if (FAILED(hr)) {
-        PRINT_HR_ERROR_MESSAGE(SetValue, hr)
         return false;
     }
     // Exclusion blend
@@ -329,6 +316,10 @@ bool AcrylicBrushDirect2DPrivate::PrepareEffects_Legacy(ID2D1Effect **output)
 
 bool AcrylicBrushDirect2DPrivate::CreateEffects(ID2D1Effect **output)
 {
+    ReloadDesktopParameters();
+    EnsureWallpaperBrush();
+    EnsureNoiseBrush();
+
     HRESULT hr = m_D2DContext->CreateEffect(am_CLSID_D2D1BitmapSource, m_D2DWallpaperBitmapSourceEffect.GetAddressOf());
     if (FAILED(hr)) {
         PRINT_HR_ERROR_MESSAGE(CreateEffect, hr)
@@ -344,11 +335,6 @@ bool AcrylicBrushDirect2DPrivate::CreateEffects(ID2D1Effect **output)
         PRINT_HR_ERROR_MESSAGE(CreateEffect, hr)
         return false;
     }
-    hr = m_D2DTintColorEffect->SetValue(D2D1_FLOOD_PROP_COLOR, WINRTCOLOR_TO_D2DCOLOR4F(q_ptr->GetEffectiveTintColor()));
-    if (FAILED(hr)) {
-        PRINT_HR_ERROR_MESSAGE(SetValue, hr)
-        return false;
-    }
     hr = m_D2DContext->CreateEffect(am_CLSID_D2D1GaussianBlur, m_D2DGaussianBlurEffect.GetAddressOf());
     if (FAILED(hr)) {
         PRINT_HR_ERROR_MESSAGE(CreateEffect, hr)
@@ -360,11 +346,6 @@ bool AcrylicBrushDirect2DPrivate::CreateEffects(ID2D1Effect **output)
         return false;
     }
     hr = m_D2DGaussianBlurEffect->SetValue(D2D1_GAUSSIANBLUR_PROP_OPTIMIZATION, D2D1_DIRECTIONALBLUR_OPTIMIZATION_QUALITY);
-    if (FAILED(hr)) {
-        PRINT_HR_ERROR_MESSAGE(SetValue, hr)
-        return false;
-    }
-    hr = m_D2DGaussianBlurEffect->SetValue(D2D1_GAUSSIANBLUR_PROP_STANDARD_DEVIATION, q_ptr->GetBlurRadius());
     if (FAILED(hr)) {
         PRINT_HR_ERROR_MESSAGE(SetValue, hr)
         return false;
@@ -408,11 +389,6 @@ bool AcrylicBrushDirect2DPrivate::CreateEffects(ID2D1Effect **output)
         PRINT_HR_ERROR_MESSAGE(CreateEffect, hr)
         return false;
     }
-    hr = m_D2DNoiseOpacityEffect->SetValue(D2D1_OPACITY_PROP_OPACITY, q_ptr->GetNoiseOpacity());
-    if (FAILED(hr)) {
-        PRINT_HR_ERROR_MESSAGE(SetValue, hr)
-        return false;
-    }
     m_D2DNoiseOpacityEffect->SetInputEffect(0, m_D2DNoiseBorderEffect.Get());
 
     // Blend noise on top of tint
@@ -435,11 +411,6 @@ bool AcrylicBrushDirect2DPrivate::CreateEffects(ID2D1Effect **output)
         PRINT_HR_ERROR_MESSAGE(CreateEffect, hr)
         return false;
     }
-    hr = m_D2DFallbackColorEffect->SetValue(D2D1_FLOOD_PROP_COLOR, WINRTCOLOR_TO_D2DCOLOR4F(q_ptr->GetFallbackColor()));
-    if (FAILED(hr)) {
-        PRINT_HR_ERROR_MESSAGE(SetValue, hr)
-        return false;
-    }
     // CrossFade with the fallback color. Weight = 0 means full fallback, 1 means full acrylic.
     hr = m_D2DContext->CreateEffect(am_CLSID_D2D1CrossFade, m_D2DFadeInOutEffect.GetAddressOf());
     if (FAILED(hr)) {
@@ -455,6 +426,8 @@ bool AcrylicBrushDirect2DPrivate::CreateEffects(ID2D1Effect **output)
     m_D2DFadeInOutEffect->SetInputEffect(0, m_D2DNoiseBlendEffectOuter.Get());
     m_D2DFadeInOutEffect->SetInputEffect(1, m_D2DFallbackColorEffect.Get());
 
+    ReloadBrushParameters(); // <-- All visual effect parameters are setted here.
+
     *output = m_D2DFadeInOutEffect.Get();
 
     return true;
@@ -462,7 +435,7 @@ bool AcrylicBrushDirect2DPrivate::CreateEffects(ID2D1Effect **output)
 
 bool AcrylicBrushDirect2DPrivate::DrawFinalVisual() const
 {
-    const HWND hWnd = GetWindowHandle();
+    const HWND hWnd = GetHandle();
     const SIZE windowSize = GET_WINDOW_CLIENT_SIZE(hWnd);
     const int borderThickness = Utils::GetWindowVisibleFrameBorderThickness(hWnd);
     m_D2DContext->BeginDraw();
@@ -489,14 +462,6 @@ bool AcrylicBrushDirect2DPrivate::DrawFinalVisual() const
         return false;
     }
     return true;
-}
-
-void AcrylicBrushDirect2DPrivate::ReloadDesktopParameters()
-{
-    constexpr int screen = 0; // fixme: use the correct screen id.
-    m_wallpaperFilePath = Utils::GetWallpaperFilePath(screen);
-    m_wallpaperAspectStyle = Utils::GetWallpaperAspectStyle(screen);
-    m_desktopBackgroundColor = Utils::GetDesktopBackgroundColor(screen);
 }
 
 bool AcrylicBrushDirect2DPrivate::InitializeGraphicsInfrastructure()
@@ -564,7 +529,7 @@ bool AcrylicBrushDirect2DPrivate::InitializeGraphicsInfrastructure()
         PRINT_HR_ERROR_MESSAGE(GetParent, hr)
         return false;
     }
-    hr = m_DXGIFactory->CreateSwapChainForHwnd(m_D3D11Device.Get(), GetWindowHandle(),
+    hr = m_DXGIFactory->CreateSwapChainForHwnd(m_D3D11Device.Get(), GetHandle(),
                                                &m_DXGISwapChainDesc, nullptr, nullptr,
                                                m_DXGISwapChain.GetAddressOf());
     if (FAILED(hr)) {
@@ -602,6 +567,53 @@ bool AcrylicBrushDirect2DPrivate::InitializeGraphicsInfrastructure()
     return true;
 }
 
+void AcrylicBrushDirect2DPrivate::ReloadDesktopParameters()
+{
+    constexpr int screen = 0; // fixme: use the correct screen id.
+    m_wallpaperFilePath = Utils::GetWallpaperFilePath(screen);
+    m_wallpaperAspectStyle = Utils::GetWallpaperAspectStyle(screen);
+    m_desktopBackgroundColor = Utils::GetDesktopBackgroundColor(screen);
+}
+
+void AcrylicBrushDirect2DPrivate::ReloadBrushParameters()
+{
+    HRESULT hr = m_D2DLuminosityColorEffect->SetValue(D2D1_FLOOD_PROP_COLOR, WINRTCOLOR_TO_D2DCOLOR4F(q_ptr->GetEffectiveLuminosityColor()));
+    if (FAILED(hr)) {
+        PRINT_HR_ERROR_MESSAGE(SetValue, hr)
+        return;
+    }
+    hr = m_D2DSaturationEffect->SetValue(D2D1_SATURATION_PROP_SATURATION, q_ptr->GetSaturation());
+    if (FAILED(hr)) {
+        PRINT_HR_ERROR_MESSAGE(SetValue, hr)
+        return;
+    }
+    hr = m_D2DExclusionColorEffect->SetValue(D2D1_FLOOD_PROP_COLOR, WINRTCOLOR_TO_D2DCOLOR4F(q_ptr->GetExclusionColor()));
+    if (FAILED(hr)) {
+        PRINT_HR_ERROR_MESSAGE(SetValue, hr)
+        return;
+    }
+    hr = m_D2DTintColorEffect->SetValue(D2D1_FLOOD_PROP_COLOR, WINRTCOLOR_TO_D2DCOLOR4F(q_ptr->GetEffectiveTintColor()));
+    if (FAILED(hr)) {
+        PRINT_HR_ERROR_MESSAGE(SetValue, hr)
+        return;
+    }
+    hr = m_D2DGaussianBlurEffect->SetValue(D2D1_GAUSSIANBLUR_PROP_STANDARD_DEVIATION, q_ptr->GetBlurRadius());
+    if (FAILED(hr)) {
+        PRINT_HR_ERROR_MESSAGE(SetValue, hr)
+        return;
+    }
+    hr = m_D2DNoiseOpacityEffect->SetValue(D2D1_OPACITY_PROP_OPACITY, q_ptr->GetNoiseOpacity());
+    if (FAILED(hr)) {
+        PRINT_HR_ERROR_MESSAGE(SetValue, hr)
+        return;
+    }
+    hr = m_D2DFallbackColorEffect->SetValue(D2D1_FLOOD_PROP_COLOR, WINRTCOLOR_TO_D2DCOLOR4F(q_ptr->GetFallbackColor()));
+    if (FAILED(hr)) {
+        PRINT_HR_ERROR_MESSAGE(SetValue, hr)
+        return;
+    }
+}
+
 bool AcrylicBrushDirect2DPrivate::Initialize()
 {
     if (!Create()) {
@@ -622,11 +634,6 @@ bool AcrylicBrushDirect2DPrivate::Initialize()
 int AcrylicBrushDirect2DPrivate::GetMessageLoopResult() const
 {
     return MessageLoop();
-}
-
-void AcrylicBrushDirect2DPrivate::ReloadBrushParameters()
-{
-    // todo
 }
 
 AcrylicBrushDirect2D::AcrylicBrushDirect2D()

@@ -27,7 +27,6 @@
 #include "acrylicmanager_global.h"
 #include <Unknwn.h>
 #include <WinRT\Windows.UI.h>
-//#include <WinRT\Windows.Foundation.Numerics.h>
 
 class AcrylicBrush
 {

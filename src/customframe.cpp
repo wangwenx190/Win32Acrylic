@@ -95,12 +95,19 @@ std::wstring CustomFrame::__GetWindowClassName() const noexcept
     return m_windowClass;
 }
 
+bool CustomFrame::FilterMessage(const MSG *msg) const noexcept
+{
+    return false;
+}
+
 int CustomFrame::MessageLoop() const noexcept
 {
     MSG msg = {};
     while (GetMessageW(&msg, nullptr, 0, 0) != FALSE) {
-        TranslateMessage(&msg);
-        DispatchMessageW(&msg);
+        if (!FilterMessage(&msg)) {
+            TranslateMessage(&msg);
+            DispatchMessageW(&msg);
+        }
     }
     return static_cast<int>(msg.wParam);
 }

@@ -423,7 +423,7 @@ bool Utils::ShouldSystemUsesDarkMode()
         const int value = GetIntFromRegistry(HKEY_CURRENT_USER, g_personalizeRegistryKey, L"SystemUsesLightTheme");
         return (value == 0);
     };
-    if (true) {
+    if (false) {
         return resultFromRegistry();
     } else {
         static bool tried = false;

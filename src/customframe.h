@@ -33,13 +33,14 @@ class CustomFrame
 
 public:
     explicit CustomFrame();
-    ~CustomFrame();
+    virtual ~CustomFrame();
 
 protected:
     [[nodiscard]] bool __RegisterWindowClass(const WNDPROC wndProc) noexcept;
     [[nodiscard]] bool __CreateWindow() noexcept;
     [[nodiscard]] std::wstring __GetWindowClassName() const noexcept;
 
+    [[nodiscard]] virtual bool FilterMessage(const MSG *msg) const noexcept;
     [[nodiscard]] int MessageLoop() const noexcept;
 
     [[nodiscard]] HWND GetHandle() const noexcept;

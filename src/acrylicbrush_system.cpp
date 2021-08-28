@@ -27,31 +27,6 @@
 #include "utils.h"
 #include <DwmApi.h>
 
-static HMODULE g_user32Module = nullptr;
-
-using SetWindowCompositionAttributeSignature = BOOL(WINAPI *)(HWND, WINDOWCOMPOSITIONATTRIBDATA *);
-static SetWindowCompositionAttributeSignature g_setWindowCompositionAttributePfn = nullptr;
-
-[[nodiscard]] static inline bool InitializeUndocumentedAPIs()
-{
-    static bool tried = false;
-    if (tried) {
-        return false;
-    }
-    tried = true;
-    g_user32Module = LoadLibraryExW(L"User32.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
-    if (!g_user32Module) {
-        PRINT_WIN32_ERROR_MESSAGE(LoadLibraryExW)
-        return false;
-    }
-    g_setWindowCompositionAttributePfn = reinterpret_cast<SetWindowCompositionAttributeSignature>(GetProcAddress(g_user32Module, "SetWindowCompositionAttribute"));
-    if (!g_setWindowCompositionAttributePfn) {
-        PRINT_WIN32_ERROR_MESSAGE(GetProcAddress)
-        return false;
-    }
-    return true;
-}
-
 [[nodiscard]] static inline bool IsAcrylicBlurAvailableForWin32()
 {
     static const bool result = (Utils::IsWindows11OrGreater()
@@ -72,18 +47,37 @@ static SetWindowCompositionAttributeSignature g_setWindowCompositionAttributePfn
     }
     // We prefer using DwmEnableBlurBehindWindow() on Windows 7.
     if (Utils::IsWindows8OrGreater()) {
+        static bool tried = false;
+        using sig = BOOL(WINAPI *)(HWND, WINDOWCOMPOSITIONATTRIBDATA *);
+        static sig func = nullptr;
+        if (!func) {
+            if (tried) {
+                return false;
+            } else {
+                tried = true;
+                const HMODULE dll = LoadLibraryExW(L"User32.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
+                if (!dll) {
+                    PRINT_WIN32_ERROR_MESSAGE(LoadLibraryExW)
+                    return false;
+                }
+                func = reinterpret_cast<sig>(GetProcAddress(dll, "SetWindowCompositionAttribute"));
+                if (!func) {
+                    PRINT_WIN32_ERROR_MESSAGE(GetProcAddress)
+                    return false;
+                }
+            }
+        }
         ACCENT_POLICY policy = {};
         policy.Flags = (enable ? 2 : 0); // Magic number, don't know the exact meaning.
         if (enable) {
-            // The gradient color must be set otherwise it'll look like a classic blur.
-            // Use semi-transparent gradient color to get better appearance.
             if (IsAcrylicBlurAvailableForWin32()) {
                 policy.State = ACCENT_ENABLE_ACRYLICBLURBEHIND;
-                policy.GradientColor = 0x01FFFFFF;
             } else {
                 policy.State = ACCENT_ENABLE_BLURBEHIND;
-                policy.GradientColor = WINRTCOLOR_TO_WIN32COLOR(color);
             }
+            // The gradient color must be set otherwise it'll look like a classic blur.
+            // Use semi-transparent gradient color to get better appearance.
+            policy.GradientColor = WINRTCOLOR_TO_WIN32COLOR(color);
         } else {
             policy.State = ACCENT_DISABLED;
             policy.GradientColor = 0;
@@ -92,7 +86,7 @@ static SetWindowCompositionAttributeSignature g_setWindowCompositionAttributePfn
         data.Attrib = WCA_ACCENT_POLICY;
         data.pvData = &policy;
         data.cbData = sizeof(policy);
-        if (g_setWindowCompositionAttributePfn(hWnd, &data) == FALSE) {
+        if (func(hWnd, &data) == FALSE) {
             PRINT_WIN32_ERROR_MESSAGE(SetWindowCompositionAttribute)
             return false;
         }
@@ -132,7 +126,7 @@ class AcrylicBrushSystemPrivate : public CustomFrameT<AcrylicBrushSystemPrivate>
 
 public:
     explicit AcrylicBrushSystemPrivate(AcrylicBrushSystem *q);
-    ~AcrylicBrushSystemPrivate();
+    ~AcrylicBrushSystemPrivate() override;
 
     [[nodiscard]] LRESULT MessageHandler(UINT message, WPARAM wParam, LPARAM lParam) noexcept;
 
@@ -178,10 +172,6 @@ bool AcrylicBrushSystemPrivate::Initialize()
 {
     if (!Create()) {
         OutputDebugStringW(L"Failed to create the background window.");
-        return false;
-    }
-    if (!InitializeUndocumentedAPIs()) {
-        OutputDebugStringW(L"Failed to load the undocumented APIs.");
         return false;
     }
     if (!SetBlurBehindWindowEnabled(GetWindowHandle(), true, q_ptr->GetEffectiveTintColor())) {

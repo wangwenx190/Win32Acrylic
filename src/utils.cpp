@@ -379,8 +379,39 @@ bool Utils::ShouldAppsUseDarkMode()
     if (!IsWindows10RS1OrGreater()) {
         return false;
     }
-    const int value = GetIntFromRegistry(HKEY_CURRENT_USER, g_personalizeRegistryKey, L"AppsUseLightTheme");
-    return (value == 0);
+    const auto resultFromRegistry = []() -> bool {
+        const int value = GetIntFromRegistry(HKEY_CURRENT_USER, g_personalizeRegistryKey, L"AppsUseLightTheme");
+        return (value == 0);
+    };
+    // Starting from Windows 10 19H1, ShouldAppsUseDarkMode() always return "TRUE"
+    // (actually, a random non-zero number at runtime), so we can't use it due to
+    // this unreliability. In this case, we just simply read the user's setting from
+    // the registry instead, it's not elegant but at least it works well.
+    if (IsWindows1019H1OrGreater()) {
+        return resultFromRegistry();
+    } else {
+        static bool tried = false;
+        using sig = BOOL(WINAPI *)();
+        static sig func = nullptr;
+        if (!func) {
+            if (tried) {
+                return resultFromRegistry();
+            } else {
+                tried = true;
+                const HMODULE dll = LoadLibraryExW(L"UxTheme.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
+                if (!dll) {
+                    PRINT_WIN32_ERROR_MESSAGE(LoadLibraryExW)
+                    return resultFromRegistry();
+                }
+                func = reinterpret_cast<sig>(GetProcAddress(dll, MAKEINTRESOURCEA(132)));
+                if (!func) {
+                    PRINT_WIN32_ERROR_MESSAGE(GetProcAddress)
+                    return resultFromRegistry();
+                }
+            }
+        }
+        return (func() != FALSE);
+    }
 }
 
 bool Utils::ShouldSystemUsesDarkMode()
@@ -388,8 +419,35 @@ bool Utils::ShouldSystemUsesDarkMode()
     if (!IsWindows10RS1OrGreater()) {
         return false;
     }
-    const int value = GetIntFromRegistry(HKEY_CURRENT_USER, g_personalizeRegistryKey, L"SystemUsesLightTheme");
-    return (value == 0);
+    const auto resultFromRegistry = []() -> bool {
+        const int value = GetIntFromRegistry(HKEY_CURRENT_USER, g_personalizeRegistryKey, L"SystemUsesLightTheme");
+        return (value == 0);
+    };
+    if (true) {
+        return resultFromRegistry();
+    } else {
+        static bool tried = false;
+        using sig = BOOL(WINAPI *)();
+        static sig func = nullptr;
+        if (!func) {
+            if (tried) {
+                return resultFromRegistry();
+            } else {
+                tried = true;
+                const HMODULE dll = LoadLibraryExW(L"UxTheme.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
+                if (!dll) {
+                    PRINT_WIN32_ERROR_MESSAGE(LoadLibraryExW)
+                    return resultFromRegistry();
+                }
+                func = reinterpret_cast<sig>(GetProcAddress(dll, MAKEINTRESOURCEA(138)));
+                if (!func) {
+                    PRINT_WIN32_ERROR_MESSAGE(GetProcAddress)
+                    return resultFromRegistry();
+                }
+            }
+        }
+        return (func() != FALSE);
+    }
 }
 
 COLORREF Utils::GetColorizationColor()
@@ -399,7 +457,10 @@ COLORREF Utils::GetColorizationColor()
     const HRESULT hr = DwmGetColorizationColor(&color, &opaque);
     if (FAILED(hr)) {
         PRINT_HR_ERROR_MESSAGE(DwmGetColorizationColor, hr)
-        return RGB(128, 128, 128); // Dark gray
+        color = static_cast<COLORREF>(GetIntFromRegistry(HKEY_CURRENT_USER, g_dwmRegistryKey, L"ColorizationColor"));
+        if (color == 0) {
+            color = RGB(128, 128, 128); // Dark gray
+        }
     }
     return color;
 }

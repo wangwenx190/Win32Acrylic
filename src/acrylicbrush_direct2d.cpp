@@ -59,8 +59,9 @@ public:
     [[nodiscard]] HWND GetWindowHandle() const;
     void ReloadBrushParameters();
 
-private:
     [[nodiscard]] LRESULT MessageHandler(UINT message, WPARAM wParam, LPARAM lParam) noexcept;
+
+private:
     [[nodiscard]] bool EnsureWallpaperBrush();
     [[nodiscard]] bool EnsureNoiseBrush();
     [[nodiscard]] bool PrepareEffects_Luminosity(ID2D1Effect **output);
@@ -220,6 +221,7 @@ bool AcrylicBrushDirect2DPrivate::EnsureWallpaperBrush()
 bool AcrylicBrushDirect2DPrivate::EnsureNoiseBrush()
 {
     // todo
+    return false;
 }
 
 bool AcrylicBrushDirect2DPrivate::PrepareEffects_Luminosity(ID2D1Effect **output)

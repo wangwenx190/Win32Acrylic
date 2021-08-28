@@ -27,7 +27,7 @@
 
 AcrylicBrushWinUI3::AcrylicBrushWinUI3()
 {
-    d_ptr = std::make_unique<AcrylicBrushWinUI3Private>(this);
+    //d_ptr = std::make_unique<AcrylicBrushWinUI3Private>(this);
 }
 
 AcrylicBrushWinUI3::~AcrylicBrushWinUI3()

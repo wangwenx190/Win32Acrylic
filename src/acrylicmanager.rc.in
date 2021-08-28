@@ -58,8 +58,6 @@ BEGIN
             #endif
             VALUE "ProductName",      "AcrylicManager\0"
             VALUE "ProductVersion",   "@PROJECT_VERSION@\0"
-            VALUE "Comments",         "Based on the technology of XAML Island.\0"
-            VALUE "InternalName",     "acrylicmanager\0"
         END
     END
     BLOCK "VarFileInfo"

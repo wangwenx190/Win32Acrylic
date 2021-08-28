@@ -48,13 +48,14 @@ public:
     [[nodiscard]] int GetMessageLoopResult() const;
     void ReloadBrushParameters();
 
+    [[nodiscard]] LRESULT MessageHandler(UINT message, WPARAM wParam, LPARAM lParam) noexcept;
+    [[nodiscard]] LRESULT DragBarMessageHandler(UINT message, WPARAM wParam, LPARAM lParam) noexcept;
+
 protected:
     bool FilterMessage(const MSG *msg) const noexcept override;
 
 private:
-    [[nodiscard]] LRESULT MessageHandler(UINT message, WPARAM wParam, LPARAM lParam) noexcept;
     static LRESULT CALLBACK DragBarWindowProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) noexcept;
-    [[nodiscard]] LRESULT DragBarMessageHandler(UINT message, WPARAM wParam, LPARAM lParam) noexcept;
     [[nodiscard]] bool CreateDragBarWindow();
     [[nodiscard]] bool CreateXAMLIsland();
     void Cleanup();

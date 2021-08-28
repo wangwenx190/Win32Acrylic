@@ -38,30 +38,37 @@ wWinMain(
     UNREFERENCED_PARAMETER(lpCmdLine);
     UNREFERENCED_PARAMETER(nCmdShow);
 
-    if (!InitializeAcrylicManagerLibrary()) {
-        OutputDebugStringW(L"Failed to initialize AcrylicManager library.");
+    auto id = new wchar_t[60];
+    SecureZeroMemory(id, sizeof(id));
+
+    const auto cleanup = [&id](){
+        if (id) {
+            delete [] id;
+            id = nullptr;
+        }
+    };
+
+    if (!am_CreateWindow(BrushType::WinUI2, &id)) {
+        OutputDebugStringW(L"Failed to create the acrylic window.");
+        cleanup();
         return -1;
     }
 
-    LPWSTR ver = nullptr;
-    if (SUCCEEDED(am_GetVersion(&ver))) {
-        const auto str = new wchar_t[MAX_PATH];
-        SecureZeroMemory(str, sizeof(str));
-        swprintf(str, L"AcrylicManager version: %s", ver);
-        OutputDebugStringW(str);
-        am_FreeStringW(ver);
-        delete [] str;
+    if (!am_MoveToScreenCenter(id)) {
+        OutputDebugStringW(L"Failed to move the acrylic window to screen center.");
+        cleanup();
+        return -1;
     }
 
-    int result = -1;
-
-    if (SUCCEEDED(am_CreateWindow(-1, -1, -1, -1))) {
-        am_CenterWindow();
-        am_SetWindowState(g_am_WindowState_Shown);
-        am_EventLoopExec(&result);
+    if (!am_SetWindowState(id, WindowState::Shown)) {
+        OutputDebugStringW(L"Failed to show the acrylic window.");
+        cleanup();
+        return -1;
     }
 
-    am_Release();
+    const int result = am_GetMessageLoopResult(id);
+
+    cleanup();
 
     return result;
 }

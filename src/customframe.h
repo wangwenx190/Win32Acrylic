@@ -115,7 +115,7 @@ protected:
 
     [[nodiscard]] LRESULT MessageHandler(UINT message, WPARAM wParam, LPARAM lParam) noexcept
     {
-        const HWND hWnd = GetWindowHandle();
+        const HWND hWnd = GetHandle();
         switch (message) {
         case WM_NCCALCSIZE:
             return OnNCCalcSize(hWnd, wParam, lParam);

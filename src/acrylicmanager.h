@@ -30,63 +30,68 @@
 EXTERN_C_START
 #endif
 
-[[nodiscard]] bool WINAPI
+[[nodiscard]] ACRYLICMANAGER_API bool WINAPI
 am_CreateWindow(
     _In_ const BrushType type,
     _Out_ LPWSTR *id
 );
 
-[[nodiscard]] bool WINAPI
+[[nodiscard]] ACRYLICMANAGER_API bool WINAPI
 am_DestroyWindow(
     _In_ LPCWSTR id
 );
 
-[[nodiscard]] RECT WINAPI
+[[nodiscard]] ACRYLICMANAGER_API RECT WINAPI
 am_GetWindowGeometry(
     _In_ LPCWSTR id
 );
 
-[[nodiscard]] bool WINAPI
+[[nodiscard]] ACRYLICMANAGER_API bool WINAPI
 am_SetWindowGeometry(
     _In_ LPCWSTR id,
     _In_ const RECT geometry
 );
 
-[[nodiscard]] POINT WINAPI
+[[nodiscard]] ACRYLICMANAGER_API POINT WINAPI
 am_GetWindowPos(
     _In_ LPCWSTR id
 );
 
-[[nodiscard]] bool WINAPI
+[[nodiscard]] ACRYLICMANAGER_API bool WINAPI
 am_SetWindowPos(
     _In_ LPCWSTR id,
     _In_ const POINT pos
 );
 
-[[nodiscard]] SIZE WINAPI
+[[nodiscard]] ACRYLICMANAGER_API SIZE WINAPI
 am_GetWindowSize(
     _In_ LPCWSTR id
 );
 
-[[nodiscard]] bool WINAPI
+[[nodiscard]] ACRYLICMANAGER_API bool WINAPI
 am_SetWindowSize(
     _In_ LPCWSTR id,
     _In_ const SIZE size
 );
 
-[[nodiscard]] WindowState WINAPI
+[[nodiscard]] ACRYLICMANAGER_API WindowState WINAPI
 am_GetWindowState(
     _In_ LPCWSTR id
 );
 
-[[nodiscard]] bool WINAPI
+[[nodiscard]] ACRYLICMANAGER_API bool WINAPI
 am_SetWindowState(
     _In_ LPCWSTR id,
     _In_ const WindowState state
 );
 
-[[nodiscard]] bool WINAPI
+[[nodiscard]] ACRYLICMANAGER_API bool WINAPI
 am_MoveToScreenCenter(
+    _In_ LPCWSTR id
+);
+
+[[nodiscard]] ACRYLICMANAGER_API int WINAPI
+am_GetMessageLoopResult(
     _In_ LPCWSTR id
 );
 

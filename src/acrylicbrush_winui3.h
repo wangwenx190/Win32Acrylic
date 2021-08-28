@@ -43,5 +43,5 @@ public:
     [[nodiscard]] int MessageLoop() const override;
 
 private:
-    std::unique_ptr<AcrylicBrushWinUI3Private> d_ptr;
+    //std::unique_ptr<AcrylicBrushWinUI3Private> d_ptr;
 };

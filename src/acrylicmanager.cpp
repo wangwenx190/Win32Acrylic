@@ -51,6 +51,21 @@ static std::unordered_map<std::wstring, AcrylicBrush *> g_brushList = {};
     return ((search == g_brushList.end()) ? nullptr : search->second);
 }
 
+static inline void Release()
+{
+    if (g_brushList.empty()) {
+        return;
+    }
+    for (auto &&item : std::as_const(g_brushList)) {
+        const auto brush = item.second;
+        if (!brush) {
+            continue;
+        }
+        delete brush;
+    }
+    g_brushList.clear();
+}
+
 bool am_CreateWindow(const BrushType type, LPWSTR *id)
 {
     if (!id || !(*id)) {
@@ -122,13 +137,12 @@ bool am_CreateWindow(const BrushType type, LPWSTR *id)
 
 bool am_DestroyWindow(LPCWSTR id)
 {
-    AcrylicBrush *brush = ExtractBrushFromList(id);
+    const auto brush = ExtractBrushFromList(id);
     if (!brush) {
         return false;
     }
     SendMessageW(brush->GetWindowHandle(), WM_SYSCOMMAND, SC_CLOSE, 0);
     delete brush;
-    brush = nullptr;
     g_brushList.erase(id);
     return true;
 }
@@ -136,10 +150,7 @@ bool am_DestroyWindow(LPCWSTR id)
 RECT am_GetWindowGeometry(LPCWSTR id)
 {
     const auto brush = ExtractBrushFromList(id);
-    if (!brush) {
-        return {};
-    }
-    return GET_WINDOW_RECT(brush->GetWindowHandle());
+    return (brush ? GET_WINDOW_RECT(brush->GetWindowHandle()) : RECT{});
 }
 
 bool am_SetWindowGeometry(LPCWSTR id, const RECT geometry)
@@ -179,10 +190,7 @@ bool am_SetWindowPos(LPCWSTR id, const POINT pos)
 SIZE am_GetWindowSize(LPCWSTR id)
 {
     const auto brush = ExtractBrushFromList(id);
-    if (!brush) {
-        return {};
-    }
-    return GET_WINDOW_SIZE(brush->GetWindowHandle());
+    return (brush ? GET_WINDOW_SIZE(brush->GetWindowHandle()) : SIZE{});
 }
 
 bool am_SetWindowSize(LPCWSTR id, const SIZE size)
@@ -266,6 +274,12 @@ bool am_MoveToScreenCenter(LPCWSTR id)
     return am_SetWindowPos(id, {newX, newY});
 }
 
+int am_GetMessageLoopResult(LPCWSTR id)
+{
+    const auto brush = ExtractBrushFromList(id);
+    return (brush ? brush->MessageLoop() : -1);
+}
+
 #ifndef ACRYLICMANAGER_STATIC
 
 EXTERN_C ACRYLICMANAGER_API BOOL APIENTRY
@@ -280,6 +294,7 @@ DllMain(
     case DLL_PROCESS_ATTACH:
         break;
     case DLL_PROCESS_DETACH:
+        Release();
         break;
     }
     return TRUE;

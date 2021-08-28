@@ -133,7 +133,6 @@ public:
     [[nodiscard]] int GetMessageLoopResult() const;
     void ReloadBrushParameters();
 
-private:
     [[nodiscard]] LRESULT MessageHandler(UINT message, WPARAM wParam, LPARAM lParam) noexcept;
 
 private:

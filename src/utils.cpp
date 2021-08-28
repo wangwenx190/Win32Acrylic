@@ -514,7 +514,7 @@ bool Utils::IsWindowDarkFrameBorderEnabled(const HWND hWnd)
         return false;
     }
     BOOL enabled = FALSE;
-    HRESULT hr = DwmGetWindowAttribute(hWnd, static_cast<DWORD>(DwmWindowAttribute::USE_IMMERSIVE_DARK_MODE_BEFORE_20H1), &enabled, sizeof(enabled));
+    HRESULT hr = DwmGetWindowAttribute(hWnd, static_cast<DWORD>(DwmWindowAttribute::USE_IMMERSIVE_DARK_MODE), &enabled, sizeof(enabled));
     if (SUCCEEDED(hr)) {
         return (enabled != FALSE);
     } else {
@@ -522,7 +522,7 @@ bool Utils::IsWindowDarkFrameBorderEnabled(const HWND hWnd)
         // late Windows 10 version, so querying it's value will always result in
         // a "parameter error" (code: 87) on systems before that value was introduced.
     }
-    hr = DwmGetWindowAttribute(hWnd, static_cast<DWORD>(DwmWindowAttribute::USE_IMMERSIVE_DARK_MODE), &enabled, sizeof(enabled));
+    hr = DwmGetWindowAttribute(hWnd, static_cast<DWORD>(DwmWindowAttribute::USE_IMMERSIVE_DARK_MODE_BEFORE_20H1), &enabled, sizeof(enabled));
     if (SUCCEEDED(hr)) {
         return (enabled != FALSE);
     } else {
@@ -542,7 +542,7 @@ bool Utils::SetWindowDarkFrameBorderEnabled(const HWND hWnd, const bool enable)
         return false;
     }
     const BOOL enabled = (enable ? TRUE : FALSE);
-    HRESULT hr = DwmSetWindowAttribute(hWnd, static_cast<DWORD>(DwmWindowAttribute::USE_IMMERSIVE_DARK_MODE_BEFORE_20H1), &enabled, sizeof(enabled));
+    HRESULT hr = DwmSetWindowAttribute(hWnd, static_cast<DWORD>(DwmWindowAttribute::USE_IMMERSIVE_DARK_MODE), &enabled, sizeof(enabled));
     if (SUCCEEDED(hr)) {
         return true;
     } else {
@@ -550,7 +550,7 @@ bool Utils::SetWindowDarkFrameBorderEnabled(const HWND hWnd, const bool enable)
         // late Windows 10 version, so changing it's value will always result in
         // a "parameter error" (code: 87) on systems before that value was introduced.
     }
-    hr = DwmSetWindowAttribute(hWnd, static_cast<DWORD>(DwmWindowAttribute::USE_IMMERSIVE_DARK_MODE), &enabled, sizeof(enabled));
+    hr = DwmSetWindowAttribute(hWnd, static_cast<DWORD>(DwmWindowAttribute::USE_IMMERSIVE_DARK_MODE_BEFORE_20H1), &enabled, sizeof(enabled));
     if (SUCCEEDED(hr)) {
         return true;
     } else {
@@ -1111,7 +1111,7 @@ bool Utils::UpdateFrameMargins(const HWND hWnd)
     return true;
 }
 
-bool OpenSystemMenu(const HWND hWnd, const POINT pos)
+bool Utils::OpenSystemMenu(const HWND hWnd, const POINT pos)
 {
     if (!hWnd) {
         return false;

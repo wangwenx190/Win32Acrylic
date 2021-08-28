@@ -26,7 +26,7 @@
 
 AcrylicBrushNull::AcrylicBrushNull()
 {
-    d_ptr = std::make_unique<AcrylicBrushNullPrivate>(this);
+    //d_ptr = std::make_unique<AcrylicBrushNullPrivate>(this);
 }
 
 AcrylicBrushNull::~AcrylicBrushNull()
@@ -35,7 +35,7 @@ AcrylicBrushNull::~AcrylicBrushNull()
 
 bool AcrylicBrushNull::IsSupportedByCurrentOS() const
 {
-    static const bool result = false;
+    static const bool result = true;
     return result;
 }
 

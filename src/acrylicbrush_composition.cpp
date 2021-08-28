@@ -26,7 +26,7 @@
 
 AcrylicBrushComposition::AcrylicBrushComposition()
 {
-    d_ptr = std::make_unique<AcrylicBrushCompositionPrivate>(this);
+    //d_ptr = std::make_unique<AcrylicBrushCompositionPrivate>(this);
 }
 
 AcrylicBrushComposition::~AcrylicBrushComposition()

@@ -50,6 +50,7 @@ std::wstring CustomFrame::__RegisterWindowClass(const WNDPROC wndProc) noexcept
         return nullptr;
     }
     if (!wndProc) {
+        OutputDebugStringW(L"The given WindowProc function address is null.");
         return nullptr;
     }
     const std::wstring className = g_classNamePrefix + Utils::GenerateGUID();
@@ -101,13 +102,20 @@ HWND CustomFrame::__CreateWindow(const std::wstring &className, const DWORD styl
     return window;
 }
 
+std::wstring CustomFrame::__GetWindowClassName() const noexcept
+{
+    return m_windowClass;
+}
+
 void CustomFrame::__SetWindowClassName(const std::wstring &className) noexcept
 {
+    // todo: guard against empty string?
     m_windowClass = className;
 }
 
 void CustomFrame::__SetWindowHandle(const HWND hWnd) noexcept
 {
+    // todo: guard against null pointer?
     m_window = hWnd;
 }
 
@@ -519,7 +527,7 @@ void CustomFrame::OnDwmCompositionChanged() noexcept
     }
 }
 
-void OnDPIChanged(const HWND hWnd, const WPARAM wParam, const LPARAM lParam, UINT *newDpi) noexcept
+void CustomFrame::OnDPIChanged(const HWND hWnd, const WPARAM wParam, const LPARAM lParam, UINT *newDpi) noexcept
 {
     if (newDpi) {
         const auto x = static_cast<double>(LOWORD(wParam));

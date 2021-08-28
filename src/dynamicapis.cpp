@@ -608,6 +608,14 @@ IsProcessDPIAware()
     ACRYLICMANAGER_TRY_EXECUTE_USER_FUNCTION(IsProcessDPIAware)
 }
 
+int WINAPI
+GetSystemMetrics(
+    int nIndex
+)
+{
+    ACRYLICMANAGER_TRY_EXECUTE_USER_INT_FUNCTION(GetSystemMetrics, nIndex)
+}
+
 /////////////////////////////////
 /////     Shell32
 /////////////////////////////////
@@ -640,6 +648,25 @@ GetStockObject(
 )
 {
     ACRYLICMANAGER_TRY_EXECUTE_GDI_FUNCTION_RETURN(GetStockObject, nullptr, i)
+}
+
+BOOL WINAPI
+DeleteObject(
+    HGDIOBJ ho
+)
+{
+    ACRYLICMANAGER_TRY_EXECUTE_GDI_FUNCTION_RETURN(DeleteObject, FALSE, ho)
+}
+
+HRGN WINAPI
+CreateRectRgn(
+    int x1,
+    int y1,
+    int x2,
+    int y2
+)
+{
+    ACRYLICMANAGER_TRY_EXECUTE_GDI_FUNCTION_RETURN(CreateRectRgn, nullptr, x1, y1, x2, y2)
 }
 
 /////////////////////////////////
@@ -811,6 +838,27 @@ HRESULT WINAPI
 DwmFlush()
 {
     ACRYLICMANAGER_TRY_EXECUTE_DWM_FUNCTION(DwmFlush)
+}
+
+HRESULT WINAPI
+DwmEnableBlurBehindWindow(
+    HWND                 hWnd,
+    const DWM_BLURBEHIND *pBlurBehind
+)
+{
+    ACRYLICMANAGER_TRY_EXECUTE_DWM_FUNCTION(DwmEnableBlurBehindWindow, hWnd, pBlurBehind)
+}
+
+BOOL WINAPI
+DwmDefWindowProc(
+    HWND    hWnd,
+    UINT    message,
+    WPARAM  wParam,
+    LPARAM  lParam,
+    LRESULT *pLResult
+)
+{
+    ACRYLICMANAGER_TRY_EXECUTE_DWM_FUNCTION_RETURN(DwmDefWindowProc, FALSE, hWnd, message, wParam, lParam, pLResult)
 }
 
 /////////////////////////////////

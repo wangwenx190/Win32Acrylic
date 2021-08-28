@@ -75,44 +75,6 @@ public:
         return m_dpi;
     }
 
-protected:
-    using base_type = CustomFrameT<T>;
-
-    [[nodiscard]] static T *GetThisFromHandle(const HWND hWnd) noexcept
-    {
-        return (hWnd ? reinterpret_cast<T *>(GetWindowLongPtrW(hWnd, GWLP_USERDATA)) : nullptr);
-    }
-
-    [[nodiscard]] bool CreateFramelessWindow() noexcept
-    {
-        const std::wstring className = __RegisterWindowClass(WindowProc);
-        if (className.empty()) {
-            OutputDebugStringW(L"Failed to register window class.");
-            return false;
-        }
-        __SetWindowClassName(className);
-        const HWND window = __CreateWindow(className, WS_OVERLAPPEDWINDOW, 0L, nullptr, this);
-        if (!window) {
-            OutputDebugStringW(L"Failed to create window.");
-            // todo: unreg window class
-            return false;
-        }
-        __SetWindowHandle(window);
-        return true;
-    }
-
-    [[nodiscard]] static LRESULT CALLBACK WindowProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) noexcept
-    {
-        if (message == WM_NCCREATE) {
-            OnNCCreate(hWnd, lParam);
-        } else if (message == WM_NCDESTROY) {
-            OnNCDestroy(hWnd);
-        } else if (const auto that = GetThisFromHandle(hWnd)) {
-            return that->MessageHandler(message, wParam, lParam);
-        }
-        return DefWindowProcW(hWnd, message, wParam, lParam);
-    }
-
     [[nodiscard]] LRESULT MessageHandler(UINT message, WPARAM wParam, LPARAM lParam) noexcept
     {
         const HWND hWnd = GetHandle();
@@ -150,6 +112,45 @@ protected:
             break;
         default:
             break;
+        }
+        return DefWindowProcW(hWnd, message, wParam, lParam);
+    }
+
+protected:
+    using base_type = CustomFrameT<T>;
+
+    [[nodiscard]] static T *GetThisFromHandle(const HWND hWnd) noexcept
+    {
+        return (hWnd ? reinterpret_cast<T *>(GetWindowLongPtrW(hWnd, GWLP_USERDATA)) : nullptr);
+    }
+
+    [[nodiscard]] bool CreateFramelessWindow() noexcept
+    {
+        const std::wstring className = __RegisterWindowClass(WindowProc);
+        if (className.empty()) {
+            OutputDebugStringW(L"Failed to register window class.");
+            return false;
+        }
+        __SetWindowClassName(className);
+        const HWND window = __CreateWindow(className, WS_OVERLAPPEDWINDOW, 0L, nullptr, this);
+        if (!window) {
+            OutputDebugStringW(L"Failed to create window.");
+            // todo: unreg window class
+            return false;
+        }
+        __SetWindowHandle(window);
+        return true;
+    }
+
+private:
+    [[nodiscard]] static LRESULT CALLBACK WindowProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) noexcept
+    {
+        if (message == WM_NCCREATE) {
+            OnNCCreate(hWnd, lParam);
+        } else if (message == WM_NCDESTROY) {
+            OnNCDestroy(hWnd);
+        } else if (const auto that = GetThisFromHandle(hWnd)) {
+            return that->MessageHandler(message, wParam, lParam);
         }
         return DefWindowProcW(hWnd, message, wParam, lParam);
     }

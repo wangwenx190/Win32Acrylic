@@ -48,7 +48,7 @@ wWinMain(
         }
     };
 
-    if (!am_CreateWindow(BrushType::WinUI2, &id)) {
+    if (!am_CreateWindow(BrushType::Null, &id)) {
         OutputDebugStringW(L"Failed to create the acrylic window.");
         cleanup();
         return -1;

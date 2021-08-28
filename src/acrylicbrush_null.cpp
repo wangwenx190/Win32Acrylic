@@ -23,10 +23,68 @@
  */
 
 #include "acrylicbrush_null.h"
+#include "customframe.h"
+
+class AcrylicBrushNullPrivate final : public CustomFrameT<AcrylicBrushNullPrivate>
+{
+    ACRYLICMANAGER_DISABLE_COPY_MOVE(AcrylicBrushNullPrivate)
+
+public:
+    explicit AcrylicBrushNullPrivate(AcrylicBrushNull *q);
+    ~AcrylicBrushNullPrivate() override;
+
+    [[nodiscard]] bool Initialize();
+    [[nodiscard]] HWND GetWindowHandle() const;
+    [[nodiscard]] int GetMessageLoopResult() const;
+    void ReloadBrushParameters();
+
+    [[nodiscard]] LRESULT MessageHandler(UINT message, WPARAM wParam, LPARAM lParam) noexcept;
+
+private:
+    AcrylicBrushNull *q_ptr = nullptr;
+};
+
+AcrylicBrushNullPrivate::AcrylicBrushNullPrivate(AcrylicBrushNull *q)
+{
+    q_ptr = q;
+}
+
+AcrylicBrushNullPrivate::~AcrylicBrushNullPrivate()
+{
+}
+
+bool AcrylicBrushNullPrivate::Initialize()
+{
+    if (!CreateFramelessWindow()) {
+        OutputDebugStringW(L"Failed to create the background window.");
+        return false;
+    }
+    return true;
+}
+
+HWND AcrylicBrushNullPrivate::GetWindowHandle() const
+{
+    return GetHandle();
+}
+
+int AcrylicBrushNullPrivate::GetMessageLoopResult() const
+{
+    return MessageLoop();
+}
+
+void AcrylicBrushNullPrivate::ReloadBrushParameters()
+{
+    // Nothing to do.
+}
+
+LRESULT AcrylicBrushNullPrivate::MessageHandler(UINT message, WPARAM wParam, LPARAM lParam) noexcept
+{
+    return base_type::MessageHandler(message, wParam, lParam);
+}
 
 AcrylicBrushNull::AcrylicBrushNull()
 {
-    //d_ptr = std::make_unique<AcrylicBrushNullPrivate>(this);
+    d_ptr = std::make_unique<AcrylicBrushNullPrivate>(this);
 }
 
 AcrylicBrushNull::~AcrylicBrushNull()
@@ -41,20 +99,21 @@ bool AcrylicBrushNull::IsSupportedByCurrentOS() const
 
 bool AcrylicBrushNull::Initialize() const
 {
-    return false;
+    return d_ptr->Initialize();
 }
 
 bool AcrylicBrushNull::RefreshBrush() const
 {
-    return false;
+    d_ptr->ReloadBrushParameters();
+    return true;
 }
 
 HWND AcrylicBrushNull::GetWindowHandle() const
 {
-    return nullptr;
+    return d_ptr->GetWindowHandle();
 }
 
 int AcrylicBrushNull::MessageLoop() const
 {
-    return -1;
+    return d_ptr->GetMessageLoopResult();
 }

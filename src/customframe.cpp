@@ -50,7 +50,7 @@ std::wstring CustomFrame::__RegisterWindowClass(const WNDPROC wndProc) noexcept
         return nullptr;
     }
     if (!wndProc) {
-        OutputDebugStringW(L"The given WindowProc function address is null.");
+        OutputDebugStringW(L"The given WindowProc function's address is null.");
         return nullptr;
     }
     const std::wstring className = g_classNamePrefix + Utils::GenerateGUID();

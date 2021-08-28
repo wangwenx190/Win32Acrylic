@@ -38,7 +38,7 @@ wWinMain(
     UNREFERENCED_PARAMETER(lpCmdLine);
     UNREFERENCED_PARAMETER(nCmdShow);
 
-    auto id = new wchar_t[60];
+    auto id = new wchar_t[MAX_PATH];
     SecureZeroMemory(id, sizeof(id));
 
     const auto cleanup = [&id](){

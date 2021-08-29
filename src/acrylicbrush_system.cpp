@@ -135,6 +135,9 @@ public:
 
     [[nodiscard]] LRESULT MessageHandler(UINT message, WPARAM wParam, LPARAM lParam) noexcept;
 
+protected:
+    void OnThemeChanged(const HWND hWnd) noexcept override;
+
 private:
     AcrylicBrushSystem *q_ptr = nullptr;
 };
@@ -150,29 +153,14 @@ AcrylicBrushSystemPrivate::~AcrylicBrushSystemPrivate()
 
 LRESULT AcrylicBrushSystemPrivate::MessageHandler(UINT message, WPARAM wParam, LPARAM lParam) noexcept
 {
-    const LRESULT result = base_type::MessageHandler(message, wParam, lParam);
+    return base_type::MessageHandler(message, wParam, lParam);
+}
 
-    bool themeChanged = false;
-
-    switch (message) {
-    case WM_SETTINGCHANGE: {
-        if ((wParam == 0) && (_wcsicmp(reinterpret_cast<LPCWSTR>(lParam), L"ImmersiveColorSet") == 0)) {
-            themeChanged = true;
-        }
-    } break;
-    case WM_THEMECHANGED:
-    case WM_DWMCOLORIZATIONCOLORCHANGED:
-        themeChanged = true;
-        break;
-    default:
-        break;
-    }
-
-    if (themeChanged && !Utils::IsHighContrastModeEnabled()) {
+void AcrylicBrushSystemPrivate::OnThemeChanged(const HWND hWnd) noexcept
+{
+    if (!Utils::IsHighContrastModeEnabled()) {
         ReloadBrushParameters();
     }
-
-    return result;
 }
 
 void AcrylicBrushSystemPrivate::ReloadBrushParameters()

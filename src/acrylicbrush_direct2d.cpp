@@ -61,6 +61,10 @@ public:
 
     [[nodiscard]] LRESULT MessageHandler(UINT message, WPARAM wParam, LPARAM lParam) noexcept;
 
+protected:
+    void OnThemeChanged(const HWND hWnd) noexcept override;
+    void OnWallpaperChanged(const HWND hWnd) noexcept override;
+
 private:
     [[nodiscard]] bool InitializeWIC();
     [[nodiscard]] bool EnsureWallpaperBrush();
@@ -150,12 +154,22 @@ AcrylicBrushDirect2DPrivate::~AcrylicBrushDirect2DPrivate()
     SAFE_FREE_CHARARRAY(m_wallpaperFilePath)
 }
 
+void AcrylicBrushDirect2DPrivate::OnThemeChanged(const HWND hWnd) noexcept
+{
+    if (!Utils::IsHighContrastModeEnabled()) {
+        ReloadBrushParameters();
+    }
+}
+
+void AcrylicBrushDirect2DPrivate::OnWallpaperChanged(const HWND hWnd) noexcept
+{
+    ReloadDesktopParameters();
+    // todo: refresh d2d bitmapsource.
+}
+
 LRESULT AcrylicBrushDirect2DPrivate::MessageHandler(UINT message, WPARAM wParam, LPARAM lParam) noexcept
 {
     const LRESULT result = base_type::MessageHandler(message, wParam, lParam);
-
-    bool wallpaperChanged = false;
-    bool themeChanged = false;
 
     switch (message) {
     case WM_PAINT: {
@@ -163,30 +177,8 @@ LRESULT AcrylicBrushDirect2DPrivate::MessageHandler(UINT message, WPARAM wParam,
             OutputDebugStringW(L"Failed to draw the final D2D visual.");
         }
     } break;
-    case WM_SETTINGCHANGE: {
-        if (wParam == SPI_SETDESKWALLPAPER) {
-            wallpaperChanged = true;
-        }
-        if ((wParam == 0) && (_wcsicmp(reinterpret_cast<LPCWSTR>(lParam), L"ImmersiveColorSet") == 0)) {
-            themeChanged = true;
-        }
-    } break;
-    case WM_THEMECHANGED:
-    case WM_DWMCOLORIZATIONCOLORCHANGED:
-        themeChanged = true;
-        break;
     default:
         break;
-    }
-
-    if ((wallpaperChanged || themeChanged) && !Utils::IsHighContrastModeEnabled()) {
-        if (wallpaperChanged) {
-            ReloadDesktopParameters();
-            // todo: refresh d2d bitmapsource.
-        }
-        if (themeChanged) {
-            ReloadBrushParameters();
-        }
     }
 
     return result;

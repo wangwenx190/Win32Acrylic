@@ -53,7 +53,8 @@ public:
 
 protected:
     bool FilterMessage(const MSG *msg) const noexcept override;
-    void CleanupResources() noexcept override;
+    void CleanupResources(const HWND hWnd) noexcept override;
+    void OnThemeChanged(const HWND hWnd) noexcept override;
 
 private:
     static LRESULT CALLBACK DragBarWindowProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) noexcept;
@@ -116,7 +117,14 @@ void AcrylicBrushWinUI2Private::ReloadBrushParameters()
     m_backgroundBrush.FallbackColor(q_ptr->GetFallbackColor());
 }
 
-void AcrylicBrushWinUI2Private::CleanupResources() noexcept
+void AcrylicBrushWinUI2Private::OnThemeChanged(const HWND hWnd) noexcept
+{
+    if (!Utils::IsHighContrastModeEnabled()) {
+        ReloadBrushParameters();
+    }
+}
+
+void AcrylicBrushWinUI2Private::CleanupResources(const HWND hWnd) noexcept
 {
     if (m_backgroundBrush) {
         m_backgroundBrush = nullptr;
@@ -263,8 +271,6 @@ LRESULT AcrylicBrushWinUI2Private::MessageHandler(UINT message, WPARAM wParam, L
 
     const HWND mainWindowHandle = GetHandle();
 
-    bool themeChanged = false;
-
     switch (message) {
     case WM_SIZE: {
         const auto width = LOWORD(lParam);
@@ -324,21 +330,8 @@ LRESULT AcrylicBrushWinUI2Private::MessageHandler(UINT message, WPARAM wParam, L
             return TRUE;
         }
     } break;
-    case WM_SETTINGCHANGE: {
-        if ((wParam == 0) && (_wcsicmp(reinterpret_cast<LPCWSTR>(lParam), L"ImmersiveColorSet") == 0)) {
-            themeChanged = true;
-        }
-    } break;
-    case WM_THEMECHANGED:
-    case WM_DWMCOLORIZATIONCOLORCHANGED:
-        themeChanged = true;
-        break;
     default:
         break;
-    }
-
-    if (themeChanged && m_backgroundBrush && !Utils::IsHighContrastModeEnabled()) {
-        ReloadBrushParameters();
     }
 
     return result;

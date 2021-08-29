@@ -40,6 +40,20 @@ static constexpr wchar_t g_windowTitle[] = L"AcrylicManager Background Window";
 // The thickness of an auto-hide taskbar in pixels.
 static constexpr int g_autoHideTaskbarThickness = 2;
 
+[[nodiscard]] static inline bool ToggleWindowDarkFrameBorderVisibility(const HWND hWnd)
+{
+    if (!hWnd) {
+        return false;
+    }
+    if (Utils::IsWindows10RS1OrGreater() && !Utils::IsHighContrastModeEnabled()) {
+        if (!Utils::SetWindowDarkFrameBorderEnabled(hWnd, Utils::ShouldAppsUseDarkMode())) {
+            OutputDebugStringW(L"Failed to toggle the visibility of window's dark frame border.");
+            return false;
+        }
+    }
+    return true;
+}
+
 CustomFrame::CustomFrame() = default;
 
 CustomFrame::~CustomFrame() = default;
@@ -141,12 +155,25 @@ void CustomFrame::__CleanupResources() noexcept
     }
 }
 
+bool CustomFrame::__IsImmersiveColorChanged(const WPARAM wParam, const LPARAM lParam) noexcept
+{
+    return ((wParam == 0) && (_wcsicmp(reinterpret_cast<LPCWSTR>(lParam), L"ImmersiveColorSet") == 0));
+}
+
 bool CustomFrame::FilterMessage(const MSG *msg) const noexcept
 {
     return false;
 }
 
-void CustomFrame::CleanupResources() noexcept
+void CustomFrame::CleanupResources(const HWND hWnd) noexcept
+{
+}
+
+void CustomFrame::OnThemeChanged(const HWND hWnd) noexcept
+{
+}
+
+void CustomFrame::OnWallpaperChanged(const HWND hWnd) noexcept
 {
 }
 
@@ -504,11 +531,12 @@ void CustomFrame::OnNCRButtonUp(const HWND hWnd, const WPARAM wParam, const LPAR
 void CustomFrame::OnCreate(const HWND hWnd, const LPARAM lParam, UINT *dpi) noexcept
 {
     if (!Utils::SetDpiAwarenessForWindow(hWnd, DpiAwareness::PerMonitorV2)) {
-        // Setting the DPI awareness for window may fail in many different reasons,
-        // no need to print any debug messages for it.
+        OutputDebugStringW(L"Failed to enable the PerMonitorV2 dpi awareness.");
         // PerMonitorV2 implies the non-client area dpi scaling so we only have to
         // enable it if we cannot enable PerMonitorV2.
-        EnableNonClientDpiScaling(hWnd);
+        if (EnableNonClientDpiScaling(hWnd) == FALSE) {
+            PRINT_WIN32_ERROR_MESSAGE(EnableNonClientDpiScaling)
+        }
     }
     if (!Utils::UpdateFrameMargins(hWnd)) {
         OutputDebugStringW(L"Failed to update frame margins.");
@@ -516,6 +544,9 @@ void CustomFrame::OnCreate(const HWND hWnd, const LPARAM lParam, UINT *dpi) noex
     constexpr UINT flags = (SWP_FRAMECHANGED | SWP_NOACTIVATE | SWP_NOSIZE | SWP_NOMOVE | SWP_NOZORDER | SWP_NOOWNERZORDER);
     if (SetWindowPos(hWnd, nullptr, 0, 0, 0, 0, flags) == FALSE) {
         PRINT_WIN32_ERROR_MESSAGE(SetWindowPos)
+    }
+    if (!ToggleWindowDarkFrameBorderVisibility(hWnd)) {
+        OutputDebugStringW(L"Failed to toggle window dark frame border visibility.");
     }
     if (dpi) {
         *dpi = Utils::GetDotsPerInchForWindow(hWnd);
@@ -536,11 +567,9 @@ void CustomFrame::OnSettingChange(const HWND hWnd, const WPARAM wParam, const LP
     if (!Utils::IsWindows10OrGreater()) {
         return;
     }
-    if ((wParam == 0) && (_wcsicmp(reinterpret_cast<LPCWSTR>(lParam), L"ImmersiveColorSet") == 0)) {
-        if (Utils::IsWindows10RS1OrGreater() && !Utils::IsHighContrastModeEnabled()) {
-            if (!Utils::SetWindowDarkFrameBorderEnabled(hWnd, Utils::ShouldAppsUseDarkMode())) {
-                OutputDebugStringW(L"Failed to toggle the visibility of window's dark frame border.");
-            }
+    if (__IsImmersiveColorChanged(wParam, lParam)) {
+        if (!ToggleWindowDarkFrameBorderVisibility(hWnd)) {
+            OutputDebugStringW(L"Failed to toggle window dark frame border visibility.");
         }
     }
 }

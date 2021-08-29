@@ -56,7 +56,7 @@ wWinMain(
 
     for (int i = 0; i != MAX_WINDOW_COUNT; ++i) {
         LPCWSTR id = nullptr;
-        if (!am_CreateWindow(BrushType::Direct2D, &id)) {
+        if (!am_CreateWindow(BrushType::Null, &id)) {
             OutputDebugStringW(L"Failed to create the acrylic window.");
             continue;
         }

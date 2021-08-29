@@ -44,9 +44,12 @@ protected:
     void __SetWindowClassName(LPCWSTR className) noexcept;
     void __SetWindowHandle(const HWND hWnd) noexcept;
     void __CleanupResources() noexcept; // Internal cleanup
+    [[nodiscard]] static bool __IsImmersiveColorChanged(const WPARAM wParam, const LPARAM lParam) noexcept;
 
     [[nodiscard]] virtual bool FilterMessage(const MSG *msg) const noexcept;
-    virtual void CleanupResources() noexcept; // User cleanup
+    virtual void CleanupResources(const HWND hWnd) noexcept; // User cleanup
+    virtual void OnThemeChanged(const HWND hWnd) noexcept;
+    virtual void OnWallpaperChanged(const HWND hWnd) noexcept;
 
     static void OnNCCreate(const HWND hWnd, const LPARAM lParam) noexcept;
     static void OnNCDestroy(const HWND hWnd) noexcept;
@@ -96,19 +99,29 @@ public:
         case WM_PAINT:
             OnPaint(hWnd);
             break;
-        case WM_SETTINGCHANGE:
+        case WM_SETTINGCHANGE: {
             OnSettingChange(hWnd, wParam, lParam);
-            break;
+            if (wParam == SPI_SETDESKWALLPAPER) {
+                OnWallpaperChanged(hWnd);
+            }
+            if (__IsImmersiveColorChanged(wParam, lParam)) {
+                OnThemeChanged(hWnd);
+            }
+        } break;
         case WM_DPICHANGED:
             OnDPIChanged(hWnd, wParam, lParam, &m_dpi);
             break;
         case WM_DWMCOMPOSITIONCHANGED:
             OnDwmCompositionChanged();
             break;
+        case WM_THEMECHANGED:
+        case WM_DWMCOLORIZATIONCOLORCHANGED:
+            OnThemeChanged(hWnd);
+            break;
         case WM_CLOSE: {
             OnClose(hWnd);
             __CleanupResources(); // Internal cleanup
-            CleanupResources(); // User cleanup
+            CleanupResources(hWnd); // User cleanup
         } break;
         case WM_DESTROY:
             OnDestroy();

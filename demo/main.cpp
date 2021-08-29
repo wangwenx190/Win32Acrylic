@@ -38,37 +38,26 @@ wWinMain(
     UNREFERENCED_PARAMETER(lpCmdLine);
     UNREFERENCED_PARAMETER(nCmdShow);
 
-    auto id = new wchar_t[MAX_PATH];
-    SecureZeroMemory(id, sizeof(id));
+    LPCWSTR id = nullptr;
 
-    const auto cleanup = [&id](){
-        if (id) {
-            delete [] id;
-            id = nullptr;
-        }
-    };
-
-    if (!am_CreateWindow(BrushType::Null, &id)) {
+    if (!am_CreateWindow(BrushType::WinUI2, &id)) {
         OutputDebugStringW(L"Failed to create the acrylic window.");
-        cleanup();
         return -1;
     }
 
     if (!am_MoveToScreenCenter(id)) {
         OutputDebugStringW(L"Failed to move the acrylic window to screen center.");
-        cleanup();
         return -1;
     }
 
     if (!am_SetWindowState(id, WindowState::Shown)) {
         OutputDebugStringW(L"Failed to show the acrylic window.");
-        cleanup();
         return -1;
     }
 
     const int result = am_GetMessageLoopResult(id);
 
-    cleanup();
+    // todo: cleanup
 
     return result;
 }

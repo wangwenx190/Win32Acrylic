@@ -33,7 +33,7 @@ EXTERN_C_START
 [[nodiscard]] ACRYLICMANAGER_API bool WINAPI
 am_CreateWindow(
     _In_ const BrushType type,
-    _Out_ LPWSTR *id
+    _Out_ LPCWSTR *id
 );
 
 [[nodiscard]] ACRYLICMANAGER_API bool WINAPI

@@ -169,9 +169,7 @@ LRESULT AcrylicBrushSystemPrivate::MessageHandler(UINT message, WPARAM wParam, L
     }
 
     if (themeChanged && !Utils::IsHighContrastModeEnabled()) {
-        if (!SetBlurBehindWindowEnabled(GetHandle(), true, q_ptr->GetEffectiveTintColor())) {
-            OutputDebugStringW(L"Failed to update the blur parameters.");
-        }
+        ReloadBrushParameters();
     }
 
     return result;
@@ -179,7 +177,9 @@ LRESULT AcrylicBrushSystemPrivate::MessageHandler(UINT message, WPARAM wParam, L
 
 void AcrylicBrushSystemPrivate::ReloadBrushParameters()
 {
-
+    if (!SetBlurBehindWindowEnabled(GetHandle(), true, q_ptr->GetEffectiveTintColor())) {
+        OutputDebugStringW(L"Failed to update the blur parameters.");
+    }
 }
 
 HWND AcrylicBrushSystemPrivate::GetWindowHandle() const
@@ -198,10 +198,7 @@ bool AcrylicBrushSystemPrivate::Initialize()
         OutputDebugStringW(L"Failed to create the background window.");
         return false;
     }
-    if (!SetBlurBehindWindowEnabled(GetHandle(), true, q_ptr->GetEffectiveTintColor())) {
-        OutputDebugStringW(L"Failed to enable blur behind window.");
-        return false;
-    }
+    ReloadBrushParameters();
     return true;
 }
 

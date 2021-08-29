@@ -34,7 +34,7 @@ static constexpr wchar_t g_forceWinUI2BrushEnvVar[] = L"ACRYLICMANAGER_FORCE_WIN
 static constexpr wchar_t g_forceDirect2DBrushEnvVar[] = L"ACRYLICMANAGER_FORCE_DIRECT2D_BRUSH";
 static constexpr wchar_t g_forceNullBrushEnvVar[] = L"ACRYLICMANAGER_FORCE_NULL_BRUSH";
 
-static std::unordered_map<std::wstring, AcrylicBrush *> g_brushList = {};
+static std::unordered_map<LPCWSTR, AcrylicBrush *> g_brushList = {};
 
 [[nodiscard]] static inline BrushType PickUpTheAppropriateBrushType()
 {
@@ -57,18 +57,19 @@ static inline void Release()
         return;
     }
     for (auto &&item : std::as_const(g_brushList)) {
-        const auto brush = item.second;
-        if (!brush) {
-            continue;
+        if (item.first) {
+            delete [] item.first;
         }
-        delete brush;
+        if (item.second) {
+            delete item.second;
+        }
     }
     g_brushList.clear();
 }
 
-bool am_CreateWindow(const BrushType type, LPWSTR *id)
+bool am_CreateWindow(const BrushType type, LPCWSTR *id)
 {
-    if (!id || !(*id)) {
+    if (!id) {
         return false;
     }
     BrushType realType = type;
@@ -128,10 +129,9 @@ bool am_CreateWindow(const BrushType type, LPWSTR *id)
         cleanup();
         return false;
     }
-    const std::wstring guid = Utils::GenerateGUID();
-    SecureZeroMemory((*id), sizeof((*id)));
-    wcscpy((*id), guid.c_str());
+    LPCWSTR guid = Utils::GenerateGUID();
     g_brushList.insert({guid, brush});
+    *id = guid;
     return true;
 }
 
@@ -142,6 +142,7 @@ bool am_DestroyWindow(LPCWSTR id)
         return false;
     }
     SendMessageW(brush->GetWindowHandle(), WM_SYSCOMMAND, SC_CLOSE, 0);
+    // todo: delete id
     delete brush;
     g_brushList.erase(id);
     return true;

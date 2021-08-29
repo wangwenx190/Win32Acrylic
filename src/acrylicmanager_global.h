@@ -516,10 +516,11 @@ EXTERN_C IMAGE_DOS_HEADER __ImageBase;
 #define PRINT_HR_ERROR_MESSAGE(function, hresult) \
 { \
     if (FAILED(hresult)) { \
-        const std::wstring __message = Utils::TranslateErrorCodeToMessage(L#function, hresult); \
-        if (!__message.empty()) { \
-            OutputDebugStringW(__message.c_str()); \
-            MessageBoxW(nullptr, __message.c_str(), L"AcrylicManager", MB_ICONERROR | MB_OK); \
+        LPCWSTR __message = Utils::TranslateErrorCodeToMessage(L#function, hresult); \
+        if (__message) { \
+            OutputDebugStringW(__message); \
+            MessageBoxW(nullptr, __message, L"AcrylicManager", MB_ICONERROR | MB_OK); \
+            SAFE_FREE_CHARARRAY(__message) \
         } \
     } \
 }

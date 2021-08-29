@@ -25,7 +25,6 @@
 #pragma once
 
 #include "acrylicmanager_global.h"
-#include <string>
 
 namespace Utils
 {
@@ -40,7 +39,7 @@ namespace Utils
 [[nodiscard]] bool IsWindows10RS5OrGreater();
 [[nodiscard]] bool IsWindows1019H1OrGreater();
 [[nodiscard]] bool IsWindows11OrGreater();
-[[nodiscard]] std::wstring GetCurrentDirectoryPath();
+[[nodiscard]] LPCWSTR GetCurrentDirectoryPath();
 [[nodiscard]] UINT GetDotsPerInchForWindow(const HWND hWnd);
 [[nodiscard]] double GetDevicePixelRatioForWindow(const HWND hWnd);
 [[nodiscard]] int GetResizeBorderThickness(const HWND hWnd);
@@ -54,21 +53,21 @@ namespace Utils
 [[nodiscard]] bool IsHighContrastModeEnabled();
 [[nodiscard]] bool IsWindowDarkFrameBorderEnabled(const HWND hWnd);
 [[nodiscard]] bool SetWindowDarkFrameBorderEnabled(const HWND hWnd, const bool enable);
-[[nodiscard]] std::wstring GetWallpaperFilePath(const int screen);
+[[nodiscard]] LPCWSTR GetWallpaperFilePath(const int screen);
 [[nodiscard]] COLORREF GetDesktopBackgroundColor(const int screen);
 [[nodiscard]] WallpaperAspectStyle GetWallpaperAspectStyle(const int screen);
-[[nodiscard]] std::wstring GetStringFromEnvironmentVariable(const std::wstring &name);
-[[nodiscard]] int GetIntFromEnvironmentVariable(const std::wstring &name);
-[[nodiscard]] bool GetBoolFromEnvironmentVariable(const std::wstring &name);
-[[nodiscard]] std::wstring GetStringFromIniFile(const std::wstring &file, const std::wstring &section, const std::wstring &key);
-[[nodiscard]] int GetIntFromIniFile(const std::wstring &file, const std::wstring &section, const std::wstring &key);
-[[nodiscard]] bool GetBoolFromIniFile(const std::wstring &file, const std::wstring &section, const std::wstring &key);
-[[nodiscard]] std::wstring GetStringFromRegistry(const HKEY rootKey, const std::wstring &subKey, const std::wstring &key);
-[[nodiscard]] int GetIntFromRegistry(const HKEY rootKey, const std::wstring &subKey, const std::wstring &key);
+[[nodiscard]] LPCWSTR GetStringFromEnvironmentVariable(LPCWSTR name);
+[[nodiscard]] int GetIntFromEnvironmentVariable(LPCWSTR name);
+[[nodiscard]] bool GetBoolFromEnvironmentVariable(LPCWSTR name);
+[[nodiscard]] LPCWSTR GetStringFromIniFile(LPCWSTR file, LPCWSTR section, LPCWSTR key);
+[[nodiscard]] int GetIntFromIniFile(LPCWSTR file, LPCWSTR section, LPCWSTR key);
+[[nodiscard]] bool GetBoolFromIniFile(LPCWSTR file, LPCWSTR section, LPCWSTR key);
+[[nodiscard]] LPCWSTR GetStringFromRegistry(const HKEY rootKey, LPCWSTR subKey, LPCWSTR key);
+[[nodiscard]] int GetIntFromRegistry(const HKEY rootKey, LPCWSTR subKey, LPCWSTR key);
 [[nodiscard]] DpiAwareness GetDpiAwarenessForWindow(const HWND hWnd);
 [[nodiscard]] bool SetDpiAwarenessForWindow(const HWND hWnd, const DpiAwareness awareness);
-[[nodiscard]] std::wstring TranslateErrorCodeToMessage(const std::wstring &function, const HRESULT hr);
-[[nodiscard]] std::wstring GenerateGUID();
+[[nodiscard]] LPCWSTR TranslateErrorCodeToMessage(LPCWSTR function, const HRESULT hr);
+[[nodiscard]] LPCWSTR GenerateGUID();
 [[nodiscard]] bool UpdateFrameMargins(const HWND hWnd);
 [[nodiscard]] bool OpenSystemMenu(const HWND hWnd, const POINT pos);
 [[nodiscard]] bool IsCompositionEnabled();

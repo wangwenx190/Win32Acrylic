@@ -25,7 +25,6 @@
 #pragma once
 
 #include "acrylicmanager_global.h"
-#include <string>
 
 class CustomFrame
 {
@@ -39,10 +38,10 @@ public:
     [[nodiscard]] int MessageLoop() const noexcept;
 
 protected:
-    [[nodiscard]] static std::wstring __RegisterWindowClass(const WNDPROC wndProc) noexcept;
-    [[nodiscard]] static HWND __CreateWindow(const std::wstring &className, const DWORD style, const DWORD exStyle, const HWND parent, LPVOID data) noexcept;
-    [[nodiscard]] std::wstring __GetWindowClassName() const noexcept;
-    void __SetWindowClassName(const std::wstring &className) noexcept;
+    [[nodiscard]] static LPCWSTR __RegisterWindowClass(const WNDPROC wndProc) noexcept;
+    [[nodiscard]] static HWND __CreateWindow(LPCWSTR className, const DWORD style, const DWORD exStyle, const HWND parent, LPVOID data) noexcept;
+    [[nodiscard]] LPCWSTR __GetWindowClassName() const noexcept;
+    void __SetWindowClassName(LPCWSTR className) noexcept;
     void __SetWindowHandle(const HWND hWnd) noexcept;
 
     [[nodiscard]] virtual bool FilterMessage(const MSG *msg) const noexcept;
@@ -58,11 +57,11 @@ protected:
     static void OnSettingChange(const HWND hWnd, const WPARAM wParam, const LPARAM lParam) noexcept;
     static void OnDwmCompositionChanged() noexcept;
     static void OnDPIChanged(const HWND hWnd, const WPARAM wParam, const LPARAM lParam, UINT *newDpi) noexcept;
-    static void OnClose(const HWND hWnd, const std::wstring &className) noexcept;
+    static void OnClose(const HWND hWnd, LPCWSTR className) noexcept;
     static void OnDestroy() noexcept;
 
 private:
-    std::wstring m_windowClass = nullptr;
+    LPWSTR m_windowClass = nullptr;
     HWND m_window = nullptr;
 };
 
@@ -126,8 +125,8 @@ protected:
 
     [[nodiscard]] bool CreateFramelessWindow() noexcept
     {
-        const std::wstring className = __RegisterWindowClass(WindowProc);
-        if (className.empty()) {
+        LPCWSTR className = __RegisterWindowClass(WindowProc);
+        if (!className) {
             OutputDebugStringW(L"Failed to register window class.");
             return false;
         }

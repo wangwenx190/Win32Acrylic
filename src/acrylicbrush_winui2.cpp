@@ -63,7 +63,7 @@ private:
 private:
     AcrylicBrushWinUI2 *q_ptr = nullptr;
 
-    std::wstring m_dragBarWindowClassName = nullptr;
+    LPWSTR m_dragBarWindowClassName = nullptr;
     HWND m_dragBarWindowHandle = nullptr;
     HWND m_XAMLIslandWindowHandle = nullptr;
 
@@ -137,11 +137,11 @@ void AcrylicBrushWinUI2Private::Cleanup()
         }
         m_dragBarWindowHandle = nullptr;
     }
-    if (!m_dragBarWindowClassName.empty()) {
-        if (UnregisterClassW(m_dragBarWindowClassName.c_str(), GET_CURRENT_INSTANCE) == FALSE) {
+    if (m_dragBarWindowClassName) {
+        if (UnregisterClassW(m_dragBarWindowClassName, GET_CURRENT_INSTANCE) == FALSE) {
             PRINT_WIN32_ERROR_MESSAGE(UnregisterClassW)
         }
-        m_dragBarWindowClassName.clear();
+        SAFE_FREE_CHARARRAY(m_dragBarWindowClassName)
     }
 }
 
@@ -153,8 +153,8 @@ bool AcrylicBrushWinUI2Private::CreateDragBarWindow()
         return false;
     }
 
-    m_dragBarWindowClassName = __RegisterWindowClass(DragBarWindowProc);
-    if (m_dragBarWindowClassName.empty()) {
+    m_dragBarWindowClassName = const_cast<LPWSTR>(__RegisterWindowClass(DragBarWindowProc));
+    if (!m_dragBarWindowClassName) {
         OutputDebugStringW(L"Failed to register the drag bar window class.");
         return false;
     }
@@ -212,6 +212,7 @@ bool AcrylicBrushWinUI2Private::CreateXAMLIsland()
 
     if (!g_winRTInitialized) {
         winrt::init_apartment(winrt::apartment_type::single_threaded);
+        g_winRTInitialized = true;
     }
     if (!g_manager) {
         g_manager = winrt::Windows::UI::Xaml::Hosting::WindowsXamlManager::InitializeForCurrentThread();

@@ -28,6 +28,7 @@
 #include <ShellApi.h>
 #include <UxTheme.h>
 #include <cmath>
+#include <cstdio>
 
 #ifndef ABM_GETAUTOHIDEBAREX
 #define ABM_GETAUTOHIDEBAREX (0x0000000b)
@@ -41,9 +42,12 @@ static constexpr int g_autoHideTaskbarThickness = 2;
 
 CustomFrame::CustomFrame() = default;
 
-CustomFrame::~CustomFrame() = default;
+CustomFrame::~CustomFrame()
+{
+    SAFE_FREE_CHARARRAY(m_windowClass)
+}
 
-std::wstring CustomFrame::__RegisterWindowClass(const WNDPROC wndProc) noexcept
+LPCWSTR CustomFrame::__RegisterWindowClass(const WNDPROC wndProc) noexcept
 {
     if (!Utils::IsCompositionEnabled()) {
         OutputDebugStringW(L"DWM composition is disabled.");
@@ -53,7 +57,11 @@ std::wstring CustomFrame::__RegisterWindowClass(const WNDPROC wndProc) noexcept
         OutputDebugStringW(L"The given WindowProc function's address is null.");
         return nullptr;
     }
-    const std::wstring className = g_classNamePrefix + Utils::GenerateGUID();
+    LPCWSTR guid = Utils::GenerateGUID();
+    auto className = new wchar_t[MAX_PATH];
+    SecureZeroMemory(className, sizeof(className));
+    swprintf(className, L"%s%s", g_classNamePrefix, guid);
+    SAFE_FREE_CHARARRAY(guid)
     WNDCLASSEXW wcex;
     SecureZeroMemory(&wcex, sizeof(wcex));
     wcex.cbSize = sizeof(wcex);
@@ -64,15 +72,16 @@ std::wstring CustomFrame::__RegisterWindowClass(const WNDPROC wndProc) noexcept
     wcex.hIcon = LoadIconW(GET_CURRENT_INSTANCE, MAKEINTRESOURCEW(IDI_DEFAULTICON));
     wcex.hIconSm = LoadIconW(GET_CURRENT_INSTANCE, MAKEINTRESOURCEW(IDI_DEFAULTICONSM));
     wcex.hbrBackground = reinterpret_cast<HBRUSH>(COLOR_WINDOW + 1);
-    wcex.lpszClassName = className.c_str();
+    wcex.lpszClassName = className;
     if (RegisterClassExW(&wcex) == 0) {
+        SAFE_FREE_CHARARRAY(className)
         PRINT_WIN32_ERROR_MESSAGE(RegisterClassExW)
         return nullptr;
     }
     return className;
 }
 
-HWND CustomFrame::__CreateWindow(const std::wstring &className, const DWORD style,
+HWND CustomFrame::__CreateWindow(LPCWSTR className, const DWORD style,
                                  const DWORD exStyle, const HWND parent,
                                  LPVOID data) noexcept
 {
@@ -80,13 +89,13 @@ HWND CustomFrame::__CreateWindow(const std::wstring &className, const DWORD styl
         OutputDebugStringW(L"DWM composition is disabled.");
         return nullptr;
     }
-    if (className.empty()) {
+    if (!className) {
         OutputDebugStringW(L"The given window class name is empty.");
         return nullptr;
     }
 
     const HWND window = CreateWindowExW(exStyle,
-                                        className.c_str(),
+                                        className,
                                         g_windowTitle,
                                         style,
                                         CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
@@ -102,15 +111,15 @@ HWND CustomFrame::__CreateWindow(const std::wstring &className, const DWORD styl
     return window;
 }
 
-std::wstring CustomFrame::__GetWindowClassName() const noexcept
+LPCWSTR CustomFrame::__GetWindowClassName() const noexcept
 {
     return m_windowClass;
 }
 
-void CustomFrame::__SetWindowClassName(const std::wstring &className) noexcept
+void CustomFrame::__SetWindowClassName(LPCWSTR className) noexcept
 {
     // todo: guard against empty string?
-    m_windowClass = className;
+    m_windowClass = const_cast<LPWSTR>(className);
 }
 
 void CustomFrame::__SetWindowHandle(const HWND hWnd) noexcept
@@ -541,13 +550,13 @@ void CustomFrame::OnDPIChanged(const HWND hWnd, const WPARAM wParam, const LPARA
     }
 }
 
-void CustomFrame::OnClose(const HWND hWnd, const std::wstring &className) noexcept
+void CustomFrame::OnClose(const HWND hWnd, LPCWSTR className) noexcept
 {
     if (DestroyWindow(hWnd) == FALSE) {
         PRINT_WIN32_ERROR_MESSAGE(DestroyWindow)
     }
-    if (!className.empty()) {
-        if (UnregisterClassW(className.c_str(), GET_CURRENT_INSTANCE) == FALSE) {
+    if (className) {
+        if (UnregisterClassW(className, GET_CURRENT_INSTANCE) == FALSE) {
             PRINT_WIN32_ERROR_MESSAGE(UnregisterClassW)
         }
     }

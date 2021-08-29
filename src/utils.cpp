@@ -28,6 +28,7 @@
 #include <ShellScalingApi.h>
 #include <DwmApi.h>
 #include <cmath>
+#include <cstdio>
 
 static constexpr wchar_t g_personalizeRegistryKey[] = LR"(Software\Microsoft\Windows\CurrentVersion\Themes\Personalize)";
 static constexpr wchar_t g_dwmRegistryKey[] = LR"(Software\Microsoft\Windows\DWM)";
@@ -205,19 +206,17 @@ bool Utils::IsWindows11OrGreater()
     return result;
 }
 
-std::wstring Utils::GetCurrentDirectoryPath()
+LPCWSTR Utils::GetCurrentDirectoryPath()
 {
     auto buf = new wchar_t[MAX_PATH];
     SecureZeroMemory(buf, sizeof(buf));
     if (GetModuleFileNameW(nullptr, buf, MAX_PATH) == 0) {
         SAFE_FREE_CHARARRAY(buf)
         PRINT_WIN32_ERROR_MESSAGE(GetModuleFileNameW)
-        return {};
+        return nullptr;
     }
     *wcsrchr(buf, L'\\') = L'\0';
-    const std::wstring result = buf;
-    SAFE_FREE_CHARARRAY(buf)
-    return result;
+    return buf;
 }
 
 UINT Utils::GetDotsPerInchForWindow(const HWND hWnd)
@@ -478,7 +477,7 @@ ColorizationArea Utils::GetColorizationArea()
         return ColorizationArea::None;
     }
     const HKEY rootKey = HKEY_CURRENT_USER;
-    const std::wstring keyName = L"ColorPrevalence";
+    LPCWSTR keyName = L"ColorPrevalence";
     const int themeValue = GetIntFromRegistry(rootKey, g_personalizeRegistryKey, keyName);
     const int dwmValue = GetIntFromRegistry(rootKey, g_dwmRegistryKey, keyName);
     const bool theme = (themeValue != 0);
@@ -561,7 +560,7 @@ bool Utils::SetWindowDarkFrameBorderEnabled(const HWND hWnd, const bool enable)
     return false;
 }
 
-std::wstring Utils::GetWallpaperFilePath(const int screen)
+LPCWSTR Utils::GetWallpaperFilePath(const int screen)
 {
     if (IsWindows8OrGreater()) {
         HRESULT hr = CoInitialize(nullptr);
@@ -580,7 +579,9 @@ std::wstring Utils::GetWallpaperFilePath(const int screen)
                             hr = pDesktopWallpaper->GetWallpaper(monitorId, &wallpaperPath);
                             if (SUCCEEDED(hr)) {
                                 CoTaskMemFree(monitorId);
-                                const std::wstring result = wallpaperPath;
+                                const auto result = new wchar_t[MAX_PATH];
+                                SecureZeroMemory(result, sizeof(result));
+                                wcscpy(result, wallpaperPath);
                                 CoTaskMemFree(wallpaperPath);
                                 COM_SAFE_RELEASE(pDesktopWallpaper)
                                 CoUninitialize();
@@ -621,11 +622,9 @@ std::wstring Utils::GetWallpaperFilePath(const int screen)
             // TODO: AD_GETWP_BMP, AD_GETWP_IMAGE, AD_GETWP_LAST_APPLIED. What's the difference?
             hr = pActiveDesktop->GetWallpaper(wallpaperPath, MAX_PATH, AD_GETWP_LAST_APPLIED);
             if (SUCCEEDED(hr)) {
-                const std::wstring result = wallpaperPath;
-                SAFE_FREE_CHARARRAY(wallpaperPath)
                 COM_SAFE_RELEASE(pActiveDesktop)
                 CoUninitialize();
-                return result;
+                return wallpaperPath;
             } else {
                 SAFE_FREE_CHARARRAY(wallpaperPath)
                 COM_SAFE_RELEASE(pActiveDesktop)
@@ -642,15 +641,12 @@ std::wstring Utils::GetWallpaperFilePath(const int screen)
     auto wallpaperPath = new wchar_t[MAX_PATH];
     SecureZeroMemory(wallpaperPath, sizeof(wallpaperPath));
     if (SystemParametersInfoW(SPI_GETDESKWALLPAPER, MAX_PATH, wallpaperPath, 0) != FALSE) {
-        const std::wstring result = wallpaperPath;
-        SAFE_FREE_CHARARRAY(wallpaperPath)
-        return result;
+        return wallpaperPath;
     } else {
         SAFE_FREE_CHARARRAY(wallpaperPath)
         PRINT_WIN32_ERROR_MESSAGE(SystemParametersInfoW)
     }
-    const std::wstring result = GetStringFromRegistry(HKEY_CURRENT_USER, g_desktopRegistryKey, L"WallPaper");
-    return result;
+    return GetStringFromRegistry(HKEY_CURRENT_USER, g_desktopRegistryKey, L"WallPaper");
 }
 
 COLORREF Utils::GetDesktopBackgroundColor(const int screen)
@@ -803,68 +799,68 @@ WallpaperAspectStyle Utils::GetWallpaperAspectStyle(const int screen)
     }
 }
 
-std::wstring Utils::GetStringFromEnvironmentVariable(const std::wstring &name)
+LPCWSTR Utils::GetStringFromEnvironmentVariable(LPCWSTR name)
 {
-    if (name.empty()) {
-        return {};
+    if (!name) {
+        return nullptr;
     }
     auto buf = new wchar_t[MAX_PATH];
     SecureZeroMemory(buf, sizeof(buf));
-    if (GetEnvironmentVariableW(name.c_str(), buf, sizeof(buf)) == 0) {
+    if (GetEnvironmentVariableW(name, buf, sizeof(buf)) == 0) {
         // We eat this error because the given environment variable may not exist.
         SAFE_FREE_CHARARRAY(buf)
-        return {};
+        return nullptr;
     }
-    const std::wstring result = buf;
-    SAFE_FREE_CHARARRAY(buf)
+    return buf;
+}
+
+int Utils::GetIntFromEnvironmentVariable(LPCWSTR name)
+{
+    if (!name) {
+        return 0;
+    }
+    LPCWSTR str = GetStringFromEnvironmentVariable(name);
+    const int result = _wtoi(str);
+    SAFE_FREE_CHARARRAY(str)
     return result;
 }
 
-int Utils::GetIntFromEnvironmentVariable(const std::wstring &name)
+bool Utils::GetBoolFromEnvironmentVariable(LPCWSTR name)
 {
-    if (name.empty()) {
-        return 0;
-    }
-    const std::wstring str = GetStringFromEnvironmentVariable(name);
-    return _wtoi(str.c_str());
-}
-
-bool Utils::GetBoolFromEnvironmentVariable(const std::wstring &name)
-{
-    if (name.empty()) {
+    if (!name) {
         return false;
     }
-    const std::wstring str = GetStringFromEnvironmentVariable(name);
-    return ((_wcsicmp(str.c_str(), L"True") == 0)
-            || (_wcsicmp(str.c_str(), L"Enable") == 0)
-            || (_wcsicmp(str.c_str(), L"On") == 0)
-            || (_wcsicmp(str.c_str(), L"Enabled") == 0)
-            || (_wcsicmp(str.c_str(), L"Yes") == 0));
+    LPCWSTR str = GetStringFromEnvironmentVariable(name);
+    const bool result = ((_wcsicmp(str, L"True") == 0)
+                         || (_wcsicmp(str, L"Enable") == 0)
+                         || (_wcsicmp(str, L"On") == 0)
+                         || (_wcsicmp(str, L"Enabled") == 0)
+                         || (_wcsicmp(str, L"Yes") == 0));
+    SAFE_FREE_CHARARRAY(str)
+    return result;
 }
 
-std::wstring Utils::GetStringFromIniFile(const std::wstring &file, const std::wstring &section, const std::wstring &key)
+LPCWSTR Utils::GetStringFromIniFile(LPCWSTR file, LPCWSTR section, LPCWSTR key)
 {
-    if (file.empty() || section.empty() || key.empty()) {
-        return {};
+    if (!file || !section || !key) {
+        return nullptr;
     }
     auto buf = new wchar_t[MAX_PATH];
     SecureZeroMemory(buf, sizeof(buf));
-    if (GetPrivateProfileStringW(section.c_str(), key.c_str(), nullptr, buf, MAX_PATH, file.c_str()) == 0) {
+    if (GetPrivateProfileStringW(section, key, nullptr, buf, MAX_PATH, file) == 0) {
         SAFE_FREE_CHARARRAY(buf)
         PRINT_WIN32_ERROR_MESSAGE(GetPrivateProfileStringW)
-        return {};
+        return nullptr;
     }
-    const std::wstring result = buf;
-    SAFE_FREE_CHARARRAY(buf)
-    return result;
+    return buf;
 }
 
-int Utils::GetIntFromIniFile(const std::wstring &file, const std::wstring &section, const std::wstring &key)
+int Utils::GetIntFromIniFile(LPCWSTR file, LPCWSTR section, LPCWSTR key)
 {
-    if (file.empty() || section.empty() || key.empty()) {
+    if (!file || !section || !key) {
         return 0;
     }
-    const int result = GetPrivateProfileIntW(section.c_str(), key.c_str(), 0, file.c_str());
+    const int result = GetPrivateProfileIntW(section, key, 0, file);
     if (GetLastError() != ERROR_SUCCESS) {
         PRINT_WIN32_ERROR_MESSAGE(GetPrivateProfileIntW)
         return 0;
@@ -872,34 +868,36 @@ int Utils::GetIntFromIniFile(const std::wstring &file, const std::wstring &secti
     return result;
 }
 
-bool Utils::GetBoolFromIniFile(const std::wstring &file, const std::wstring &section, const std::wstring &key)
+bool Utils::GetBoolFromIniFile(LPCWSTR file, LPCWSTR section, LPCWSTR key)
 {
-    if (file.empty() || section.empty() || key.empty()) {
+    if (!file || !section || !key) {
         return false;
     }
-    const std::wstring str = GetStringFromIniFile(file, section, key);
-    return ((_wcsicmp(str.c_str(), L"True") == 0)
-            || (_wcsicmp(str.c_str(), L"Enable") == 0)
-            || (_wcsicmp(str.c_str(), L"On") == 0)
-            || (_wcsicmp(str.c_str(), L"Yes") == 0)
-            || (_wcsicmp(str.c_str(), L"Enabled") == 0));
+    LPCWSTR str = GetStringFromIniFile(file, section, key);
+    const bool result = ((_wcsicmp(str, L"True") == 0)
+                         || (_wcsicmp(str, L"Enable") == 0)
+                         || (_wcsicmp(str, L"On") == 0)
+                         || (_wcsicmp(str, L"Yes") == 0)
+                         || (_wcsicmp(str, L"Enabled") == 0));
+    SAFE_FREE_CHARARRAY(str)
+    return result;
 }
 
-std::wstring Utils::GetStringFromRegistry(const HKEY rootKey, const std::wstring &subKey, const std::wstring &key)
+LPCWSTR Utils::GetStringFromRegistry(const HKEY rootKey, LPCWSTR subKey, LPCWSTR key)
 {
-    if (!rootKey || subKey.empty() || key.empty()) {
-        return {};
+    if (!rootKey || !subKey || !key) {
+        return nullptr;
     }
     HKEY hKey = nullptr;
-    if (RegOpenKeyExW(rootKey, subKey.c_str(), 0, KEY_READ, &hKey) != ERROR_SUCCESS) {
+    if (RegOpenKeyExW(rootKey, subKey, 0, KEY_READ, &hKey) != ERROR_SUCCESS) {
         PRINT_WIN32_ERROR_MESSAGE(RegOpenKeyExW)
-        return {};
+        return nullptr;
     }
     auto buf = new wchar_t[MAX_PATH];
     SecureZeroMemory(buf, sizeof(buf));
     DWORD dwType = REG_SZ;
     DWORD dwSize = sizeof(buf);
-    const bool success = (RegQueryValueExW(hKey, key.c_str(), nullptr, &dwType,
+    const bool success = (RegQueryValueExW(hKey, key, nullptr, &dwType,
                                 reinterpret_cast<LPBYTE>(buf), &dwSize) == ERROR_SUCCESS);
     if (!success) {
         // We eat this error because the given registry key and value may not exist.
@@ -908,27 +906,25 @@ std::wstring Utils::GetStringFromRegistry(const HKEY rootKey, const std::wstring
     if (RegCloseKey(hKey) != ERROR_SUCCESS) {
         SAFE_FREE_CHARARRAY(buf)
         PRINT_WIN32_ERROR_MESSAGE(RegCloseKey)
-        return {};
+        return nullptr;
     }
-    const std::wstring result = (success ? buf : std::wstring{});
-    SAFE_FREE_CHARARRAY(buf)
-    return result;
+    return buf;
 }
 
-int Utils::GetIntFromRegistry(const HKEY rootKey, const std::wstring &subKey, const std::wstring &key)
+int Utils::GetIntFromRegistry(const HKEY rootKey, LPCWSTR subKey, LPCWSTR key)
 {
-    if (!rootKey || subKey.empty() || key.empty()) {
+    if (!rootKey || !subKey || !key) {
         return 0;
     }
     HKEY hKey = nullptr;
-    if (RegOpenKeyExW(rootKey, subKey.c_str(), 0, KEY_READ, &hKey) != ERROR_SUCCESS) {
+    if (RegOpenKeyExW(rootKey, subKey, 0, KEY_READ, &hKey) != ERROR_SUCCESS) {
         PRINT_WIN32_ERROR_MESSAGE(RegOpenKeyExW)
         return 0;
     }
     DWORD dwValue = 0;
     DWORD dwType = REG_DWORD;
     DWORD dwSize = sizeof(dwValue);
-    const bool success = (RegQueryValueExW(hKey, key.c_str(), nullptr, &dwType,
+    const bool success = (RegQueryValueExW(hKey, key, nullptr, &dwType,
                                 reinterpret_cast<LPBYTE>(&dwValue), &dwSize) == ERROR_SUCCESS);
     if (!success) {
         // We eat this error because the given registry key and value may not exist.
@@ -1028,39 +1024,37 @@ bool Utils::SetDpiAwarenessForWindow(const HWND hWnd, const DpiAwareness awarene
     return false;
 }
 
-std::wstring Utils::TranslateErrorCodeToMessage(const std::wstring &function, const HRESULT hr)
+LPCWSTR Utils::TranslateErrorCodeToMessage(LPCWSTR function, const HRESULT hr)
 {
-    if (function.empty() || SUCCEEDED(hr)) {
-        return {};
+    if (!function || SUCCEEDED(hr)) {
+        return nullptr;
     }
     const DWORD dwError = HRESULT_CODE(hr);
     LPWSTR buf = nullptr;
     if (FormatMessageW(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
         nullptr, dwError, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), buf, 0, nullptr) == 0) {
-        return {};
+        return nullptr;
     }
-    auto str = new wchar_t[MAX_PATH];
+    const auto str = new wchar_t[MAX_PATH];
     SecureZeroMemory(str, sizeof(str));
-    swprintf(str, L"%s failed with error %d: %s", function.c_str(), dwError, buf);
-    const std::wstring result = str;
+    swprintf(str, L"%s failed with error %d: %s", function, dwError, buf);
     LocalFree(buf);
-    SAFE_FREE_CHARARRAY(str)
-    return result;
+    return str;
 }
 
-std::wstring Utils::GenerateGUID()
+LPCWSTR Utils::GenerateGUID()
 {
     HRESULT hr = CoInitialize(nullptr);
     if (FAILED(hr)) {
         PRINT_HR_ERROR_MESSAGE(CoInitialize, hr)
-        return {};
+        return nullptr;
     }
     GUID guid = {};
     hr = CoCreateGuid(&guid);
     if (FAILED(hr)) {
         PRINT_HR_ERROR_MESSAGE(CoCreateGuid, hr)
         CoUninitialize();
-        return {};
+        return nullptr;
     }
     auto buf = new wchar_t[MAX_PATH];
     SecureZeroMemory(buf, sizeof(buf));
@@ -1068,12 +1062,10 @@ std::wstring Utils::GenerateGUID()
         SAFE_FREE_CHARARRAY(buf)
         PRINT_WIN32_ERROR_MESSAGE(StringFromGUID2)
         CoUninitialize();
-        return {};
+        return nullptr;
     }
     CoUninitialize();
-    const std::wstring result = buf;
-    SAFE_FREE_CHARARRAY(buf)
-    return result;
+    return buf;
 }
 
 bool Utils::UpdateFrameMargins(const HWND hWnd)

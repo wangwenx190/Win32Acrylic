@@ -74,7 +74,7 @@ private:
 private:
     AcrylicBrushDirect2D *q_ptr = nullptr;
 
-    std::wstring m_wallpaperFilePath = nullptr;
+    LPWSTR m_wallpaperFilePath = nullptr;
     WallpaperAspectStyle m_wallpaperAspectStyle = WallpaperAspectStyle::Invalid;
     COLORREF m_desktopBackgroundColor = 0;
 
@@ -126,6 +126,7 @@ AcrylicBrushDirect2DPrivate::AcrylicBrushDirect2DPrivate(AcrylicBrushDirect2D *q
 
 AcrylicBrushDirect2DPrivate::~AcrylicBrushDirect2DPrivate()
 {
+    SAFE_FREE_CHARARRAY(m_wallpaperFilePath)
 }
 
 LRESULT AcrylicBrushDirect2DPrivate::MessageHandler(UINT message, WPARAM wParam, LPARAM lParam) noexcept
@@ -188,7 +189,7 @@ bool AcrylicBrushDirect2DPrivate::EnsureWallpaperBrush()
         PRINT_HR_ERROR_MESSAGE(CoCreateInstance, hr)
         return false;
     }
-    hr = m_WICFactory->CreateDecoderFromFilename(m_wallpaperFilePath.c_str(), nullptr, GENERIC_READ,
+    hr = m_WICFactory->CreateDecoderFromFilename(m_wallpaperFilePath, nullptr, GENERIC_READ,
                                                  WICDecodeMetadataCacheOnLoad, &m_WICDecoder);
     if (FAILED(hr)) {
         CoUninitialize();
@@ -576,7 +577,7 @@ bool AcrylicBrushDirect2DPrivate::InitializeGraphicsInfrastructure()
 void AcrylicBrushDirect2DPrivate::ReloadDesktopParameters()
 {
     constexpr int screen = 0; // fixme: use the correct screen id.
-    m_wallpaperFilePath = Utils::GetWallpaperFilePath(screen);
+    m_wallpaperFilePath = const_cast<LPWSTR>(Utils::GetWallpaperFilePath(screen));
     m_wallpaperAspectStyle = Utils::GetWallpaperAspectStyle(screen);
     m_desktopBackgroundColor = Utils::GetDesktopBackgroundColor(screen);
 }

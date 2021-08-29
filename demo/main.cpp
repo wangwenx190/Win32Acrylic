@@ -22,8 +22,7 @@
  * SOFTWARE.
  */
 
-#include <Windows.h>
-#include <acrylicmanager.h>
+#include "acrylicmanager.hpp"
 
 EXTERN_C int APIENTRY
 wWinMain(
@@ -38,9 +37,14 @@ wWinMain(
     UNREFERENCED_PARAMETER(lpCmdLine);
     UNREFERENCED_PARAMETER(nCmdShow);
 
+    if (!InitializeAcrylicManager()) {
+        OutputDebugStringW(L"Failed to initialize the AcrylicManager library.");
+        return -1;
+    }
+
     LPCWSTR id = nullptr;
 
-    if (!am_CreateWindow(BrushType::WinUI2, &id)) {
+    if (!am_CreateWindow(1, &id)) {
         OutputDebugStringW(L"Failed to create the acrylic window.");
         return -1;
     }
@@ -50,7 +54,7 @@ wWinMain(
         return -1;
     }
 
-    if (!am_SetWindowState(id, WindowState::Shown)) {
+    if (!am_SetWindowState(id, 5)) {
         OutputDebugStringW(L"Failed to show the acrylic window.");
         return -1;
     }

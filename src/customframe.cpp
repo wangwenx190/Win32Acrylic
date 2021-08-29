@@ -125,12 +125,7 @@ void CustomFrame::__SetWindowHandle(const HWND hWnd) noexcept
     m_window = hWnd;
 }
 
-bool CustomFrame::FilterMessage(const MSG *msg) const noexcept
-{
-    return false;
-}
-
-void CustomFrame::CleanupResources() noexcept
+void CustomFrame::__CleanupResources() noexcept
 {
     if (m_window) {
         if (DestroyWindow(m_window) == FALSE) {
@@ -144,6 +139,15 @@ void CustomFrame::CleanupResources() noexcept
         }
         SAFE_FREE_CHARARRAY(m_windowClass)
     }
+}
+
+bool CustomFrame::FilterMessage(const MSG *msg) const noexcept
+{
+    return false;
+}
+
+void CustomFrame::CleanupResources() noexcept
+{
 }
 
 int CustomFrame::MessageLoop() const noexcept

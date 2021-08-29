@@ -43,9 +43,10 @@ protected:
     [[nodiscard]] LPCWSTR __GetWindowClassName() const noexcept;
     void __SetWindowClassName(LPCWSTR className) noexcept;
     void __SetWindowHandle(const HWND hWnd) noexcept;
+    void __CleanupResources() noexcept; // Internal cleanup
 
     [[nodiscard]] virtual bool FilterMessage(const MSG *msg) const noexcept;
-    virtual void CleanupResources() noexcept;
+    virtual void CleanupResources() noexcept; // User cleanup
 
     static void OnNCCreate(const HWND hWnd, const LPARAM lParam) noexcept;
     static void OnNCDestroy(const HWND hWnd) noexcept;
@@ -104,10 +105,11 @@ public:
         case WM_DWMCOMPOSITIONCHANGED:
             OnDwmCompositionChanged();
             break;
-        case WM_CLOSE:
+        case WM_CLOSE: {
             OnClose(hWnd);
-            CleanupResources();
-            break;
+            __CleanupResources(); // Internal cleanup
+            CleanupResources(); // User cleanup
+        } break;
         case WM_DESTROY:
             OnDestroy();
             break;

@@ -53,12 +53,12 @@ public:
 
 protected:
     bool FilterMessage(const MSG *msg) const noexcept override;
+    void CleanupResources() noexcept override;
 
 private:
     static LRESULT CALLBACK DragBarWindowProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) noexcept;
     [[nodiscard]] bool CreateDragBarWindow();
     [[nodiscard]] bool CreateXAMLIsland();
-    void Cleanup();
 
 private:
     AcrylicBrushWinUI2 *q_ptr = nullptr;
@@ -116,7 +116,7 @@ void AcrylicBrushWinUI2Private::ReloadBrushParameters()
     m_backgroundBrush.FallbackColor(q_ptr->GetFallbackColor());
 }
 
-void AcrylicBrushWinUI2Private::Cleanup()
+void AcrylicBrushWinUI2Private::CleanupResources() noexcept
 {
     if (m_backgroundBrush) {
         m_backgroundBrush = nullptr;

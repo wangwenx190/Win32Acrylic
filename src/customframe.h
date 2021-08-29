@@ -45,6 +45,7 @@ protected:
     void __SetWindowHandle(const HWND hWnd) noexcept;
 
     [[nodiscard]] virtual bool FilterMessage(const MSG *msg) const noexcept;
+    virtual void CleanupResources() noexcept;
 
     static void OnNCCreate(const HWND hWnd, const LPARAM lParam) noexcept;
     static void OnNCDestroy(const HWND hWnd) noexcept;
@@ -57,7 +58,7 @@ protected:
     static void OnSettingChange(const HWND hWnd, const WPARAM wParam, const LPARAM lParam) noexcept;
     static void OnDwmCompositionChanged() noexcept;
     static void OnDPIChanged(const HWND hWnd, const WPARAM wParam, const LPARAM lParam, UINT *newDpi) noexcept;
-    static void OnClose(const HWND hWnd, LPCWSTR className) noexcept;
+    static void OnClose(const HWND hWnd) noexcept;
     static void OnDestroy() noexcept;
 
 private:
@@ -104,7 +105,8 @@ public:
             OnDwmCompositionChanged();
             break;
         case WM_CLOSE:
-            OnClose(hWnd, __GetWindowClassName());
+            OnClose(hWnd);
+            CleanupResources();
             break;
         case WM_DESTROY:
             OnDestroy();

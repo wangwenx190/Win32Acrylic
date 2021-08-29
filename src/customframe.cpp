@@ -42,10 +42,7 @@ static constexpr int g_autoHideTaskbarThickness = 2;
 
 CustomFrame::CustomFrame() = default;
 
-CustomFrame::~CustomFrame()
-{
-    SAFE_FREE_CHARARRAY(m_windowClass)
-}
+CustomFrame::~CustomFrame() = default;
 
 LPCWSTR CustomFrame::__RegisterWindowClass(const WNDPROC wndProc) noexcept
 {
@@ -131,6 +128,22 @@ void CustomFrame::__SetWindowHandle(const HWND hWnd) noexcept
 bool CustomFrame::FilterMessage(const MSG *msg) const noexcept
 {
     return false;
+}
+
+void CustomFrame::CleanupResources() noexcept
+{
+    if (m_window) {
+        if (DestroyWindow(m_window) == FALSE) {
+            PRINT_WIN32_ERROR_MESSAGE(DestroyWindow)
+        }
+        m_window = nullptr;
+    }
+    if (m_windowClass) {
+        if (UnregisterClassW(m_windowClass, GET_CURRENT_INSTANCE) == FALSE) {
+            PRINT_WIN32_ERROR_MESSAGE(UnregisterClassW)
+        }
+        SAFE_FREE_CHARARRAY(m_windowClass)
+    }
 }
 
 int CustomFrame::MessageLoop() const noexcept
@@ -550,16 +563,8 @@ void CustomFrame::OnDPIChanged(const HWND hWnd, const WPARAM wParam, const LPARA
     }
 }
 
-void CustomFrame::OnClose(const HWND hWnd, LPCWSTR className) noexcept
+void CustomFrame::OnClose(const HWND hWnd) noexcept
 {
-    if (DestroyWindow(hWnd) == FALSE) {
-        PRINT_WIN32_ERROR_MESSAGE(DestroyWindow)
-    }
-    if (className) {
-        if (UnregisterClassW(className, GET_CURRENT_INSTANCE) == FALSE) {
-            PRINT_WIN32_ERROR_MESSAGE(UnregisterClassW)
-        }
-    }
 }
 
 void CustomFrame::OnDestroy() noexcept

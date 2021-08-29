@@ -22,7 +22,22 @@
  * SOFTWARE.
  */
 
-#include "acrylicmanager.hpp"
+#include <Windows.h>
+#include <acrylicmanager.h>
+#include <cstdio>
+
+#ifndef MAX_WINDOW_COUNT
+#define MAX_WINDOW_COUNT 1
+#endif
+
+static inline void PrintWindowInformation(const int index, LPCWSTR id)
+{
+    auto str = new wchar_t[MAX_PATH];
+    SecureZeroMemory(str, sizeof(str));
+    swprintf(str, L"Window index: %d, ID: %s.", index, id);
+    OutputDebugStringW(str);
+    SAFE_FREE_CHARARRAY(str)
+}
 
 EXTERN_C int APIENTRY
 wWinMain(
@@ -37,29 +52,25 @@ wWinMain(
     UNREFERENCED_PARAMETER(lpCmdLine);
     UNREFERENCED_PARAMETER(nCmdShow);
 
-    if (!InitializeAcrylicManager()) {
-        OutputDebugStringW(L"Failed to initialize the AcrylicManager library.");
-        return -1;
+    int result = -1;
+
+    for (int i = 0; i != MAX_WINDOW_COUNT; ++i) {
+        LPCWSTR id = nullptr;
+        if (!am_CreateWindow(BrushType::Direct2D, &id)) {
+            OutputDebugStringW(L"Failed to create the acrylic window.");
+            continue;
+        }
+        PrintWindowInformation((i + 1), id);
+        if (!am_MoveToScreenCenter(id)) {
+            OutputDebugStringW(L"Failed to move the acrylic window to screen center.");
+            continue;
+        }
+        if (!am_SetWindowState(id, WindowState::Shown)) {
+            OutputDebugStringW(L"Failed to show the acrylic window.");
+            continue;
+        }
+        result = am_GetMessageLoopResult(id);
     }
-
-    LPCWSTR id = nullptr;
-
-    if (!am_CreateWindow(1, &id)) {
-        OutputDebugStringW(L"Failed to create the acrylic window.");
-        return -1;
-    }
-
-    if (!am_MoveToScreenCenter(id)) {
-        OutputDebugStringW(L"Failed to move the acrylic window to screen center.");
-        return -1;
-    }
-
-    if (!am_SetWindowState(id, 5)) {
-        OutputDebugStringW(L"Failed to show the acrylic window.");
-        return -1;
-    }
-
-    const int result = am_GetMessageLoopResult(id);
 
     // todo: cleanup
 

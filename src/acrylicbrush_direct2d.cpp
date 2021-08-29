@@ -286,6 +286,11 @@ bool AcrylicBrushDirect2DPrivate::EnsureNoiseBrush()
 
 bool AcrylicBrushDirect2DPrivate::PrepareEffects_Luminosity(ID2D1Effect **output)
 {
+    if (!output) {
+        OutputDebugStringW(L"The output address of D2D effect is null.");
+        return false;
+    }
+
     // Apply luminosity:
 
     // Luminosity Color
@@ -332,6 +337,11 @@ bool AcrylicBrushDirect2DPrivate::PrepareEffects_Luminosity(ID2D1Effect **output
 
 bool AcrylicBrushDirect2DPrivate::PrepareEffects_Legacy(ID2D1Effect **output)
 {
+    if (!output) {
+        OutputDebugStringW(L"The output address of D2D effect is null.");
+        return false;
+    }
+
     // Apply saturation
     HRESULT hr = m_D2DContext->CreateEffect(am_CLSID_D2D1Saturation, m_D2DSaturationEffect.GetAddressOf());
     if (FAILED(hr)) {
@@ -382,6 +392,11 @@ bool AcrylicBrushDirect2DPrivate::PrepareEffects_Legacy(ID2D1Effect **output)
 
 bool AcrylicBrushDirect2DPrivate::CreateEffects(ID2D1Effect **output)
 {
+    if (!output) {
+        OutputDebugStringW(L"The output address of D2D effect is null.");
+        return false;
+    }
+
     ReloadDesktopParameters();
     if (!EnsureWallpaperBrush()) {
         OutputDebugStringW(L"Failed to create the wallpaper brush.");
@@ -397,7 +412,11 @@ bool AcrylicBrushDirect2DPrivate::CreateEffects(ID2D1Effect **output)
         PRINT_HR_ERROR_MESSAGE(CreateEffect, hr)
         return false;
     }
+#if 0
     hr = m_D2DWallpaperBitmapSourceEffect->SetValue(D2D1_BITMAPSOURCE_PROP_WIC_BITMAP_SOURCE, m_WICWallpaperConverter.Get());
+#else
+    hr = m_D2DWallpaperBitmapSourceEffect->SetValue(D2D1_BITMAPSOURCE_PROP_WIC_BITMAP_SOURCE, nullptr);
+#endif
     if (FAILED(hr)) {
         PRINT_HR_ERROR_MESSAGE(SetValue, hr)
         return false;
@@ -513,22 +532,22 @@ bool AcrylicBrushDirect2DPrivate::CreateEffects(ID2D1Effect **output)
 
 bool AcrylicBrushDirect2DPrivate::DrawFinalVisual() const
 {
-    const HWND hWnd = GetHandle();
-    const SIZE windowSize = GET_WINDOW_CLIENT_SIZE(hWnd);
-    const int borderThickness = Utils::GetWindowVisibleFrameBorderThickness(hWnd);
+    if (!m_D2DFinalBrushEffect) {
+        OutputDebugStringW(L"The final D2D visual image is not created.");
+        return false;
+    }
     m_D2DContext->BeginDraw();
-    m_D2DContext->Clear(D2D1::ColorF(0.0, 0.0, 0.0, 0.0)); // todo: check: fully transparent color.
-    m_D2DContext->DrawImage(m_D2DFinalBrushEffect.Get(),
-                            D2D1::Point2F(0.0, static_cast<float>(borderThickness)),
-                            D2D1::RectF(0.0, 0.0,
-                                        static_cast<float>(windowSize.cx), static_cast<float>(windowSize.cy - borderThickness)));
+    //m_D2DContext->Clear(D2D1::ColorF(0.0, 0.0, 0.0, 0.0)); // todo: check: fully transparent color.
+    m_D2DContext->DrawImage(m_D2DFinalBrushEffect.Get());
     HRESULT hr = m_D2DContext->EndDraw();
     if (FAILED(hr)) {
         PRINT_HR_ERROR_MESSAGE(EndDraw, hr)
         return false;
     }
+    DXGI_PRESENT_PARAMETERS parameters;
+    SecureZeroMemory(&parameters, sizeof(parameters));
     // Without this step, nothing will be visible to the user.
-    hr = m_DXGISwapChain->Present(1, 0);
+    hr = m_DXGISwapChain->Present1(1, 0, &parameters);
     if (FAILED(hr)) {
         PRINT_HR_ERROR_MESSAGE(Present, hr)
         return false;
@@ -655,43 +674,51 @@ void AcrylicBrushDirect2DPrivate::ReloadDesktopParameters()
 
 void AcrylicBrushDirect2DPrivate::ReloadBrushParameters()
 {
-    // todo: check the existence of these pointers first.
-    HRESULT hr = m_D2DLuminosityColorEffect->SetValue(D2D1_FLOOD_PROP_COLOR, WINRTCOLOR_TO_D2DCOLOR4F(q_ptr->GetEffectiveLuminosityColor()));
-    if (FAILED(hr)) {
-        PRINT_HR_ERROR_MESSAGE(SetValue, hr)
-        return;
+    if (m_D2DLuminosityColorEffect) {
+        const HRESULT hr = m_D2DLuminosityColorEffect->SetValue(D2D1_FLOOD_PROP_COLOR, WINRTCOLOR_TO_D2DCOLOR4F(q_ptr->GetEffectiveLuminosityColor()));
+        if (FAILED(hr)) {
+            PRINT_HR_ERROR_MESSAGE(SetValue, hr)
+        }
     }
-    hr = m_D2DSaturationEffect->SetValue(D2D1_SATURATION_PROP_SATURATION, q_ptr->GetSaturation());
-    if (FAILED(hr)) {
-        PRINT_HR_ERROR_MESSAGE(SetValue, hr)
-        return;
+    if (m_D2DSaturationEffect) {
+        const HRESULT hr = m_D2DSaturationEffect->SetValue(D2D1_SATURATION_PROP_SATURATION, q_ptr->GetSaturation());
+        if (FAILED(hr)) {
+            PRINT_HR_ERROR_MESSAGE(SetValue, hr)
+        }
     }
-    hr = m_D2DExclusionColorEffect->SetValue(D2D1_FLOOD_PROP_COLOR, WINRTCOLOR_TO_D2DCOLOR4F(q_ptr->GetExclusionColor()));
-    if (FAILED(hr)) {
-        PRINT_HR_ERROR_MESSAGE(SetValue, hr)
-        return;
+    if (m_D2DExclusionColorEffect) {
+        const HRESULT hr = m_D2DExclusionColorEffect->SetValue(D2D1_FLOOD_PROP_COLOR, WINRTCOLOR_TO_D2DCOLOR4F(q_ptr->GetExclusionColor()));
+        if (FAILED(hr)) {
+            PRINT_HR_ERROR_MESSAGE(SetValue, hr)
+        }
     }
-    hr = m_D2DTintColorEffect->SetValue(D2D1_FLOOD_PROP_COLOR, WINRTCOLOR_TO_D2DCOLOR4F(q_ptr->GetEffectiveTintColor()));
-    if (FAILED(hr)) {
-        PRINT_HR_ERROR_MESSAGE(SetValue, hr)
-        return;
+    if (m_D2DTintColorEffect) {
+        const HRESULT hr = m_D2DTintColorEffect->SetValue(D2D1_FLOOD_PROP_COLOR, WINRTCOLOR_TO_D2DCOLOR4F(q_ptr->GetEffectiveTintColor()));
+        if (FAILED(hr)) {
+            PRINT_HR_ERROR_MESSAGE(SetValue, hr)
+        }
     }
-    hr = m_D2DGaussianBlurEffect->SetValue(D2D1_GAUSSIANBLUR_PROP_STANDARD_DEVIATION, q_ptr->GetBlurRadius());
-    if (FAILED(hr)) {
-        PRINT_HR_ERROR_MESSAGE(SetValue, hr)
-        return;
+    if (m_D2DGaussianBlurEffect) {
+        const HRESULT hr = m_D2DGaussianBlurEffect->SetValue(D2D1_GAUSSIANBLUR_PROP_STANDARD_DEVIATION, q_ptr->GetBlurRadius());
+        if (FAILED(hr)) {
+            PRINT_HR_ERROR_MESSAGE(SetValue, hr)
+        }
     }
+
 #if 0
-    hr = m_D2DNoiseOpacityEffect->SetValue(D2D1_OPACITY_PROP_OPACITY, q_ptr->GetNoiseOpacity());
-    if (FAILED(hr)) {
-        PRINT_HR_ERROR_MESSAGE(SetValue, hr)
-        return;
+    if (m_D2DNoiseOpacityEffect) {
+        const HRESULT hr = m_D2DNoiseOpacityEffect->SetValue(D2D1_OPACITY_PROP_OPACITY, q_ptr->GetNoiseOpacity());
+        if (FAILED(hr)) {
+            PRINT_HR_ERROR_MESSAGE(SetValue, hr)
+        }
     }
+
 #endif
-    hr = m_D2DFallbackColorEffect->SetValue(D2D1_FLOOD_PROP_COLOR, WINRTCOLOR_TO_D2DCOLOR4F(q_ptr->GetFallbackColor()));
-    if (FAILED(hr)) {
-        PRINT_HR_ERROR_MESSAGE(SetValue, hr)
-        return;
+    if (m_D2DFallbackColorEffect) {
+        const HRESULT hr = m_D2DFallbackColorEffect->SetValue(D2D1_FLOOD_PROP_COLOR, WINRTCOLOR_TO_D2DCOLOR4F(q_ptr->GetFallbackColor()));
+        if (FAILED(hr)) {
+            PRINT_HR_ERROR_MESSAGE(SetValue, hr)
+        }
     }
 }
 

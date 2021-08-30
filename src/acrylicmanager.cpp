@@ -43,33 +43,34 @@ static std::unordered_map<LPCWSTR, AcrylicBrush *> g_brushList = {};
 
 [[nodiscard]] static inline BrushType PickUpTheAppropriateBrushType()
 {
-    const auto placeHolder = L"Auto";
     auto env_override_str = Utils::GetStringFromEnvironmentVariable(g_forceOverrideBrushEnvVar);
-    const bool env_system = ((_wcsicmp((env_override_str ? env_override_str : placeHolder), L"System") == 0)
-                             || Utils::GetBoolFromEnvironmentVariable(g_forceSystemBrushEnvVar));
-    const bool env_composition = ((_wcsicmp((env_override_str ? env_override_str : placeHolder), L"Composition") == 0)
-                                  || Utils::GetBoolFromEnvironmentVariable(g_forceCompositionBrushEnvVar));
-    const bool env_winui3 = ((_wcsicmp((env_override_str ? env_override_str : placeHolder), L"WinUI3") == 0)
-                             || Utils::GetBoolFromEnvironmentVariable(g_forceWinUI3BrushEnvVar));
-    const bool env_winui2 = ((_wcsicmp((env_override_str ? env_override_str : placeHolder), L"WinUI2") == 0)
-                             || Utils::GetBoolFromEnvironmentVariable(g_forceWinUI2BrushEnvVar));
-    const bool env_direct2d = ((_wcsicmp((env_override_str ? env_override_str : placeHolder), L"Direct2D") == 0)
-                               || Utils::GetBoolFromEnvironmentVariable(g_forceDirect2DBrushEnvVar));
-    const bool env_null = ((_wcsicmp((env_override_str ? env_override_str : placeHolder), L"Null") == 0)
-                           || Utils::GetBoolFromEnvironmentVariable(g_forceNullBrushEnvVar));
-    SAFE_FREE_CHARARRAY(env_override_str)
-    if (env_system) {
-        return BrushType::System;
-    } else if (env_composition) {
-        return BrushType::Composition;
-    } else if (env_winui3) {
-        return BrushType::WinUI3;
-    } else if (env_winui2) {
-        return BrushType::WinUI2;
-    } else if (env_direct2d) {
-        return BrushType::Direct2D;
-    } else if (env_null) {
-        return BrushType::Null;
+    if (env_override_str) {
+        const bool env_system = ((_wcsicmp(env_override_str, L"System") == 0)
+                                 || Utils::GetBoolFromEnvironmentVariable(g_forceSystemBrushEnvVar));
+        const bool env_composition = ((_wcsicmp(env_override_str, L"Composition") == 0)
+                                      || Utils::GetBoolFromEnvironmentVariable(g_forceCompositionBrushEnvVar));
+        const bool env_winui3 = ((_wcsicmp(env_override_str, L"WinUI3") == 0)
+                                 || Utils::GetBoolFromEnvironmentVariable(g_forceWinUI3BrushEnvVar));
+        const bool env_winui2 = ((_wcsicmp(env_override_str, L"WinUI2") == 0)
+                                 || Utils::GetBoolFromEnvironmentVariable(g_forceWinUI2BrushEnvVar));
+        const bool env_direct2d = ((_wcsicmp(env_override_str, L"Direct2D") == 0)
+                                   || Utils::GetBoolFromEnvironmentVariable(g_forceDirect2DBrushEnvVar));
+        const bool env_null = ((_wcsicmp(env_override_str, L"Null") == 0)
+                               || Utils::GetBoolFromEnvironmentVariable(g_forceNullBrushEnvVar));
+        SAFE_FREE_CHARARRAY(env_override_str)
+        if (env_system) {
+            return BrushType::System;
+        } else if (env_composition) {
+            return BrushType::Composition;
+        } else if (env_winui3) {
+            return BrushType::WinUI3;
+        } else if (env_winui2) {
+            return BrushType::WinUI2;
+        } else if (env_direct2d) {
+            return BrushType::Direct2D;
+        } else if (env_null) {
+            return BrushType::Null;
+        }
     }
     auto iniFilePath = new wchar_t[MAX_PATH];
     SecureZeroMemory(iniFilePath, sizeof(iniFilePath));
@@ -78,25 +79,27 @@ static std::unordered_map<LPCWSTR, AcrylicBrush *> g_brushList = {};
     SAFE_FREE_CHARARRAY(currentDirPath)
     auto ini_override_str = Utils::GetStringFromIniFile(iniFilePath, g_iniSectionName, g_iniKeyName);
     SAFE_FREE_CHARARRAY(iniFilePath)
-    const bool ini_system = (_wcsicmp((ini_override_str ? ini_override_str : placeHolder), L"System") == 0);
-    const bool ini_composition = (_wcsicmp((ini_override_str ? ini_override_str : placeHolder), L"Composition") == 0);
-    const bool ini_winui3 = (_wcsicmp((ini_override_str ? ini_override_str : placeHolder), L"WinUI3") == 0);
-    const bool ini_winui2 = (_wcsicmp((ini_override_str ? ini_override_str : placeHolder), L"WinUI2") == 0);
-    const bool ini_direct2d = (_wcsicmp((ini_override_str ? ini_override_str : placeHolder), L"Direct2D") == 0);
-    const bool ini_null = (_wcsicmp((ini_override_str ? ini_override_str : placeHolder), L"Null") == 0);
-    SAFE_FREE_CHARARRAY(ini_override_str)
-    if (ini_system) {
-        return BrushType::System;
-    } else if (ini_composition) {
-        return BrushType::Composition;
-    } else if (ini_winui3) {
-        return BrushType::WinUI3;
-    } else if (ini_winui2) {
-        return BrushType::WinUI2;
-    } else if (ini_direct2d) {
-        return BrushType::Direct2D;
-    } else if (ini_null) {
-        return BrushType::Null;
+    if (ini_override_str) {
+        const bool ini_system = (_wcsicmp(ini_override_str, L"System") == 0);
+        const bool ini_composition = (_wcsicmp(ini_override_str, L"Composition") == 0);
+        const bool ini_winui3 = (_wcsicmp(ini_override_str, L"WinUI3") == 0);
+        const bool ini_winui2 = (_wcsicmp(ini_override_str, L"WinUI2") == 0);
+        const bool ini_direct2d = (_wcsicmp(ini_override_str, L"Direct2D") == 0);
+        const bool ini_null = (_wcsicmp(ini_override_str, L"Null") == 0);
+        SAFE_FREE_CHARARRAY(ini_override_str)
+        if (ini_system) {
+            return BrushType::System;
+        } else if (ini_composition) {
+            return BrushType::Composition;
+        } else if (ini_winui3) {
+            return BrushType::WinUI3;
+        } else if (ini_winui2) {
+            return BrushType::WinUI2;
+        } else if (ini_direct2d) {
+            return BrushType::Direct2D;
+        } else if (ini_null) {
+            return BrushType::Null;
+        }
     }
     const bool os_system = Utils::IsWindows7OrGreater();
     const bool os_composition = Utils::IsWindows10OrGreater();

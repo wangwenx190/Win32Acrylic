@@ -33,12 +33,86 @@ static constexpr wchar_t g_forceWinUI3BrushEnvVar[] = L"ACRYLICMANAGER_FORCE_WIN
 static constexpr wchar_t g_forceWinUI2BrushEnvVar[] = L"ACRYLICMANAGER_FORCE_WINUI2_BRUSH";
 static constexpr wchar_t g_forceDirect2DBrushEnvVar[] = L"ACRYLICMANAGER_FORCE_DIRECT2D_BRUSH";
 static constexpr wchar_t g_forceNullBrushEnvVar[] = L"ACRYLICMANAGER_FORCE_NULL_BRUSH";
+static constexpr wchar_t g_forceOverrideBrushEnvVar[] = L"ACRYLICMANAGER_BRUSH_OVERRIDE";
+
+static constexpr wchar_t g_iniFileName[] = L".acrylicmanager.ini";
+static constexpr wchar_t g_iniSectionName[] = L"Settings";
+static constexpr wchar_t g_iniKeyName[] = L"Brush";
 
 static std::unordered_map<LPCWSTR, AcrylicBrush *> g_brushList = {};
 
 [[nodiscard]] static inline BrushType PickUpTheAppropriateBrushType()
 {
-    // todo
+    auto env_override_str = Utils::GetStringFromEnvironmentVariable(g_forceOverrideBrushEnvVar);
+    const bool env_system = ((_wcsicmp(env_override_str, L"System") == 0)
+                             || Utils::GetBoolFromEnvironmentVariable(g_forceSystemBrushEnvVar));
+    const bool env_composition = ((_wcsicmp(env_override_str, L"Composition") == 0)
+                                  || Utils::GetBoolFromEnvironmentVariable(g_forceCompositionBrushEnvVar));
+    const bool env_winui3 = ((_wcsicmp(env_override_str, L"WinUI3") == 0)
+                             || Utils::GetBoolFromEnvironmentVariable(g_forceWinUI3BrushEnvVar));
+    const bool env_winui2 = ((_wcsicmp(env_override_str, L"WinUI2") == 0)
+                             || Utils::GetBoolFromEnvironmentVariable(g_forceWinUI2BrushEnvVar));
+    const bool env_direct2d = ((_wcsicmp(env_override_str, L"Direct2D") == 0)
+                               || Utils::GetBoolFromEnvironmentVariable(g_forceDirect2DBrushEnvVar));
+    const bool env_null = ((_wcsicmp(env_override_str, L"Null") == 0)
+                           || Utils::GetBoolFromEnvironmentVariable(g_forceNullBrushEnvVar));
+    SAFE_FREE_CHARARRAY(env_override_str)
+    if (env_system) {
+        return BrushType::System;
+    } else if (env_composition) {
+        return BrushType::Composition;
+    } else if (env_winui3) {
+        return BrushType::WinUI3;
+    } else if (env_winui2) {
+        return BrushType::WinUI2;
+    } else if (env_direct2d) {
+        return BrushType::Direct2D;
+    } else if (env_null) {
+        return BrushType::Null;
+    }
+    auto iniFilePath = new wchar_t[MAX_PATH];
+    SecureZeroMemory(iniFilePath, sizeof(iniFilePath));
+    auto currentDirPath = Utils::GetCurrentDirectoryPath();
+    swprintf(iniFilePath, L"%s\\%s", currentDirPath, g_iniFileName);
+    SAFE_FREE_CHARARRAY(currentDirPath)
+    auto ini_override_str = Utils::GetStringFromIniFile(iniFilePath, g_iniSectionName, g_iniKeyName);
+    SAFE_FREE_CHARARRAY(iniFilePath)
+    const bool ini_system = (_wcsicmp(ini_override_str, L"System") == 0);
+    const bool ini_composition = (_wcsicmp(ini_override_str, L"Composition") == 0);
+    const bool ini_winui3 = (_wcsicmp(ini_override_str, L"WinUI3") == 0);
+    const bool ini_winui2 = (_wcsicmp(ini_override_str, L"WinUI2") == 0);
+    const bool ini_direct2d = (_wcsicmp(ini_override_str, L"Direct2D") == 0);
+    const bool ini_null = (_wcsicmp(ini_override_str, L"Null") == 0);
+    SAFE_FREE_CHARARRAY(ini_override_str)
+    if (ini_system) {
+        return BrushType::System;
+    } else if (ini_composition) {
+        return BrushType::Composition;
+    } else if (ini_winui3) {
+        return BrushType::WinUI3;
+    } else if (ini_winui2) {
+        return BrushType::WinUI2;
+    } else if (ini_direct2d) {
+        return BrushType::Direct2D;
+    } else if (ini_null) {
+        return BrushType::Null;
+    }
+    const bool os_system = Utils::IsWindows7OrGreater();
+    const bool os_composition = Utils::IsWindows10OrGreater();
+    const bool os_winui3 = Utils::IsWindows10RS5OrGreater();
+    const bool os_winui2 = Utils::IsWindows10RS2OrGreater();
+    const bool os_direct2d = Utils::IsWindows8OrGreater();
+    if (os_system) {
+        return BrushType::System;
+    } else if (os_composition) {
+        return BrushType::Composition;
+    } else if (os_winui3) {
+        return BrushType::WinUI3;
+    } else if (os_winui2) {
+        return BrushType::WinUI2;
+    } else if (os_direct2d) {
+        return BrushType::Direct2D;
+    }
     return BrushType::Null;
 }
 

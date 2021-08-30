@@ -26,9 +26,7 @@
 #include <acrylicmanager.h>
 #include <cstdio>
 
-#ifndef MAX_WINDOW_COUNT
-#define MAX_WINDOW_COUNT 1
-#endif
+static constexpr int max_window_count = 1;
 
 static inline void PrintWindowInformation(const int index, LPCWSTR id)
 {
@@ -54,9 +52,9 @@ wWinMain(
 
     int result = -1;
 
-    for (int i = 0; i != MAX_WINDOW_COUNT; ++i) {
+    for (int i = 0; i != max_window_count; ++i) {
         LPCWSTR id = nullptr;
-        if (!am_CreateWindow(BrushType::Direct2D, &id)) {
+        if (!am_CreateWindow(BrushType::Auto, &id)) {
             OutputDebugStringW(L"Failed to create the acrylic window.");
             continue;
         }
@@ -71,8 +69,6 @@ wWinMain(
         }
         result = am_GetMessageLoopResult(id);
     }
-
-    // todo: cleanup
 
     return result;
 }

@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.21.1 FATAL_ERROR)
 
-project(AcrylicManager VERSION 1.0.0.0 LANGUAGES CXX)
+project(AcrylicManager LANGUAGES CXX)
 
 option(BUILD_DEMO "Build demo application." ON)
 

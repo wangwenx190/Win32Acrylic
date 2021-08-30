@@ -1,8 +1,5 @@
 enable_language(RC)
 
-set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>" CACHE STRING "" FORCE)
-set(CMAKE_CXX_STANDARD_LIBRARIES "kernel32.lib" CACHE STRING "" FORCE)
-
 set(SOURCES
     acrylicmanager.rc
     acrylicmanager_global.h
@@ -38,6 +35,15 @@ set(SOURCES
 add_library(${PROJECT_NAME} ${SOURCES})
 add_library(wangwenx190::${PROJECT_NAME} ALIAS ${PROJECT_NAME})
 
+set(_filename_suffix)
+if("${CMAKE_SIZEOF_VOID_P}" STREQUAL "8")
+    set(_filename_suffix 64)
+endif()
+set_target_properties(${PROJECT_NAME} PROPERTIES
+    OUTPUT_NAME ${PROJECT_NAME}${_filename_suffix}
+)
+unset(_filename_suffix)
+
 target_include_directories(${PROJECT_NAME} PUBLIC
     "$<BUILD_INTERFACE:${CMAKE_CURRENT_LIST_DIR}>"
 )
@@ -62,14 +68,4 @@ if(NOT BUILD_SHARED_LIBS)
     target_compile_definitions(${PROJECT_NAME} PRIVATE
         ACRYLICMANAGER_STATIC
     )
-endif()
-
-if(MSVC)
-    target_compile_options(${PROJECT_NAME} PRIVATE /utf-8 /await) # TODO: /await:strict /permissive-
-    if(CMAKE_BUILD_TYPE STREQUAL "Debug")
-        target_compile_options(${PROJECT_NAME} PRIVATE /JMC)
-    else()
-        target_compile_options(${PROJECT_NAME} PRIVATE /guard:cf)
-        target_link_options(${PROJECT_NAME} PRIVATE /GUARD:CF)
-    endif()
 endif()

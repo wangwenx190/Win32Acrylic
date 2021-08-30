@@ -229,6 +229,7 @@ AcrylicBrushDirect2DPrivate::~AcrylicBrushDirect2DPrivate()
 
 void AcrylicBrushDirect2DPrivate::CleanupResources(const HWND hWnd) noexcept
 {
+    CoUninitialize();
     SAFE_FREE_CHARARRAY(m_wallpaperFilePath)
 }
 

@@ -109,8 +109,8 @@ del /f /s /q "%_bin_dir%\*.manifest"
 copy /y "%~dp0README.md" "%_bin_dir%"
 set _license_dir=%_bin_dir%\licenses
 md "%_license_dir%"
-copy /y "%~dp0LICENSE" "%_license_dir%\AcrylicManager.txt"
-copy /y "%~dp0licenses\*" "%_license_dir%"
+copy /y "%~dp0..\LICENSE" "%_license_dir%\AcrylicManager.txt"
+copy /y "%~dp0..\licenses\*" "%_license_dir%"
 set _new_bin_name=AcrylicManager
 ren bin %_new_bin_name%
 set PATH=%ProgramFiles%\7-Zip;%PATH%

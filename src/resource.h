@@ -24,10 +24,14 @@
 
 #pragma once
 
-#ifndef IDI_DEFAULTICON
-#define IDI_DEFAULTICON 107
+#ifndef IDI_DEFAULT_ICON
+#define IDI_DEFAULT_ICON 107
 #endif
 
-#ifndef IDI_DEFAULTICONSM
-#define IDI_DEFAULTICONSM 108
+#ifndef IDI_DEFAULT_ICON_SMALL
+#define IDI_DEFAULT_ICON_SMALL 108
+#endif
+
+#ifndef IDB_NOISE_BITMAP
+#define IDB_NOISE_BITMAP 117
 #endif

@@ -23,6 +23,7 @@
  */
 
 #include "acrylicbrush_direct2d.h"
+#include "resource.h"
 #include "customframe.h"
 #include "utils.h"
 #include <DwmApi.h>
@@ -59,6 +60,7 @@ D2D1CreateFactory(
 )
 {
     static bool tried = false;
+    // D2D1CreateFactory() has some overloads so we'd better use its signature directly.
     using sig = HRESULT(WINAPI *)(D2D1_FACTORY_TYPE, REFIID, const D2D1_FACTORY_OPTIONS *, void **);
     static sig func = nullptr;
     if (!func) {
@@ -142,7 +144,7 @@ protected:
     void OnWallpaperChanged(const HWND hWnd) noexcept override;
 
 private:
-    [[nodiscard]] bool InitializeWIC();
+    [[nodiscard]] bool InitializeWindowsImagingComponent();
     [[nodiscard]] bool EnsureWallpaperBrush();
     [[nodiscard]] bool EnsureNoiseBrush();
     [[nodiscard]] bool PrepareEffects_Luminosity(ID2D1Effect **output);
@@ -166,7 +168,7 @@ private:
     D2D1_BITMAP_PROPERTIES1 m_D2DBitmapProperties = {};
 
     Microsoft::WRL::ComPtr<ID2D1Effect> m_D2DWallpaperBitmapSourceEffect = nullptr;
-    //Microsoft::WRL::ComPtr<ID2D1Effect> m_D2DNoiseBitmapSourceEffect = nullptr;
+    Microsoft::WRL::ComPtr<ID2D1Effect> m_D2DNoiseBitmapSourceEffect = nullptr;
 
     Microsoft::WRL::ComPtr<ID2D1Effect> m_D2DTintColorEffect = nullptr;
     Microsoft::WRL::ComPtr<ID2D1Effect> m_D2DFallbackColorEffect = nullptr;
@@ -181,13 +183,11 @@ private:
     Microsoft::WRL::ComPtr<ID2D1Effect> m_D2DExclusionBlendEffectInner = nullptr;
     Microsoft::WRL::ComPtr<ID2D1Effect> m_D2DExclusionCompositeEffect = nullptr;
 
-#if 0
     Microsoft::WRL::ComPtr<ID2D1Effect> m_D2DNoiseBorderEffect = nullptr;
     Microsoft::WRL::ComPtr<ID2D1Effect> m_D2DNoiseOpacityEffect = nullptr;
     Microsoft::WRL::ComPtr<ID2D1Effect> m_D2DNoiseBlendEffectOuter = nullptr;
-#endif
 
-    //Microsoft::WRL::ComPtr<ID2D1Effect> m_D2DFadeInOutEffect = nullptr;
+    Microsoft::WRL::ComPtr<ID2D1Effect> m_D2DFadeInOutEffect = nullptr;
     Microsoft::WRL::ComPtr<ID2D1Effect> m_D2DFinalBrushEffect = nullptr;
 
     Microsoft::WRL::ComPtr<IWICImagingFactory> m_WICFactory = nullptr;
@@ -198,13 +198,11 @@ private:
     Microsoft::WRL::ComPtr<IWICFormatConverter> m_WICWallpaperConverter = nullptr;
     Microsoft::WRL::ComPtr<IWICBitmapScaler> m_WICWallpaperScaler = nullptr;
 
-#if 0
     Microsoft::WRL::ComPtr<IWICBitmapDecoder> m_WICNoiseDecoder = nullptr;
     Microsoft::WRL::ComPtr<IWICBitmapFrameDecode> m_WICNoiseFrame = nullptr;
     Microsoft::WRL::ComPtr<IWICStream> m_WICNoiseStream = nullptr;
     Microsoft::WRL::ComPtr<IWICFormatConverter> m_WICNoiseConverter = nullptr;
     Microsoft::WRL::ComPtr<IWICBitmapScaler> m_WICNoiseScaler = nullptr;
-#endif
 
     Microsoft::WRL::ComPtr<ID3D11Device> m_D3D11Device = nullptr;
     Microsoft::WRL::ComPtr<ID3D11DeviceContext> m_D3D11Context = nullptr;
@@ -265,14 +263,14 @@ HWND AcrylicBrushDirect2DPrivate::GetWindowHandle() const
     return GetHandle();
 }
 
-bool AcrylicBrushDirect2DPrivate::InitializeWIC()
+bool AcrylicBrushDirect2DPrivate::InitializeWindowsImagingComponent()
 {
     HRESULT hr = CoInitialize(nullptr);
     if (FAILED(hr)) {
         PRINT_HR_ERROR_MESSAGE(CoInitialize, hr)
         return false;
     }
-    hr = CoCreateInstance(CLSID_WICImagingFactory1, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&m_WICFactory));
+    hr = CoCreateInstance(CLSID_WICImagingFactory2, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&m_WICFactory));
     if (FAILED(hr)) {
         CoUninitialize();
         PRINT_HR_ERROR_MESSAGE(CoCreateInstance, hr)
@@ -283,13 +281,13 @@ bool AcrylicBrushDirect2DPrivate::InitializeWIC()
 
 bool AcrylicBrushDirect2DPrivate::EnsureWallpaperBrush()
 {
-    if (!InitializeWIC()) {
+    if (!InitializeWindowsImagingComponent()) {
         CoUninitialize();
-        OutputDebugStringW(L"Failed to initialize WIC.");
+        OutputDebugStringW(L"Failed to initialize Windows Imaging Component.");
         return false;
     }
     HRESULT hr = m_WICFactory->CreateDecoderFromFilename(m_wallpaperFilePath, nullptr, GENERIC_READ,
-                                                 WICDecodeMetadataCacheOnLoad, &m_WICWallpaperDecoder);
+                                                         WICDecodeMetadataCacheOnLoad, &m_WICWallpaperDecoder);
     if (FAILED(hr)) {
         CoUninitialize();
         PRINT_HR_ERROR_MESSAGE(CreateDecoderFromFilename, hr)
@@ -308,7 +306,7 @@ bool AcrylicBrushDirect2DPrivate::EnsureWallpaperBrush()
         return false;
     }
     hr = m_WICWallpaperConverter->Initialize(m_WICWallpaperFrame.Get(), GUID_WICPixelFormat32bppPBGRA,
-                WICBitmapDitherTypeNone, nullptr, 0.0f, WICBitmapPaletteTypeMedianCut);
+                                             WICBitmapDitherTypeNone, nullptr, 0.0f, WICBitmapPaletteTypeMedianCut);
     if (FAILED(hr)) {
         CoUninitialize();
         PRINT_HR_ERROR_MESSAGE(Initialize, hr)
@@ -320,15 +318,31 @@ bool AcrylicBrushDirect2DPrivate::EnsureWallpaperBrush()
 
 bool AcrylicBrushDirect2DPrivate::EnsureNoiseBrush()
 {
-#if 0
-    if (!InitializeWIC()) {
-        CoUninitialize();
-        OutputDebugStringW(L"Failed to initialize WIC.");
+    LPVOID noiseResourceData = nullptr;
+    DWORD noiseResourceDataSize = 0;
+    if (!Utils::LoadResourceData(MAKEINTRESOURCEW(IDB_NOISE_BITMAP), L"PNG", &noiseResourceData, &noiseResourceDataSize)) {
+        OutputDebugStringW(L"Failed to load the noise asset from resource.");
         return false;
     }
-    // fixme: read from resource instead of harddisk.
-    HRESULT hr = m_WICFactory->CreateDecoderFromFilename(m_noiseFilePath, nullptr, GENERIC_READ,
-                                                 WICDecodeMetadataCacheOnLoad, &m_WICNoiseDecoder);
+    if (!InitializeWindowsImagingComponent()) {
+        CoUninitialize();
+        OutputDebugStringW(L"Failed to initialize Windows Imaging Component.");
+        return false;
+    }
+    HRESULT hr = m_WICFactory->CreateStream(m_WICNoiseStream.GetAddressOf());
+    if (FAILED(hr)) {
+        CoUninitialize();
+        PRINT_HR_ERROR_MESSAGE(CreateStream, hr)
+        return false;
+    }
+    hr = m_WICNoiseStream->InitializeFromMemory(static_cast<WICInProcPointer>(noiseResourceData), noiseResourceDataSize);
+    if (FAILED(hr)) {
+        CoUninitialize();
+        PRINT_HR_ERROR_MESSAGE(InitializeFromMemory, hr)
+        return false;
+    }
+    hr = m_WICFactory->CreateDecoderFromStream(m_WICNoiseStream.Get(), nullptr,
+                                               WICDecodeMetadataCacheOnLoad, &m_WICNoiseDecoder);
     if (FAILED(hr)) {
         CoUninitialize();
         PRINT_HR_ERROR_MESSAGE(CreateDecoderFromFilename, hr)
@@ -347,7 +361,7 @@ bool AcrylicBrushDirect2DPrivate::EnsureNoiseBrush()
         return false;
     }
     hr = m_WICNoiseConverter->Initialize(m_WICNoiseFrame.Get(), GUID_WICPixelFormat32bppPBGRA,
-                WICBitmapDitherTypeNone, nullptr, 0.0f, WICBitmapPaletteTypeMedianCut);
+                                         WICBitmapDitherTypeNone, nullptr, 0.0f, WICBitmapPaletteTypeMedianCut);
     if (FAILED(hr)) {
         CoUninitialize();
         PRINT_HR_ERROR_MESSAGE(Initialize, hr)
@@ -355,9 +369,6 @@ bool AcrylicBrushDirect2DPrivate::EnsureNoiseBrush()
     }
     CoUninitialize();
     return true;
-#else
-    return true;
-#endif
 }
 
 bool AcrylicBrushDirect2DPrivate::PrepareEffects_Luminosity(ID2D1Effect **output)
@@ -532,7 +543,6 @@ bool AcrylicBrushDirect2DPrivate::CreateEffects(ID2D1Effect **output)
         }
     }
 
-#if 0
     // Create noise with alpha and wrap:
     // Noise image BorderEffect (infinitely tiles noise image)
     hr = m_D2DContext->CreateEffect(am_CLSID_D2D1Border, m_D2DNoiseBorderEffect.GetAddressOf());
@@ -593,15 +603,10 @@ bool AcrylicBrushDirect2DPrivate::CreateEffects(ID2D1Effect **output)
     // fixme: check which one is destination (index 0), which one is source (index 1)
     m_D2DFadeInOutEffect->SetInputEffect(0, m_D2DNoiseBlendEffectOuter.Get());
     m_D2DFadeInOutEffect->SetInputEffect(1, m_D2DFallbackColorEffect.Get());
-#endif
 
     ReloadBrushParameters(); // <-- All visual effect parameters are setted here.
 
-#if 0
     *output = m_D2DFadeInOutEffect.Get();
-#else
-    *output = tintOutput;
-#endif
 
     return true;
 }
@@ -781,16 +786,12 @@ void AcrylicBrushDirect2DPrivate::ReloadBrushParameters()
             PRINT_HR_ERROR_MESSAGE(SetValue, hr)
         }
     }
-
-#if 0
     if (m_D2DNoiseOpacityEffect) {
         const HRESULT hr = m_D2DNoiseOpacityEffect->SetValue(D2D1_OPACITY_PROP_OPACITY, q_ptr->GetNoiseOpacity());
         if (FAILED(hr)) {
             PRINT_HR_ERROR_MESSAGE(SetValue, hr)
         }
     }
-
-#endif
     if (m_D2DFallbackColorEffect) {
         const HRESULT hr = m_D2DFallbackColorEffect->SetValue(D2D1_FLOOD_PROP_COLOR, WINRTCOLOR_TO_D2DCOLOR4F(q_ptr->GetFallbackColor()));
         if (FAILED(hr)) {

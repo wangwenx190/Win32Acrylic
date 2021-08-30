@@ -73,5 +73,6 @@ namespace Utils
 [[nodiscard]] bool IsCompositionEnabled();
 [[nodiscard]] bool SetWindowExcludedFromLivePreview(const HWND hWnd, const bool enable);
 [[nodiscard]] bool RemoveWindowFromTaskListAndTaskBar(const HWND hWnd);
+[[nodiscard]] bool LoadResourceData(LPCWSTR name, LPCWSTR type, void **data, DWORD *dataSize);
 
 }

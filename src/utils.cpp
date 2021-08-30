@@ -1203,3 +1203,33 @@ bool Utils::RemoveWindowFromTaskListAndTaskBar(const HWND hWnd)
     // todo
     return false;
 }
+
+bool Utils::LoadResourceData(LPCWSTR name, LPCWSTR type, void **data, DWORD *dataSize)
+{
+    if (!name || !type || !data || !dataSize) {
+        return false;
+    }
+    const HRSRC resHandle = FindResourceW(GET_CURRENT_INSTANCE, name, type);
+    if (!resHandle) {
+        PRINT_WIN32_ERROR_MESSAGE(FindResourceW)
+        return false;
+    }
+    const DWORD resDataSize = SizeofResource(GET_CURRENT_INSTANCE, resHandle);
+    if (resDataSize == 0) {
+        PRINT_WIN32_ERROR_MESSAGE(SizeofResource)
+        return false;
+    }
+    const HGLOBAL resDataHandle = LoadResource(GET_CURRENT_INSTANCE, resHandle);
+    if (!resDataHandle) {
+        PRINT_WIN32_ERROR_MESSAGE(LoadResource)
+        return false;
+    }
+    const LPVOID resData = LockResource(resDataHandle);
+    if (!resData) {
+        PRINT_WIN32_ERROR_MESSAGE(LockResource)
+        return false;
+    }
+    *data = resData;
+    *dataSize = resDataSize;
+    return true;
+}

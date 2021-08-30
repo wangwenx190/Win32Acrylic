@@ -76,8 +76,8 @@ LPCWSTR CustomFrame::__RegisterWindowClass(const WNDPROC wndProc) noexcept
     wcex.lpfnWndProc = wndProc;
     wcex.hInstance = GET_CURRENT_INSTANCE;
     wcex.hCursor = LoadCursorW(nullptr, IDC_ARROW);
-    wcex.hIcon = LoadIconW(GET_CURRENT_INSTANCE, MAKEINTRESOURCEW(IDI_DEFAULTICON));
-    wcex.hIconSm = LoadIconW(GET_CURRENT_INSTANCE, MAKEINTRESOURCEW(IDI_DEFAULTICONSM));
+    wcex.hIcon = LoadIconW(GET_CURRENT_INSTANCE, MAKEINTRESOURCEW(IDI_DEFAULT_ICON));
+    wcex.hIconSm = LoadIconW(GET_CURRENT_INSTANCE, MAKEINTRESOURCEW(IDI_DEFAULT_ICON_SMALL));
     wcex.hbrBackground = reinterpret_cast<HBRUSH>(COLOR_WINDOW + 1);
     wcex.lpszClassName = className;
     if (RegisterClassExW(&wcex) == 0) {

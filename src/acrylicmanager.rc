@@ -25,8 +25,10 @@
 #include <Windows.h>
 #include "resource.h"
 
-IDI_DEFAULTICON ICON "assets\\defaulticon.ico"
-IDI_DEFAULTICONSM ICON "assets\\defaulticonsm.ico"
+IDI_DEFAULT_ICON ICON "assets\\icon.ico"
+IDI_DEFAULT_ICON_SMALL ICON "assets\\smallicon.ico"
+
+IDB_NOISE_BITMAP PNG "assets\\noise_256x256.png"
 
 #ifndef ACRYLICMANAGER_STATIC
 

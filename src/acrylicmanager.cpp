@@ -43,18 +43,19 @@ static std::unordered_map<LPCWSTR, AcrylicBrush *> g_brushList = {};
 
 [[nodiscard]] static inline BrushType PickUpTheAppropriateBrushType()
 {
+    const auto placeHolder = L"Auto";
     auto env_override_str = Utils::GetStringFromEnvironmentVariable(g_forceOverrideBrushEnvVar);
-    const bool env_system = ((_wcsicmp(env_override_str, L"System") == 0)
+    const bool env_system = ((_wcsicmp((env_override_str ? env_override_str : placeHolder), L"System") == 0)
                              || Utils::GetBoolFromEnvironmentVariable(g_forceSystemBrushEnvVar));
-    const bool env_composition = ((_wcsicmp(env_override_str, L"Composition") == 0)
+    const bool env_composition = ((_wcsicmp((env_override_str ? env_override_str : placeHolder), L"Composition") == 0)
                                   || Utils::GetBoolFromEnvironmentVariable(g_forceCompositionBrushEnvVar));
-    const bool env_winui3 = ((_wcsicmp(env_override_str, L"WinUI3") == 0)
+    const bool env_winui3 = ((_wcsicmp((env_override_str ? env_override_str : placeHolder), L"WinUI3") == 0)
                              || Utils::GetBoolFromEnvironmentVariable(g_forceWinUI3BrushEnvVar));
-    const bool env_winui2 = ((_wcsicmp(env_override_str, L"WinUI2") == 0)
+    const bool env_winui2 = ((_wcsicmp((env_override_str ? env_override_str : placeHolder), L"WinUI2") == 0)
                              || Utils::GetBoolFromEnvironmentVariable(g_forceWinUI2BrushEnvVar));
-    const bool env_direct2d = ((_wcsicmp(env_override_str, L"Direct2D") == 0)
+    const bool env_direct2d = ((_wcsicmp((env_override_str ? env_override_str : placeHolder), L"Direct2D") == 0)
                                || Utils::GetBoolFromEnvironmentVariable(g_forceDirect2DBrushEnvVar));
-    const bool env_null = ((_wcsicmp(env_override_str, L"Null") == 0)
+    const bool env_null = ((_wcsicmp((env_override_str ? env_override_str : placeHolder), L"Null") == 0)
                            || Utils::GetBoolFromEnvironmentVariable(g_forceNullBrushEnvVar));
     SAFE_FREE_CHARARRAY(env_override_str)
     if (env_system) {
@@ -77,12 +78,12 @@ static std::unordered_map<LPCWSTR, AcrylicBrush *> g_brushList = {};
     SAFE_FREE_CHARARRAY(currentDirPath)
     auto ini_override_str = Utils::GetStringFromIniFile(iniFilePath, g_iniSectionName, g_iniKeyName);
     SAFE_FREE_CHARARRAY(iniFilePath)
-    const bool ini_system = (_wcsicmp(ini_override_str, L"System") == 0);
-    const bool ini_composition = (_wcsicmp(ini_override_str, L"Composition") == 0);
-    const bool ini_winui3 = (_wcsicmp(ini_override_str, L"WinUI3") == 0);
-    const bool ini_winui2 = (_wcsicmp(ini_override_str, L"WinUI2") == 0);
-    const bool ini_direct2d = (_wcsicmp(ini_override_str, L"Direct2D") == 0);
-    const bool ini_null = (_wcsicmp(ini_override_str, L"Null") == 0);
+    const bool ini_system = (_wcsicmp((ini_override_str ? ini_override_str : placeHolder), L"System") == 0);
+    const bool ini_composition = (_wcsicmp((ini_override_str ? ini_override_str : placeHolder), L"Composition") == 0);
+    const bool ini_winui3 = (_wcsicmp((ini_override_str ? ini_override_str : placeHolder), L"WinUI3") == 0);
+    const bool ini_winui2 = (_wcsicmp((ini_override_str ? ini_override_str : placeHolder), L"WinUI2") == 0);
+    const bool ini_direct2d = (_wcsicmp((ini_override_str ? ini_override_str : placeHolder), L"Direct2D") == 0);
+    const bool ini_null = (_wcsicmp((ini_override_str ? ini_override_str : placeHolder), L"Null") == 0);
     SAFE_FREE_CHARARRAY(ini_override_str)
     if (ini_system) {
         return BrushType::System;

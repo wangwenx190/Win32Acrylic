@@ -313,6 +313,16 @@ bool AcrylicBrushDirect2DPrivate::EnsureWallpaperBrush()
         return false;
     }
     CoUninitialize();
+    hr = m_D2DContext->CreateEffect(am_CLSID_D2D1BitmapSource, m_D2DWallpaperBitmapSourceEffect.GetAddressOf());
+    if (FAILED(hr)) {
+        PRINT_HR_ERROR_MESSAGE(CreateEffect, hr)
+        return false;
+    }
+    hr = m_D2DWallpaperBitmapSourceEffect->SetValue(D2D1_BITMAPSOURCE_PROP_WIC_BITMAP_SOURCE, m_WICWallpaperConverter.Get());
+    if (FAILED(hr)) {
+        PRINT_HR_ERROR_MESSAGE(SetValue, hr)
+        return false;
+    }
     return true;
 }
 
@@ -368,6 +378,16 @@ bool AcrylicBrushDirect2DPrivate::EnsureNoiseBrush()
         return false;
     }
     CoUninitialize();
+    hr = m_D2DContext->CreateEffect(am_CLSID_D2D1BitmapSource, m_D2DNoiseBitmapSourceEffect.GetAddressOf());
+    if (FAILED(hr)) {
+        PRINT_HR_ERROR_MESSAGE(CreateEffect, hr)
+        return false;
+    }
+    hr = m_D2DNoiseBitmapSourceEffect->SetValue(D2D1_BITMAPSOURCE_PROP_WIC_BITMAP_SOURCE, m_WICNoiseConverter.Get());
+    if (FAILED(hr)) {
+        PRINT_HR_ERROR_MESSAGE(SetValue, hr)
+        return false;
+    }
     return true;
 }
 
@@ -494,21 +514,7 @@ bool AcrylicBrushDirect2DPrivate::CreateEffects(ID2D1Effect **output)
         return false;
     }
 
-    HRESULT hr = m_D2DContext->CreateEffect(am_CLSID_D2D1BitmapSource, m_D2DWallpaperBitmapSourceEffect.GetAddressOf());
-    if (FAILED(hr)) {
-        PRINT_HR_ERROR_MESSAGE(CreateEffect, hr)
-        return false;
-    }
-#if 0
-    hr = m_D2DWallpaperBitmapSourceEffect->SetValue(D2D1_BITMAPSOURCE_PROP_WIC_BITMAP_SOURCE, m_WICWallpaperConverter.Get());
-#else
-    hr = m_D2DWallpaperBitmapSourceEffect->SetValue(D2D1_BITMAPSOURCE_PROP_WIC_BITMAP_SOURCE, nullptr);
-#endif
-    if (FAILED(hr)) {
-        PRINT_HR_ERROR_MESSAGE(SetValue, hr)
-        return false;
-    }
-    hr = m_D2DContext->CreateEffect(am_CLSID_D2D1Flood, m_D2DTintColorEffect.GetAddressOf());
+    HRESULT hr = m_D2DContext->CreateEffect(am_CLSID_D2D1Flood, m_D2DTintColorEffect.GetAddressOf());
     if (FAILED(hr)) {
         PRINT_HR_ERROR_MESSAGE(CreateEffect, hr)
         return false;
@@ -530,14 +536,14 @@ bool AcrylicBrushDirect2DPrivate::CreateEffects(ID2D1Effect **output)
     }
     m_D2DGaussianBlurEffect->SetInputEffect(0, m_D2DWallpaperBitmapSourceEffect.Get());
 
-    ID2D1Effect *tintOutput = nullptr;
+    Microsoft::WRL::ComPtr<ID2D1Effect> tintOutput = nullptr;
     if (Utils::IsWindows1019H1OrGreater()) {
-        if (!PrepareEffects_Luminosity(&tintOutput)) {
+        if (!PrepareEffects_Luminosity(tintOutput.GetAddressOf())) {
             OutputDebugStringW(L"Failed to create the luminosity based D2D effects.");
             return false;
         }
     } else {
-        if (!PrepareEffects_Legacy(&tintOutput)) {
+        if (!PrepareEffects_Legacy(tintOutput.GetAddressOf())) {
             OutputDebugStringW(L"Failed to create the legacy D2D effects.");
             return false;
         }
@@ -580,7 +586,7 @@ bool AcrylicBrushDirect2DPrivate::CreateEffects(ID2D1Effect **output)
         PRINT_HR_ERROR_MESSAGE(SetValue, hr)
         return false;
     }
-    m_D2DNoiseBlendEffectOuter->SetInputEffect(0, tintOutput);
+    m_D2DNoiseBlendEffectOuter->SetInputEffect(0, tintOutput.Get());
     m_D2DNoiseBlendEffectOuter->SetInputEffect(1, m_D2DNoiseOpacityEffect.Get());
 
     // Fallback color

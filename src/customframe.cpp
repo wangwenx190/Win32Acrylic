@@ -54,10 +54,6 @@ static constexpr int g_autoHideTaskbarThickness = 2;
     return true;
 }
 
-CustomFrame::CustomFrame() = default;
-
-CustomFrame::~CustomFrame() = default;
-
 LPCWSTR CustomFrame::__RegisterWindowClass(const WNDPROC wndProc) noexcept
 {
     if (!Utils::IsCompositionEnabled()) {
@@ -160,9 +156,9 @@ bool CustomFrame::__IsImmersiveColorChanged(const WPARAM wParam, const LPARAM lP
     return ((wParam == 0) && (_wcsicmp(reinterpret_cast<LPCWSTR>(lParam), L"ImmersiveColorSet") == 0));
 }
 
-bool CustomFrame::FilterMessage(const MSG *msg) const noexcept
+CustomFrame *CustomFrame::GetThisFromHandle(const HWND hWnd) noexcept
 {
-    return false;
+    return (hWnd ? reinterpret_cast<CustomFrame *>(GetWindowLongPtrW(hWnd, GWLP_USERDATA)) : nullptr);
 }
 
 void CustomFrame::CleanupResources(const HWND hWnd) noexcept
@@ -177,14 +173,12 @@ void CustomFrame::OnWallpaperChanged(const HWND hWnd) noexcept
 {
 }
 
-int CustomFrame::MessageLoop() const noexcept
+int CustomFrame::MessageLoop() noexcept
 {
     MSG msg = {};
     while (GetMessageW(&msg, nullptr, 0, 0) != FALSE) {
-        if (!FilterMessage(&msg)) {
-            TranslateMessage(&msg);
-            DispatchMessageW(&msg);
-        }
+        TranslateMessage(&msg);
+        DispatchMessageW(&msg);
     }
     return static_cast<int>(msg.wParam);
 }
@@ -600,7 +594,7 @@ void CustomFrame::OnClose(const HWND hWnd) noexcept
 {
 }
 
-void CustomFrame::OnDestroy() noexcept
+void CustomFrame::OnDestroy(const HWND hWnd) noexcept
 {
     PostQuitMessage(0);
 }

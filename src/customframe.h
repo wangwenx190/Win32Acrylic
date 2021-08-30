@@ -31,11 +31,11 @@ class CustomFrame
     ACRYLICMANAGER_DISABLE_COPY_MOVE(CustomFrame)
 
 public:
-    explicit CustomFrame();
-    virtual ~CustomFrame();
+    explicit CustomFrame() = default;
+    virtual ~CustomFrame() = default;
 
     [[nodiscard]] HWND GetHandle() const noexcept;
-    [[nodiscard]] int MessageLoop() const noexcept;
+    [[nodiscard]] static int MessageLoop() noexcept;
 
 protected:
     [[nodiscard]] static LPCWSTR __RegisterWindowClass(const WNDPROC wndProc) noexcept;
@@ -46,7 +46,8 @@ protected:
     void __CleanupResources() noexcept; // Internal cleanup
     [[nodiscard]] static bool __IsImmersiveColorChanged(const WPARAM wParam, const LPARAM lParam) noexcept;
 
-    [[nodiscard]] virtual bool FilterMessage(const MSG *msg) const noexcept;
+    [[nodiscard]] static CustomFrame *GetThisFromHandle(const HWND hWnd) noexcept;
+
     virtual void CleanupResources(const HWND hWnd) noexcept; // User cleanup
     virtual void OnThemeChanged(const HWND hWnd) noexcept;
     virtual void OnWallpaperChanged(const HWND hWnd) noexcept;
@@ -63,23 +64,59 @@ protected:
     static void OnDwmCompositionChanged() noexcept;
     static void OnDPIChanged(const HWND hWnd, const WPARAM wParam, const LPARAM lParam, UINT *newDpi) noexcept;
     static void OnClose(const HWND hWnd) noexcept;
-    static void OnDestroy() noexcept;
+    static void OnDestroy(const HWND hWnd) noexcept;
 
 private:
     LPWSTR m_windowClass = nullptr;
     HWND m_window = nullptr;
 };
 
-template <typename T>
-struct CustomFrameT : public CustomFrame
+template<typename T>
+class CustomFrameT : public CustomFrame
 {
+    ACRYLICMANAGER_DISABLE_COPY_MOVE(CustomFrameT)
+
 public:
+    explicit CustomFrameT() = default;
+    virtual ~CustomFrameT() = default;
+
     [[nodiscard]] UINT GetCurrentDpi() const noexcept
     {
         return m_dpi;
     }
 
-    [[nodiscard]] LRESULT MessageHandler(UINT message, WPARAM wParam, LPARAM lParam) noexcept
+    [[nodiscard]] virtual LRESULT MessageHandler(UINT message, WPARAM wParam, LPARAM lParam) noexcept
+    {
+        return DefaultMessageHandler(message, wParam, lParam);
+    }
+
+protected:
+    using base_type = CustomFrameT<T>;
+
+    [[nodiscard]] static T *GetThatFromHandle(const HWND hWnd) noexcept
+    {
+        return (hWnd ? static_cast<T *>(GetThisFromHandle(hWnd)) : nullptr);
+    }
+
+    [[nodiscard]] bool CreateThisWindow() noexcept
+    {
+        LPCWSTR className = __RegisterWindowClass(WindowProc);
+        if (!className) {
+            OutputDebugStringW(L"Failed to register window class.");
+            return false;
+        }
+        __SetWindowClassName(className);
+        const HWND window = __CreateWindow(className, WS_OVERLAPPEDWINDOW, 0L, nullptr, this);
+        if (!window) {
+            OutputDebugStringW(L"Failed to create window.");
+            // todo: unreg window class
+            return false;
+        }
+        __SetWindowHandle(window);
+        return true;
+    }
+
+    [[nodiscard]] LRESULT DefaultMessageHandler(UINT message, WPARAM wParam, LPARAM lParam) noexcept
     {
         const HWND hWnd = GetHandle();
         switch (message) {
@@ -124,38 +161,12 @@ public:
             CleanupResources(hWnd); // User cleanup
         } break;
         case WM_DESTROY:
-            OnDestroy();
+            OnDestroy(hWnd);
             break;
         default:
             break;
         }
         return DefWindowProcW(hWnd, message, wParam, lParam);
-    }
-
-protected:
-    using base_type = CustomFrameT<T>;
-
-    [[nodiscard]] static T *GetThisFromHandle(const HWND hWnd) noexcept
-    {
-        return (hWnd ? reinterpret_cast<T *>(GetWindowLongPtrW(hWnd, GWLP_USERDATA)) : nullptr);
-    }
-
-    [[nodiscard]] bool CreateFramelessWindow() noexcept
-    {
-        LPCWSTR className = __RegisterWindowClass(WindowProc);
-        if (!className) {
-            OutputDebugStringW(L"Failed to register window class.");
-            return false;
-        }
-        __SetWindowClassName(className);
-        const HWND window = __CreateWindow(className, WS_OVERLAPPEDWINDOW, 0L, nullptr, this);
-        if (!window) {
-            OutputDebugStringW(L"Failed to create window.");
-            // todo: unreg window class
-            return false;
-        }
-        __SetWindowHandle(window);
-        return true;
     }
 
 private:
@@ -165,7 +176,7 @@ private:
             OnNCCreate(hWnd, lParam);
         } else if (message == WM_NCDESTROY) {
             OnNCDestroy(hWnd);
-        } else if (const auto that = GetThisFromHandle(hWnd)) {
+        } else if (const auto that = GetThatFromHandle(hWnd)) {
             return that->MessageHandler(message, wParam, lParam);
         }
         return DefWindowProcW(hWnd, message, wParam, lParam);

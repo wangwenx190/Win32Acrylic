@@ -55,13 +55,13 @@ public:
     ~AcrylicBrushDirect2DPrivate() override;
 
     [[nodiscard]] bool Initialize();
-    [[nodiscard]] int GetMessageLoopResult() const;
     [[nodiscard]] HWND GetWindowHandle() const;
     void ReloadBrushParameters();
 
-    [[nodiscard]] LRESULT MessageHandler(UINT message, WPARAM wParam, LPARAM lParam) noexcept;
+    [[nodiscard]] LRESULT MessageHandler(UINT message, WPARAM wParam, LPARAM lParam) noexcept override;
 
 protected:
+    void CleanupResources(const HWND hWnd) noexcept override;
     void OnThemeChanged(const HWND hWnd) noexcept override;
     void OnWallpaperChanged(const HWND hWnd) noexcept override;
 
@@ -151,6 +151,10 @@ AcrylicBrushDirect2DPrivate::AcrylicBrushDirect2DPrivate(AcrylicBrushDirect2D *q
 
 AcrylicBrushDirect2DPrivate::~AcrylicBrushDirect2DPrivate()
 {
+}
+
+void AcrylicBrushDirect2DPrivate::CleanupResources(const HWND hWnd) noexcept
+{
     SAFE_FREE_CHARARRAY(m_wallpaperFilePath)
 }
 
@@ -169,16 +173,12 @@ void AcrylicBrushDirect2DPrivate::OnWallpaperChanged(const HWND hWnd) noexcept
 
 LRESULT AcrylicBrushDirect2DPrivate::MessageHandler(UINT message, WPARAM wParam, LPARAM lParam) noexcept
 {
-    const LRESULT result = base_type::MessageHandler(message, wParam, lParam);
+    const LRESULT result = base_type::DefaultMessageHandler(message, wParam, lParam);
 
-    switch (message) {
-    case WM_PAINT: {
+    if (message == WM_PAINT) {
         if (!DrawFinalVisual()) {
             OutputDebugStringW(L"Failed to draw the final D2D visual.");
         }
-    } break;
-    default:
-        break;
     }
 
     return result;
@@ -667,6 +667,7 @@ bool AcrylicBrushDirect2DPrivate::InitializeGraphicsInfrastructure()
 void AcrylicBrushDirect2DPrivate::ReloadDesktopParameters()
 {
     constexpr int screen = 0; // fixme: use the correct screen id.
+    SAFE_FREE_CHARARRAY(m_wallpaperFilePath)
     m_wallpaperFilePath = const_cast<LPWSTR>(Utils::GetWallpaperFilePath(screen));
     m_wallpaperAspectStyle = Utils::GetWallpaperAspectStyle(screen);
     m_desktopBackgroundColor = Utils::GetDesktopBackgroundColor(screen);
@@ -724,7 +725,7 @@ void AcrylicBrushDirect2DPrivate::ReloadBrushParameters()
 
 bool AcrylicBrushDirect2DPrivate::Initialize()
 {
-    if (!CreateFramelessWindow()) {
+    if (!CreateThisWindow()) {
         OutputDebugStringW(L"Failed to create the background window.");
         return false;
     }
@@ -737,11 +738,6 @@ bool AcrylicBrushDirect2DPrivate::Initialize()
         return false;
     }
     return true;
-}
-
-int AcrylicBrushDirect2DPrivate::GetMessageLoopResult() const
-{
-    return MessageLoop();
 }
 
 AcrylicBrushDirect2D::AcrylicBrushDirect2D()
@@ -777,5 +773,5 @@ HWND AcrylicBrushDirect2D::GetWindowHandle() const
 
 int AcrylicBrushDirect2D::MessageLoop() const
 {
-    return d_ptr->GetMessageLoopResult();
+    return AcrylicBrushDirect2DPrivate::MessageLoop();
 }

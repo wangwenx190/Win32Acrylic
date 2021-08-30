@@ -45,14 +45,12 @@ public:
 
     [[nodiscard]] bool Initialize();
     [[nodiscard]] HWND GetWindowHandle() const;
-    [[nodiscard]] int GetMessageLoopResult() const;
     void ReloadBrushParameters();
 
-    [[nodiscard]] LRESULT MessageHandler(UINT message, WPARAM wParam, LPARAM lParam) noexcept;
+    [[nodiscard]] LRESULT MessageHandler(UINT message, WPARAM wParam, LPARAM lParam) noexcept override;
     [[nodiscard]] LRESULT DragBarMessageHandler(UINT message, WPARAM wParam, LPARAM lParam) noexcept;
 
 protected:
-    bool FilterMessage(const MSG *msg) const noexcept override;
     void CleanupResources(const HWND hWnd) noexcept override;
     void OnThemeChanged(const HWND hWnd) noexcept override;
 
@@ -87,6 +85,7 @@ HWND AcrylicBrushWinUI2Private::GetWindowHandle() const
     return GetHandle();
 }
 
+#if 0
 bool AcrylicBrushWinUI2Private::FilterMessage(const MSG *msg) const noexcept
 {
     BOOL filtered = FALSE;
@@ -100,11 +99,7 @@ bool AcrylicBrushWinUI2Private::FilterMessage(const MSG *msg) const noexcept
     }
     return (filtered != FALSE);
 }
-
-int AcrylicBrushWinUI2Private::GetMessageLoopResult() const
-{
-    return MessageLoop();
-}
+#endif
 
 void AcrylicBrushWinUI2Private::ReloadBrushParameters()
 {
@@ -267,7 +262,7 @@ bool AcrylicBrushWinUI2Private::CreateXAMLIsland()
 
 LRESULT AcrylicBrushWinUI2Private::MessageHandler(UINT message, WPARAM wParam, LPARAM lParam) noexcept
 {
-    const LRESULT result = base_type::MessageHandler(message, wParam, lParam);
+    const LRESULT result = base_type::DefaultMessageHandler(message, wParam, lParam);
 
     const HWND mainWindowHandle = GetHandle();
 
@@ -343,7 +338,7 @@ LRESULT CALLBACK AcrylicBrushWinUI2Private::DragBarWindowProc(HWND hWnd, UINT me
         OnNCCreate(hWnd, lParam);
     } else if (message == WM_NCDESTROY) {
         OnNCDestroy(hWnd);
-    } else if (const auto that = GetThisFromHandle(hWnd)) {
+    } else if (const auto that = GetThatFromHandle(hWnd)) {
         return that->DragBarMessageHandler(message, wParam, lParam);
     }
     return DefWindowProcW(hWnd, message, wParam, lParam);
@@ -413,7 +408,7 @@ LRESULT AcrylicBrushWinUI2Private::DragBarMessageHandler(UINT message, WPARAM wP
 
 bool AcrylicBrushWinUI2Private::Initialize()
 {
-    if (!CreateFramelessWindow()) {
+    if (!CreateThisWindow()) {
         OutputDebugStringW(L"Failed to create the background window.");
         return false;
     }
@@ -461,7 +456,7 @@ HWND AcrylicBrushWinUI2::GetWindowHandle() const
 
 int AcrylicBrushWinUI2::MessageLoop() const
 {
-    return d_ptr->GetMessageLoopResult();
+    return AcrylicBrushWinUI2Private::MessageLoop();
 }
 
 #if 0

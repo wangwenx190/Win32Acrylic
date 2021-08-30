@@ -130,10 +130,7 @@ public:
 
     [[nodiscard]] bool Initialize();
     [[nodiscard]] HWND GetWindowHandle() const;
-    [[nodiscard]] int GetMessageLoopResult() const;
     void ReloadBrushParameters();
-
-    [[nodiscard]] LRESULT MessageHandler(UINT message, WPARAM wParam, LPARAM lParam) noexcept;
 
 protected:
     void OnThemeChanged(const HWND hWnd) noexcept override;
@@ -149,11 +146,6 @@ AcrylicBrushSystemPrivate::AcrylicBrushSystemPrivate(AcrylicBrushSystem *q)
 
 AcrylicBrushSystemPrivate::~AcrylicBrushSystemPrivate()
 {
-}
-
-LRESULT AcrylicBrushSystemPrivate::MessageHandler(UINT message, WPARAM wParam, LPARAM lParam) noexcept
-{
-    return base_type::MessageHandler(message, wParam, lParam);
 }
 
 void AcrylicBrushSystemPrivate::OnThemeChanged(const HWND hWnd) noexcept
@@ -175,14 +167,9 @@ HWND AcrylicBrushSystemPrivate::GetWindowHandle() const
     return GetHandle();
 }
 
-int AcrylicBrushSystemPrivate::GetMessageLoopResult() const
-{
-    return MessageLoop();
-}
-
 bool AcrylicBrushSystemPrivate::Initialize()
 {
-    if (!CreateFramelessWindow()) {
+    if (!CreateThisWindow()) {
         OutputDebugStringW(L"Failed to create the background window.");
         return false;
     }
@@ -223,5 +210,5 @@ bool AcrylicBrushSystem::RefreshBrush() const
 
 int AcrylicBrushSystem::MessageLoop() const
 {
-    return d_ptr->GetMessageLoopResult();
+    return AcrylicBrushSystemPrivate::MessageLoop();
 }

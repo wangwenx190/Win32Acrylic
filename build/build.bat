@@ -91,7 +91,7 @@ if /i "%_build_type%" == "debug" (
 ) else (
     set _cmake_config_params=%_cmake_config_params% -DCMAKE_BUILD_TYPE=Release -DCMAKE_INTERPROCEDURAL_OPTIMIZATION=ON
 )
-cmake %_cmake_config_params% "%~dp0"
+cmake %_cmake_config_params% "%~dp0.."
 set _cmake_build_params=--build . --target all --parallel
 if /i "%_build_type%" == "debug" (
     set _cmake_build_params=%_cmake_build_params% --config debug

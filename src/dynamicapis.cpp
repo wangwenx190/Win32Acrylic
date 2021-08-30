@@ -30,8 +30,6 @@
 #include <ShellScalingApi.h>
 #include <UxTheme.h>
 #include <DwmApi.h>
-#include <D2D1.h>
-#include <D3D11.h>
 
 #ifdef __cplusplus
 EXTERN_C_START
@@ -932,63 +930,6 @@ CoIncrementMTAUsage(
 )
 {
     ACRYLICMANAGER_TRY_EXECUTE_COM_FUNCTION(CoIncrementMTAUsage, pCookie)
-}
-
-/////////////////////////////////
-/////     Direct2D
-/////////////////////////////////
-
-// D2D1CreateFactory() has some overloads so we have to load it manually here.
-HRESULT WINAPI
-D2D1CreateFactory(
-    D2D1_FACTORY_TYPE          factoryType,
-    REFIID                     riid,
-    const D2D1_FACTORY_OPTIONS *pFactoryOptions,
-    void                       **ppIFactory
-)
-{
-    static bool tried = false;
-    using sig = HRESULT(WINAPI *)(D2D1_FACTORY_TYPE, REFIID, const D2D1_FACTORY_OPTIONS *, void **);
-    static sig func = nullptr;
-    if (!func) {
-        if (tried) {
-            return E_NOTIMPL;
-        } else {
-            tried = true;
-            const HMODULE dll = LoadLibraryExW(L"D2D1.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
-            if (!dll) {
-                OutputDebugStringW(L"Failed to load dynamic link library D2D1.dll.");
-                return E_NOTIMPL;
-            }
-            func = reinterpret_cast<sig>(GetProcAddress(dll, "D2D1CreateFactory"));
-            if (!func) {
-                OutputDebugStringW(L"Failed to resolve symbol D2D1CreateFactory().");
-                return E_NOTIMPL;
-            }
-        }
-    }
-    return func(factoryType, riid, pFactoryOptions, ppIFactory);
-}
-
-/////////////////////////////////
-/////     Direct3D
-/////////////////////////////////
-
-HRESULT WINAPI
-D3D11CreateDevice(
-    IDXGIAdapter            *pAdapter,
-    D3D_DRIVER_TYPE         DriverType,
-    HMODULE                 Software,
-    UINT                    Flags,
-    const D3D_FEATURE_LEVEL *pFeatureLevels,
-    UINT                    FeatureLevels,
-    UINT                    SDKVersion,
-    ID3D11Device            **ppDevice,
-    D3D_FEATURE_LEVEL       *pFeatureLevel,
-    ID3D11DeviceContext     **ppImmediateContext
-)
-{
-    ACRYLICMANAGER_TRY_EXECUTE_D3D_FUNCTION(D3D11CreateDevice, pAdapter, DriverType, Software, Flags, pFeatureLevels, FeatureLevels, SDKVersion, ppDevice, pFeatureLevel, ppImmediateContext)
 }
 
 /////////////////////////////////

@@ -46,6 +46,82 @@ constexpr CLSID am_CLSID_D2D1Opacity = {0x811d79a4, 0xde28, 0x4454, {0x80, 0x94,
 constexpr CLSID am_CLSID_D2D1CrossFade = {0x12f575e8, 0x4db1, 0x485f, {0x9a, 0x84, 0x03, 0xa0, 0x7d, 0xd3, 0x82, 0x9f}};
 constexpr CLSID am_CLSID_D2D1Tint = {0x36312b17, 0xf7dd, 0x4014, {0x91, 0x5d, 0xff, 0xca, 0x76, 0x8c, 0xf2, 0x11}};
 
+#ifdef __cplusplus
+EXTERN_C_START
+#endif
+
+HRESULT WINAPI
+D2D1CreateFactory(
+    D2D1_FACTORY_TYPE          factoryType,
+    REFIID                     riid,
+    const D2D1_FACTORY_OPTIONS *pFactoryOptions,
+    void                       **ppIFactory
+)
+{
+    static bool tried = false;
+    using sig = HRESULT(WINAPI *)(D2D1_FACTORY_TYPE, REFIID, const D2D1_FACTORY_OPTIONS *, void **);
+    static sig func = nullptr;
+    if (!func) {
+        if (tried) {
+            return E_NOTIMPL;
+        } else {
+            tried = true;
+            const HMODULE dll = LoadLibraryExW(L"D2D1.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
+            if (!dll) {
+                OutputDebugStringW(L"Failed to load dynamic link library D2D1.dll.");
+                return E_NOTIMPL;
+            }
+            func = reinterpret_cast<sig>(GetProcAddress(dll, "D2D1CreateFactory"));
+            if (!func) {
+                OutputDebugStringW(L"Failed to resolve symbol D2D1CreateFactory().");
+                return E_NOTIMPL;
+            }
+        }
+    }
+    return func(factoryType, riid, pFactoryOptions, ppIFactory);
+}
+
+HRESULT WINAPI
+D3D11CreateDevice(
+    IDXGIAdapter            *pAdapter,
+    D3D_DRIVER_TYPE         DriverType,
+    HMODULE                 Software,
+    UINT                    Flags,
+    const D3D_FEATURE_LEVEL *pFeatureLevels,
+    UINT                    FeatureLevels,
+    UINT                    SDKVersion,
+    ID3D11Device            **ppDevice,
+    D3D_FEATURE_LEVEL       *pFeatureLevel,
+    ID3D11DeviceContext     **ppImmediateContext
+)
+{
+    static bool tried = false;
+    using sig = decltype(&::D3D11CreateDevice);
+    static sig func = nullptr;
+    if (!func) {
+        if (tried) {
+            return E_NOTIMPL;
+        } else {
+            tried = true;
+            const HMODULE dll = LoadLibraryExW(L"D3D11.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
+            if (!dll) {
+                OutputDebugStringW(L"Failed to load dynamic link library D3D11.dll.");
+                return E_NOTIMPL;
+            }
+            func = reinterpret_cast<sig>(GetProcAddress(dll, "D3D11CreateDevice"));
+            if (!func) {
+                OutputDebugStringW(L"Failed to resolve symbol D3D11CreateDevice().");
+                return E_NOTIMPL;
+            }
+        }
+    }
+    return func(pAdapter, DriverType, Software, Flags, pFeatureLevels, FeatureLevels, SDKVersion, ppDevice, pFeatureLevel, ppImmediateContext);
+}
+
+#ifdef __cplusplus
+EXTERN_C_END
+#endif
+
 class AcrylicBrushDirect2DPrivate final : public CustomFrameT<AcrylicBrushDirect2DPrivate>
 {
     ACRYLICMANAGER_DISABLE_COPY_MOVE(AcrylicBrushDirect2DPrivate)

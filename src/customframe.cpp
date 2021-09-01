@@ -525,8 +525,8 @@ void CustomFrame::OnNCRButtonUp(const HWND hWnd, const WPARAM wParam, const LPAR
 void CustomFrame::OnCreate(const HWND hWnd, const LPARAM lParam, UINT *dpi) noexcept
 {
     if (!Utils::SetDpiAwarenessForWindow(hWnd, DpiAwareness::PerMonitorV2)) {
-        OutputDebugStringW(L"Failed to enable the PerMonitorV2 dpi awareness.");
-        // PerMonitorV2 implies the non-client area dpi scaling so we only have to
+        OutputDebugStringW(L"Failed to enable the PerMonitorV2 DPI awareness.");
+        // PerMonitorV2 implies the non-client area DPI scaling so we only have to
         // enable it if we cannot enable PerMonitorV2.
         if (EnableNonClientDpiScaling(hWnd) == FALSE) {
             PRINT_WIN32_ERROR_MESSAGE(EnableNonClientDpiScaling)

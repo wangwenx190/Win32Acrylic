@@ -228,26 +228,37 @@ UINT Utils::GetDotsPerInchForWindow(const HWND hWnd)
         const UINT dpi = GetDpiForWindow(hWnd);
         if (dpi > 0) {
             return dpi;
+        } else {
+            PRINT_WIN32_ERROR_MESSAGE(GetDpiForWindow)
         }
     }
     {
         const UINT dpi = GetSystemDpiForProcess(GetCurrentProcess());
         if (dpi > 0) {
             return dpi;
+        } else {
+            PRINT_WIN32_ERROR_MESSAGE(GetSystemDpiForProcess)
         }
     }
     {
         const UINT dpi = GetDpiForSystem();
         if (dpi > 0) {
             return dpi;
+        } else {
+            PRINT_WIN32_ERROR_MESSAGE(GetDpiForSystem)
         }
     }
     {
         UINT dpiX = 0, dpiY = 0;
-        if (SUCCEEDED(GetDpiForMonitor(GET_CURRENT_SCREEN(hWnd), static_cast<MONITOR_DPI_TYPE>(MonitorDpiType::EFFECTIVE_DPI), &dpiX, &dpiY))) {
+        const HRESULT hr = GetDpiForMonitor(GET_CURRENT_SCREEN(hWnd), static_cast<MONITOR_DPI_TYPE>(MonitorDpiType::EFFECTIVE_DPI), &dpiX, &dpiY);
+        if (SUCCEEDED(hr)) {
             if ((dpiX > 0) && (dpiY > 0)) {
                 return std::round(static_cast<double>(dpiX + dpiY) / 2.0);
+            } else {
+                OutputDebugStringW(L"The retrieved DPI data is invalid.");
             }
+        } else {
+            PRINT_HR_ERROR_MESSAGE(GetDpiForMonitor, hr)
         }
 
     }
@@ -256,10 +267,16 @@ UINT Utils::GetDotsPerInchForWindow(const HWND hWnd)
         if (hdc) {
             const int dpiX = GetDeviceCaps(hdc, LOGPIXELSX);
             const int dpiY = GetDeviceCaps(hdc, LOGPIXELSY);
-            ReleaseDC(nullptr, hdc);
+            if (ReleaseDC(nullptr, hdc) == 0) {
+                PRINT_WIN32_ERROR_MESSAGE(ReleaseDC)
+            }
             if ((dpiX > 0) && (dpiY > 0)) {
                 return std::round(static_cast<double>(dpiX + dpiY) / 2.0);
+            } else {
+                OutputDebugStringW(L"The retrieved DPI data is invalid.");
             }
+        } else {
+            PRINT_WIN32_ERROR_MESSAGE(GetDC)
         }
     }
     return USER_DEFAULT_SCREEN_DPI;

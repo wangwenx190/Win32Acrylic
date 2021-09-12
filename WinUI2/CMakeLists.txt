@@ -37,8 +37,12 @@ unset(NTDDI_WIN10_19H1)
 target_compile_options(${PROJECT_NAME} PRIVATE
     /utf-8
     /Zc:__cplusplus
-    /await # TODO: /await:Strict
-    /permissive-
+    /await # TODO: /await:strict
+    #/permissive-
+    /MP
+    /EHsc
+    /GR
+    /d2FH4
 )
 if("${CMAKE_BUILD_TYPE}" STREQUAL "Debug")
     target_compile_options(${PROJECT_NAME} PRIVATE
@@ -49,13 +53,17 @@ else()
         /Gy
         /Zc:inline
         /guard:cf
+        /guard:ehcont
     )
     target_link_options(${PROJECT_NAME} PRIVATE
         /DYNAMICBASE
         /NXCOMPAT
+        /HIGHENTROPYVA
+        /LARGEADDRESSAWARE
+        /INCREMENTAL:NO
         /OPT:REF
         /OPT:ICF
-        /INCREMENTAL:NO
         /GUARD:CF
+        /CETCOMPAT
     )
 endif()

@@ -125,8 +125,40 @@ WIN32ACRYLIC_TRY_EXECUTE_FUNCTION_CALL_FUNC_RETURN(__VA_ARGS__)
 #define WIN32ACRYLIC_TRY_EXECUTE_WINRT_PTR_FUNCTION(funcName, ...) WIN32ACRYLIC_TRY_EXECUTE_WINRT_FUNCTION_RETURN(funcName, nullptr, ##__VA_ARGS__)
 #endif
 
+#ifndef WIN32ACRYLIC_TRY_EXECUTE_COM_FUNCTION_RETURN
+#define WIN32ACRYLIC_TRY_EXECUTE_COM_FUNCTION_RETURN(funcName, defVal, ...) WIN32ACRYLIC_TRY_EXECUTE_RETURN_FUNCTION(OLE32, funcName, defVal, ##__VA_ARGS__)
+#endif
+
+#ifndef WIN32ACRYLIC_TRY_EXECUTE_COM_FUNCTION
+#define WIN32ACRYLIC_TRY_EXECUTE_COM_FUNCTION(funcName, ...) WIN32ACRYLIC_TRY_EXECUTE_COM_FUNCTION_RETURN(funcName, E_NOTIMPL, ##__VA_ARGS__)
+#endif
+
+#ifndef WIN32ACRYLIC_TRY_EXECUTE_COM_INT_FUNCTION
+#define WIN32ACRYLIC_TRY_EXECUTE_COM_INT_FUNCTION(funcName, ...) WIN32ACRYLIC_TRY_EXECUTE_COM_FUNCTION_RETURN(funcName, 0, ##__VA_ARGS__)
+#endif
+
+#ifndef WIN32ACRYLIC_TRY_EXECUTE_COM_VOID_FUNCTION
+#define WIN32ACRYLIC_TRY_EXECUTE_COM_VOID_FUNCTION(funcName, ...) WIN32ACRYLIC_TRY_EXECUTE_VOID_FUNCTION(OLE32, funcName, ##__VA_ARGS__)
+#endif
+
+#ifndef WIN32ACRYLIC_TRY_EXECUTE_COMAUTO_VOID_FUNCTION
+#define WIN32ACRYLIC_TRY_EXECUTE_COMAUTO_VOID_FUNCTION(funcName, ...) WIN32ACRYLIC_TRY_EXECUTE_VOID_FUNCTION(OLEAut32, funcName, ##__VA_ARGS__)
+#endif
+
 // Define these macros first before including their header files to avoid linking
 // to their import libraries.
+
+#ifndef _OLE32_
+#define _OLE32_
+#endif
+
+#ifndef _OLEAUT32_
+#define _OLEAUT32_
+#endif
+
+#ifndef _COMBASEAPI_
+#define _COMBASEAPI_
+#endif
 
 #ifndef _ROAPI_
 #define _ROAPI_
@@ -141,6 +173,8 @@ WIN32ACRYLIC_TRY_EXECUTE_FUNCTION_CALL_FUNC_RETURN(__VA_ARGS__)
 #ifdef __cplusplus
 EXTERN_C_START
 #endif
+
+// RuntimeObject
 
 HRESULT WINAPI
 RoActivateInstance(
@@ -744,6 +778,35 @@ RoResolveNamespace(
     WIN32ACRYLIC_TRY_EXECUTE_WINRT_FUNCTION(RoResolveNamespace, name, windowsMetaDataDir, packageGraphDirsCount, packageGraphDirs, metaDataFilePathsCount, metaDataFilePaths, subNamespacesCount, subNamespaces)
 }
 
+// ComBaseApi
+
+HRESULT WINAPI
+IIDFromString(
+    LPCOLESTR lpsz,
+    LPIID     lpiid
+)
+{
+    WIN32ACRYLIC_TRY_EXECUTE_COM_FUNCTION(IIDFromString, lpsz, lpiid)
+}
+
+HRESULT WINAPI
+CoIncrementMTAUsage(
+    CO_MTA_USAGE_COOKIE *pCookie
+)
+{
+    WIN32ACRYLIC_TRY_EXECUTE_COM_FUNCTION(CoIncrementMTAUsage, pCookie)
+}
+
+// COM Automation
+
+void WINAPI
+SysFreeString(
+    BSTR bstrString
+)
+{
+    WIN32ACRYLIC_TRY_EXECUTE_COMAUTO_VOID_FUNCTION(SysFreeString, bstrString)
+}
+
 // Wrappers
 
 void WINAPI
@@ -761,6 +824,14 @@ WINRT_IIDFromString(
 )
 {
     return IIDFromString(lpsz, lpiid);
+}
+
+HRESULT WINAPI
+WINRT_CoIncrementMTAUsage(
+    CO_MTA_USAGE_COOKIE *pCookie
+)
+{
+    return CoIncrementMTAUsage(pCookie);
 }
 
 #ifdef __cplusplus

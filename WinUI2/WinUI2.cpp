@@ -46,6 +46,22 @@ static winrt::Windows::UI::Xaml::Media::AcrylicBrush g_backgroundBrush = nullptr
 
 LRESULT CALLBACK WndProc(HWND, UINT, WPARAM, LPARAM);
 
+[[nodiscard]] static inline bool IsWindows1019H1OrGreater()
+{
+    OSVERSIONINFOEXW osvi;
+    SecureZeroMemory(&osvi, sizeof(osvi));
+    osvi.dwOSVersionInfoSize = sizeof(osvi);
+    osvi.dwMajorVersion = 10;
+    osvi.dwMinorVersion = 0;
+    osvi.dwBuildNumber = 18362;
+    const BYTE op = VER_GREATER_EQUAL;
+    DWORDLONG dwlConditionMask = 0;
+    VER_SET_CONDITION(dwlConditionMask, VER_MAJORVERSION, op);
+    VER_SET_CONDITION(dwlConditionMask, VER_MINORVERSION, op);
+    VER_SET_CONDITION(dwlConditionMask, VER_BUILDNUMBER, op);
+    return (VerifyVersionInfoW(&osvi, VER_MAJORVERSION | VER_MINORVERSION | VER_BUILDNUMBER, dwlConditionMask) != FALSE);
+}
+
 EXTERN_C int APIENTRY
 wWinMain(
     _In_ HINSTANCE     hInstance,
@@ -56,6 +72,11 @@ wWinMain(
 {
     UNREFERENCED_PARAMETER(hPrevInstance);
     UNREFERENCED_PARAMETER(lpCmdLine);
+
+    if (!IsWindows1019H1OrGreater()) {
+        MessageBoxW(nullptr, L"This application only supports Windows 10 19H1 and onwards.", L"Error", MB_ICONERROR | MB_OK);
+        return -1;
+    }
 
     g_instance = hInstance;
 

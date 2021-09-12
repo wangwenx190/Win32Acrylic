@@ -30,7 +30,7 @@
 #include <WinRT\Windows.UI.Xaml.Controls.h>
 #include <WinRT\Windows.UI.Xaml.Media.h>
 #include <Windows.UI.Xaml.Hosting.DesktopWindowXamlSource.h>
-#include "resource.h"
+#include "Resource.h"
 
 static constexpr wchar_t g_windowClassName[] = L"Win32AcrylicDemoApplicationWindowClass";
 static constexpr wchar_t g_windowTitle[] = L"Win32Acrylic WinUI2 Demo";

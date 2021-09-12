@@ -13,9 +13,9 @@ endif()
 set(SOURCES
     WinUI2.rc
     WinUI2.manifest
-    resource.h
+    Resource.h
     RuntimeObject.cpp
-    main.cpp
+    WinUI2.cpp
 )
 
 add_executable(${PROJECT_NAME} WIN32 ${SOURCES})

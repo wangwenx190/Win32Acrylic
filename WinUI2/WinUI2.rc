@@ -23,10 +23,10 @@
  */
 
 #include <Windows.h>
-#include "resource.h"
+#include "Resource.h"
 
-IDI_APPICON ICON "icon.ico"
-IDI_APPICON_SMALL ICON "smallicon.ico"
+IDI_APPICON ICON "Icon.ico"
+IDI_APPICON_SMALL ICON "SmallIcon.ico"
 
 VS_VERSION_INFO VERSIONINFO
 FILEVERSION     1,0,0,0

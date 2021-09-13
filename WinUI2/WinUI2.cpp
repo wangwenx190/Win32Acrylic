@@ -100,7 +100,7 @@ wWinMain(
         WS_EX_NOREDIRECTIONBITMAP,
         g_windowClassName,
         g_windowTitle,
-        WS_OVERLAPPEDWINDOW | WS_CLIPSIBLINGS | WS_CLIPCHILDREN,
+        WS_OVERLAPPEDWINDOW,
         CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
         nullptr,
         nullptr,
@@ -113,13 +113,13 @@ wWinMain(
     }
 
     // XAML Island section:
-    // The call to winrt::init_apartment initializes COM; by default, in a multithreaded apartment.
+    // The call to winrt::init_apartment() initializes COM. By default, in a multithreaded apartment.
     winrt::init_apartment(winrt::apartment_type::single_threaded);
     // Initialize the XAML framework's core window for the current thread.
     g_manager = winrt::Windows::UI::Xaml::Hosting::WindowsXamlManager::InitializeForCurrentThread();
     // This DesktopWindowXamlSource is the object that enables a non-UWP desktop application
     // to host WinRT XAML controls in any UI element that is associated with a window handle (HWND).
-    g_source = {};
+    g_source = winrt::Windows::UI::Xaml::Hosting::DesktopWindowXamlSource();
     // Get handle to the core window.
     const auto interop = g_source.as<IDesktopWindowXamlSourceNative>();
     if (!interop) {
@@ -140,15 +140,14 @@ wWinMain(
         MessageBoxW(nullptr, L"Failed to retrieve the client area rect of the window.", L"Error", MB_ICONERROR | MB_OK);
         return -1;
     }
-    if (SetWindowPos(g_xamlIslandHandle, HWND_BOTTOM,
-                     0, 0, rect.right, rect.bottom,
-                     SWP_NOACTIVATE | SWP_SHOWWINDOW | SWP_NOOWNERZORDER) == FALSE) {
+    if (SetWindowPos(g_xamlIslandHandle, nullptr, 0, 0, rect.right, rect.bottom,
+                     SWP_NOACTIVATE | SWP_SHOWWINDOW | SWP_NOZORDER | SWP_NOOWNERZORDER) == FALSE) {
         MessageBoxW(nullptr, L"Failed to change the geometry of the XAML Island window.", L"Error", MB_ICONERROR | MB_OK);
         return -1;
     }
     // Create the XAML content.
-    g_rootGrid = {};
-    g_backgroundBrush = {};
+    g_rootGrid = winrt::Windows::UI::Xaml::Controls::Grid();
+    g_backgroundBrush = winrt::Windows::UI::Xaml::Media::AcrylicBrush();
     g_backgroundBrush.BackgroundSource(winrt::Windows::UI::Xaml::Media::AcrylicBackgroundSource::HostBackdrop);
     g_rootGrid.Background(g_backgroundBrush);
     //g_rootGrid.Children().Clear();
@@ -176,13 +175,11 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
     switch (message) {
     case WM_CLOSE: {
-        g_backgroundBrush = nullptr;
-        g_rootGrid = nullptr;
-        if (g_source) {
+        if (g_source != nullptr) {
             g_source.Close();
             g_source = nullptr;
         }
-        if (g_manager) {
+        if (g_manager != nullptr) {
             g_manager.Close();
             g_manager = nullptr;
         }
@@ -204,9 +201,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
         if (g_xamlIslandHandle) {
             const UINT width = LOWORD(lParam);
             const UINT height = HIWORD(lParam);
-            if (SetWindowPos(g_xamlIslandHandle, HWND_BOTTOM,
-                             0, 0, width, height,
-                             SWP_NOACTIVATE | SWP_SHOWWINDOW | SWP_NOOWNERZORDER) == FALSE) {
+            if (MoveWindow(g_xamlIslandHandle, 0, 0, width, height, TRUE) == FALSE) {
                 MessageBoxW(nullptr, L"Failed to change the geometry of the XAML Island window.", L"Error", MB_ICONERROR | MB_OK);
             }
         }

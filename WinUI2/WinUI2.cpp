@@ -32,7 +32,35 @@
 #include <Windows.UI.Xaml.Hosting.DesktopWindowXamlSource.h>
 #include "Resource.h"
 
-static constexpr wchar_t g_windowClassName[] = L"Win32AcrylicDemoApplicationWindowClass";
+namespace Constants {
+namespace Light {
+static constexpr winrt::Windows::UI::Color TintColor = {255, 252, 252, 252};
+static constexpr double TintOpacity = 0.0;
+static constexpr double LuminosityOpacity = 0.85;
+static constexpr winrt::Windows::UI::Color FallbackColor = {255, 249, 249, 249};
+static constexpr double BlurRadius = 30.0;
+static constexpr double Saturation = 1.25;
+static constexpr double NoiseOpacity = 0.02;
+static constexpr winrt::Windows::UI::Color ExclusionColor = {26, 255, 255, 255};
+} // namespace Light
+namespace Dark {
+static constexpr winrt::Windows::UI::Color TintColor = {255, 44, 44, 44};
+static constexpr double TintOpacity = 0.15;
+static constexpr double LuminosityOpacity = 0.96;
+static constexpr winrt::Windows::UI::Color FallbackColor = {255, 44, 44, 44};
+static constexpr double BlurRadius = 30.0;
+static constexpr double Saturation = 1.25;
+static constexpr double NoiseOpacity = 0.02;
+static constexpr winrt::Windows::UI::Color ExclusionColor = {26, 255, 255, 255};
+} // namespace Dark
+namespace HighContrast {
+// ### TO BE IMPLEMENTED
+} // namespace HighContrast
+} // namespace Constants
+
+static constexpr wchar_t g_personalizeRegistryKey[] = LR"(Software\Microsoft\Windows\CurrentVersion\Themes\Personalize)";
+
+static constexpr wchar_t g_windowClassName[] = LR"(wangwenx190\Win32Acrylic\WinUI2\WindowClass)";
 static constexpr wchar_t g_windowTitle[] = L"Win32Acrylic WinUI2 Demo";
 
 static HWND g_mainWindowHandle = nullptr;
@@ -44,22 +72,166 @@ static winrt::Windows::UI::Xaml::Hosting::DesktopWindowXamlSource g_source = nul
 static winrt::Windows::UI::Xaml::Controls::Grid g_rootGrid = nullptr;
 static winrt::Windows::UI::Xaml::Media::AcrylicBrush g_backgroundBrush = nullptr;
 
-LRESULT CALLBACK WndProc(HWND, UINT, WPARAM, LPARAM);
-
-[[nodiscard]] static inline bool IsWindows1019H1OrGreater()
+[[nodiscard]] static inline bool IsWindowsNOrGreater(const int major, const int minor, const int build)
 {
     OSVERSIONINFOEXW osvi;
     SecureZeroMemory(&osvi, sizeof(osvi));
     osvi.dwOSVersionInfoSize = sizeof(osvi);
-    osvi.dwMajorVersion = 10;
-    osvi.dwMinorVersion = 0;
-    osvi.dwBuildNumber = 18362;
+    osvi.dwMajorVersion = major;
+    osvi.dwMinorVersion = minor;
+    osvi.dwBuildNumber = build;
     const BYTE op = VER_GREATER_EQUAL;
     DWORDLONG dwlConditionMask = 0;
     VER_SET_CONDITION(dwlConditionMask, VER_MAJORVERSION, op);
     VER_SET_CONDITION(dwlConditionMask, VER_MINORVERSION, op);
     VER_SET_CONDITION(dwlConditionMask, VER_BUILDNUMBER, op);
     return (VerifyVersionInfoW(&osvi, VER_MAJORVERSION | VER_MINORVERSION | VER_BUILDNUMBER, dwlConditionMask) != FALSE);
+}
+
+[[nodiscard]] static inline bool IsWindows10RS1OrGreater()
+{
+    // Windows 10 Version 1607 (Anniversary Update)
+    // Code name: Red Stone 1
+    return IsWindowsNOrGreater(10, 0, 14393);
+}
+
+[[nodiscard]] static inline bool IsWindows1019H1OrGreater()
+{
+    // Windows 10 Version 1903 (May 2019 Update)
+    // Code name: 19H1
+    return IsWindowsNOrGreater(10, 0, 18362);
+}
+
+[[nodiscard]] static inline bool IsHighContrastModeEnabled()
+{
+    HIGHCONTRASTW hc;
+    SecureZeroMemory(&hc, sizeof(hc));
+    hc.cbSize = sizeof(hc);
+    if (SystemParametersInfoW(SPI_GETHIGHCONTRAST, sizeof(hc), &hc, 0) == FALSE) {
+        OutputDebugStringW(L"Failed to retrieve the high contrast mode state.");
+        return false;
+    }
+    return (hc.dwFlags & HCF_HIGHCONTRASTON);
+}
+
+[[nodiscard]] static inline bool ShouldAppsUseDarkMode()
+{
+    if (!IsWindows10RS1OrGreater()) {
+        return false;
+    }
+    // Starting from Windows 10 19H1, ShouldAppsUseDarkMode() always return "TRUE"
+    // (actually, a random non-zero number at runtime), so we can't use it due to
+    // this unreliability. In this case, we just simply read the user's setting from
+    // the registry instead, it's not elegant but at least it works well.
+    if (IsWindows1019H1OrGreater()) {
+        HKEY hKey = nullptr;
+        if (RegOpenKeyExW(HKEY_CURRENT_USER, g_personalizeRegistryKey, 0, KEY_READ, &hKey) != ERROR_SUCCESS) {
+            OutputDebugStringW(L"Failed to open the registry key to read.");
+            return false;
+        }
+        DWORD dwValue = 0;
+        DWORD dwType = REG_DWORD;
+        DWORD dwSize = sizeof(dwValue);
+        const bool success = (RegQueryValueExW(hKey, L"AppsUseLightTheme", nullptr, &dwType, reinterpret_cast<LPBYTE>(&dwValue),&dwSize) == ERROR_SUCCESS);
+        if (!success) {
+            OutputDebugStringW(L"Failed to query the registry key value.");
+        }
+        if (RegCloseKey(hKey) != ERROR_SUCCESS) {
+            OutputDebugStringW(L"Failed to close the registry key.");
+        }
+        return (success && (dwValue == 0));
+    } else {
+        static bool tried = false;
+        using ShouldAppsUseDarkModeSig = BOOL(WINAPI *)();
+        static ShouldAppsUseDarkModeSig ShouldAppsUseDarkModeFunc = nullptr;
+        if (!ShouldAppsUseDarkModeFunc) {
+            if (!tried) {
+                tried = true;
+                const HMODULE UxThemeDLL = LoadLibraryExW(L"UxTheme.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
+                if (UxThemeDLL) {
+                    ShouldAppsUseDarkModeFunc = reinterpret_cast<ShouldAppsUseDarkModeSig>(GetProcAddress(UxThemeDLL, MAKEINTRESOURCEA(132)));
+                    if (!ShouldAppsUseDarkModeFunc) {
+                        OutputDebugStringW(L"Failed to resolve symbol ShouldAppsUseDarkMode().");
+                    }
+                    //FreeLibrary(UxThemeDLL);
+                } else {
+                    OutputDebugStringW(L"Failed to load dynamic link library UxTheme.dll.");
+                }
+            }
+        }
+        return (ShouldAppsUseDarkModeFunc ? (ShouldAppsUseDarkModeFunc() != FALSE) : false);
+    }
+}
+
+[[nodiscard]] static inline bool RefreshBackgroundBrush()
+{
+    if (g_backgroundBrush == nullptr) {
+        return false;
+    }
+    if (IsHighContrastModeEnabled()) {
+        // ### TO BE IMPLEMENTED
+    } else if (ShouldAppsUseDarkMode()) {
+        g_backgroundBrush.TintColor(Constants::Dark::TintColor);
+        g_backgroundBrush.TintOpacity(Constants::Dark::TintOpacity);
+        g_backgroundBrush.TintLuminosityOpacity(Constants::Dark::LuminosityOpacity);
+        g_backgroundBrush.FallbackColor(Constants::Dark::FallbackColor);
+    } else {
+        g_backgroundBrush.TintColor(Constants::Light::TintColor);
+        g_backgroundBrush.TintOpacity(Constants::Light::TintOpacity);
+        g_backgroundBrush.TintLuminosityOpacity(Constants::Light::LuminosityOpacity);
+        g_backgroundBrush.FallbackColor(Constants::Light::FallbackColor);
+    }
+    return true;
+}
+
+[[nodiscard]] static inline LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
+{
+    switch (message) {
+    case WM_CLOSE: {
+        if (DestroyWindow(hWnd) == FALSE) {
+            MessageBoxW(nullptr, L"Failed to destroy the window.", L"Error", MB_ICONERROR | MB_OK);
+            break;
+        }
+        if (UnregisterClassW(g_windowClassName, g_instance) == FALSE) {
+            MessageBoxW(nullptr, L"Failed to unregister the window class.", L"Error", MB_ICONERROR | MB_OK);
+            break;
+        }
+        return 0;
+    } break;
+    case WM_DESTROY: {
+        if (g_source != nullptr) {
+            g_source.Close();
+            g_source = nullptr;
+        }
+        if (g_manager != nullptr) {
+            g_manager.Close();
+            g_manager = nullptr;
+        }
+        PostQuitMessage(0);
+        return 0;
+    } break;
+    case WM_SIZE: {
+        if (g_xamlIslandHandle) {
+            const UINT width = LOWORD(lParam);
+            const UINT height = HIWORD(lParam);
+            if (MoveWindow(g_xamlIslandHandle, 0, 0, width, height, TRUE) == FALSE) {
+                MessageBoxW(nullptr, L"Failed to change the geometry of the XAML Island window.", L"Error", MB_ICONERROR | MB_OK);
+            }
+        }
+    } break;
+    case WM_SETTINGCHANGE: {
+        // wParam == 0: User-wide setting change
+        // wParam == 1: System-wide setting change
+        if (((wParam == 0) || (wParam == 1)) && (_wcsicmp(reinterpret_cast<LPCWSTR>(lParam), L"ImmersiveColorSet") == 0)) {
+            if (!RefreshBackgroundBrush()) {
+                MessageBoxW(nullptr, L"Failed to refresh the background brush.", L"Error", MB_ICONERROR | MB_OK);
+            }
+        }
+    } break;
+    default:
+        break;
+    }
+    return DefWindowProcW(hWnd, message, wParam, lParam);
 }
 
 EXTERN_C int APIENTRY
@@ -148,6 +320,10 @@ wWinMain(
     // Create the XAML content.
     g_rootGrid = winrt::Windows::UI::Xaml::Controls::Grid();
     g_backgroundBrush = winrt::Windows::UI::Xaml::Media::AcrylicBrush();
+    if (!RefreshBackgroundBrush()) {
+        MessageBoxW(nullptr, L"Failed to refresh the background brush.", L"Error", MB_ICONERROR | MB_OK);
+        return -1;
+    }
     g_backgroundBrush.BackgroundSource(winrt::Windows::UI::Xaml::Media::AcrylicBackgroundSource::HostBackdrop);
     g_rootGrid.Background(g_backgroundBrush);
     //g_rootGrid.Children().Clear();
@@ -169,45 +345,4 @@ wWinMain(
     }
 
     return static_cast<int>(msg.wParam);
-}
-
-LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
-{
-    switch (message) {
-    case WM_CLOSE: {
-        if (g_source != nullptr) {
-            g_source.Close();
-            g_source = nullptr;
-        }
-        if (g_manager != nullptr) {
-            g_manager.Close();
-            g_manager = nullptr;
-        }
-        if (DestroyWindow(hWnd) == FALSE) {
-            MessageBoxW(nullptr, L"Failed to destroy the window.", L"Error", MB_ICONERROR | MB_OK);
-            break;
-        }
-        if (UnregisterClassW(g_windowClassName, g_instance) == FALSE) {
-            MessageBoxW(nullptr, L"Failed to unregister the window class.", L"Error", MB_ICONERROR | MB_OK);
-            break;
-        }
-        return 0;
-    } break;
-    case WM_DESTROY: {
-        PostQuitMessage(0);
-        return 0;
-    } break;
-    case WM_SIZE: {
-        if (g_xamlIslandHandle) {
-            const UINT width = LOWORD(lParam);
-            const UINT height = HIWORD(lParam);
-            if (MoveWindow(g_xamlIslandHandle, 0, 0, width, height, TRUE) == FALSE) {
-                MessageBoxW(nullptr, L"Failed to change the geometry of the XAML Island window.", L"Error", MB_ICONERROR | MB_OK);
-            }
-        }
-    } break;
-    default:
-        break;
-    }
-    return DefWindowProcW(hWnd, message, wParam, lParam);
 }

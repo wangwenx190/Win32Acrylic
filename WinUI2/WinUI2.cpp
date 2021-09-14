@@ -40,14 +40,12 @@ static constexpr winrt::Windows::UI::Color TintColor = {255, 252, 252, 252};
 static constexpr double TintOpacity = 0.0;
 static constexpr double LuminosityOpacity = 0.85;
 static constexpr winrt::Windows::UI::Color FallbackColor = {255, 249, 249, 249};
-static constexpr winrt::Windows::UI::Color ExclusionColor = {26, 255, 255, 255};
 } // namespace Light
 namespace Dark {
 static constexpr winrt::Windows::UI::Color TintColor = {255, 44, 44, 44};
 static constexpr double TintOpacity = 0.15;
 static constexpr double LuminosityOpacity = 0.96;
 static constexpr winrt::Windows::UI::Color FallbackColor = {255, 44, 44, 44};
-static constexpr winrt::Windows::UI::Color ExclusionColor = {26, 255, 255, 255};
 } // namespace Dark
 namespace HighContrast {
 // ### TO BE IMPLEMENTED

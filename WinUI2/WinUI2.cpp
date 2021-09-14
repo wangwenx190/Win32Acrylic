@@ -24,6 +24,8 @@
 
 #include <SDKDDKVer.h>
 #include <Windows.h>
+#include <UxTheme.h>
+#include <DwmApi.h>
 #include <Unknwn.h>
 #include <WinRT\Windows.Foundation.Collections.h>
 #include <WinRT\Windows.UI.Xaml.Hosting.h>
@@ -38,9 +40,6 @@ static constexpr winrt::Windows::UI::Color TintColor = {255, 252, 252, 252};
 static constexpr double TintOpacity = 0.0;
 static constexpr double LuminosityOpacity = 0.85;
 static constexpr winrt::Windows::UI::Color FallbackColor = {255, 249, 249, 249};
-static constexpr double BlurRadius = 30.0;
-static constexpr double Saturation = 1.25;
-static constexpr double NoiseOpacity = 0.02;
 static constexpr winrt::Windows::UI::Color ExclusionColor = {26, 255, 255, 255};
 } // namespace Light
 namespace Dark {
@@ -48,15 +47,15 @@ static constexpr winrt::Windows::UI::Color TintColor = {255, 44, 44, 44};
 static constexpr double TintOpacity = 0.15;
 static constexpr double LuminosityOpacity = 0.96;
 static constexpr winrt::Windows::UI::Color FallbackColor = {255, 44, 44, 44};
-static constexpr double BlurRadius = 30.0;
-static constexpr double Saturation = 1.25;
-static constexpr double NoiseOpacity = 0.02;
 static constexpr winrt::Windows::UI::Color ExclusionColor = {26, 255, 255, 255};
 } // namespace Dark
 namespace HighContrast {
 // ### TO BE IMPLEMENTED
 } // namespace HighContrast
 } // namespace Constants
+
+static constexpr DWORD _DWMWA_USE_IMMERSIVE_DARK_MODE_BEFORE_20H1 = 19;
+static constexpr DWORD _DWMWA_USE_IMMERSIVE_DARK_MODE = 20;
 
 static constexpr wchar_t g_personalizeRegistryKey[] = LR"(Software\Microsoft\Windows\CurrentVersion\Themes\Personalize)";
 
@@ -163,8 +162,36 @@ static winrt::Windows::UI::Xaml::Media::AcrylicBrush g_backgroundBrush = nullptr
     }
 }
 
+[[nodiscard]] static inline bool RefreshWindowTheme(const HWND hWnd)
+{
+    if (!IsWindows10RS1OrGreater()) {
+        return false;
+    }
+    if (!hWnd) {
+        return false;
+    }
+    BOOL enabled = FALSE;
+    LPCWSTR themeName = nullptr;
+    if (IsHighContrastModeEnabled()) {
+        // ### TO BE IMPLEMENTED
+    } else if (ShouldAppsUseDarkMode()) {
+        enabled = TRUE;
+        themeName = L"Dark_Explorer";
+    } else {
+        enabled = FALSE;
+        themeName = L"Explorer";
+    }
+    DwmSetWindowAttribute(hWnd, _DWMWA_USE_IMMERSIVE_DARK_MODE_BEFORE_20H1, &enabled, sizeof(enabled));
+    DwmSetWindowAttribute(hWnd, _DWMWA_USE_IMMERSIVE_DARK_MODE, &enabled, sizeof(enabled));
+    SetWindowTheme(hWnd, themeName, nullptr);
+    return true;
+}
+
 [[nodiscard]] static inline bool RefreshBackgroundBrush()
 {
+    if (!IsWindows10RS1OrGreater()) {
+        return false;
+    }
     if (g_backgroundBrush == nullptr) {
         return false;
     }
@@ -216,15 +243,24 @@ static winrt::Windows::UI::Xaml::Media::AcrylicBrush g_backgroundBrush = nullptr
             const UINT height = HIWORD(lParam);
             if (MoveWindow(g_xamlIslandHandle, 0, 0, width, height, TRUE) == FALSE) {
                 MessageBoxW(nullptr, L"Failed to change the geometry of the XAML Island window.", L"Error", MB_ICONERROR | MB_OK);
+                break;
             }
         }
     } break;
     case WM_SETTINGCHANGE: {
+        if (!IsWindows10RS1OrGreater()) {
+            break;
+        }
         // wParam == 0: User-wide setting change
         // wParam == 1: System-wide setting change
         if (((wParam == 0) || (wParam == 1)) && (_wcsicmp(reinterpret_cast<LPCWSTR>(lParam), L"ImmersiveColorSet") == 0)) {
+            if (!RefreshWindowTheme(hWnd)) {
+                MessageBoxW(nullptr, L"Failed to refresh the window theme.", L"Error", MB_ICONERROR | MB_OK);
+                break;
+            }
             if (!RefreshBackgroundBrush()) {
                 MessageBoxW(nullptr, L"Failed to refresh the background brush.", L"Error", MB_ICONERROR | MB_OK);
+                break;
             }
         }
     } break;
@@ -281,6 +317,11 @@ wWinMain(
     );
     if (!g_mainWindowHandle) {
         MessageBoxW(nullptr, L"Failed to create the window.", L"Error", MB_ICONERROR | MB_OK);
+        return -1;
+    }
+
+    if (!RefreshWindowTheme(g_mainWindowHandle)) {
+        MessageBoxW(nullptr, L"Failed to refresh the window theme.", L"Error", MB_ICONERROR | MB_OK);
         return -1;
     }
 

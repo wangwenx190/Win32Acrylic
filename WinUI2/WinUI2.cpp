@@ -70,7 +70,7 @@ static winrt::Windows::UI::Xaml::Hosting::DesktopWindowXamlSource g_source = nul
 static winrt::Windows::UI::Xaml::Controls::Grid g_rootGrid = nullptr;
 static winrt::Windows::UI::Xaml::Media::AcrylicBrush g_backgroundBrush = nullptr;
 
-[[nodiscard]] static inline bool DisplayErrorDialog(LPCWSTR text)
+static inline void DisplayErrorDialog(LPCWSTR text)
 {
     static bool tried = false;
     using MessageBoxWSig = decltype(&::MessageBoxW);
@@ -91,15 +91,13 @@ static winrt::Windows::UI::Xaml::Media::AcrylicBrush g_backgroundBrush = nullptr
     }
     if (MessageBoxWFunc) {
         if (text && (wcslen(text) > 0)) {
+            OutputDebugStringW(text);
             MessageBoxWFunc(nullptr, text, L"Error", MB_ICONERROR | MB_OK);
-            return true;
         } else {
             OutputDebugStringW(L"Failed to show the message box due to the content is empty.");
-            return false;
         }
     } else {
         OutputDebugStringW(L"MessageBoxW() is not available.");
-        return false;
     }
 }
 
@@ -492,7 +490,7 @@ static winrt::Windows::UI::Xaml::Media::AcrylicBrush g_backgroundBrush = nullptr
     }
 }
 
-[[nodiscard]] static inline bool DisposeResources()
+static inline void DisposeResources()
 {
     if (g_source != nullptr) {
         g_source.Close();
@@ -502,7 +500,6 @@ static winrt::Windows::UI::Xaml::Media::AcrylicBrush g_backgroundBrush = nullptr
         g_manager.Close();
         g_manager = nullptr;
     }
-    return true;
 }
 
 [[nodiscard]] static inline LRESULT CALLBACK WindowProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)

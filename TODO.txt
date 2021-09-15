@@ -1,3 +1,0 @@
-1、除kernel32以外，所有API均按需动态加载
-2、RuntimeObject也包含SDKDDKVer.h
-3、窗口类名使用GUID

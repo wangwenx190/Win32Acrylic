@@ -57,8 +57,8 @@ static constexpr DWORD _DWMWA_USE_IMMERSIVE_DARK_MODE = 20;
 
 static constexpr wchar_t g_personalizeRegistryKey[] = LR"(Software\Microsoft\Windows\CurrentVersion\Themes\Personalize)";
 
-static constexpr wchar_t g_windowClassNamePrefix[] = LR"(wangwenx190\Win32Acrylic\WinUI2\WindowClass\)";
-static constexpr wchar_t g_windowTitle[] = L"Win32Acrylic WinUI2 Demo";
+static constexpr wchar_t g_defaultWindowClassName[] = LR"(wangwenx190\Win32Acrylic\WindowClass\0000-0000-0000)";
+static constexpr wchar_t g_defaultWindowTitle[] = L"Win32Acrylic WinUI2 Demo";
 
 static ATOM g_mainWindowAtom = INVALID_ATOM;
 static HWND g_mainWindowHandle = nullptr;
@@ -69,6 +69,36 @@ static winrt::Windows::UI::Xaml::Hosting::WindowsXamlManager g_manager = nullptr
 static winrt::Windows::UI::Xaml::Hosting::DesktopWindowXamlSource g_source = nullptr;
 static winrt::Windows::UI::Xaml::Controls::Grid g_rootGrid = nullptr;
 static winrt::Windows::UI::Xaml::Media::AcrylicBrush g_backgroundBrush = nullptr;
+
+[[nodiscard]] static inline bool IsWindowsOrGreater(const int major, const int minor, const int build)
+{
+    OSVERSIONINFOEXW osvi;
+    SecureZeroMemory(&osvi, sizeof(osvi));
+    osvi.dwOSVersionInfoSize = sizeof(osvi);
+    osvi.dwMajorVersion = major;
+    osvi.dwMinorVersion = minor;
+    osvi.dwBuildNumber = build;
+    const BYTE op = VER_GREATER_EQUAL;
+    DWORDLONG dwlConditionMask = 0;
+    VER_SET_CONDITION(dwlConditionMask, VER_MAJORVERSION, op);
+    VER_SET_CONDITION(dwlConditionMask, VER_MINORVERSION, op);
+    VER_SET_CONDITION(dwlConditionMask, VER_BUILDNUMBER, op);
+    return (VerifyVersionInfoW(&osvi, VER_MAJORVERSION | VER_MINORVERSION | VER_BUILDNUMBER, dwlConditionMask) != FALSE);
+}
+
+[[nodiscard]] static inline bool IsWindows10RS1OrGreater()
+{
+    // Windows 10 Version 1607 (Anniversary Update)
+    // Code name: Red Stone 1
+    return IsWindowsOrGreater(10, 0, 14393);
+}
+
+[[nodiscard]] static inline bool IsWindows1019H1OrGreater()
+{
+    // Windows 10 Version 1903 (May 2019 Update)
+    // Code name: 19H1
+    return IsWindowsOrGreater(10, 0, 18362);
+}
 
 static inline void DisplayErrorDialog(LPCWSTR text)
 {
@@ -99,36 +129,6 @@ static inline void DisplayErrorDialog(LPCWSTR text)
     } else {
         OutputDebugStringW(L"MessageBoxW() is not available.");
     }
-}
-
-[[nodiscard]] static inline bool IsWindowsOrGreater(const int major, const int minor, const int build)
-{
-    OSVERSIONINFOEXW osvi;
-    SecureZeroMemory(&osvi, sizeof(osvi));
-    osvi.dwOSVersionInfoSize = sizeof(osvi);
-    osvi.dwMajorVersion = major;
-    osvi.dwMinorVersion = minor;
-    osvi.dwBuildNumber = build;
-    const BYTE op = VER_GREATER_EQUAL;
-    DWORDLONG dwlConditionMask = 0;
-    VER_SET_CONDITION(dwlConditionMask, VER_MAJORVERSION, op);
-    VER_SET_CONDITION(dwlConditionMask, VER_MINORVERSION, op);
-    VER_SET_CONDITION(dwlConditionMask, VER_BUILDNUMBER, op);
-    return (VerifyVersionInfoW(&osvi, VER_MAJORVERSION | VER_MINORVERSION | VER_BUILDNUMBER, dwlConditionMask) != FALSE);
-}
-
-[[nodiscard]] static inline bool IsWindows10RS1OrGreater()
-{
-    // Windows 10 Version 1607 (Anniversary Update)
-    // Code name: Red Stone 1
-    return IsWindowsOrGreater(10, 0, 14393);
-}
-
-[[nodiscard]] static inline bool IsWindows1019H1OrGreater()
-{
-    // Windows 10 Version 1903 (May 2019 Update)
-    // Code name: 19H1
-    return IsWindowsOrGreater(10, 0, 18362);
 }
 
 [[nodiscard]] static inline bool IsHighContrastModeEnabled()
@@ -502,6 +502,57 @@ static inline void DisposeResources()
     }
 }
 
+[[nodiscard]] static inline bool GenerateGUID(LPCWSTR *str)
+{
+    static bool tried = false;
+    using CoCreateGuidSig = decltype(&::CoCreateGuid);
+    static CoCreateGuidSig CoCreateGuidFunc = nullptr;
+    using StringFromGUID2Sig = decltype(&::StringFromGUID2);
+    static StringFromGUID2Sig StringFromGUID2Func = nullptr;
+    if (!CoCreateGuidFunc || !StringFromGUID2Func) {
+        if (!tried) {
+            tried = true;
+            const HMODULE OLE32DLL = LoadLibraryExW(L"OLE32.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
+            if (OLE32DLL) {
+                CoCreateGuidFunc = reinterpret_cast<CoCreateGuidSig>(GetProcAddress(OLE32DLL, "CoCreateGuid"));
+                if (!CoCreateGuidFunc) {
+                    OutputDebugStringW(L"Failed to resolve symbol CoCreateGuid().");
+                }
+                StringFromGUID2Func = reinterpret_cast<StringFromGUID2Sig>(GetProcAddress(OLE32DLL, "StringFromGUID2"));
+                if (!StringFromGUID2Func) {
+                    OutputDebugStringW(L"Failed to resolve symbol StringFromGUID2().");
+                }
+            } else {
+                OutputDebugStringW(L"Failed to load dynamic link library OLE32.dll.");
+            }
+        }
+    }
+    if (CoCreateGuidFunc && StringFromGUID2Func) {
+        if (!str) {
+            OutputDebugStringW(L"Failed to generate GUID due to the given string address is null.");
+            return false;
+        }
+        GUID guid = {};
+        if (FAILED(CoCreateGuidFunc(&guid))) {
+            DisplayErrorDialog(L"Failed to generate GUID.");
+            return false;
+        }
+        auto buf = new wchar_t[MAX_PATH];
+        SecureZeroMemory(buf, sizeof(buf));
+        if (StringFromGUID2Func(guid, buf, MAX_PATH) == 0) {
+            delete [] buf;
+            buf = nullptr;
+            DisplayErrorDialog(L"Failed to convert GUID to string.");
+            return false;
+        }
+        *str = buf;
+        return true;
+    } else {
+        OutputDebugStringW(L"CoCreateGuid() and StringFromGUID2() are not available.");
+        return false;
+    }
+}
+
 [[nodiscard]] static inline LRESULT CALLBACK WindowProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
     static bool tried = false;
@@ -629,7 +680,18 @@ static inline void DisposeResources()
         wcex.style = CS_HREDRAW | CS_VREDRAW;
         wcex.lpfnWndProc = WndProc;
         wcex.hInstance = instance;
-        wcex.lpszClassName = nullptr;
+        wcex.lpszClassName = [name]{
+            if (name && (wcslen(name) > 0)) {
+                return name;
+            } else {
+                LPCWSTR guid = nullptr;
+                if (GenerateGUID(&guid)) {
+                    return guid;
+                } else {
+                    return g_defaultWindowClassName;
+                }
+            }
+        }();
         wcex.hCursor = LoadCursorWFunc(nullptr, IDC_ARROW);
         wcex.hIcon = LoadIconWFunc(instance, MAKEINTRESOURCEW(IDI_APPICON));
         wcex.hIconSm = LoadIconWFunc(instance, MAKEINTRESOURCEW(IDI_APPICON_SMALL));
@@ -672,7 +734,13 @@ static inline void DisposeResources()
         g_mainWindowHandle = CreateWindowExWFunc(
             WS_EX_NOREDIRECTIONBITMAP,
             reinterpret_cast<LPCWSTR>(MAKEWORD(atom, 0)),
-            g_windowTitle,
+            [title]{
+                if (title && (wcslen(title) > 0)) {
+                    return title;
+                } else {
+                    return g_defaultWindowTitle;
+                }
+            }(),
             WS_OVERLAPPEDWINDOW,
             CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
             nullptr, nullptr, instance, nullptr);
@@ -866,6 +934,7 @@ wWinMain(
     }
 
     if (!InitializeXAMLIsland()) {
+        DisplayErrorDialog(L"Failed to initialize XAML Island.");
         return -1;
     }
 

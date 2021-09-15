@@ -69,7 +69,7 @@ static winrt::Windows::UI::Xaml::Hosting::DesktopWindowXamlSource g_source = nul
 static winrt::Windows::UI::Xaml::Controls::Grid g_rootGrid = nullptr;
 static winrt::Windows::UI::Xaml::Media::AcrylicBrush g_backgroundBrush = nullptr;
 
-[[nodiscard]] static inline bool IsWindowsNOrGreater(const int major, const int minor, const int build)
+[[nodiscard]] static inline bool IsWindowsOrGreater(const int major, const int minor, const int build)
 {
     OSVERSIONINFOEXW osvi;
     SecureZeroMemory(&osvi, sizeof(osvi));
@@ -89,14 +89,14 @@ static winrt::Windows::UI::Xaml::Media::AcrylicBrush g_backgroundBrush = nullptr
 {
     // Windows 10 Version 1607 (Anniversary Update)
     // Code name: Red Stone 1
-    return IsWindowsNOrGreater(10, 0, 14393);
+    return IsWindowsOrGreater(10, 0, 14393);
 }
 
 [[nodiscard]] static inline bool IsWindows1019H1OrGreater()
 {
     // Windows 10 Version 1903 (May 2019 Update)
     // Code name: 19H1
-    return IsWindowsNOrGreater(10, 0, 18362);
+    return IsWindowsOrGreater(10, 0, 18362);
 }
 
 [[nodiscard]] static inline bool IsHighContrastModeEnabled()
@@ -168,20 +168,28 @@ static winrt::Windows::UI::Xaml::Media::AcrylicBrush g_backgroundBrush = nullptr
     if (!hWnd) {
         return false;
     }
-    BOOL enabled = FALSE;
+    BOOL useDarkFrame = FALSE;
     LPCWSTR themeName = nullptr;
     if (IsHighContrastModeEnabled()) {
         // ### TO BE IMPLEMENTED
     } else if (ShouldAppsUseDarkMode()) {
-        enabled = TRUE;
+        useDarkFrame = TRUE;
         themeName = L"Dark_Explorer";
     } else {
-        enabled = FALSE;
+        useDarkFrame = FALSE;
         themeName = L"Explorer";
     }
-    DwmSetWindowAttribute(hWnd, _DWMWA_USE_IMMERSIVE_DARK_MODE_BEFORE_20H1, &enabled, sizeof(enabled));
-    DwmSetWindowAttribute(hWnd, _DWMWA_USE_IMMERSIVE_DARK_MODE, &enabled, sizeof(enabled));
-    SetWindowTheme(hWnd, themeName, nullptr);
+    const HRESULT hr1 = DwmSetWindowAttribute(hWnd, _DWMWA_USE_IMMERSIVE_DARK_MODE_BEFORE_20H1, &useDarkFrame, sizeof(useDarkFrame));
+    const HRESULT hr2 = DwmSetWindowAttribute(hWnd, _DWMWA_USE_IMMERSIVE_DARK_MODE, &useDarkFrame, sizeof(useDarkFrame));
+    const HRESULT hr3 = SetWindowTheme(hWnd, themeName, nullptr);
+    if (FAILED(hr1) && FAILED(hr2)) {
+        OutputDebugStringW(L"Failed to change the window dark mode state.");
+        return false;
+    }
+    if (FAILED(hr3)) {
+        OutputDebugStringW(L"Failed to change the window theme.");
+        return false;
+    }
     return true;
 }
 
@@ -351,8 +359,7 @@ wWinMain(
         MessageBoxW(nullptr, L"Failed to retrieve the client area rect of the window.", L"Error", MB_ICONERROR | MB_OK);
         return -1;
     }
-    if (SetWindowPos(g_xamlIslandHandle, nullptr, 0, 0, rect.right, rect.bottom,
-                     SWP_NOACTIVATE | SWP_SHOWWINDOW | SWP_NOZORDER | SWP_NOOWNERZORDER) == FALSE) {
+    if (SetWindowPos(g_xamlIslandHandle, nullptr, 0, 0, rect.right, rect.bottom, SWP_SHOWWINDOW | SWP_NOZORDER | SWP_NOOWNERZORDER) == FALSE) {
         MessageBoxW(nullptr, L"Failed to change the geometry of the XAML Island window.", L"Error", MB_ICONERROR | MB_OK);
         return -1;
     }

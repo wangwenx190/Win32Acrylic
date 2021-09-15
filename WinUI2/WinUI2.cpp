@@ -57,17 +57,51 @@ static constexpr DWORD _DWMWA_USE_IMMERSIVE_DARK_MODE = 20;
 
 static constexpr wchar_t g_personalizeRegistryKey[] = LR"(Software\Microsoft\Windows\CurrentVersion\Themes\Personalize)";
 
-static constexpr wchar_t g_windowClassName[] = LR"(wangwenx190\Win32Acrylic\WinUI2\WindowClass)";
+static constexpr wchar_t g_windowClassNamePrefix[] = LR"(wangwenx190\Win32Acrylic\WinUI2\WindowClass\)";
 static constexpr wchar_t g_windowTitle[] = L"Win32Acrylic WinUI2 Demo";
 
+static ATOM g_mainWindowAtom = INVALID_ATOM;
 static HWND g_mainWindowHandle = nullptr;
-static HWND g_xamlIslandHandle = nullptr;
+static HWND g_xamlIslandWindowHandle = nullptr;
 static HINSTANCE g_instance = nullptr;
 
 static winrt::Windows::UI::Xaml::Hosting::WindowsXamlManager g_manager = nullptr;
 static winrt::Windows::UI::Xaml::Hosting::DesktopWindowXamlSource g_source = nullptr;
 static winrt::Windows::UI::Xaml::Controls::Grid g_rootGrid = nullptr;
 static winrt::Windows::UI::Xaml::Media::AcrylicBrush g_backgroundBrush = nullptr;
+
+[[nodiscard]] static inline bool DisplayErrorDialog(LPCWSTR text)
+{
+    static bool tried = false;
+    using MessageBoxWSig = decltype(&::MessageBoxW);
+    static MessageBoxWSig MessageBoxWFunc = nullptr;
+    if (!MessageBoxWFunc) {
+        if (!tried) {
+            tried = true;
+            const HMODULE User32DLL = LoadLibraryExW(L"User32.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
+            if (User32DLL) {
+                MessageBoxWFunc = reinterpret_cast<MessageBoxWSig>(GetProcAddress(User32DLL, "MessageBoxW"));
+                if (!MessageBoxWFunc) {
+                    OutputDebugStringW(L"Failed to resolve symbol MessageBoxW().");
+                }
+            } else {
+                OutputDebugStringW(L"Failed to load dynamic link library User32.dll.");
+            }
+        }
+    }
+    if (MessageBoxWFunc) {
+        if (text && (wcslen(text) > 0)) {
+            MessageBoxWFunc(nullptr, text, L"Error", MB_ICONERROR | MB_OK);
+            return true;
+        } else {
+            OutputDebugStringW(L"Failed to show the message box due to the content is empty.");
+            return false;
+        }
+    } else {
+        OutputDebugStringW(L"MessageBoxW() is not available.");
+        return false;
+    }
+}
 
 [[nodiscard]] static inline bool IsWindowsOrGreater(const int major, const int minor, const int build)
 {
@@ -101,14 +135,36 @@ static winrt::Windows::UI::Xaml::Media::AcrylicBrush g_backgroundBrush = nullptr
 
 [[nodiscard]] static inline bool IsHighContrastModeEnabled()
 {
-    HIGHCONTRASTW hc;
-    SecureZeroMemory(&hc, sizeof(hc));
-    hc.cbSize = sizeof(hc);
-    if (SystemParametersInfoW(SPI_GETHIGHCONTRAST, sizeof(hc), &hc, 0) == FALSE) {
-        OutputDebugStringW(L"Failed to retrieve the high contrast mode state.");
+    static bool tried = false;
+    using SystemParametersInfoWSig = decltype(&::SystemParametersInfoW);
+    static SystemParametersInfoWSig SystemParametersInfoWFunc = nullptr;
+    if (!SystemParametersInfoWFunc) {
+        if (!tried) {
+            tried = true;
+            const HMODULE User32DLL = LoadLibraryExW(L"User32.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
+            if (User32DLL) {
+                SystemParametersInfoWFunc = reinterpret_cast<SystemParametersInfoWSig>(GetProcAddress(User32DLL, "SystemParametersInfoW"));
+                if (!SystemParametersInfoWFunc) {
+                    OutputDebugStringW(L"Failed to resolve symbol SystemParametersInfoW().");
+                }
+            } else {
+                OutputDebugStringW(L"Failed to load dynamic link library User32.dll.");
+            }
+        }
+    }
+    if (SystemParametersInfoWFunc) {
+        HIGHCONTRASTW hc;
+        SecureZeroMemory(&hc, sizeof(hc));
+        hc.cbSize = sizeof(hc);
+        if (SystemParametersInfoWFunc(SPI_GETHIGHCONTRAST, sizeof(hc), &hc, 0) == FALSE) {
+            OutputDebugStringW(L"Failed to retrieve the high contrast mode state.");
+            return false;
+        }
+        return (hc.dwFlags & HCF_HIGHCONTRASTON);
+    } else {
+        OutputDebugStringW(L"SystemParametersInfoW() is not available.");
         return false;
     }
-    return (hc.dwFlags & HCF_HIGHCONTRASTON);
 }
 
 [[nodiscard]] static inline bool ShouldAppsUseDarkMode()
@@ -203,9 +259,6 @@ static winrt::Windows::UI::Xaml::Media::AcrylicBrush g_backgroundBrush = nullptr
     if (!IsWindows10RS1OrGreater()) {
         return false;
     }
-    if (!hWnd) {
-        return false;
-    }
     static bool tried = false;
     using DwmSetWindowAttributeSig = decltype(&::DwmSetWindowAttribute);
     static DwmSetWindowAttributeSig DwmSetWindowAttributeFunc = nullptr;
@@ -235,6 +288,10 @@ static winrt::Windows::UI::Xaml::Media::AcrylicBrush g_backgroundBrush = nullptr
         }
     }
     if (DwmSetWindowAttributeFunc && SetWindowThemeFunc) {
+        if (!hWnd) {
+            OutputDebugStringW(L"Failed to refresh the window theme due to the given window handle is null.");
+            return false;
+        }
         BOOL useDarkFrame = FALSE;
         LPCWSTR themeName = nullptr;
         if (IsHighContrastModeEnabled()) {
@@ -270,6 +327,7 @@ static winrt::Windows::UI::Xaml::Media::AcrylicBrush g_backgroundBrush = nullptr
         return false;
     }
     if (g_backgroundBrush == nullptr) {
+        OutputDebugStringW(L"Failed to refresh the background brush due to the brush is null.");
         return false;
     }
     if (IsHighContrastModeEnabled()) {
@@ -288,38 +346,214 @@ static winrt::Windows::UI::Xaml::Media::AcrylicBrush g_backgroundBrush = nullptr
     return true;
 }
 
-[[nodiscard]] static inline LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
+[[nodiscard]] static inline bool CloseMainWindow(const HWND hWnd)
 {
+    static bool tried = false;
+    using GetClassLongPtrWSig = decltype(&::GetClassLongPtrW);
+    static GetClassLongPtrWSig GetClassLongPtrWFunc = nullptr;
+    using GetWindowLongPtrWSig = decltype(&::GetWindowLongPtrW);
+    static GetWindowLongPtrWSig GetWindowLongPtrWFunc = nullptr;
+    using DestroyWindowSig = decltype(&::DestroyWindow);
+    static DestroyWindowSig DestroyWindowFunc = nullptr;
+    using UnregisterClassWSig = decltype(&::UnregisterClassW);
+    static UnregisterClassWSig UnregisterClassWFunc = nullptr;
+    if (!GetClassLongPtrWFunc || !GetWindowLongPtrWFunc || !DestroyWindowFunc || !UnregisterClassWFunc) {
+        if (!tried) {
+            tried = true;
+            const HMODULE User32DLL = LoadLibraryExW(L"User32.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
+            if (User32DLL) {
+                GetClassLongPtrWFunc = reinterpret_cast<GetClassLongPtrWSig>(GetProcAddress(User32DLL, "GetClassLongPtrW"));
+                if (!GetClassLongPtrWFunc) {
+                    OutputDebugStringW(L"Failed to resolve symbol GetClassLongPtrW().");
+                }
+                GetWindowLongPtrWFunc = reinterpret_cast<GetWindowLongPtrWSig>(GetProcAddress(User32DLL, "GetWindowLongPtrW"));
+                if (!GetWindowLongPtrWFunc) {
+                    OutputDebugStringW(L"Failed to resolve symbol GetWindowLongPtrW().");
+                }
+                DestroyWindowFunc = reinterpret_cast<DestroyWindowSig>(GetProcAddress(User32DLL, "DestroyWindow"));
+                if (!DestroyWindowFunc) {
+                    OutputDebugStringW(L"Failed to resolve symbol DestroyWindow().");
+                }
+                UnregisterClassWFunc = reinterpret_cast<UnregisterClassWSig>(GetProcAddress(User32DLL, "UnregisterClassW"));
+                if (!UnregisterClassWFunc) {
+                    OutputDebugStringW(L"Failed to resolve symbol UnregisterClassW().");
+                }
+            } else {
+                OutputDebugStringW(L"Failed to load dynamic link library User32.dll.");
+            }
+        }
+    }
+    if (GetClassLongPtrWFunc && GetWindowLongPtrWFunc && DestroyWindowFunc && UnregisterClassWFunc) {
+        if (!hWnd) {
+            OutputDebugStringW(L"Failed to close the window due to the given window handle is null.");
+            return false;
+        }
+        if (DestroyWindowFunc(hWnd) == FALSE) {
+            DisplayErrorDialog(L"Failed to destroy the window.");
+            return false;
+        }
+        const auto atom = static_cast<ATOM>(GetClassLongPtrWFunc(hWnd, GCW_ATOM));
+        if (atom == INVALID_ATOM) {
+            DisplayErrorDialog(L"Failed to retrieve the ATOM of the window.");
+            return false;
+        }
+        const auto instance = reinterpret_cast<HINSTANCE>(GetWindowLongPtrWFunc(hWnd, GWLP_HINSTANCE));
+        if (!instance) {
+            DisplayErrorDialog(L"Failed to retrieve the HINSTANCE of the window.");
+            return false;
+        }
+        if (UnregisterClassWFunc(reinterpret_cast<LPCWSTR>(MAKEWORD(atom, 0)), instance) == FALSE) {
+            DisplayErrorDialog(L"Failed to unregister the window class.");
+            return false;
+        }
+        return true;
+    } else {
+        OutputDebugStringW(L"GetClassLongPtrW(), GetWindowLongPtrW(), DestroyWindow() and UnregisterClassW() are not available.");
+        return false;
+    }
+}
+
+[[nodiscard]] static inline bool SyncXAMLIslandPosition(const UINT width, const UINT height)
+{
+    static bool tried = false;
+    using MoveWindowSig = decltype(&::MoveWindow);
+    static MoveWindowSig MoveWindowFunc = nullptr;
+    if (!MoveWindowFunc) {
+        if (!tried) {
+            tried = true;
+            const HMODULE User32DLL = LoadLibraryExW(L"User32.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
+            if (User32DLL) {
+                MoveWindowFunc = reinterpret_cast<MoveWindowSig>(GetProcAddress(User32DLL, "MoveWindow"));
+                if (!MoveWindowFunc) {
+                    OutputDebugStringW(L"Failed to resolve symbol MoveWindow().");
+                }
+            } else {
+                OutputDebugStringW(L"Failed to load dynamic link library User32.dll.");
+            }
+        }
+    }
+    if (MoveWindowFunc) {
+        if (!g_xamlIslandWindowHandle) {
+            OutputDebugStringW(L"Failed to sync the geometry of the XAML Island window due to its window handle is null.");
+            return false;
+        }
+        if ((width == 0) || (height == 0)) {
+            OutputDebugStringW(L"Failed to sync the geometry of the XAML Island window due to invalid width and height.");
+            return false;
+        }
+        if (MoveWindowFunc(g_xamlIslandWindowHandle, 0, 0, width, height, TRUE) == FALSE) {
+            DisplayErrorDialog(L"Failed to sync the geometry of the XAML Island window.");
+            return false;
+        }
+        return true;
+    } else {
+        OutputDebugStringW(L"MoveWindow() is not available.");
+        return false;
+    }
+}
+
+[[nodiscard]] static inline bool SyncXAMLIslandPosition()
+{
+    static bool tried = false;
+    using GetClientRectSig = decltype(&::GetClientRect);
+    static GetClientRectSig GetClientRectFunc = nullptr;
+    if (!GetClientRectFunc) {
+        if (!tried) {
+            tried = true;
+            const HMODULE User32DLL = LoadLibraryExW(L"User32.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
+            if (User32DLL) {
+                GetClientRectFunc = reinterpret_cast<GetClientRectSig>(GetProcAddress(User32DLL, "GetClientRect"));
+                if (!GetClientRectFunc) {
+                    OutputDebugStringW(L"Failed to resolve symbol GetClientRect().");
+                }
+            } else {
+                OutputDebugStringW(L"Failed to load dynamic link library User32.dll.");
+            }
+        }
+    }
+    if (GetClientRectFunc) {
+        if (!g_mainWindowHandle) {
+            OutputDebugStringW(L"Failed to sync the geometry of the XAML Island window due to main window handle is null.");
+            return false;
+        }
+        if (!g_xamlIslandWindowHandle) {
+            OutputDebugStringW(L"Failed to sync the geometry of the XAML Island window due to its window handle is null.");
+            return false;
+        }
+        RECT clientRect = {0, 0, 0, 0};
+        if (GetClientRectFunc(g_mainWindowHandle, &clientRect) == FALSE) {
+            DisplayErrorDialog(L"Failed to retrieve the client rect of the window.");
+            return false;
+        }
+        return SyncXAMLIslandPosition(clientRect.right, clientRect.bottom);
+    } else {
+        OutputDebugStringW(L"GetClientRect() is not available.");
+        return false;
+    }
+}
+
+[[nodiscard]] static inline bool DisposeResources()
+{
+    if (g_source != nullptr) {
+        g_source.Close();
+        g_source = nullptr;
+    }
+    if (g_manager != nullptr) {
+        g_manager.Close();
+        g_manager = nullptr;
+    }
+    return true;
+}
+
+[[nodiscard]] static inline LRESULT CALLBACK WindowProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
+{
+    static bool tried = false;
+    using PostQuitMessageSig = decltype(&::PostQuitMessage);
+    static PostQuitMessageSig PostQuitMessageFunc = nullptr;
+    using DefWindowProcWSig = decltype(&::DefWindowProcW);
+    static DefWindowProcWSig DefWindowProcWFunc = nullptr;
+    if (!PostQuitMessageFunc || !DefWindowProcWFunc) {
+        if (!tried) {
+            tried = true;
+            const HMODULE User32DLL = LoadLibraryExW(L"User32.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
+            if (User32DLL) {
+                PostQuitMessageFunc = reinterpret_cast<PostQuitMessageSig>(GetProcAddress(User32DLL, "PostQuitMessage"));
+                if (!PostQuitMessageFunc) {
+                    OutputDebugStringW(L"Failed to resolve symbol PostQuitMessage().");
+                }
+                DefWindowProcWFunc = reinterpret_cast<DefWindowProcWSig>(GetProcAddress(User32DLL, "DefWindowProcW"));
+                if (!DefWindowProcWFunc) {
+                    OutputDebugStringW(L"Failed to resolve symbol DefWindowProcW().");
+                }
+            } else {
+                OutputDebugStringW(L"Failed to load dynamic link library User32.dll.");
+            }
+        }
+    }
     switch (message) {
     case WM_CLOSE: {
-        if (DestroyWindow(hWnd) == FALSE) {
-            MessageBoxW(nullptr, L"Failed to destroy the window.", L"Error", MB_ICONERROR | MB_OK);
-            break;
-        }
-        if (UnregisterClassW(g_windowClassName, g_instance) == FALSE) {
-            MessageBoxW(nullptr, L"Failed to unregister the window class.", L"Error", MB_ICONERROR | MB_OK);
+        if (!CloseMainWindow(hWnd)) {
+            DisplayErrorDialog(L"Failed to close the window.");
             break;
         }
         return 0;
     } break;
     case WM_DESTROY: {
-        if (g_source != nullptr) {
-            g_source.Close();
-            g_source = nullptr;
+        DisposeResources();
+        if (PostQuitMessageFunc) {
+            PostQuitMessageFunc(0);
+            return 0;
+        } else {
+            OutputDebugStringW(L"PostQuitMessage() is not available.");
+            break;
         }
-        if (g_manager != nullptr) {
-            g_manager.Close();
-            g_manager = nullptr;
-        }
-        PostQuitMessage(0);
-        return 0;
     } break;
     case WM_SIZE: {
-        if (g_xamlIslandHandle) {
+        if (g_xamlIslandWindowHandle) {
             const UINT width = LOWORD(lParam);
             const UINT height = HIWORD(lParam);
-            if (MoveWindow(g_xamlIslandHandle, 0, 0, width, height, TRUE) == FALSE) {
-                MessageBoxW(nullptr, L"Failed to change the geometry of the XAML Island window.", L"Error", MB_ICONERROR | MB_OK);
+            if (!SyncXAMLIslandPosition(width, height)) {
+                DisplayErrorDialog(L"Failed to sync the geometry of the XAML Island window.");
                 break;
             }
         }
@@ -332,11 +566,11 @@ static winrt::Windows::UI::Xaml::Media::AcrylicBrush g_backgroundBrush = nullptr
         // wParam == 1: System-wide setting change
         if (((wParam == 0) || (wParam == 1)) && (_wcsicmp(reinterpret_cast<LPCWSTR>(lParam), L"ImmersiveColorSet") == 0)) {
             if (!RefreshWindowTheme(hWnd)) {
-                MessageBoxW(nullptr, L"Failed to refresh the window theme.", L"Error", MB_ICONERROR | MB_OK);
+                DisplayErrorDialog(L"Failed to refresh the window theme.");
                 break;
             }
             if (!RefreshBackgroundBrush()) {
-                MessageBoxW(nullptr, L"Failed to refresh the background brush.", L"Error", MB_ICONERROR | MB_OK);
+                DisplayErrorDialog(L"Failed to refresh the background brush.");
                 break;
             }
         }
@@ -344,7 +578,261 @@ static winrt::Windows::UI::Xaml::Media::AcrylicBrush g_backgroundBrush = nullptr
     default:
         break;
     }
-    return DefWindowProcW(hWnd, message, wParam, lParam);
+    if (DefWindowProcWFunc) {
+        return DefWindowProcWFunc(hWnd, message, wParam, lParam);
+    } else {
+        OutputDebugStringW(L"DefWindowProcW() is not available.");
+        return 0;
+    }
+}
+
+[[nodiscard]] static inline bool RegisterMainWindowClass(LPCWSTR name, const WNDPROC WndProc, const HINSTANCE instance)
+{
+    static bool tried = false;
+    using LoadCursorWSig = decltype(&::LoadCursorW);
+    static LoadCursorWSig LoadCursorWFunc = nullptr;
+    using LoadIconWSig = decltype(&::LoadIconW);
+    static LoadIconWSig LoadIconWFunc = nullptr;
+    using RegisterClassExWSig = decltype(&::RegisterClassExW);
+    static RegisterClassExWSig RegisterClassExWFunc = nullptr;
+    if (!LoadCursorWFunc || !LoadIconWFunc || !RegisterClassExWFunc) {
+        if (!tried) {
+            tried = true;
+            const HMODULE User32DLL = LoadLibraryExW(L"User32.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
+            if (User32DLL) {
+                LoadCursorWFunc = reinterpret_cast<LoadCursorWSig>(GetProcAddress(User32DLL, "LoadCursorW"));
+                if (!LoadCursorWFunc) {
+                    OutputDebugStringW(L"Failed to resolve symbol LoadCursorW().");
+                }
+                LoadIconWFunc = reinterpret_cast<LoadIconWSig>(GetProcAddress(User32DLL, "LoadIconW"));
+                if (!LoadIconWFunc) {
+                    OutputDebugStringW(L"Failed to resolve symbol LoadIconW().");
+                }
+                RegisterClassExWFunc = reinterpret_cast<RegisterClassExWSig>(GetProcAddress(User32DLL, "RegisterClassExW"));
+                if (!RegisterClassExWFunc) {
+                    OutputDebugStringW(L"Failed to resolve symbol RegisterClassExW().");
+                }
+            } else {
+                OutputDebugStringW(L"Failed to load dynamic link library User32.dll.");
+            }
+        }
+    }
+    if (LoadCursorWFunc && LoadIconWFunc && RegisterClassExWFunc) {
+        if (!WndProc) {
+            OutputDebugStringW(L"Failed to register the window class due to the given WNDPROC is null.");
+            return false;
+        }
+        if (!instance) {
+            OutputDebugStringW(L"Failed to register the window class due to the given HINSTANCE is null.");
+            return false;
+        }
+        WNDCLASSEXW wcex;
+        SecureZeroMemory(&wcex, sizeof(wcex));
+        wcex.cbSize = sizeof(wcex);
+        wcex.style = CS_HREDRAW | CS_VREDRAW;
+        wcex.lpfnWndProc = WndProc;
+        wcex.hInstance = instance;
+        wcex.lpszClassName = nullptr;
+        wcex.hCursor = LoadCursorWFunc(nullptr, IDC_ARROW);
+        wcex.hIcon = LoadIconWFunc(instance, MAKEINTRESOURCEW(IDI_APPICON));
+        wcex.hIconSm = LoadIconWFunc(instance, MAKEINTRESOURCEW(IDI_APPICON_SMALL));
+        g_mainWindowAtom = RegisterClassExWFunc(&wcex);
+        return (g_mainWindowAtom != INVALID_ATOM);
+    } else {
+        OutputDebugStringW(L"LoadCursorW(), LoadIconW() and RegisterClassExW() are not available.");
+        return false;
+    }
+}
+
+[[nodiscard]] static inline bool CreateMainWindow(LPCWSTR title, const ATOM atom, const HINSTANCE instance)
+{
+    static bool tried = false;
+    using CreateWindowExWSig = decltype(&::CreateWindowExW);
+    static CreateWindowExWSig CreateWindowExWFunc = nullptr;
+    if (!CreateWindowExWFunc) {
+        if (!tried) {
+            tried = true;
+            const HMODULE User32DLL = LoadLibraryExW(L"User32.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
+            if (User32DLL) {
+                CreateWindowExWFunc = reinterpret_cast<CreateWindowExWSig>(GetProcAddress(User32DLL, "CreateWindowExW"));
+                if (!CreateWindowExWFunc) {
+                    OutputDebugStringW(L"Failed to resolve symbol CreateWindowExW().");
+                }
+            } else {
+                OutputDebugStringW(L"Failed to load dynamic link library User32.dll.");
+            }
+        }
+    }
+    if (CreateWindowExWFunc) {
+        if (atom == INVALID_ATOM) {
+            OutputDebugStringW(L"Failed to create the window due to the given ATOM is invalid.");
+            return false;
+        }
+        if (!instance) {
+            OutputDebugStringW(L"Failed to create the window due to the given HINSTANCE is null.");
+            return false;
+        }
+        g_mainWindowHandle = CreateWindowExWFunc(
+            WS_EX_NOREDIRECTIONBITMAP,
+            reinterpret_cast<LPCWSTR>(MAKEWORD(atom, 0)),
+            g_windowTitle,
+            WS_OVERLAPPEDWINDOW,
+            CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
+            nullptr, nullptr, instance, nullptr);
+        return (g_mainWindowHandle != nullptr);
+    } else {
+        OutputDebugStringW(L"CreateWindowExW() is not available.");
+        return false;
+    }
+}
+
+[[nodiscard]] static inline bool ShowAndUpdateWindow(const HWND hWnd, const int nCmdShow)
+{
+    static bool tried = false;
+    using ShowWindowSig = decltype(&::ShowWindow);
+    static ShowWindowSig ShowWindowFunc = nullptr;
+    using UpdateWindowSig = decltype(&::UpdateWindow);
+    static UpdateWindowSig UpdateWindowFunc = nullptr;
+    if (!ShowWindowFunc || !UpdateWindowFunc) {
+        if (!tried) {
+            tried = true;
+            const HMODULE User32DLL = LoadLibraryExW(L"User32.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
+            if (User32DLL) {
+                ShowWindowFunc = reinterpret_cast<ShowWindowSig>(GetProcAddress(User32DLL, "ShowWindow"));
+                if (!ShowWindowFunc) {
+                    OutputDebugStringW(L"Failed to resolve symbol ShowWindow().");
+                }
+                UpdateWindowFunc = reinterpret_cast<UpdateWindowSig>(GetProcAddress(User32DLL, "UpdateWindow"));
+                if (!UpdateWindowFunc) {
+                    OutputDebugStringW(L"Failed to resolve symbol UpdateWindow().");
+                }
+            } else {
+                OutputDebugStringW(L"Failed to load dynamic link library User32.dll.");
+            }
+        }
+    }
+    if (ShowWindowFunc && UpdateWindowFunc) {
+        if (!hWnd) {
+            OutputDebugStringW(L"Failed to show the window due to the given window handle is null.");
+            return false;
+        }
+        ShowWindowFunc(hWnd, nCmdShow);
+        if (UpdateWindowFunc(hWnd) == FALSE) {
+            DisplayErrorDialog(L"Failed to update the window.");
+            return false;
+        }
+        return true;
+    } else {
+        OutputDebugStringW(L"ShowWindow() and UpdateWindow() are not available.");
+        return false;
+    }
+}
+
+[[nodiscard]] static inline bool InitializeXAMLIsland()
+{
+    // The call to winrt::init_apartment() initializes COM. By default, in a multithreaded apartment.
+    winrt::init_apartment(winrt::apartment_type::single_threaded);
+    // Initialize the XAML framework's core window for the current thread.
+    g_manager = winrt::Windows::UI::Xaml::Hosting::WindowsXamlManager::InitializeForCurrentThread();
+    // This DesktopWindowXamlSource is the object that enables a non-UWP desktop application
+    // to host WinRT XAML controls in any UI element that is associated with a window handle (HWND).
+    g_source = winrt::Windows::UI::Xaml::Hosting::DesktopWindowXamlSource();
+    // Get handle to the core window.
+    const auto interop = g_source.as<IDesktopWindowXamlSourceNative>();
+    if (!interop) {
+        DisplayErrorDialog(L"Failed to retrieve XAML Island's core window.");
+        return false;
+    }
+    // Parent the DesktopWindowXamlSource object to the current window.
+    winrt::check_hresult(interop->AttachToWindow(g_mainWindowHandle));
+    // Get the new child window's HWND.
+    winrt::check_hresult(interop->get_WindowHandle(&g_xamlIslandWindowHandle));
+    if (!g_xamlIslandWindowHandle) {
+        DisplayErrorDialog(L"Failed to retrieve the window handle of XAML Island's core window.");
+        return false;
+    }
+    // Update the XAML Island window size because initially it is 0x0.
+    if (!SyncXAMLIslandPosition()) {
+        DisplayErrorDialog(L"Failed to sync the geometry of the XAML Island window.");
+        return false;
+    }
+    // Show the XAML Island window.
+    if (!ShowAndUpdateWindow(g_xamlIslandWindowHandle, SW_SHOW)) {
+        DisplayErrorDialog(L"Failed to show and update the XAML Island window.");
+        return false;
+    }
+    // Create the XAML content.
+    g_rootGrid = winrt::Windows::UI::Xaml::Controls::Grid();
+    g_backgroundBrush = winrt::Windows::UI::Xaml::Media::AcrylicBrush();
+    if (!RefreshBackgroundBrush()) {
+        DisplayErrorDialog(L"Failed to refresh the background brush.");
+        return false;
+    }
+    g_backgroundBrush.BackgroundSource(winrt::Windows::UI::Xaml::Media::AcrylicBackgroundSource::HostBackdrop);
+    g_rootGrid.Background(g_backgroundBrush);
+    //g_rootGrid.Children().Clear();
+    //g_rootGrid.Children().Append(/* some UWP control */);
+    //g_rootGrid.UpdateLayout();
+    g_source.Content(g_rootGrid);
+    return true;
+}
+
+[[nodiscard]] static inline int MessageLoop()
+{
+    static bool tried = false;
+    using GetMessageWSig = decltype(&::GetMessageW);
+    static GetMessageWSig GetMessageWFunc = nullptr;
+    using TranslateMessageSig = decltype(&::TranslateMessage);
+    static TranslateMessageSig TranslateMessageFunc = nullptr;
+    using DispatchMessageWSig = decltype(&::DispatchMessageW);
+    static DispatchMessageWSig DispatchMessageWFunc = nullptr;
+    if (!GetMessageWFunc || !TranslateMessageFunc || !DispatchMessageWFunc) {
+        if (!tried) {
+            tried = true;
+            const HMODULE User32DLL = LoadLibraryExW(L"User32.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
+            if (User32DLL) {
+                GetMessageWFunc = reinterpret_cast<GetMessageWSig>(GetProcAddress(User32DLL, "GetMessageW"));
+                if (!GetMessageWFunc) {
+                    OutputDebugStringW(L"Failed to resolve symbol GetMessageW().");
+                }
+                TranslateMessageFunc = reinterpret_cast<TranslateMessageSig>(GetProcAddress(User32DLL, "TranslateMessage"));
+                if (!TranslateMessageFunc) {
+                    OutputDebugStringW(L"Failed to resolve symbol TranslateMessage().");
+                }
+                DispatchMessageWFunc = reinterpret_cast<DispatchMessageWSig>(GetProcAddress(User32DLL, "DispatchMessageW"));
+                if (!DispatchMessageWFunc) {
+                    OutputDebugStringW(L"Failed to resolve symbol DispatchMessageW().");
+                }
+            } else {
+                OutputDebugStringW(L"Failed to load dynamic link library User32.dll.");
+            }
+        }
+    }
+    if (GetMessageWFunc && TranslateMessageFunc && DispatchMessageWFunc) {
+        if (g_source == nullptr) {
+            DisplayErrorDialog(L"Failed to do the message loop due to the XAML Island is not initialized.");
+            return -1;
+        }
+        MSG msg = {};
+        while (GetMessageWFunc(&msg, nullptr, 0, 0) != FALSE) {
+            const auto interop2 = g_source.as<IDesktopWindowXamlSourceNative2>();
+            if (interop2) {
+                BOOL filtered = FALSE;
+                winrt::check_hresult(interop2->PreTranslateMessage(&msg, &filtered));
+                if (filtered == FALSE) {
+                    TranslateMessageFunc(&msg);
+                    DispatchMessageWFunc(&msg);
+                }
+            } else {
+                DisplayErrorDialog(L"Failed to retrieve the window handle of XAML Island's core window.");
+                return -1;
+            }
+        }
+        return static_cast<int>(msg.wParam);
+    } else {
+        OutputDebugStringW(L"GetMessageW(), TranslateMessage() and DispatchMessageW() are not available.");
+        return -1;
+    }
 }
 
 EXTERN_C int APIENTRY
@@ -359,107 +847,35 @@ wWinMain(
     UNREFERENCED_PARAMETER(lpCmdLine);
 
     if (!IsWindows1019H1OrGreater()) {
-        MessageBoxW(nullptr, L"This application only supports Windows 10 19H1 and onwards.", L"Error", MB_ICONERROR | MB_OK);
+        DisplayErrorDialog(L"This application only supports Windows 10 19H1 and onwards.");
         return -1;
     }
 
     g_instance = hInstance;
 
-    WNDCLASSEXW wcex;
-    SecureZeroMemory(&wcex, sizeof(wcex));
-    wcex.cbSize = sizeof(wcex);
-    wcex.style = CS_HREDRAW | CS_VREDRAW;
-    wcex.lpfnWndProc = WndProc;
-    wcex.hInstance = hInstance;
-    wcex.lpszClassName = g_windowClassName;
-    wcex.hCursor = LoadCursorW(nullptr, IDC_ARROW);
-    wcex.hIcon = LoadIconW(hInstance, MAKEINTRESOURCEW(IDI_APPICON));
-    wcex.hIconSm = LoadIconW(hInstance, MAKEINTRESOURCEW(IDI_APPICON_SMALL));
-
-    if (!RegisterClassExW(&wcex)) {
-        MessageBoxW(nullptr, L"Failed to register the window class.", L"Error", MB_ICONERROR | MB_OK);
+    if (!RegisterMainWindowClass(nullptr, WindowProc, hInstance)) {
+        DisplayErrorDialog(L"Failed to register the window class.");
         return -1;
     }
 
-    g_mainWindowHandle = CreateWindowExW(
-        WS_EX_NOREDIRECTIONBITMAP,
-        g_windowClassName,
-        g_windowTitle,
-        WS_OVERLAPPEDWINDOW,
-        CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
-        nullptr,
-        nullptr,
-        hInstance,
-        nullptr
-    );
-    if (!g_mainWindowHandle) {
-        MessageBoxW(nullptr, L"Failed to create the window.", L"Error", MB_ICONERROR | MB_OK);
+    if (!CreateMainWindow(nullptr, g_mainWindowAtom, hInstance)) {
+        DisplayErrorDialog(L"Failed to create the window.");
         return -1;
     }
 
     if (!RefreshWindowTheme(g_mainWindowHandle)) {
-        MessageBoxW(nullptr, L"Failed to refresh the window theme.", L"Error", MB_ICONERROR | MB_OK);
+        DisplayErrorDialog(L"Failed to refresh the window theme.");
         return -1;
     }
 
-    // XAML Island section:
-    // The call to winrt::init_apartment() initializes COM. By default, in a multithreaded apartment.
-    winrt::init_apartment(winrt::apartment_type::single_threaded);
-    // Initialize the XAML framework's core window for the current thread.
-    g_manager = winrt::Windows::UI::Xaml::Hosting::WindowsXamlManager::InitializeForCurrentThread();
-    // This DesktopWindowXamlSource is the object that enables a non-UWP desktop application
-    // to host WinRT XAML controls in any UI element that is associated with a window handle (HWND).
-    g_source = winrt::Windows::UI::Xaml::Hosting::DesktopWindowXamlSource();
-    // Get handle to the core window.
-    const auto interop = g_source.as<IDesktopWindowXamlSourceNative>();
-    if (!interop) {
-        MessageBoxW(nullptr, L"Failed to retrieve XAML Island's core window.", L"Error", MB_ICONERROR | MB_OK);
-        return -1;
-    }
-    // Parent the DesktopWindowXamlSource object to the current window.
-    winrt::check_hresult(interop->AttachToWindow(g_mainWindowHandle));
-    // Get the new child window's HWND.
-    winrt::check_hresult(interop->get_WindowHandle(&g_xamlIslandHandle));
-    if (!g_xamlIslandHandle) {
-        MessageBoxW(nullptr, L"Failed to retrieve the window handle of XAML Island's core window.", L"Error", MB_ICONERROR | MB_OK);
-        return -1;
-    }
-    // Update the XAML Island window size because initially it is 0x0.
-    RECT rect = {0, 0, 0, 0};
-    if (GetClientRect(g_mainWindowHandle, &rect) == FALSE) {
-        MessageBoxW(nullptr, L"Failed to retrieve the client area rect of the window.", L"Error", MB_ICONERROR | MB_OK);
-        return -1;
-    }
-    if (SetWindowPos(g_xamlIslandHandle, nullptr, 0, 0, rect.right, rect.bottom, SWP_SHOWWINDOW | SWP_NOZORDER | SWP_NOOWNERZORDER) == FALSE) {
-        MessageBoxW(nullptr, L"Failed to change the geometry of the XAML Island window.", L"Error", MB_ICONERROR | MB_OK);
-        return -1;
-    }
-    // Create the XAML content.
-    g_rootGrid = winrt::Windows::UI::Xaml::Controls::Grid();
-    g_backgroundBrush = winrt::Windows::UI::Xaml::Media::AcrylicBrush();
-    if (!RefreshBackgroundBrush()) {
-        MessageBoxW(nullptr, L"Failed to refresh the background brush.", L"Error", MB_ICONERROR | MB_OK);
-        return -1;
-    }
-    g_backgroundBrush.BackgroundSource(winrt::Windows::UI::Xaml::Media::AcrylicBackgroundSource::HostBackdrop);
-    g_rootGrid.Background(g_backgroundBrush);
-    //g_rootGrid.Children().Clear();
-    //g_rootGrid.Children().Append(/* some UWP control */);
-    //g_rootGrid.UpdateLayout();
-    g_source.Content(g_rootGrid);
-    // End XAML Island section.
-
-    ShowWindow(g_mainWindowHandle, nCmdShow);
-    if (UpdateWindow(g_mainWindowHandle) == FALSE) {
-        MessageBoxW(nullptr, L"Failed to update the window.", L"Error", MB_ICONERROR | MB_OK);
+    if (!InitializeXAMLIsland()) {
         return -1;
     }
 
-    MSG msg = {};
-    while (GetMessageW(&msg, nullptr, 0, 0) != FALSE) {
-        TranslateMessage(&msg);
-        DispatchMessageW(&msg);
+    if (!ShowAndUpdateWindow(g_mainWindowHandle, nCmdShow)) {
+        DisplayErrorDialog(L"Failed to show and update the window.");
+        return -1;
     }
 
-    return static_cast<int>(msg.wParam);
+    return MessageLoop();
 }

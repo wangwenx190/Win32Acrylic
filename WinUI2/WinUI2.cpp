@@ -70,7 +70,7 @@ static winrt::Windows::UI::Xaml::Hosting::DesktopWindowXamlSource g_source = nul
 static winrt::Windows::UI::Xaml::Controls::Grid g_rootGrid = nullptr;
 static winrt::Windows::UI::Xaml::Media::AcrylicBrush g_backgroundBrush = nullptr;
 
-[[nodiscard]] static inline bool IsWindowsOrGreater(const int major, const int minor, const int build)
+[[nodiscard]] static inline bool IsWindowsOrGreater(const int major, const int minor, const int build) noexcept
 {
     OSVERSIONINFOEXW osvi;
     SecureZeroMemory(&osvi, sizeof(osvi));
@@ -86,21 +86,21 @@ static winrt::Windows::UI::Xaml::Media::AcrylicBrush g_backgroundBrush = nullptr
     return (VerifyVersionInfoW(&osvi, VER_MAJORVERSION | VER_MINORVERSION | VER_BUILDNUMBER, dwlConditionMask) != FALSE);
 }
 
-[[nodiscard]] static inline bool IsWindows10RS1OrGreater()
+[[nodiscard]] static inline bool IsWindows10RS1OrGreater() noexcept
 {
     // Windows 10 Version 1607 (Anniversary Update)
     // Code name: Red Stone 1
     return IsWindowsOrGreater(10, 0, 14393);
 }
 
-[[nodiscard]] static inline bool IsWindows1019H1OrGreater()
+[[nodiscard]] static inline bool IsWindows1019H1OrGreater() noexcept
 {
     // Windows 10 Version 1903 (May 2019 Update)
     // Code name: 19H1
     return IsWindowsOrGreater(10, 0, 18362);
 }
 
-static inline void DisplayErrorDialog(LPCWSTR text)
+static inline void DisplayErrorDialog(LPCWSTR text) noexcept
 {
     static bool tried = false;
     using MessageBoxWSig = decltype(&::MessageBoxW);
@@ -131,7 +131,7 @@ static inline void DisplayErrorDialog(LPCWSTR text)
     }
 }
 
-[[nodiscard]] static inline bool IsHighContrastModeEnabled()
+[[nodiscard]] static inline bool IsHighContrastModeEnabled() noexcept
 {
     static bool tried = false;
     using SystemParametersInfoWSig = decltype(&::SystemParametersInfoW);
@@ -165,7 +165,7 @@ static inline void DisplayErrorDialog(LPCWSTR text)
     }
 }
 
-[[nodiscard]] static inline bool ShouldAppsUseDarkMode()
+[[nodiscard]] static inline bool ShouldAppsUseDarkMode() noexcept
 {
     if (!IsWindows10RS1OrGreater()) {
         return false;
@@ -252,7 +252,7 @@ static inline void DisplayErrorDialog(LPCWSTR text)
     }
 }
 
-[[nodiscard]] static inline bool RefreshWindowTheme(const HWND hWnd)
+[[nodiscard]] static inline bool RefreshWindowTheme(const HWND hWnd) noexcept
 {
     if (!IsWindows10RS1OrGreater()) {
         return false;
@@ -319,7 +319,7 @@ static inline void DisplayErrorDialog(LPCWSTR text)
     }
 }
 
-[[nodiscard]] static inline bool RefreshBackgroundBrush()
+[[nodiscard]] static inline bool RefreshBackgroundBrush() noexcept
 {
     if (!IsWindows10RS1OrGreater()) {
         return false;
@@ -344,30 +344,18 @@ static inline void DisplayErrorDialog(LPCWSTR text)
     return true;
 }
 
-[[nodiscard]] static inline bool CloseMainWindow(const HWND hWnd)
+[[nodiscard]] static inline bool CloseMainWindow(const HWND hWnd, const ATOM atom, const HINSTANCE instance) noexcept
 {
     static bool tried = false;
-    using GetClassLongPtrWSig = decltype(&::GetClassLongPtrW);
-    static GetClassLongPtrWSig GetClassLongPtrWFunc = nullptr;
-    using GetWindowLongPtrWSig = decltype(&::GetWindowLongPtrW);
-    static GetWindowLongPtrWSig GetWindowLongPtrWFunc = nullptr;
     using DestroyWindowSig = decltype(&::DestroyWindow);
     static DestroyWindowSig DestroyWindowFunc = nullptr;
     using UnregisterClassWSig = decltype(&::UnregisterClassW);
     static UnregisterClassWSig UnregisterClassWFunc = nullptr;
-    if (!GetClassLongPtrWFunc || !GetWindowLongPtrWFunc || !DestroyWindowFunc || !UnregisterClassWFunc) {
+    if (!DestroyWindowFunc || !UnregisterClassWFunc) {
         if (!tried) {
             tried = true;
             const HMODULE User32DLL = LoadLibraryExW(L"User32.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
             if (User32DLL) {
-                GetClassLongPtrWFunc = reinterpret_cast<GetClassLongPtrWSig>(GetProcAddress(User32DLL, "GetClassLongPtrW"));
-                if (!GetClassLongPtrWFunc) {
-                    OutputDebugStringW(L"Failed to resolve symbol GetClassLongPtrW().");
-                }
-                GetWindowLongPtrWFunc = reinterpret_cast<GetWindowLongPtrWSig>(GetProcAddress(User32DLL, "GetWindowLongPtrW"));
-                if (!GetWindowLongPtrWFunc) {
-                    OutputDebugStringW(L"Failed to resolve symbol GetWindowLongPtrW().");
-                }
                 DestroyWindowFunc = reinterpret_cast<DestroyWindowSig>(GetProcAddress(User32DLL, "DestroyWindow"));
                 if (!DestroyWindowFunc) {
                     OutputDebugStringW(L"Failed to resolve symbol DestroyWindow().");
@@ -381,26 +369,24 @@ static inline void DisplayErrorDialog(LPCWSTR text)
             }
         }
     }
-    if (GetClassLongPtrWFunc && GetWindowLongPtrWFunc && DestroyWindowFunc && UnregisterClassWFunc) {
+    if (DestroyWindowFunc && UnregisterClassWFunc) {
         if (!hWnd) {
             OutputDebugStringW(L"Failed to close the window due to the given window handle is null.");
+            return false;
+        }
+        if (atom == INVALID_ATOM) {
+            OutputDebugStringW(L"Failed to close the window due to the given ATOM is invalid.");
+            return false;
+        }
+        if (!instance) {
+            OutputDebugStringW(L"Failed to close the window due to the given HINSTANCE is null.");
             return false;
         }
         if (DestroyWindowFunc(hWnd) == FALSE) {
             DisplayErrorDialog(L"Failed to destroy the window.");
             return false;
         }
-        const auto atom = static_cast<ATOM>(GetClassLongPtrWFunc(hWnd, GCW_ATOM));
-        if (atom == INVALID_ATOM) {
-            DisplayErrorDialog(L"Failed to retrieve the ATOM of the window.");
-            return false;
-        }
-        const auto instance = reinterpret_cast<HINSTANCE>(GetWindowLongPtrWFunc(hWnd, GWLP_HINSTANCE));
-        if (!instance) {
-            DisplayErrorDialog(L"Failed to retrieve the HINSTANCE of the window.");
-            return false;
-        }
-        if (UnregisterClassWFunc(reinterpret_cast<LPCWSTR>(MAKEWORD(atom, 0)), instance) == FALSE) {
+        if (UnregisterClassWFunc(reinterpret_cast<LPCWSTR>(MAKELONG(atom, 0)), instance) == FALSE) {
             DisplayErrorDialog(L"Failed to unregister the window class.");
             return false;
         }
@@ -411,26 +397,26 @@ static inline void DisplayErrorDialog(LPCWSTR text)
     }
 }
 
-[[nodiscard]] static inline bool SyncXAMLIslandPosition(const UINT width, const UINT height)
+[[nodiscard]] static inline bool SyncXAMLIslandPosition(const UINT width, const UINT height) noexcept
 {
     static bool tried = false;
-    using MoveWindowSig = decltype(&::MoveWindow);
-    static MoveWindowSig MoveWindowFunc = nullptr;
-    if (!MoveWindowFunc) {
+    using SetWindowPosSig = decltype(&::SetWindowPos);
+    static SetWindowPosSig SetWindowPosFunc = nullptr;
+    if (!SetWindowPosFunc) {
         if (!tried) {
             tried = true;
             const HMODULE User32DLL = LoadLibraryExW(L"User32.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
             if (User32DLL) {
-                MoveWindowFunc = reinterpret_cast<MoveWindowSig>(GetProcAddress(User32DLL, "MoveWindow"));
-                if (!MoveWindowFunc) {
-                    OutputDebugStringW(L"Failed to resolve symbol MoveWindow().");
+                SetWindowPosFunc = reinterpret_cast<SetWindowPosSig>(GetProcAddress(User32DLL, "SetWindowPos"));
+                if (!SetWindowPosFunc) {
+                    OutputDebugStringW(L"Failed to resolve symbol SetWindowPos().");
                 }
             } else {
                 OutputDebugStringW(L"Failed to load dynamic link library User32.dll.");
             }
         }
     }
-    if (MoveWindowFunc) {
+    if (SetWindowPosFunc) {
         if (!g_xamlIslandWindowHandle) {
             OutputDebugStringW(L"Failed to sync the geometry of the XAML Island window due to its window handle is null.");
             return false;
@@ -439,18 +425,18 @@ static inline void DisplayErrorDialog(LPCWSTR text)
             OutputDebugStringW(L"Failed to sync the geometry of the XAML Island window due to invalid width and height.");
             return false;
         }
-        if (MoveWindowFunc(g_xamlIslandWindowHandle, 0, 0, width, height, TRUE) == FALSE) {
+        if (SetWindowPosFunc(g_xamlIslandWindowHandle, nullptr, 0, 0, width, height, SWP_SHOWWINDOW | SWP_NOACTIVATE | SWP_NOZORDER | SWP_NOOWNERZORDER) == FALSE) {
             DisplayErrorDialog(L"Failed to sync the geometry of the XAML Island window.");
             return false;
         }
         return true;
     } else {
-        OutputDebugStringW(L"MoveWindow() is not available.");
+        OutputDebugStringW(L"SetWindowPos() is not available.");
         return false;
     }
 }
 
-[[nodiscard]] static inline bool SyncXAMLIslandPosition()
+[[nodiscard]] static inline bool SyncXAMLIslandPosition() noexcept
 {
     static bool tried = false;
     using GetClientRectSig = decltype(&::GetClientRect);
@@ -490,7 +476,7 @@ static inline void DisplayErrorDialog(LPCWSTR text)
     }
 }
 
-static inline void DisposeResources()
+static inline void DisposeResources() noexcept
 {
     if (g_source != nullptr) {
         g_source.Close();
@@ -502,7 +488,7 @@ static inline void DisposeResources()
     }
 }
 
-[[nodiscard]] static inline bool GenerateGUID(LPCWSTR *str)
+[[nodiscard]] static inline bool GenerateGUID(LPCWSTR *str) noexcept
 {
     static bool tried = false;
     using CoCreateGuidSig = decltype(&::CoCreateGuid);
@@ -553,7 +539,7 @@ static inline void DisposeResources()
     }
 }
 
-[[nodiscard]] static inline LRESULT CALLBACK WindowProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
+[[nodiscard]] static inline LRESULT CALLBACK MessageHandler(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) noexcept
 {
     static bool tried = false;
     using PostQuitMessageSig = decltype(&::PostQuitMessage);
@@ -580,7 +566,7 @@ static inline void DisposeResources()
     }
     switch (message) {
     case WM_CLOSE: {
-        if (!CloseMainWindow(hWnd)) {
+        if (!CloseMainWindow(hWnd, g_mainWindowAtom, g_instance)) {
             DisplayErrorDialog(L"Failed to close the window.");
             break;
         }
@@ -634,7 +620,7 @@ static inline void DisposeResources()
     }
 }
 
-[[nodiscard]] static inline bool RegisterMainWindowClass(LPCWSTR name, const WNDPROC WndProc, const HINSTANCE instance)
+[[nodiscard]] static inline bool RegisterMainWindowClass(LPCWSTR name, const WNDPROC WndProc, const HINSTANCE instance) noexcept
 {
     static bool tried = false;
     using LoadCursorWSig = decltype(&::LoadCursorW);
@@ -703,7 +689,7 @@ static inline void DisposeResources()
     }
 }
 
-[[nodiscard]] static inline bool CreateMainWindow(LPCWSTR title, const ATOM atom, const HINSTANCE instance)
+[[nodiscard]] static inline bool CreateMainWindow(LPCWSTR title, const ATOM atom, const HINSTANCE instance) noexcept
 {
     static bool tried = false;
     using CreateWindowExWSig = decltype(&::CreateWindowExW);
@@ -733,7 +719,7 @@ static inline void DisposeResources()
         }
         g_mainWindowHandle = CreateWindowExWFunc(
             WS_EX_NOREDIRECTIONBITMAP,
-            reinterpret_cast<LPCWSTR>(MAKEWORD(atom, 0)),
+            reinterpret_cast<LPCWSTR>(MAKELONG(atom, 0)),
             [title]{
                 if (title && (wcslen(title) > 0)) {
                     return title;
@@ -741,7 +727,7 @@ static inline void DisposeResources()
                     return g_defaultWindowTitle;
                 }
             }(),
-            WS_OVERLAPPEDWINDOW,
+            WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN | WS_CLIPSIBLINGS,
             CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
             nullptr, nullptr, instance, nullptr);
         return (g_mainWindowHandle != nullptr);
@@ -751,7 +737,7 @@ static inline void DisposeResources()
     }
 }
 
-[[nodiscard]] static inline bool ShowAndUpdateWindow(const HWND hWnd, const int nCmdShow)
+[[nodiscard]] static inline bool ShowAndUpdateWindow(const HWND hWnd, const int nCmdShow) noexcept
 {
     static bool tried = false;
     using ShowWindowSig = decltype(&::ShowWindow);
@@ -793,7 +779,7 @@ static inline void DisposeResources()
     }
 }
 
-[[nodiscard]] static inline bool InitializeXAMLIsland()
+[[nodiscard]] static inline bool InitializeXAMLIsland() noexcept
 {
     // The call to winrt::init_apartment() initializes COM. By default, in a multithreaded apartment.
     winrt::init_apartment(winrt::apartment_type::single_threaded);
@@ -809,9 +795,15 @@ static inline void DisposeResources()
         return false;
     }
     // Parent the DesktopWindowXamlSource object to the current window.
-    winrt::check_hresult(interop->AttachToWindow(g_mainWindowHandle));
+    if (FAILED(interop->AttachToWindow(g_mainWindowHandle))) {
+        DisplayErrorDialog(L"Failed to attach the XAML Island window to the main window.");
+        return false;
+    }
     // Get the new child window's HWND.
-    winrt::check_hresult(interop->get_WindowHandle(&g_xamlIslandWindowHandle));
+    if (FAILED(interop->get_WindowHandle(&g_xamlIslandWindowHandle))) {
+        DisplayErrorDialog(L"Failed to retrieve the XAML Island window's handle.");
+        return false;
+    }
     if (!g_xamlIslandWindowHandle) {
         DisplayErrorDialog(L"Failed to retrieve the window handle of XAML Island's core window.");
         return false;
@@ -819,11 +811,6 @@ static inline void DisposeResources()
     // Update the XAML Island window size because initially it is 0x0.
     if (!SyncXAMLIslandPosition()) {
         DisplayErrorDialog(L"Failed to sync the geometry of the XAML Island window.");
-        return false;
-    }
-    // Show the XAML Island window.
-    if (!ShowAndUpdateWindow(g_xamlIslandWindowHandle, SW_SHOW)) {
-        DisplayErrorDialog(L"Failed to show and update the XAML Island window.");
         return false;
     }
     // Create the XAML content.
@@ -842,7 +829,7 @@ static inline void DisposeResources()
     return true;
 }
 
-[[nodiscard]] static inline int MessageLoop()
+[[nodiscard]] static inline int MessageLoop() noexcept
 {
     static bool tried = false;
     using GetMessageWSig = decltype(&::GetMessageW);
@@ -874,23 +861,18 @@ static inline void DisposeResources()
         }
     }
     if (GetMessageWFunc && TranslateMessageFunc && DispatchMessageWFunc) {
-        if (g_source == nullptr) {
-            DisplayErrorDialog(L"Failed to do the message loop due to the XAML Island is not initialized.");
-            return -1;
-        }
         MSG msg = {};
         while (GetMessageWFunc(&msg, nullptr, 0, 0) != FALSE) {
-            const auto interop2 = g_source.as<IDesktopWindowXamlSourceNative2>();
-            if (interop2) {
-                BOOL filtered = FALSE;
-                winrt::check_hresult(interop2->PreTranslateMessage(&msg, &filtered));
-                if (filtered == FALSE) {
-                    TranslateMessageFunc(&msg);
-                    DispatchMessageWFunc(&msg);
+            BOOL filtered = FALSE;
+            if (g_source != nullptr) {
+                const auto interop2 = g_source.as<IDesktopWindowXamlSourceNative2>();
+                if (interop2) {
+                    interop2->PreTranslateMessage(&msg, &filtered);
                 }
-            } else {
-                DisplayErrorDialog(L"Failed to retrieve the window handle of XAML Island's core window.");
-                return -1;
+            }
+            if (filtered == FALSE) {
+                TranslateMessageFunc(&msg);
+                DispatchMessageWFunc(&msg);
             }
         }
         return static_cast<int>(msg.wParam);
@@ -918,7 +900,7 @@ wWinMain(
 
     g_instance = hInstance;
 
-    if (!RegisterMainWindowClass(nullptr, WindowProc, hInstance)) {
+    if (!RegisterMainWindowClass(nullptr, MessageHandler, hInstance)) {
         DisplayErrorDialog(L"Failed to register the window class.");
         return -1;
     }
@@ -939,7 +921,7 @@ wWinMain(
     }
 
     if (!ShowAndUpdateWindow(g_mainWindowHandle, nCmdShow)) {
-        DisplayErrorDialog(L"Failed to show and update the window.");
+        DisplayErrorDialog(L"Failed to show and update the main window.");
         return -1;
     }
 

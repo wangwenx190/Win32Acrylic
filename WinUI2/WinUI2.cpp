@@ -121,22 +121,56 @@ static winrt::Windows::UI::Xaml::Media::AcrylicBrush g_backgroundBrush = nullptr
     // this unreliability. In this case, we just simply read the user's setting from
     // the registry instead, it's not elegant but at least it works well.
     if (IsWindows1019H1OrGreater()) {
-        HKEY hKey = nullptr;
-        if (RegOpenKeyExW(HKEY_CURRENT_USER, g_personalizeRegistryKey, 0, KEY_READ, &hKey) != ERROR_SUCCESS) {
-            OutputDebugStringW(L"Failed to open the registry key to read.");
+        static bool tried = false;
+        using RegOpenKeyExWSig = decltype(&::RegOpenKeyExW);
+        static RegOpenKeyExWSig RegOpenKeyExWFunc = nullptr;
+        using RegQueryValueExWSig = decltype(&::RegQueryValueExW);
+        static RegQueryValueExWSig RegQueryValueExWFunc = nullptr;
+        using RegCloseKeySig = decltype(&::RegCloseKey);
+        static RegCloseKeySig RegCloseKeyFunc = nullptr;
+        if (!RegOpenKeyExWFunc || !RegQueryValueExWFunc || !RegCloseKeyFunc) {
+            if (!tried) {
+                tried = true;
+                const HMODULE AdvApi32DLL = LoadLibraryExW(L"AdvApi32.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
+                if (AdvApi32DLL) {
+                    RegOpenKeyExWFunc = reinterpret_cast<RegOpenKeyExWSig>(GetProcAddress(AdvApi32DLL, "RegOpenKeyExW"));
+                    if (!RegOpenKeyExWFunc) {
+                        OutputDebugStringW(L"Failed to resolve symbol RegOpenKeyExW().");
+                    }
+                    RegQueryValueExWFunc = reinterpret_cast<RegQueryValueExWSig>(GetProcAddress(AdvApi32DLL, "RegQueryValueExW"));
+                    if (!RegQueryValueExWFunc) {
+                        OutputDebugStringW(L"Failed to resolve symbol RegQueryValueExW().");
+                    }
+                    RegCloseKeyFunc = reinterpret_cast<RegCloseKeySig>(GetProcAddress(AdvApi32DLL, "RegCloseKey"));
+                    if (!RegCloseKeyFunc) {
+                        OutputDebugStringW(L"Failed to resolve symbol RegCloseKey().");
+                    }
+                } else {
+                    OutputDebugStringW(L"Failed to load dynamic link library AdvApi32.dll.");
+                }
+            }
+        }
+        if (RegOpenKeyExWFunc && RegQueryValueExWFunc && RegCloseKeyFunc) {
+            HKEY hKey = nullptr;
+            if (RegOpenKeyExWFunc(HKEY_CURRENT_USER, g_personalizeRegistryKey, 0, KEY_READ, &hKey) != ERROR_SUCCESS) {
+                OutputDebugStringW(L"Failed to open the registry key to read.");
+                return false;
+            }
+            DWORD dwValue = 0;
+            DWORD dwType = REG_DWORD;
+            DWORD dwSize = sizeof(dwValue);
+            const bool success = (RegQueryValueExWFunc(hKey, L"AppsUseLightTheme", nullptr, &dwType, reinterpret_cast<LPBYTE>(&dwValue),&dwSize) == ERROR_SUCCESS);
+            if (!success) {
+                OutputDebugStringW(L"Failed to query the registry key value.");
+            }
+            if (RegCloseKeyFunc(hKey) != ERROR_SUCCESS) {
+                OutputDebugStringW(L"Failed to close the registry key.");
+            }
+            return (success && (dwValue == 0));
+        } else {
+            OutputDebugStringW(L"RegOpenKeyExW(), RegQueryValueExW() and RegCloseKey() are not available.");
             return false;
         }
-        DWORD dwValue = 0;
-        DWORD dwType = REG_DWORD;
-        DWORD dwSize = sizeof(dwValue);
-        const bool success = (RegQueryValueExW(hKey, L"AppsUseLightTheme", nullptr, &dwType, reinterpret_cast<LPBYTE>(&dwValue),&dwSize) == ERROR_SUCCESS);
-        if (!success) {
-            OutputDebugStringW(L"Failed to query the registry key value.");
-        }
-        if (RegCloseKey(hKey) != ERROR_SUCCESS) {
-            OutputDebugStringW(L"Failed to close the registry key.");
-        }
-        return (success && (dwValue == 0));
     } else {
         static bool tried = false;
         using ShouldAppsUseDarkModeSig = BOOL(WINAPI *)();
@@ -150,13 +184,17 @@ static winrt::Windows::UI::Xaml::Media::AcrylicBrush g_backgroundBrush = nullptr
                     if (!ShouldAppsUseDarkModeFunc) {
                         OutputDebugStringW(L"Failed to resolve symbol ShouldAppsUseDarkMode().");
                     }
-                    //FreeLibrary(UxThemeDLL);
                 } else {
                     OutputDebugStringW(L"Failed to load dynamic link library UxTheme.dll.");
                 }
             }
         }
-        return (ShouldAppsUseDarkModeFunc ? (ShouldAppsUseDarkModeFunc() != FALSE) : false);
+        if (ShouldAppsUseDarkModeFunc) {
+            return (ShouldAppsUseDarkModeFunc() != FALSE);
+        } else {
+            OutputDebugStringW(L"ShouldAppsUseDarkMode() is not available.");
+            return false;
+        }
     }
 }
 
@@ -168,29 +206,62 @@ static winrt::Windows::UI::Xaml::Media::AcrylicBrush g_backgroundBrush = nullptr
     if (!hWnd) {
         return false;
     }
-    BOOL useDarkFrame = FALSE;
-    LPCWSTR themeName = nullptr;
-    if (IsHighContrastModeEnabled()) {
-        // ### TO BE IMPLEMENTED
-    } else if (ShouldAppsUseDarkMode()) {
-        useDarkFrame = TRUE;
-        themeName = L"Dark_Explorer";
+    static bool tried = false;
+    using DwmSetWindowAttributeSig = decltype(&::DwmSetWindowAttribute);
+    static DwmSetWindowAttributeSig DwmSetWindowAttributeFunc = nullptr;
+    using SetWindowThemeSig = decltype(&::SetWindowTheme);
+    static SetWindowThemeSig SetWindowThemeFunc = nullptr;
+    if (!DwmSetWindowAttributeFunc || !SetWindowThemeFunc) {
+        if (!tried) {
+            tried = true;
+            const HMODULE DwmApiDLL = LoadLibraryExW(L"DwmApi.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
+            if (DwmApiDLL) {
+                DwmSetWindowAttributeFunc = reinterpret_cast<DwmSetWindowAttributeSig>(GetProcAddress(DwmApiDLL, "DwmSetWindowAttribute"));
+                if (!DwmSetWindowAttributeFunc) {
+                    OutputDebugStringW(L"Failed to resolve symbol DwmSetWindowAttribute().");
+                }
+            } else {
+                OutputDebugStringW(L"Failed to load dynamic link library DwmApi.dll.");
+            }
+            const HMODULE UxThemeDLL = LoadLibraryExW(L"UxTheme.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
+            if (UxThemeDLL) {
+                SetWindowThemeFunc = reinterpret_cast<SetWindowThemeSig>(GetProcAddress(UxThemeDLL, "SetWindowTheme"));
+                if (!SetWindowThemeFunc) {
+                    OutputDebugStringW(L"Failed to resolve symbol SetWindowTheme().");
+                }
+            } else {
+                OutputDebugStringW(L"Failed to load dynamic library UxTheme.dll.");
+            }
+        }
+    }
+    if (DwmSetWindowAttributeFunc && SetWindowThemeFunc) {
+        BOOL useDarkFrame = FALSE;
+        LPCWSTR themeName = nullptr;
+        if (IsHighContrastModeEnabled()) {
+            // ### TO BE IMPLEMENTED
+        } else if (ShouldAppsUseDarkMode()) {
+            useDarkFrame = TRUE;
+            themeName = L"Dark_Explorer";
+        } else {
+            useDarkFrame = FALSE;
+            themeName = L"Explorer";
+        }
+        const HRESULT hr1 = DwmSetWindowAttributeFunc(hWnd, _DWMWA_USE_IMMERSIVE_DARK_MODE_BEFORE_20H1, &useDarkFrame, sizeof(useDarkFrame));
+        const HRESULT hr2 = DwmSetWindowAttributeFunc(hWnd, _DWMWA_USE_IMMERSIVE_DARK_MODE, &useDarkFrame, sizeof(useDarkFrame));
+        const HRESULT hr3 = SetWindowThemeFunc(hWnd, themeName, nullptr);
+        if (FAILED(hr1) && FAILED(hr2)) {
+            OutputDebugStringW(L"Failed to change the window dark mode state.");
+            return false;
+        }
+        if (FAILED(hr3)) {
+            OutputDebugStringW(L"Failed to change the window theme.");
+            return false;
+        }
+        return true;
     } else {
-        useDarkFrame = FALSE;
-        themeName = L"Explorer";
-    }
-    const HRESULT hr1 = DwmSetWindowAttribute(hWnd, _DWMWA_USE_IMMERSIVE_DARK_MODE_BEFORE_20H1, &useDarkFrame, sizeof(useDarkFrame));
-    const HRESULT hr2 = DwmSetWindowAttribute(hWnd, _DWMWA_USE_IMMERSIVE_DARK_MODE, &useDarkFrame, sizeof(useDarkFrame));
-    const HRESULT hr3 = SetWindowTheme(hWnd, themeName, nullptr);
-    if (FAILED(hr1) && FAILED(hr2)) {
-        OutputDebugStringW(L"Failed to change the window dark mode state.");
+        OutputDebugStringW(L"DwmSetWindowAttribute() and SetWindowTheme() are not available.");
         return false;
     }
-    if (FAILED(hr3)) {
-        OutputDebugStringW(L"Failed to change the window theme.");
-        return false;
-    }
-    return true;
 }
 
 [[nodiscard]] static inline bool RefreshBackgroundBrush()

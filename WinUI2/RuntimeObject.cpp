@@ -22,6 +22,7 @@
  * SOFTWARE.
  */
 
+#include <SDKDDKVer.h>
 #include <Windows.h>
 
 #ifndef WIN32ACRYLIC_TRY_EXECUTE_FUNCTION_PART1

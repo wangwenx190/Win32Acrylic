@@ -12,6 +12,8 @@ endif()
 
 set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>" CACHE STRING "" FORCE)
 
+set(CMAKE_CXX_STANDARD_LIBRARIES "Kernel32.lib User32.lib" CACHE STRING "" FORCE)
+
 set(SOURCES
     WinUI2.rc
     WinUI2.manifest
@@ -21,10 +23,6 @@ set(SOURCES
 )
 
 add_executable(${PROJECT_NAME} WIN32 ${SOURCES})
-
-target_link_libraries(${PROJECT_NAME} PRIVATE
-    DwmApi.lib
-)
 
 set(NTDDI_WIN10_19H1 0x0A000007)
 target_compile_definitions(${PROJECT_NAME} PRIVATE

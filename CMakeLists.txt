@@ -19,6 +19,8 @@ set(SOURCES
     Win32AcrylicHelper.manifest
     Resource.h
     RuntimeObject.cpp
+    SystemLibrary.h
+    SystemLibrary.cpp
     main.cpp
 )
 

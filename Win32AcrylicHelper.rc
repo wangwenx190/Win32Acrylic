@@ -46,15 +46,15 @@ BEGIN
         BLOCK "040904b0"
         BEGIN
             VALUE "CompanyName",      "wangwenx190\0"
-            VALUE "FileDescription",  "Win32Acrylic WinUI2 Demo Application\0"
+            VALUE "FileDescription",  "Win32AcrylicHelper\0"
             VALUE "FileVersion",      "1.0.0.0\0"
             VALUE "LegalCopyright",   "MIT License\0"
             #ifdef _DEBUG
-            VALUE "OriginalFilename", "WinUI2Demod.exe\0"
+            VALUE "OriginalFilename", "Win32AcrylicHelperd.exe\0"
             #else
-            VALUE "OriginalFilename", "WinUI2Demo.exe\0"
+            VALUE "OriginalFilename", "Win32AcrylicHelper.exe\0"
             #endif
-            VALUE "ProductName",      "WinUI2 Demo\0"
+            VALUE "ProductName",      "Win32AcrylicHelper\0"
             VALUE "ProductVersion",   "1.0.0.0\0"
         END
     END

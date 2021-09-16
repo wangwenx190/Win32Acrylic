@@ -1,8 +1,8 @@
 cmake_minimum_required(VERSION 3.21.2 FATAL_ERROR)
 
-project(WinUI2Demo LANGUAGES CXX RC)
+project(Win32AcrylicHelper LANGUAGES CXX RC)
 
-set(CMAKE_CXX_STANDARD 17 CACHE STRING "") # TODO: make it 20 once the upstream bug is fixed
+set(CMAKE_CXX_STANDARD 17 CACHE STRING "") # TODO: make it 20 once the upstream bug of cppwinrt is fixed
 set(CMAKE_CXX_STANDARD_REQUIRED ON CACHE BOOL "")
 set(CMAKE_CXX_EXTENSIONS OFF CACHE BOOL "")
 
@@ -15,11 +15,11 @@ set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>" CACHE STR
 set(CMAKE_CXX_STANDARD_LIBRARIES "Kernel32.lib" CACHE STRING "" FORCE)
 
 set(SOURCES
-    WinUI2.rc
-    WinUI2.manifest
+    Win32AcrylicHelper.rc
+    Win32AcrylicHelper.manifest
     Resource.h
     RuntimeObject.cpp
-    WinUI2.cpp
+    main.cpp
 )
 
 add_executable(${PROJECT_NAME} WIN32 ${SOURCES})
@@ -42,7 +42,7 @@ target_compile_options(${PROJECT_NAME} PRIVATE
     /utf-8
     /Zc:__cplusplus
     /await # TODO: /await:strict
-    #/permissive-
+    #/permissive- once upstream bug of cppwinrt is fixed
     /MP
     /EHsc
     /GR

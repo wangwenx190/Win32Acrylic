@@ -303,7 +303,7 @@ static inline void DisplayErrorDialog(LPCWSTR text) noexcept
             DisplayErrorDialog(L"Failed to destroy main window.");
             return false;
         }
-        if (UnregisterClassWFunc(reinterpret_cast<LPCWSTR>(MAKELONG(g_mainWindowAtom, 0)), g_instance) == FALSE) {
+        if (UnregisterClassWFunc(reinterpret_cast<LPCWSTR>(static_cast<WORD>(MAKELONG(g_mainWindowAtom, 0))), g_instance) == FALSE) {
             DisplayErrorDialog(L"Failed to unregister main window class.");
             return false;
         }
@@ -518,7 +518,7 @@ static inline void DisplayErrorDialog(LPCWSTR text) noexcept
         }
         g_mainWindowHandle = CreateWindowExWFunc(
             WS_EX_NOREDIRECTIONBITMAP,
-            reinterpret_cast<LPCWSTR>(MAKELONG(g_mainWindowAtom, 0)),
+            reinterpret_cast<LPCWSTR>(static_cast<WORD>(MAKELONG(g_mainWindowAtom, 0))),
             [title]{
                 if (title && (wcslen(title) > 0)) {
                     return title;

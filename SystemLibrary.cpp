@@ -164,6 +164,16 @@ SystemLibrary::SystemLibrary(LPCWSTR fileName) noexcept : SystemLibrary()
 
 SystemLibrary::~SystemLibrary() noexcept = default;
 
+void SystemLibrary::SetFileName(LPCWSTR fileName) noexcept
+{
+    d_ptr->SetFileName(fileName);
+}
+
+LPCWSTR SystemLibrary::GetFileName() noexcept
+{
+    return d_ptr->GetFileName();
+}
+
 bool SystemLibrary::IsLoaded() const noexcept
 {
     return d_ptr->IsLoaded();

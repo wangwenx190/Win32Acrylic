@@ -35,24 +35,37 @@
 #include "Resource.h"
 #include "SystemLibrary.h"
 
-struct WindowsVersion {
-    explicit constexpr WindowsVersion(const int major, const int minor, const int build) {
+#ifndef RESOLVE
+#define RESOLVE(module, symbol) static const auto symbol##Func = reinterpret_cast<decltype(&::symbol)>(g_##module##DLL.GetSymbol(L#symbol))
+#endif
+
+class WindowsVersion
+{
+public:
+    explicit constexpr WindowsVersion(const int major, const int minor, const int build) noexcept {
         m_major = major;
         m_minor = minor;
         m_build = build;
     }
+    ~WindowsVersion() noexcept = default;
 
-    int Major() const {
+    inline int Major() const noexcept {
         return m_major;
     }
 
-    int Minor() const {
+    inline int Minor() const noexcept {
         return m_minor;
     }
 
-    int Build() const {
+    inline int Build() const noexcept {
         return m_build;
     }
+
+private:
+    WindowsVersion(const WindowsVersion &) = delete;
+    WindowsVersion &operator=(const WindowsVersion &) = delete;
+    WindowsVersion(WindowsVersion &&) = delete;
+    WindowsVersion &operator=(WindowsVersion &&) = delete;
 
 private:
     int m_major = 0;
@@ -106,7 +119,7 @@ static winrt::Windows::UI::Xaml::Hosting::DesktopWindowXamlSource g_source = nul
 static winrt::Windows::UI::Xaml::Controls::Grid g_rootGrid = nullptr;
 static winrt::Windows::UI::Xaml::Media::AcrylicBrush g_backgroundBrush = nullptr;
 
-[[nodiscard]] static inline bool IsWindowsOrGreater(const WindowsVersion version) noexcept
+[[nodiscard]] static inline bool IsWindowsOrGreater(const WindowsVersion &version) noexcept
 {
     OSVERSIONINFOEXW osvi;
     SecureZeroMemory(&osvi, sizeof(osvi));
@@ -140,7 +153,7 @@ static winrt::Windows::UI::Xaml::Media::AcrylicBrush g_backgroundBrush = nullptr
 
 static inline void DisplayErrorDialog(LPCWSTR text) noexcept
 {
-    static const auto MessageBoxWFunc = reinterpret_cast<decltype(&::MessageBoxW)>(g_User32DLL.GetSymbol(L"MessageBoxW"));
+    RESOLVE(User32, MessageBoxW);
     if (MessageBoxWFunc) {
         if (text && (wcslen(text) > 0)) {
             OutputDebugStringW(text);
@@ -155,7 +168,7 @@ static inline void DisplayErrorDialog(LPCWSTR text) noexcept
 
 [[nodiscard]] static inline bool IsHighContrastModeEnabled() noexcept
 {
-    static const auto SystemParametersInfoWFunc = reinterpret_cast<decltype(&::SystemParametersInfoW)>(g_User32DLL.GetSymbol(L"SystemParametersInfoW"));
+    RESOLVE(User32, SystemParametersInfoW);
     if (SystemParametersInfoWFunc) {
         HIGHCONTRASTW hc;
         SecureZeroMemory(&hc, sizeof(hc));
@@ -181,9 +194,9 @@ static inline void DisplayErrorDialog(LPCWSTR text) noexcept
     // this unreliability. In this case, we just simply read the user's setting from
     // the registry instead, it's not elegant but at least it works well.
     if (IsWindows1019H1OrGreater()) {
-        static const auto RegOpenKeyExWFunc = reinterpret_cast<decltype(&::RegOpenKeyExW)>(g_AdvApi32DLL.GetSymbol(L"RegOpenKeyExW"));
-        static const auto RegQueryValueExWFunc = reinterpret_cast<decltype(&::RegQueryValueExW)>(g_AdvApi32DLL.GetSymbol(L"RegQueryValueExW"));
-        static const auto RegCloseKeyFunc = reinterpret_cast<decltype(&::RegCloseKey)>(g_AdvApi32DLL.GetSymbol(L"RegCloseKey"));
+        RESOLVE(AdvApi32, RegOpenKeyExW);
+        RESOLVE(AdvApi32, RegQueryValueExW);
+        RESOLVE(AdvApi32, RegCloseKey);
         if (RegOpenKeyExWFunc && RegQueryValueExWFunc && RegCloseKeyFunc) {
             HKEY hKey = nullptr;
             if (RegOpenKeyExWFunc(HKEY_CURRENT_USER, g_personalizeRegistryKey, 0, KEY_READ, &hKey) != ERROR_SUCCESS) {
@@ -221,8 +234,8 @@ static inline void DisplayErrorDialog(LPCWSTR text) noexcept
     if (!IsWindows10RS1OrGreater()) {
         return false;
     }
-    static const auto DwmSetWindowAttributeFunc = reinterpret_cast<decltype(&::DwmSetWindowAttribute)>(g_DwmApiDLL.GetSymbol(L"DwmSetWindowAttribute"));
-    static const auto SetWindowThemeFunc = reinterpret_cast<decltype(&::SetWindowTheme)>(g_UxThemeDLL.GetSymbol(L"SetWindowTheme"));
+    RESOLVE(DwmApi, DwmSetWindowAttribute);
+    RESOLVE(UxTheme, SetWindowTheme);
     if (DwmSetWindowAttributeFunc && SetWindowThemeFunc) {
         if (!g_mainWindowHandle) {
             OutputDebugStringW(L"Failed to refresh main window theme due to the main window handle is null.");
@@ -284,8 +297,8 @@ static inline void DisplayErrorDialog(LPCWSTR text) noexcept
 
 [[nodiscard]] static inline bool CloseMainWindow() noexcept
 {
-    static const auto DestroyWindowFunc = reinterpret_cast<decltype(&::DestroyWindow)>(g_User32DLL.GetSymbol(L"DestroyWindow"));
-    static const auto UnregisterClassWFunc = reinterpret_cast<decltype(&::UnregisterClassW)>(g_User32DLL.GetSymbol(L"UnregisterClassW"));
+    RESOLVE(User32, DestroyWindow);
+    RESOLVE(User32, UnregisterClassW);
     if (DestroyWindowFunc && UnregisterClassWFunc) {
         if (!g_mainWindowHandle) {
             OutputDebugStringW(L"Failed to close main window due to the main window handle is null.");
@@ -316,7 +329,7 @@ static inline void DisplayErrorDialog(LPCWSTR text) noexcept
 
 [[nodiscard]] static inline bool SyncXAMLIslandPosition(const UINT width, const UINT height) noexcept
 {
-    static const auto SetWindowPosFunc = reinterpret_cast<decltype(&::SetWindowPos)>(g_User32DLL.GetSymbol(L"SetWindowPos"));
+    RESOLVE(User32, SetWindowPos);
     if (SetWindowPosFunc) {
         if (!g_xamlIslandWindowHandle) {
             OutputDebugStringW(L"Failed to sync the geometry of the XAML Island window due to its window handle is null.");
@@ -339,7 +352,7 @@ static inline void DisplayErrorDialog(LPCWSTR text) noexcept
 
 [[nodiscard]] static inline bool SyncXAMLIslandPosition() noexcept
 {
-    static const auto GetClientRectFunc = reinterpret_cast<decltype(&::GetClientRect)>(g_User32DLL.GetSymbol(L"GetClientRect"));
+    RESOLVE(User32, GetClientRect);
     if (GetClientRectFunc) {
         if (!g_mainWindowHandle) {
             OutputDebugStringW(L"Failed to sync the geometry of the XAML Island window due to the main window handle is null.");
@@ -363,8 +376,8 @@ static inline void DisplayErrorDialog(LPCWSTR text) noexcept
 
 [[nodiscard]] static inline bool GenerateGUID(LPCWSTR *str) noexcept
 {
-    static const auto CoCreateGuidFunc = reinterpret_cast<decltype(&::CoCreateGuid)>(g_Ole32DLL.GetSymbol(L"CoCreateGuid"));
-    static const auto StringFromGUID2Func = reinterpret_cast<decltype(&::StringFromGUID2)>(g_Ole32DLL.GetSymbol(L"StringFromGUID2"));
+    RESOLVE(Ole32, CoCreateGuid);
+    RESOLVE(Ole32, StringFromGUID2);
     if (CoCreateGuidFunc && StringFromGUID2Func) {
         if (!str) {
             OutputDebugStringW(L"Failed to generate GUID due to the given string address is null.");
@@ -421,7 +434,7 @@ static inline void DisplayErrorDialog(LPCWSTR text) noexcept
         g_Ole32DLL.Unload();
         g_UxThemeDLL.Unload();
         g_DwmApiDLL.Unload();
-        static const auto PostQuitMessageFunc = reinterpret_cast<decltype(&::PostQuitMessage)>(g_User32DLL.GetSymbol(L"PostQuitMessage"));
+        RESOLVE(User32, PostQuitMessage);
         if (PostQuitMessageFunc) {
             PostQuitMessageFunc(0);
             g_User32DLL.Unload();
@@ -457,7 +470,7 @@ static inline void DisplayErrorDialog(LPCWSTR text) noexcept
     default:
         break;
     }
-    static const auto DefWindowProcWFunc = reinterpret_cast<decltype(&::DefWindowProcW)>(g_User32DLL.GetSymbol(L"DefWindowProcW"));
+    RESOLVE(User32, DefWindowProcW);
     if (DefWindowProcWFunc) {
         return DefWindowProcWFunc(hWnd, message, wParam, lParam);
     } else {
@@ -468,9 +481,9 @@ static inline void DisplayErrorDialog(LPCWSTR text) noexcept
 
 [[nodiscard]] static inline bool RegisterMainWindowClass(LPCWSTR name) noexcept
 {
-    static const auto LoadCursorWFunc = reinterpret_cast<decltype(&::LoadCursorW)>(g_User32DLL.GetSymbol(L"LoadCursorW"));
-    static const auto LoadIconWFunc = reinterpret_cast<decltype(&::LoadIconW)>(g_User32DLL.GetSymbol(L"LoadIconW"));
-    static const auto RegisterClassExWFunc = reinterpret_cast<decltype(&::RegisterClassExW)>(g_User32DLL.GetSymbol(L"RegisterClassExW"));
+    RESOLVE(User32, LoadCursorW);
+    RESOLVE(User32, LoadIconW);
+    RESOLVE(User32, RegisterClassExW);
     if (LoadCursorWFunc && LoadIconWFunc && RegisterClassExWFunc) {
         if (!g_instance) {
             OutputDebugStringW(L"Failed to register main window class due to the HINSTANCE is null.");
@@ -506,7 +519,7 @@ static inline void DisplayErrorDialog(LPCWSTR text) noexcept
 
 [[nodiscard]] static inline bool CreateMainWindow(LPCWSTR title) noexcept
 {
-    static const auto CreateWindowExWFunc = reinterpret_cast<decltype(&::CreateWindowExW)>(g_User32DLL.GetSymbol(L"CreateWindowExW"));
+    RESOLVE(User32, CreateWindowExW);
     if (CreateWindowExWFunc) {
         if (g_mainWindowAtom == INVALID_ATOM) {
             OutputDebugStringW(L"Failed to create main window due to the main window ATOM is invalid.");
@@ -538,8 +551,8 @@ static inline void DisplayErrorDialog(LPCWSTR text) noexcept
 
 [[nodiscard]] static inline bool ShowMainWindow(const int nCmdShow) noexcept
 {
-    static const auto ShowWindowFunc = reinterpret_cast<decltype(&::ShowWindow)>(g_User32DLL.GetSymbol(L"ShowWindow"));
-    static const auto UpdateWindowFunc = reinterpret_cast<decltype(&::UpdateWindow)>(g_User32DLL.GetSymbol(L"UpdateWindow"));
+    RESOLVE(User32, ShowWindow);
+    RESOLVE(User32, UpdateWindow);
     if (ShowWindowFunc && UpdateWindowFunc) {
         if (!g_mainWindowHandle) {
             OutputDebugStringW(L"Failed to show the main window due to the main window handle is null.");
@@ -609,9 +622,9 @@ static inline void DisplayErrorDialog(LPCWSTR text) noexcept
 
 [[nodiscard]] static inline int MessageLoop() noexcept
 {
-    static const auto GetMessageWFunc = reinterpret_cast<decltype(&::GetMessageW)>(g_User32DLL.GetSymbol(L"GetMessageW"));
-    static const auto TranslateMessageFunc = reinterpret_cast<decltype(&::TranslateMessage)>(g_User32DLL.GetSymbol(L"TranslateMessage"));
-    static const auto DispatchMessageWFunc = reinterpret_cast<decltype(&::DispatchMessageW)>(g_User32DLL.GetSymbol(L"DispatchMessageW"));
+    RESOLVE(User32, GetMessageW);
+    RESOLVE(User32, TranslateMessage);
+    RESOLVE(User32, DispatchMessageW);
     if (GetMessageWFunc && TranslateMessageFunc && DispatchMessageWFunc) {
         MSG msg = {};
         while (GetMessageWFunc(&msg, nullptr, 0, 0) != FALSE) {

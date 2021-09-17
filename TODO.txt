@@ -6,6 +6,5 @@
 - 使用特别技巧加载LoadLibrary
 - 使用自定义的HANDLE_MSG宏
 - 支持使用命令行参数开启自定义边框模式
-- 将现在加载函数的一行代码简化为宏
 - 声明高对比主题下的调色板
 - 将main.cpp中的代码抽象为一个Application类，简化main.cpp的内容

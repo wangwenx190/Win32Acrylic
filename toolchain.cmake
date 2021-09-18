@@ -34,7 +34,7 @@ set(CMAKE_CXX_EXTENSIONS OFF CACHE BOOL "" FORCE)
 
 set(NTDDI_WIN10_19H1 0x0A000007)
 # /await:strict /permissive- /WX
-set(_common_flags "/await /bigobj /d2FH4 /D_CRT_NON_CONFORMING_SWPRINTFS /D_CRT_SECURE_NO_WARNINGS /D_ENABLE_EXTENDED_ALIGNED_STORAGE /DNOMINMAX /DUNICODE /D_UNICODE /DWIN32 /D_WINDOWS /DWIN32_LEAN_AND_MEAN /DWINRT_LEAN_AND_MEAN /DWINVER=${NTDDI_WIN10_19H1} /D_WIN32_WINNT=${NTDDI_WIN10_19H1} /EHsc /GR- /MP /nologo /utf-8 /W4 /Zc:char8_t,__cplusplus,externConstexpr,hiddenFriend,lambda,referenceBinding,rvalueCast,strictStrings,ternary,throwingNew")
+set(_common_flags "/await /bigobj /d2FH4 /D_CRT_NON_CONFORMING_SWPRINTFS /D_CRT_SECURE_NO_WARNINGS /D_ENABLE_EXTENDED_ALIGNED_STORAGE /DNOMINMAX /DUNICODE /D_UNICODE /DWIN32 /D_WINDOWS /DWIN32_LEAN_AND_MEAN /DWINRT_LEAN_AND_MEAN /DWINVER=${NTDDI_WIN10_19H1} /D_WIN32_WINNT=${NTDDI_WIN10_19H1} /EHsc /GR- /MP /nologo /utf-8 /W4 /WX /Zc:char8_t,__cplusplus,externConstexpr,hiddenFriend,lambda,referenceBinding,rvalueCast,strictStrings,ternary,throwingNew")
 set(_debug_flags "/D_DEBUG /JMC /MTd /Od /Ob0 /RTC1 /Z7")
 set(_release_flags "/DNDEBUG /GA /GL /GT /Gw /guard:cf /guard:ehcont /MT /O2 /Ob3 /Zc:inline")
 set(_link_flags "/CETCOMPAT /DYNAMICBASE /GUARD:CF /HIGHENTROPYVA /INCREMENTAL:NO /LARGEADDRESSAWARE /LTCG /NOLOGO /NXCOMPAT /OPT:REF /OPT:ICF /OPT:LBR /TSAWARE /WX")

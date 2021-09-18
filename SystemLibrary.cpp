@@ -27,7 +27,7 @@
 
 [[nodiscard]] static inline LPCSTR WideToMulti(LPCWSTR str) noexcept
 {
-    if (!str || (wcslen(str) <= 0)) {
+    if (!str) {
         return nullptr;
     }
     const int required = WideCharToMultiByte(CP_UTF8, 0, str, -1, nullptr, 0, nullptr, nullptr);
@@ -59,15 +59,47 @@ private:
     SystemLibraryPrivate &operator=(SystemLibraryPrivate &&) = delete;
 
 private:
+    void Initialize() noexcept;
+
+private:
     SystemLibrary *q_ptr = nullptr;
     LPCWSTR m_fileName = nullptr;
     HMODULE m_module = nullptr;
     std::unordered_map<LPCWSTR, FARPROC> m_resolvedSymbols = {};
+    static inline bool m_tried = false;
+    static inline decltype(&::LoadLibraryExW) m_LoadLibraryExWFunc = nullptr;
 };
+
+void SystemLibraryPrivate::Initialize() noexcept
+{
+    if (m_tried) {
+        return;
+    }
+    m_tried = true;
+    if (m_LoadLibraryExWFunc) {
+        return;
+    }
+    MEMORY_BASIC_INFORMATION mbi;
+    SecureZeroMemory(&mbi, sizeof(mbi));
+    if (VirtualQuery(reinterpret_cast<LPCVOID>(&VirtualQuery), &mbi, sizeof(mbi)) == 0) {
+        //
+    } else {
+        const auto kernel32 = static_cast<HMODULE>(mbi.AllocationBase);
+        if (kernel32) {
+            m_LoadLibraryExWFunc = reinterpret_cast<decltype(&::LoadLibraryExW)>(GetProcAddress(kernel32, "LoadLibraryExW"));
+            if (!m_LoadLibraryExWFunc) {
+                //
+            }
+        } else {
+            //
+        }
+    }
+}
 
 SystemLibraryPrivate::SystemLibraryPrivate(SystemLibrary *q) noexcept
 {
     q_ptr = q;
+    Initialize();
 }
 
 SystemLibraryPrivate::~SystemLibraryPrivate() noexcept
@@ -83,7 +115,7 @@ void SystemLibraryPrivate::SetFileName(LPCWSTR fileName) noexcept
         OutputDebugStringW(L"The library has been loaded already, can't change the file name now.");
         return;
     }
-    if (fileName && (wcslen(fileName) > 0)) {
+    if (fileName) {
         m_fileName = fileName;
     }
 }
@@ -100,11 +132,15 @@ bool SystemLibraryPrivate::IsLoaded() const noexcept
 
 bool SystemLibraryPrivate::Load() noexcept
 {
-    if (!m_fileName || (wcslen(m_fileName) <= 0)) {
+    if (!m_LoadLibraryExWFunc) {
+        OutputDebugStringW(L"LoadLibraryExW() is not available.");
+        return false;
+    }
+    if (!m_fileName) {
         OutputDebugStringW(L"The file name has not been set, can't load library now.");
         return false;
     }
-    m_module = LoadLibraryExW(m_fileName, nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
+    m_module = m_LoadLibraryExWFunc(m_fileName, nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
     return IsLoaded();
 }
 
@@ -129,7 +165,7 @@ FARPROC SystemLibraryPrivate::GetSymbol(LPCWSTR function) noexcept
             return nullptr;
         }
     }
-    if (!function || (wcslen(function) <= 0)) {
+    if (!function) {
         OutputDebugStringW(L"Can't resolve the symbol due to its name is empty.");
         return nullptr;
     }

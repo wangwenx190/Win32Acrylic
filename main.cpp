@@ -26,12 +26,18 @@
 #include <Windows.h>
 #include <UxTheme.h>
 #include <DwmApi.h>
+#pragma push_macro("GetCurrentTime")
+#pragma push_macro("TRY")
+#undef GetCurrentTime
+#undef TRY
 #include <Unknwn.h>
 #include <WinRT\Windows.Foundation.Collections.h>
 #include <WinRT\Windows.UI.Xaml.Hosting.h>
 #include <WinRT\Windows.UI.Xaml.Controls.h>
 #include <WinRT\Windows.UI.Xaml.Media.h>
 #include <Windows.UI.Xaml.Hosting.DesktopWindowXamlSource.h>
+#pragma pop_macro("TRY")
+#pragma pop_macro("GetCurrentTime")
 #include "Resource.h"
 #include "SystemLibrary.h"
 
@@ -155,7 +161,7 @@ static inline void DisplayErrorDialog(LPCWSTR text) noexcept
 {
     RESOLVE(User32, MessageBoxW);
     if (MessageBoxWFunc) {
-        if (text && (wcslen(text) > 0)) {
+        if (text) {
             OutputDebugStringW(text);
             MessageBoxWFunc(nullptr, text, L"Error", MB_ICONERROR | MB_OK);
         } else {
@@ -501,7 +507,7 @@ static inline void DisplayErrorDialog(LPCWSTR text) noexcept
         wcex.style = CS_HREDRAW | CS_VREDRAW;
         wcex.lpfnWndProc = MessageHandler;
         wcex.hInstance = g_instance;
-        wcex.lpszClassName = ((name && (wcslen(name) > 0)) ? name : guid);
+        wcex.lpszClassName = (name ? name : guid);
         wcex.hCursor = LoadCursorWFunc(nullptr, IDC_ARROW);
         wcex.hIcon = LoadIconWFunc(g_instance, MAKEINTRESOURCEW(IDI_APPICON));
         wcex.hIconSm = LoadIconWFunc(g_instance, MAKEINTRESOURCEW(IDI_APPICON_SMALL));
@@ -532,13 +538,7 @@ static inline void DisplayErrorDialog(LPCWSTR text) noexcept
         g_mainWindowHandle = CreateWindowExWFunc(
             WS_EX_NOREDIRECTIONBITMAP,
             reinterpret_cast<LPCWSTR>(static_cast<WORD>(MAKELONG(g_mainWindowAtom, 0))),
-            [title]{
-                if (title && (wcslen(title) > 0)) {
-                    return title;
-                } else {
-                    return g_defaultWindowTitle;
-                }
-            }(),
+            (title ? title : g_defaultWindowTitle),
             WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN | WS_CLIPSIBLINGS,
             CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
             nullptr, nullptr, g_instance, nullptr);

@@ -23,6 +23,10 @@
  */
 
 #include "Utils.h"
+#include "WindowsVersion.h"
+#include "SystemLibraryManager.h"
+#include <ComBaseApi.h>
+#include <DwmApi.h>
 
 #ifndef HINST_THISCOMPONENT
 EXTERN_C IMAGE_DOS_HEADER __ImageBase;
@@ -42,7 +46,7 @@ HINSTANCE Utils::GetCurrentInstance() noexcept
 LPCWSTR Utils::GetWindowClassName(const ATOM atom) noexcept
 {
     if (atom == INVALID_ATOM) {
-        OutputDebugStringW(L"");
+        OutputDebugStringW(L"Failed to convert the given ATOM to window class name due to it's invalid.");
         return nullptr;
     } else {
         return reinterpret_cast<LPCWSTR>(static_cast<WORD>(MAKELONG(atom, 0)));
@@ -52,21 +56,22 @@ LPCWSTR Utils::GetWindowClassName(const ATOM atom) noexcept
 LPCWSTR Utils::GetSystemErrorMessage(LPCWSTR function, const DWORD code) noexcept
 {
     if (!function) {
-        OutputDebugStringW(L"");
+        OutputDebugStringW(L"Failed to retrieve the system error message due to the function name is empty.");
         return nullptr;
     }
     if (code == ERROR_SUCCESS) {
-        return L"Operation succeeded.";
+        OutputDebugStringW(L"Operation succeeded.");
+        return nullptr;
     }
     LPWSTR buf = nullptr;
     if (FormatMessageW(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
         nullptr, code, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), buf, 0, nullptr) == 0) {
-        OutputDebugStringW(L"");
+        OutputDebugStringW(L"Failed to retrieve the system error message.");
         return nullptr;
     }
     const auto str = new wchar_t[MAX_PATH];
     SecureZeroMemory(str, sizeof(str));
-    swprintf(str, L"%s failed with error %d: %s", function, code, buf);
+    swprintf(str, L"%s failed with error %d: %s.", function, code, buf);
     LocalFree(buf);
     return str;
 }
@@ -74,11 +79,12 @@ LPCWSTR Utils::GetSystemErrorMessage(LPCWSTR function, const DWORD code) noexcep
 LPCWSTR Utils::GetSystemErrorMessage(LPCWSTR function, const HRESULT hr) noexcept
 {
     if (!function) {
-        OutputDebugStringW(L"");
+        OutputDebugStringW(L"Failed to retrieve the system error message due to the function name is empty.");
         return nullptr;
     }
     if (SUCCEEDED(hr)) {
-        return L"Operation succeeded.";
+        OutputDebugStringW(L"Operation succeeded.");
+        return nullptr;
     }
     return GetSystemErrorMessage(function, HRESULT_CODE(hr));
 }
@@ -86,7 +92,7 @@ LPCWSTR Utils::GetSystemErrorMessage(LPCWSTR function, const HRESULT hr) noexcep
 LPCWSTR Utils::GetSystemErrorMessage(LPCWSTR function) noexcept
 {
     if (!function) {
-        OutputDebugStringW(L"");
+        OutputDebugStringW(L"Failed to retrieve the system error message due to the function name is empty.");
         return nullptr;
     } else {
         return GetSystemErrorMessage(function, GetLastError());
@@ -116,7 +122,14 @@ bool Utils::IsHighContrastModeEnabled() noexcept
         SecureZeroMemory(&hc, sizeof(hc));
         hc.cbSize = sizeof(hc);
         if (SystemParametersInfoWFunc(SPI_GETHIGHCONTRAST, sizeof(hc), &hc, 0) == FALSE) {
-            OutputDebugStringW(L"Failed to retrieve the high contrast mode state.");
+            auto msg = GetSystemErrorMessage(L"SystemParametersInfoW");
+            if (msg) {
+                DisplayErrorDialog(msg);
+                delete [] msg;
+                msg = nullptr;
+            } else {
+                OutputDebugStringW(L"Failed to retrieve the high contrast mode state.");
+            }
             return false;
         }
         return (hc.dwFlags & HCF_HIGHCONTRASTON);
@@ -142,7 +155,14 @@ bool Utils::ShouldAppsUseDarkMode() noexcept
         if (RegOpenKeyExWFunc && RegQueryValueExWFunc && RegCloseKeyFunc) {
             HKEY hKey = nullptr;
             if (RegOpenKeyExWFunc(HKEY_CURRENT_USER, g_personalizeRegistryKey, 0, KEY_READ, &hKey) != ERROR_SUCCESS) {
-                OutputDebugStringW(L"Failed to open the registry key to read.");
+                auto msg = GetSystemErrorMessage(L"RegOpenKeyExW");
+                if (msg) {
+                    DisplayErrorDialog(msg);
+                    delete [] msg;
+                    msg = nullptr;
+                } else {
+                    OutputDebugStringW(L"Failed to open the registry key to read.");
+                }
                 return false;
             }
             DWORD dwValue = 0;
@@ -150,10 +170,24 @@ bool Utils::ShouldAppsUseDarkMode() noexcept
             DWORD dwSize = sizeof(dwValue);
             const bool success = (RegQueryValueExWFunc(hKey, L"AppsUseLightTheme", nullptr, &dwType, reinterpret_cast<LPBYTE>(&dwValue),&dwSize) == ERROR_SUCCESS);
             if (!success) {
-                OutputDebugStringW(L"Failed to query the registry key value.");
+                auto msg = GetSystemErrorMessage(L"RegQueryValueExW");
+                if (msg) {
+                    DisplayErrorDialog(msg);
+                    delete [] msg;
+                    msg = nullptr;
+                } else {
+                    OutputDebugStringW(L"Failed to query the registry key value.");
+                }
             }
             if (RegCloseKeyFunc(hKey) != ERROR_SUCCESS) {
-                OutputDebugStringW(L"Failed to close the registry key.");
+                auto msg = GetSystemErrorMessage(L"RegCloseKey");
+                if (msg) {
+                    DisplayErrorDialog(msg);
+                    delete [] msg;
+                    msg = nullptr;
+                } else {
+                    OutputDebugStringW(L"Failed to close the registry key.");
+                }
             }
             return (success && (dwValue == 0));
         } else {
@@ -195,16 +229,31 @@ bool Utils::GenerateGUID(LPCWSTR *str) noexcept
             return false;
         }
         GUID guid = {};
-        if (FAILED(CoCreateGuidFunc(&guid))) {
-            DisplayErrorDialog(L"Failed to generate GUID.");
+        const HRESULT hr = CoCreateGuidFunc(&guid);
+        if (FAILED(hr)) {
+            auto msg = GetSystemErrorMessage(L"CoCreateGuid", hr);
+            if (msg) {
+                DisplayErrorDialog(msg);
+                delete [] msg;
+                msg = nullptr;
+            } else {
+                OutputDebugStringW(L"Failed to generate a new GUID.");
+            }
             return false;
         }
         auto buf = new wchar_t[MAX_PATH];
         SecureZeroMemory(buf, sizeof(buf));
         if (StringFromGUID2Func(guid, buf, MAX_PATH) == 0) {
+            auto msg = GetSystemErrorMessage(L"StringFromGUID2");
+            if (msg) {
+                DisplayErrorDialog(msg);
+                delete [] msg;
+                msg = nullptr;
+            } else {
+                OutputDebugStringW(L"Failed to convert GUID to string.");
+            }
             delete [] buf;
             buf = nullptr;
-            DisplayErrorDialog(L"Failed to convert GUID to string.");
             return false;
         }
         *str = buf;
@@ -242,11 +291,25 @@ bool Utils::RefreshWindowTheme(const HWND hWnd) noexcept
         const HRESULT hr2 = DwmSetWindowAttributeFunc(hWnd, g_DWMWA_USE_IMMERSIVE_DARK_MODE, &useDarkFrame, sizeof(useDarkFrame));
         const HRESULT hr3 = SetWindowThemeFunc(hWnd, themeName, nullptr);
         if (FAILED(hr1) && FAILED(hr2)) {
-            OutputDebugStringW(L"Failed to change the window dark mode state.");
+            auto msg = GetSystemErrorMessage(L"DwmSetWindowAttribute", hr2);
+            if (msg) {
+                DisplayErrorDialog(msg);
+                delete [] msg;
+                msg = nullptr;
+            } else {
+                OutputDebugStringW(L"Failed to set the window dark mode state.");
+            }
             return false;
         }
         if (FAILED(hr3)) {
-            OutputDebugStringW(L"Failed to change the window theme.");
+            auto msg = GetSystemErrorMessage(L"SetWindowTheme", hr3);
+            if (msg) {
+                DisplayErrorDialog(msg);
+                delete [] msg;
+                msg = nullptr;
+            } else {
+                OutputDebugStringW(L"Failed to set the window theme.");
+            }
             return false;
         }
         return true;
@@ -270,11 +333,25 @@ bool Utils::CloseWindow(const HWND hWnd, const ATOM atom) noexcept
             return false;
         }
         if (DestroyWindowFunc(hWnd) == FALSE) {
-            DisplayErrorDialog(L"Failed to destroy the window.");
+            auto msg = GetSystemErrorMessage(L"DestroyWindow");
+            if (msg) {
+                DisplayErrorDialog(msg);
+                delete [] msg;
+                msg = nullptr;
+            } else {
+                OutputDebugStringW(L"Failed to destroy the window.");
+            }
             return false;
         }
         if (UnregisterClassWFunc(GetWindowClassName(atom), GetCurrentInstance()) == FALSE) {
-            DisplayErrorDialog(L"Failed to unregister the window class.");
+            auto msg = GetSystemErrorMessage(L"UnregisterClassW");
+            if (msg) {
+                DisplayErrorDialog(msg);
+                delete [] msg;
+                msg = nullptr;
+            } else {
+                OutputDebugStringW(L"Failed to unregister the window class.");
+            }
             return false;
         }
         return true;

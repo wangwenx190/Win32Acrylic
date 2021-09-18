@@ -24,8 +24,6 @@
 
 #include <SDKDDKVer.h>
 #include <Windows.h>
-#include <UxTheme.h>
-#include <DwmApi.h>
 #pragma push_macro("GetCurrentTime")
 #pragma push_macro("TRY")
 #undef GetCurrentTime
@@ -41,6 +39,7 @@
 #include "Resource.h"
 #include "WindowsVersion.h"
 #include "SystemLibraryManager.h"
+#include "Utils.h"
 
 namespace Constants {
 namespace Light {
@@ -80,9 +79,9 @@ static winrt::Windows::UI::Xaml::Media::AcrylicBrush g_backgroundBrush = nullptr
         OutputDebugStringW(L"Failed to refresh the background brush due to the brush is null.");
         return false;
     }
-    if (IsHighContrastModeEnabled()) {
+    if (Utils::IsHighContrastModeEnabled()) {
         // ### TO BE IMPLEMENTED
-    } else if (ShouldAppsUseDarkMode()) {
+    } else if (Utils::ShouldAppsUseDarkMode()) {
         g_backgroundBrush.TintColor(Constants::Dark::TintColor);
         g_backgroundBrush.TintOpacity(Constants::Dark::TintOpacity);
         g_backgroundBrush.TintLuminosityOpacity(Constants::Dark::LuminosityOpacity);
@@ -109,7 +108,14 @@ static winrt::Windows::UI::Xaml::Media::AcrylicBrush g_backgroundBrush = nullptr
             return false;
         }
         if (SetWindowPosFunc(g_xamlIslandWindowHandle, nullptr, 0, 0, width, height, SWP_SHOWWINDOW | SWP_NOACTIVATE | SWP_NOZORDER | SWP_NOOWNERZORDER) == FALSE) {
-            DisplayErrorDialog(L"Failed to sync the geometry of the XAML Island window.");
+            auto msg = Utils::GetSystemErrorMessage(L"SetWindowPos");
+            if (msg) {
+                Utils::DisplayErrorDialog(msg);
+                delete [] msg;
+                msg = nullptr;
+            } else {
+                OutputDebugStringW(L"Failed to sync the geometry of the XAML Island window.");
+            }
             return false;
         }
         return true;
@@ -133,7 +139,14 @@ static winrt::Windows::UI::Xaml::Media::AcrylicBrush g_backgroundBrush = nullptr
         }
         RECT clientRect = {0, 0, 0, 0};
         if (GetClientRectFunc(g_mainWindowHandle, &clientRect) == FALSE) {
-            DisplayErrorDialog(L"Failed to retrieve the client rect of the window.");
+            auto msg = Utils::GetSystemErrorMessage(L"GetClientRect");
+            if (msg) {
+                Utils::DisplayErrorDialog(msg);
+                delete [] msg;
+                msg = nullptr;
+            } else {
+                OutputDebugStringW(L"Failed to retrieve the client rect of the window.");
+            }
             return false;
         }
         return SyncXAMLIslandPosition(clientRect.right, clientRect.bottom);
@@ -147,12 +160,12 @@ static winrt::Windows::UI::Xaml::Media::AcrylicBrush g_backgroundBrush = nullptr
 {
     switch (message) {
     case WM_CLOSE: {
-        if (CloseMainWindow()) {
+        if (Utils::CloseWindow(g_mainWindowHandle, g_mainWindowAtom)) {
             g_mainWindowHandle = nullptr;
             g_mainWindowAtom = INVALID_ATOM;
             return 0;
         } else {
-            DisplayErrorDialog(L"Failed to close the window.");
+            Utils::DisplayErrorDialog(L"Failed to close the main window.");
         }
     } break;
     case WM_DESTROY: {
@@ -180,7 +193,7 @@ static winrt::Windows::UI::Xaml::Media::AcrylicBrush g_backgroundBrush = nullptr
             const UINT width = LOWORD(lParam);
             const UINT height = HIWORD(lParam);
             if (!SyncXAMLIslandPosition(width, height)) {
-                DisplayErrorDialog(L"Failed to sync the geometry of the XAML Island window.");
+                Utils::DisplayErrorDialog(L"Failed to sync the geometry of the XAML Island window.");
             }
         }
     } break;
@@ -191,11 +204,11 @@ static winrt::Windows::UI::Xaml::Media::AcrylicBrush g_backgroundBrush = nullptr
         // wParam == 0: User-wide setting change
         // wParam == 1: System-wide setting change
         if (((wParam == 0) || (wParam == 1)) && (_wcsicmp(reinterpret_cast<LPCWSTR>(lParam), L"ImmersiveColorSet") == 0)) {
-            if (!RefreshWindowTheme()) {
-                DisplayErrorDialog(L"Failed to refresh the window theme.");
+            if (!Utils::RefreshWindowTheme(hWnd)) {
+                Utils::DisplayErrorDialog(L"Failed to refresh the main window theme.");
             }
             if (!RefreshBackgroundBrush()) {
-                DisplayErrorDialog(L"Failed to refresh the background brush.");
+                Utils::DisplayErrorDialog(L"Failed to refresh the background brush.");
             }
         }
     } break;
@@ -221,16 +234,16 @@ static winrt::Windows::UI::Xaml::Media::AcrylicBrush g_backgroundBrush = nullptr
         bool exists = false;
         WNDCLASSEXW wcex = {};
         if (name) {
-            exists = (GetClassInfoExWFunc(HINST_THISCOMPONENT, name, &wcex) != FALSE);
+            exists = (GetClassInfoExWFunc(Utils::GetCurrentInstance(), name, &wcex) != FALSE);
         }
         if (!exists) {
             if (g_mainWindowAtom != INVALID_ATOM) {
-                exists = (GetClassInfoExWFunc(HINST_THISCOMPONENT, ATOM_TO_STRING(g_mainWindowAtom), &wcex) != FALSE);
+                exists = (GetClassInfoExWFunc(Utils::GetCurrentInstance(), Utils::GetWindowClassName(g_mainWindowAtom), &wcex) != FALSE);
             }
         }
         LPCWSTR guid = nullptr;
         if (!exists) {
-            if (!GenerateGUID(&guid)) {
+            if (!Utils::GenerateGUID(&guid)) {
                 OutputDebugStringW(L"Failed to register the window class due to can't generate a new GUID.");
                 return false;
             }
@@ -238,18 +251,29 @@ static winrt::Windows::UI::Xaml::Media::AcrylicBrush g_backgroundBrush = nullptr
             wcex.cbSize = sizeof(wcex);
             wcex.style = CS_HREDRAW | CS_VREDRAW;
             wcex.lpfnWndProc = MessageHandler;
-            wcex.hInstance = HINST_THISCOMPONENT;
+            wcex.hInstance = Utils::GetCurrentInstance();
             wcex.lpszClassName = (name ? name : guid);
             wcex.hCursor = LoadCursorWFunc(nullptr, IDC_ARROW);
-            wcex.hIcon = LoadIconWFunc(HINST_THISCOMPONENT, MAKEINTRESOURCEW(IDI_APPICON));
-            wcex.hIconSm = LoadIconWFunc(HINST_THISCOMPONENT, MAKEINTRESOURCEW(IDI_APPICON_SMALL));
+            wcex.hIcon = LoadIconWFunc(Utils::GetCurrentInstance(), MAKEINTRESOURCEW(IDI_APPICON));
+            wcex.hIconSm = LoadIconWFunc(Utils::GetCurrentInstance(), MAKEINTRESOURCEW(IDI_APPICON_SMALL));
         }
         g_mainWindowAtom = RegisterClassExWFunc(&wcex);
         if (guid) {
             delete [] guid;
             guid = nullptr;
         }
-        return (g_mainWindowAtom != INVALID_ATOM);
+        if (g_mainWindowAtom == INVALID_ATOM) {
+            auto msg = Utils::GetSystemErrorMessage(L"RegisterClassExW");
+            if (msg) {
+                Utils::DisplayErrorDialog(msg);
+                delete [] msg;
+                msg = nullptr;
+            } else {
+                OutputDebugStringW(L"Failed to register the window class for the main window.");
+            }
+            return false;
+        }
+        return true;
     } else {
         OutputDebugStringW(L"LoadCursorW(), LoadIconW(), RegisterClassExW() and GetClassInfoExW() are not available.");
         return false;
@@ -266,12 +290,23 @@ static winrt::Windows::UI::Xaml::Media::AcrylicBrush g_backgroundBrush = nullptr
         }
         g_mainWindowHandle = CreateWindowExWFunc(
             WS_EX_NOREDIRECTIONBITMAP,
-            ATOM_TO_STRING(g_mainWindowAtom),
+            Utils::GetWindowClassName(g_mainWindowAtom),
             (title ? title : g_defaultWindowTitle),
             WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN | WS_CLIPSIBLINGS,
             CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
-            nullptr, nullptr, HINST_THISCOMPONENT, nullptr);
-        return (g_mainWindowHandle != nullptr);
+            nullptr, nullptr, Utils::GetCurrentInstance(), nullptr);
+        if (!g_mainWindowHandle) {
+            auto msg = Utils::GetSystemErrorMessage(L"CreateWindowExW");
+            if (msg) {
+                Utils::DisplayErrorDialog(msg);
+                delete [] msg;
+                msg = nullptr;
+            } else {
+                OutputDebugStringW(L"Failed to create the main window.");
+            }
+            return false;
+        }
+        return true;
     } else {
         OutputDebugStringW(L"CreateWindowExW() is not available.");
         return false;
@@ -289,7 +324,14 @@ static winrt::Windows::UI::Xaml::Media::AcrylicBrush g_backgroundBrush = nullptr
         }
         ShowWindowFunc(g_mainWindowHandle, nCmdShow);
         if (UpdateWindowFunc(g_mainWindowHandle) == FALSE) {
-            DisplayErrorDialog(L"Failed to update main window.");
+            auto msg = Utils::GetSystemErrorMessage(L"UpdateWindow");
+            if (msg) {
+                Utils::DisplayErrorDialog(msg);
+                delete [] msg;
+                msg = nullptr;
+            } else {
+                OutputDebugStringW(L"Failed to update the main window.");
+            }
             return false;
         }
         return true;
@@ -305,39 +347,71 @@ static winrt::Windows::UI::Xaml::Media::AcrylicBrush g_backgroundBrush = nullptr
     winrt::init_apartment(winrt::apartment_type::single_threaded);
     // Initialize the XAML framework's core window for the current thread.
     g_manager = winrt::Windows::UI::Xaml::Hosting::WindowsXamlManager::InitializeForCurrentThread();
+    if (g_manager == nullptr) {
+        Utils::DisplayErrorDialog(L"Failed to initialize the Windows XAML Manager for the current thread.");
+        return false;
+    }
     // This DesktopWindowXamlSource is the object that enables a non-UWP desktop application
     // to host WinRT XAML controls in any UI element that is associated with a window handle (HWND).
     g_source = winrt::Windows::UI::Xaml::Hosting::DesktopWindowXamlSource();
+    if (g_source == nullptr) {
+        Utils::DisplayErrorDialog(L"Failed to create the Desktop Window XAML Source.");
+        return false;
+    }
     // Get handle to the core window.
     const auto interop = g_source.as<IDesktopWindowXamlSourceNative>();
     if (!interop) {
-        DisplayErrorDialog(L"Failed to retrieve XAML Island's core window.");
+        Utils::DisplayErrorDialog(L"Failed to retrieve the IDesktopWindowXamlSourceNative.");
         return false;
     }
     // Parent the DesktopWindowXamlSource object to the current window.
-    if (FAILED(interop->AttachToWindow(g_mainWindowHandle))) {
-        DisplayErrorDialog(L"Failed to attach the XAML Island window to the main window.");
+    HRESULT hr = interop->AttachToWindow(g_mainWindowHandle);
+    if (FAILED(hr)) {
+        auto msg = Utils::GetSystemErrorMessage(L"AttachToWindow", hr);
+        if (msg) {
+            Utils::DisplayErrorDialog(msg);
+            delete [] msg;
+            msg = nullptr;
+        } else {
+            OutputDebugStringW(L"Failed to attach the XAML Island window to the main window.");
+        }
         return false;
     }
     // Get the new child window's HWND.
-    if (FAILED(interop->get_WindowHandle(&g_xamlIslandWindowHandle))) {
-        DisplayErrorDialog(L"Failed to retrieve the XAML Island window's handle.");
+    hr = interop->get_WindowHandle(&g_xamlIslandWindowHandle);
+    if (FAILED(hr)) {
+        auto msg = Utils::GetSystemErrorMessage(L"get_WindowHandle", hr);
+        if (msg) {
+            Utils::DisplayErrorDialog(msg);
+            delete [] msg;
+            msg = nullptr;
+        } else {
+            OutputDebugStringW(L"Failed to retrieve the XAML Island window's handle.");
+        }
         return false;
     }
     if (!g_xamlIslandWindowHandle) {
-        DisplayErrorDialog(L"Failed to retrieve the window handle of XAML Island's core window.");
+        Utils::DisplayErrorDialog(L"Failed to retrieve the window handle of XAML Island's core window.");
         return false;
     }
     // Update the XAML Island window size because initially it is 0x0.
     if (!SyncXAMLIslandPosition()) {
-        DisplayErrorDialog(L"Failed to sync the geometry of the XAML Island window.");
+        Utils::DisplayErrorDialog(L"Failed to sync the geometry of the XAML Island window.");
         return false;
     }
     // Create the XAML content.
     g_rootGrid = winrt::Windows::UI::Xaml::Controls::Grid();
+    if (g_rootGrid == nullptr) {
+        Utils::DisplayErrorDialog(L"Failed to create the XAML Grid.");
+        return false;
+    }
     g_backgroundBrush = winrt::Windows::UI::Xaml::Media::AcrylicBrush();
+    if (g_backgroundBrush == nullptr) {
+        Utils::DisplayErrorDialog(L"Failed to create the XAML AcrylicBrush");
+        return false;
+    }
     if (!RefreshBackgroundBrush()) {
-        DisplayErrorDialog(L"Failed to refresh the background brush.");
+        Utils::DisplayErrorDialog(L"Failed to refresh the background brush.");
         return false;
     }
     g_backgroundBrush.BackgroundSource(winrt::Windows::UI::Xaml::Media::AcrylicBackgroundSource::HostBackdrop);
@@ -361,7 +435,19 @@ static winrt::Windows::UI::Xaml::Media::AcrylicBrush g_backgroundBrush = nullptr
             if (g_source != nullptr) {
                 const auto interop2 = g_source.as<IDesktopWindowXamlSourceNative2>();
                 if (interop2) {
-                    interop2->PreTranslateMessage(&msg, &filtered);
+                    const HRESULT hr = interop2->PreTranslateMessage(&msg, &filtered);
+                    if (FAILED(hr)) {
+                        auto msg = Utils::GetSystemErrorMessage(L"PreTranslateMessage", hr);
+                        if (msg) {
+                            Utils::DisplayErrorDialog(msg);
+                            delete [] msg;
+                            msg = nullptr;
+                        } else {
+                            OutputDebugStringW(L"Failed to pre-translate win32 messages.");
+                        }
+                    }
+                } else {
+                    OutputDebugStringW(L"Failed to retrieve the IDesktopWindowXamlSourceNative2.");
                 }
             }
             if (filtered == FALSE) {
@@ -389,32 +475,32 @@ wWinMain(
     UNREFERENCED_PARAMETER(lpCmdLine);
 
     if (!IsWindows1019H1OrGreater()) {
-        DisplayErrorDialog(L"This application only supports Windows 10 19H1 and onwards.");
+        Utils::DisplayErrorDialog(L"This application only supports Windows 10 19H1 and onwards.");
         return -1;
     }
 
     if (!RegisterMainWindowClass(nullptr)) {
-        DisplayErrorDialog(L"Failed to register the main window class.");
+        Utils::DisplayErrorDialog(L"Failed to register the main window class.");
         return -1;
     }
 
     if (!CreateMainWindow(nullptr)) {
-        DisplayErrorDialog(L"Failed to create the main window.");
+        Utils::DisplayErrorDialog(L"Failed to create the main window.");
         return -1;
     }
 
-    if (!RefreshWindowTheme()) {
-        DisplayErrorDialog(L"Failed to refresh the main window theme.");
+    if (!Utils::RefreshWindowTheme(g_mainWindowHandle)) {
+        Utils::DisplayErrorDialog(L"Failed to refresh the main window theme.");
         return -1;
     }
 
     if (!InitializeXAMLIsland()) {
-        DisplayErrorDialog(L"Failed to initialize the XAML Island.");
+        Utils::DisplayErrorDialog(L"Failed to initialize the XAML Island.");
         return -1;
     }
 
     if (!ShowMainWindow(nCmdShow)) {
-        DisplayErrorDialog(L"Failed to show the main window.");
+        Utils::DisplayErrorDialog(L"Failed to show the main window.");
         return -1;
     }
 

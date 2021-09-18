@@ -23,6 +23,7 @@
  */
 
 #include "SystemLibrary.h"
+#include "Utils.h"
 #include <unordered_map>
 
 [[nodiscard]] static inline LPCSTR WideToMulti(LPCWSTR str) noexcept
@@ -83,13 +84,27 @@ void SystemLibraryPrivate::Initialize() noexcept
     MEMORY_BASIC_INFORMATION mbi;
     SecureZeroMemory(&mbi, sizeof(mbi));
     if (VirtualQuery(reinterpret_cast<LPCVOID>(&VirtualQuery), &mbi, sizeof(mbi)) == 0) {
-        OutputDebugStringW(L"Failed to retrieve the memory basic information.");
+        auto msg = Utils::GetSystemErrorMessage(L"VirtualQuery");
+        if (msg) {
+            Utils::DisplayErrorDialog(msg);
+            delete [] msg;
+            msg = nullptr;
+        } else {
+            OutputDebugStringW(L"Failed to retrieve the memory basic information.");
+        }
     } else {
         const auto kernel32 = static_cast<HMODULE>(mbi.AllocationBase);
         if (kernel32) {
             m_LoadLibraryExWFunc = reinterpret_cast<LoadLibraryExWSig>(GetProcAddress(kernel32, "LoadLibraryExW"));
             if (!m_LoadLibraryExWFunc) {
-                OutputDebugStringW(L"Failed to resolve symbol LoadLibraryExW().");
+                auto msg = Utils::GetSystemErrorMessage(L"GetProcAddress");
+                if (msg) {
+                    Utils::DisplayErrorDialog(msg);
+                    delete [] msg;
+                    msg = nullptr;
+                } else {
+                    OutputDebugStringW(L"Failed to resolve symbol LoadLibraryExW().");
+                }
             }
         } else {
             OutputDebugStringW(L"Failed to retrieve the base address of Kernel32.dll.");
@@ -142,7 +157,18 @@ bool SystemLibraryPrivate::Load() noexcept
         return false;
     }
     m_module = m_LoadLibraryExWFunc(m_fileName, nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
-    return IsLoaded();
+    if (!m_module) {
+        auto msg = Utils::GetSystemErrorMessage(L"LoadLibraryExW");
+        if (msg) {
+            Utils::DisplayErrorDialog(msg);
+            delete [] msg;
+            msg = nullptr;
+        } else {
+            OutputDebugStringW(L"Failed to load dynamic link library.");
+        }
+        return false;
+    }
+    return true;
 }
 
 void SystemLibraryPrivate::Unload() noexcept
@@ -153,7 +179,14 @@ void SystemLibraryPrivate::Unload() noexcept
     m_fileName = nullptr;
     m_resolvedSymbols.clear();
     if (FreeLibrary(m_module) == FALSE) {
-        OutputDebugStringW(L"Failed to free library.");
+        auto msg = Utils::GetSystemErrorMessage(L"FreeLibrary");
+        if (msg) {
+            Utils::DisplayErrorDialog(msg);
+            delete [] msg;
+            msg = nullptr;
+        } else {
+            OutputDebugStringW(L"Failed to unload dynamic link library.");
+        }
     }
     m_module = nullptr;
 }
@@ -172,16 +205,24 @@ FARPROC SystemLibraryPrivate::GetSymbol(LPCWSTR function) noexcept
     }
     const auto search = m_resolvedSymbols.find(function);
     if (search == m_resolvedSymbols.cend()) {
-        const auto name = WideToMulti(function);
+        auto name = WideToMulti(function);
         if (!name) {
             OutputDebugStringW(L"Can't convert a wide char array to multi-byte char array.");
             return nullptr;
         }
         const auto addr = GetProcAddress(m_module, name);
         if (!addr) {
-            OutputDebugStringW(L"Failed to resolve symbol.");
+            auto msg = Utils::GetSystemErrorMessage(L"GetProcAddress");
+            if (msg) {
+                Utils::DisplayErrorDialog(msg);
+                delete [] msg;
+                msg = nullptr;
+            } else {
+                OutputDebugStringW(L"Failed to resolve symbol.");
+            }
         }
         delete [] name;
+        name = nullptr;
         m_resolvedSymbols.insert({function, addr});
         return addr;
     } else {

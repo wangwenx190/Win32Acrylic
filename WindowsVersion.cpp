@@ -26,6 +26,12 @@
 #include <SDKDDKVer.h>
 #include <Windows.h>
 
+[[nodiscard]] WindowsVersion GetCurrentSystemVersion() noexcept
+{
+    // todo
+    return {};
+}
+
 [[nodiscard]] bool IsWindowsOrGreater(const WindowsVersion &version) noexcept
 {
     OSVERSIONINFOEXW osvi;

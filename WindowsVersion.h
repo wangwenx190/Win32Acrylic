@@ -103,18 +103,17 @@ private:
 
 [[nodiscard]] extern bool IsWindowsOrGreater(const WindowsVersion &version) noexcept;
 
-[[maybe_unused]] constexpr WindowsVersion Windows_XP = WindowsVersion(0, 0, 0);
-[[maybe_unused]] constexpr WindowsVersion Windows_XP_ServicePack1 = WindowsVersion(0, 0, 0);
-[[maybe_unused]] constexpr WindowsVersion Windows_XP_ServicePack2 = WindowsVersion(0, 0, 0);
-[[maybe_unused]] constexpr WindowsVersion Windows_XP_ServicePack3 = WindowsVersion(0, 0, 0);
-[[maybe_unused]] constexpr WindowsVersion Windows_Vista = WindowsVersion(0, 0, 0);
-[[maybe_unused]] constexpr WindowsVersion Windows_Vista_ServicePack1 = WindowsVersion(0, 0, 0);
-[[maybe_unused]] constexpr WindowsVersion Windows_Vista_ServicePack2 = WindowsVersion(0, 0, 0);
-[[maybe_unused]] constexpr WindowsVersion Windows_7 = WindowsVersion(0, 0, 0);
-[[maybe_unused]] constexpr WindowsVersion Windows_7_ServicePack1 = WindowsVersion(0, 0, 0);
-[[maybe_unused]] constexpr WindowsVersion Windows_8 = WindowsVersion(0, 0, 0);
-[[maybe_unused]] constexpr WindowsVersion Windows_8_1 = WindowsVersion(0, 0, 0);
-[[maybe_unused]] constexpr WindowsVersion Windows_8_1_Update1 = WindowsVersion(0, 0, 0);
+[[maybe_unused]] constexpr WindowsVersion Windows_2000 = WindowsVersion(5, 0, 2195);
+[[maybe_unused]] constexpr WindowsVersion Windows_XP = WindowsVersion(5, 1, 2600);
+[[maybe_unused]] constexpr WindowsVersion Windows_XP_x64 = WindowsVersion(5, 2, 3790);
+[[maybe_unused]] constexpr WindowsVersion Windows_Vista = WindowsVersion(6, 0, 6000);
+[[maybe_unused]] constexpr WindowsVersion Windows_Vista_ServicePack1 = WindowsVersion(6, 0, 6001);
+[[maybe_unused]] constexpr WindowsVersion Windows_Vista_ServicePack2 = WindowsVersion(6, 0, 6002);
+[[maybe_unused]] constexpr WindowsVersion Windows_7 = WindowsVersion(6, 1, 7600);
+[[maybe_unused]] constexpr WindowsVersion Windows_7_ServicePack1 = WindowsVersion(6, 1, 7601);
+[[maybe_unused]] constexpr WindowsVersion Windows_8 = WindowsVersion(6, 2, 9200);
+[[maybe_unused]] constexpr WindowsVersion Windows_8_1 = WindowsVersion(6, 3, 9200);
+[[maybe_unused]] constexpr WindowsVersion Windows_8_1_Update1 = WindowsVersion(6, 3, 9600);
 [[maybe_unused]] constexpr WindowsVersion Windows10_ThresHold1 = WindowsVersion(10, 0, 10240);
 [[maybe_unused]] constexpr WindowsVersion Windows10_ThresHold2 = WindowsVersion(10, 0, 10586);
 [[maybe_unused]] constexpr WindowsVersion Windows10_RedStone1 = WindowsVersion(10, 0, 14393);

@@ -42,15 +42,6 @@
 #include "WindowsVersion.h"
 #include "SystemLibraryManager.h"
 
-#ifndef HINST_THISCOMPONENT
-EXTERN_C IMAGE_DOS_HEADER __ImageBase;
-#define HINST_THISCOMPONENT (reinterpret_cast<HINSTANCE>(&__ImageBase))
-#endif
-
-#ifndef ATOM_TO_STRING
-#define ATOM_TO_STRING(atom) (reinterpret_cast<LPCWSTR>(static_cast<WORD>(MAKELONG(atom, 0))))
-#endif
-
 namespace Constants {
 namespace Light {
 static constexpr winrt::Windows::UI::Color TintColor = {255, 252, 252, 252};
@@ -69,11 +60,6 @@ namespace HighContrast {
 } // namespace HighContrast
 } // namespace Constants
 
-static constexpr DWORD g_DWMWA_USE_IMMERSIVE_DARK_MODE_BEFORE_20H1 = 19;
-static constexpr DWORD g_DWMWA_USE_IMMERSIVE_DARK_MODE = 20;
-
-static constexpr wchar_t g_personalizeRegistryKey[] = LR"(Software\Microsoft\Windows\CurrentVersion\Themes\Personalize)";
-
 static constexpr wchar_t g_defaultWindowTitle[] = L"Win32AcrylicHelper Application Main Window";
 
 static ATOM g_mainWindowAtom = INVALID_ATOM;
@@ -84,125 +70,6 @@ static winrt::Windows::UI::Xaml::Hosting::WindowsXamlManager g_manager = nullptr
 static winrt::Windows::UI::Xaml::Hosting::DesktopWindowXamlSource g_source = nullptr;
 static winrt::Windows::UI::Xaml::Controls::Grid g_rootGrid = nullptr;
 static winrt::Windows::UI::Xaml::Media::AcrylicBrush g_backgroundBrush = nullptr;
-
-static inline void DisplayErrorDialog(LPCWSTR text) noexcept
-{
-    USER32_API(MessageBoxW);
-    if (MessageBoxWFunc) {
-        if (text) {
-            OutputDebugStringW(text);
-            MessageBoxWFunc(nullptr, text, L"Error", MB_ICONERROR | MB_OK);
-        } else {
-            OutputDebugStringW(L"Failed to show the message box due to the content is empty.");
-        }
-    } else {
-        OutputDebugStringW(L"MessageBoxW() is not available.");
-    }
-}
-
-[[nodiscard]] static inline bool IsHighContrastModeEnabled() noexcept
-{
-    USER32_API(SystemParametersInfoW);
-    if (SystemParametersInfoWFunc) {
-        HIGHCONTRASTW hc;
-        SecureZeroMemory(&hc, sizeof(hc));
-        hc.cbSize = sizeof(hc);
-        if (SystemParametersInfoWFunc(SPI_GETHIGHCONTRAST, sizeof(hc), &hc, 0) == FALSE) {
-            OutputDebugStringW(L"Failed to retrieve the high contrast mode state.");
-            return false;
-        }
-        return (hc.dwFlags & HCF_HIGHCONTRASTON);
-    } else {
-        OutputDebugStringW(L"SystemParametersInfoW() is not available.");
-        return false;
-    }
-}
-
-[[nodiscard]] static inline bool ShouldAppsUseDarkMode() noexcept
-{
-    if (!IsWindows10RS1OrGreater()) {
-        return false;
-    }
-    // Starting from Windows 10 19H1, ShouldAppsUseDarkMode() always return "TRUE"
-    // (actually, a random non-zero number at runtime), so we can't use it due to
-    // this unreliability. In this case, we just simply read the user's setting from
-    // the registry instead, it's not elegant but at least it works well.
-    if (IsWindows1019H1OrGreater()) {
-        ADVAPI32_API(RegOpenKeyExW);
-        ADVAPI32_API(RegQueryValueExW);
-        ADVAPI32_API(RegCloseKey);
-        if (RegOpenKeyExWFunc && RegQueryValueExWFunc && RegCloseKeyFunc) {
-            HKEY hKey = nullptr;
-            if (RegOpenKeyExWFunc(HKEY_CURRENT_USER, g_personalizeRegistryKey, 0, KEY_READ, &hKey) != ERROR_SUCCESS) {
-                OutputDebugStringW(L"Failed to open the registry key to read.");
-                return false;
-            }
-            DWORD dwValue = 0;
-            DWORD dwType = REG_DWORD;
-            DWORD dwSize = sizeof(dwValue);
-            const bool success = (RegQueryValueExWFunc(hKey, L"AppsUseLightTheme", nullptr, &dwType, reinterpret_cast<LPBYTE>(&dwValue),&dwSize) == ERROR_SUCCESS);
-            if (!success) {
-                OutputDebugStringW(L"Failed to query the registry key value.");
-            }
-            if (RegCloseKeyFunc(hKey) != ERROR_SUCCESS) {
-                OutputDebugStringW(L"Failed to close the registry key.");
-            }
-            return (success && (dwValue == 0));
-        } else {
-            OutputDebugStringW(L"RegOpenKeyExW(), RegQueryValueExW() and RegCloseKey() are not available.");
-            return false;
-        }
-    } else {
-        static const auto ShouldAppsUseDarkModeFunc = reinterpret_cast<BOOL(WINAPI *)()>(SystemLibraryManager::instance().GetSymbol(L"UxTheme.dll", MAKEINTRESOURCEW(132)));
-        if (ShouldAppsUseDarkModeFunc) {
-            return (ShouldAppsUseDarkModeFunc() != FALSE);
-        } else {
-            OutputDebugStringW(L"ShouldAppsUseDarkMode() is not available.");
-            return false;
-        }
-    }
-}
-
-[[nodiscard]] static inline bool RefreshWindowTheme() noexcept
-{
-    if (!IsWindows10RS1OrGreater()) {
-        return false;
-    }
-    DWMAPI_API(DwmSetWindowAttribute);
-    UXTHEME_API(SetWindowTheme);
-    if (DwmSetWindowAttributeFunc && SetWindowThemeFunc) {
-        if (!g_mainWindowHandle) {
-            OutputDebugStringW(L"Failed to refresh main window theme due to the main window handle is null.");
-            return false;
-        }
-        BOOL useDarkFrame = FALSE;
-        LPCWSTR themeName = nullptr;
-        if (IsHighContrastModeEnabled()) {
-            // ### TO BE IMPLEMENTED
-        } else if (ShouldAppsUseDarkMode()) {
-            useDarkFrame = TRUE;
-            themeName = L"Dark_Explorer";
-        } else {
-            useDarkFrame = FALSE;
-            themeName = L"Explorer";
-        }
-        const HRESULT hr1 = DwmSetWindowAttributeFunc(g_mainWindowHandle, g_DWMWA_USE_IMMERSIVE_DARK_MODE_BEFORE_20H1, &useDarkFrame, sizeof(useDarkFrame));
-        const HRESULT hr2 = DwmSetWindowAttributeFunc(g_mainWindowHandle, g_DWMWA_USE_IMMERSIVE_DARK_MODE, &useDarkFrame, sizeof(useDarkFrame));
-        const HRESULT hr3 = SetWindowThemeFunc(g_mainWindowHandle, themeName, nullptr);
-        if (FAILED(hr1) && FAILED(hr2)) {
-            OutputDebugStringW(L"Failed to change the window dark mode state.");
-            return false;
-        }
-        if (FAILED(hr3)) {
-            OutputDebugStringW(L"Failed to change the window theme.");
-            return false;
-        }
-        return true;
-    } else {
-        OutputDebugStringW(L"DwmSetWindowAttribute() and SetWindowTheme() are not available.");
-        return false;
-    }
-}
 
 [[nodiscard]] static inline bool RefreshBackgroundBrush() noexcept
 {
@@ -227,34 +94,6 @@ static inline void DisplayErrorDialog(LPCWSTR text) noexcept
         g_backgroundBrush.FallbackColor(Constants::Light::FallbackColor);
     }
     return true;
-}
-
-[[nodiscard]] static inline bool CloseMainWindow() noexcept
-{
-    USER32_API(DestroyWindow);
-    USER32_API(UnregisterClassW);
-    if (DestroyWindowFunc && UnregisterClassWFunc) {
-        if (!g_mainWindowHandle) {
-            OutputDebugStringW(L"Failed to close main window due to the main window handle is null.");
-            return false;
-        }
-        if (g_mainWindowAtom == INVALID_ATOM) {
-            OutputDebugStringW(L"Failed to close main window due to the main window ATOM is invalid.");
-            return false;
-        }
-        if (DestroyWindowFunc(g_mainWindowHandle) == FALSE) {
-            DisplayErrorDialog(L"Failed to destroy main window.");
-            return false;
-        }
-        if (UnregisterClassWFunc(ATOM_TO_STRING(g_mainWindowAtom), HINST_THISCOMPONENT) == FALSE) {
-            DisplayErrorDialog(L"Failed to unregister main window class.");
-            return false;
-        }
-        return true;
-    } else {
-        OutputDebugStringW(L"DestroyWindow() and UnregisterClassW() are not available.");
-        return false;
-    }
 }
 
 [[nodiscard]] static inline bool SyncXAMLIslandPosition(const UINT width, const UINT height) noexcept
@@ -300,36 +139,6 @@ static inline void DisplayErrorDialog(LPCWSTR text) noexcept
         return SyncXAMLIslandPosition(clientRect.right, clientRect.bottom);
     } else {
         OutputDebugStringW(L"GetClientRect() is not available.");
-        return false;
-    }
-}
-
-[[nodiscard]] static inline bool GenerateGUID(LPCWSTR *str) noexcept
-{
-    OLE32_API(CoCreateGuid);
-    OLE32_API(StringFromGUID2);
-    if (CoCreateGuidFunc && StringFromGUID2Func) {
-        if (!str) {
-            OutputDebugStringW(L"Failed to generate GUID due to the given string address is null.");
-            return false;
-        }
-        GUID guid = {};
-        if (FAILED(CoCreateGuidFunc(&guid))) {
-            DisplayErrorDialog(L"Failed to generate GUID.");
-            return false;
-        }
-        auto buf = new wchar_t[MAX_PATH];
-        SecureZeroMemory(buf, sizeof(buf));
-        if (StringFromGUID2Func(guid, buf, MAX_PATH) == 0) {
-            delete [] buf;
-            buf = nullptr;
-            DisplayErrorDialog(L"Failed to convert GUID to string.");
-            return false;
-        }
-        *str = buf;
-        return true;
-    } else {
-        OutputDebugStringW(L"CoCreateGuid() and StringFromGUID2() are not available.");
         return false;
     }
 }

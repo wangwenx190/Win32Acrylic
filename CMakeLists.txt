@@ -21,6 +21,8 @@ set(SOURCES
     SystemLibraryManager.cpp
     WindowsVersion.h
     WindowsVersion.cpp
+    Utils.h
+    Utils.cpp
     main.cpp
 )
 

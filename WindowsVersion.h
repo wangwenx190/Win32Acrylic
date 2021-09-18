@@ -101,6 +101,7 @@ private:
     int m_build = 0;
 };
 
+[[nodiscard]] extern WindowsVersion GetCurrentSystemVersion() noexcept;
 [[nodiscard]] extern bool IsWindowsOrGreater(const WindowsVersion &version) noexcept;
 
 [[maybe_unused]] constexpr WindowsVersion Windows_2000 = WindowsVersion(5, 0, 2195);

@@ -39,45 +39,17 @@
 #pragma pop_macro("TRY")
 #pragma pop_macro("GetCurrentTime")
 #include "Resource.h"
-#include "SystemLibrary.h"
+#include "WindowsVersion.h"
+#include "SystemLibraryManager.h"
 
-#ifndef RESOLVE
-#define RESOLVE(module, symbol) static const auto symbol##Func = reinterpret_cast<decltype(&::symbol)>(g_##module##DLL.GetSymbol(L#symbol))
+#ifndef HINST_THISCOMPONENT
+EXTERN_C IMAGE_DOS_HEADER __ImageBase;
+#define HINST_THISCOMPONENT (reinterpret_cast<HINSTANCE>(&__ImageBase))
 #endif
 
-class WindowsVersion
-{
-public:
-    explicit constexpr WindowsVersion(const int major, const int minor, const int build) noexcept {
-        m_major = major;
-        m_minor = minor;
-        m_build = build;
-    }
-    ~WindowsVersion() noexcept = default;
-
-    inline int Major() const noexcept {
-        return m_major;
-    }
-
-    inline int Minor() const noexcept {
-        return m_minor;
-    }
-
-    inline int Build() const noexcept {
-        return m_build;
-    }
-
-private:
-    WindowsVersion(const WindowsVersion &) = delete;
-    WindowsVersion &operator=(const WindowsVersion &) = delete;
-    WindowsVersion(WindowsVersion &&) = delete;
-    WindowsVersion &operator=(WindowsVersion &&) = delete;
-
-private:
-    int m_major = 0;
-    int m_minor = 0;
-    int m_build = 0;
-};
+#ifndef ATOM_TO_STRING
+#define ATOM_TO_STRING(atom) (reinterpret_cast<LPCWSTR>(static_cast<WORD>(MAKELONG(atom, 0))))
+#endif
 
 namespace Constants {
 namespace Light {
@@ -97,69 +69,25 @@ namespace HighContrast {
 } // namespace HighContrast
 } // namespace Constants
 
-static constexpr WindowsVersion g_Win10_RS1 = WindowsVersion(10, 0, 14393);
-static constexpr WindowsVersion g_Win10_19H1 = WindowsVersion(10, 0, 18362);
-
 static constexpr DWORD g_DWMWA_USE_IMMERSIVE_DARK_MODE_BEFORE_20H1 = 19;
 static constexpr DWORD g_DWMWA_USE_IMMERSIVE_DARK_MODE = 20;
 
 static constexpr wchar_t g_personalizeRegistryKey[] = LR"(Software\Microsoft\Windows\CurrentVersion\Themes\Personalize)";
 
-static constexpr wchar_t g_defaultWindowClassName[] = L"{7C8ADF8C-896C-467B-A9E4-A43815267D78}";
 static constexpr wchar_t g_defaultWindowTitle[] = L"Win32AcrylicHelper Application Main Window";
-
-static SystemLibrary g_AdvApi32DLL = SystemLibrary(L"AdvApi32.dll");
-static SystemLibrary g_User32DLL = SystemLibrary(L"User32.dll");
-static SystemLibrary g_Gdi32DLL = SystemLibrary(L"Gdi32.dll");
-static SystemLibrary g_Ole32DLL = SystemLibrary(L"Ole32.dll");
-static SystemLibrary g_UxThemeDLL = SystemLibrary(L"UxTheme.dll");
-static SystemLibrary g_DwmApiDLL = SystemLibrary(L"DwmApi.dll");
 
 static ATOM g_mainWindowAtom = INVALID_ATOM;
 static HWND g_mainWindowHandle = nullptr;
 static HWND g_xamlIslandWindowHandle = nullptr;
-static HINSTANCE g_instance = nullptr;
 
 static winrt::Windows::UI::Xaml::Hosting::WindowsXamlManager g_manager = nullptr;
 static winrt::Windows::UI::Xaml::Hosting::DesktopWindowXamlSource g_source = nullptr;
 static winrt::Windows::UI::Xaml::Controls::Grid g_rootGrid = nullptr;
 static winrt::Windows::UI::Xaml::Media::AcrylicBrush g_backgroundBrush = nullptr;
 
-[[nodiscard]] static inline bool IsWindowsOrGreater(const WindowsVersion &version) noexcept
-{
-    OSVERSIONINFOEXW osvi;
-    SecureZeroMemory(&osvi, sizeof(osvi));
-    osvi.dwOSVersionInfoSize = sizeof(osvi);
-    osvi.dwMajorVersion = version.Major();
-    osvi.dwMinorVersion = version.Minor();
-    osvi.dwBuildNumber = version.Build();
-    const BYTE op = VER_GREATER_EQUAL;
-    DWORDLONG dwlConditionMask = 0;
-    VER_SET_CONDITION(dwlConditionMask, VER_MAJORVERSION, op);
-    VER_SET_CONDITION(dwlConditionMask, VER_MINORVERSION, op);
-    VER_SET_CONDITION(dwlConditionMask, VER_BUILDNUMBER, op);
-    return (VerifyVersionInfoW(&osvi, VER_MAJORVERSION | VER_MINORVERSION | VER_BUILDNUMBER, dwlConditionMask) != FALSE);
-}
-
-[[nodiscard]] static inline bool IsWindows10RS1OrGreater() noexcept
-{
-    // Windows 10 Version 1607 (Anniversary Update)
-    // Code name: Red Stone 1
-    static const bool result = IsWindowsOrGreater(g_Win10_RS1);
-    return result;
-}
-
-[[nodiscard]] static inline bool IsWindows1019H1OrGreater() noexcept
-{
-    // Windows 10 Version 1903 (May 2019 Update)
-    // Code name: 19H1
-    static const bool result = IsWindowsOrGreater(g_Win10_19H1);
-    return result;
-}
-
 static inline void DisplayErrorDialog(LPCWSTR text) noexcept
 {
-    RESOLVE(User32, MessageBoxW);
+    USER32_API(MessageBoxW);
     if (MessageBoxWFunc) {
         if (text) {
             OutputDebugStringW(text);
@@ -174,7 +102,7 @@ static inline void DisplayErrorDialog(LPCWSTR text) noexcept
 
 [[nodiscard]] static inline bool IsHighContrastModeEnabled() noexcept
 {
-    RESOLVE(User32, SystemParametersInfoW);
+    USER32_API(SystemParametersInfoW);
     if (SystemParametersInfoWFunc) {
         HIGHCONTRASTW hc;
         SecureZeroMemory(&hc, sizeof(hc));
@@ -200,9 +128,9 @@ static inline void DisplayErrorDialog(LPCWSTR text) noexcept
     // this unreliability. In this case, we just simply read the user's setting from
     // the registry instead, it's not elegant but at least it works well.
     if (IsWindows1019H1OrGreater()) {
-        RESOLVE(AdvApi32, RegOpenKeyExW);
-        RESOLVE(AdvApi32, RegQueryValueExW);
-        RESOLVE(AdvApi32, RegCloseKey);
+        ADVAPI32_API(RegOpenKeyExW);
+        ADVAPI32_API(RegQueryValueExW);
+        ADVAPI32_API(RegCloseKey);
         if (RegOpenKeyExWFunc && RegQueryValueExWFunc && RegCloseKeyFunc) {
             HKEY hKey = nullptr;
             if (RegOpenKeyExWFunc(HKEY_CURRENT_USER, g_personalizeRegistryKey, 0, KEY_READ, &hKey) != ERROR_SUCCESS) {
@@ -225,7 +153,7 @@ static inline void DisplayErrorDialog(LPCWSTR text) noexcept
             return false;
         }
     } else {
-        static const auto ShouldAppsUseDarkModeFunc = reinterpret_cast<BOOL(WINAPI *)()>(g_UxThemeDLL.GetSymbol(MAKEINTRESOURCEW(132)));
+        static const auto ShouldAppsUseDarkModeFunc = reinterpret_cast<BOOL(WINAPI *)()>(SystemLibraryManager::instance().GetSymbol(L"UxTheme.dll", MAKEINTRESOURCEW(132)));
         if (ShouldAppsUseDarkModeFunc) {
             return (ShouldAppsUseDarkModeFunc() != FALSE);
         } else {
@@ -240,8 +168,8 @@ static inline void DisplayErrorDialog(LPCWSTR text) noexcept
     if (!IsWindows10RS1OrGreater()) {
         return false;
     }
-    RESOLVE(DwmApi, DwmSetWindowAttribute);
-    RESOLVE(UxTheme, SetWindowTheme);
+    DWMAPI_API(DwmSetWindowAttribute);
+    UXTHEME_API(SetWindowTheme);
     if (DwmSetWindowAttributeFunc && SetWindowThemeFunc) {
         if (!g_mainWindowHandle) {
             OutputDebugStringW(L"Failed to refresh main window theme due to the main window handle is null.");
@@ -303,8 +231,8 @@ static inline void DisplayErrorDialog(LPCWSTR text) noexcept
 
 [[nodiscard]] static inline bool CloseMainWindow() noexcept
 {
-    RESOLVE(User32, DestroyWindow);
-    RESOLVE(User32, UnregisterClassW);
+    USER32_API(DestroyWindow);
+    USER32_API(UnregisterClassW);
     if (DestroyWindowFunc && UnregisterClassWFunc) {
         if (!g_mainWindowHandle) {
             OutputDebugStringW(L"Failed to close main window due to the main window handle is null.");
@@ -314,15 +242,11 @@ static inline void DisplayErrorDialog(LPCWSTR text) noexcept
             OutputDebugStringW(L"Failed to close main window due to the main window ATOM is invalid.");
             return false;
         }
-        if (!g_instance) {
-            OutputDebugStringW(L"Failed to close main window due to the HINSTANCE is null.");
-            return false;
-        }
         if (DestroyWindowFunc(g_mainWindowHandle) == FALSE) {
             DisplayErrorDialog(L"Failed to destroy main window.");
             return false;
         }
-        if (UnregisterClassWFunc(reinterpret_cast<LPCWSTR>(static_cast<WORD>(MAKELONG(g_mainWindowAtom, 0))), g_instance) == FALSE) {
+        if (UnregisterClassWFunc(ATOM_TO_STRING(g_mainWindowAtom), HINST_THISCOMPONENT) == FALSE) {
             DisplayErrorDialog(L"Failed to unregister main window class.");
             return false;
         }
@@ -335,7 +259,7 @@ static inline void DisplayErrorDialog(LPCWSTR text) noexcept
 
 [[nodiscard]] static inline bool SyncXAMLIslandPosition(const UINT width, const UINT height) noexcept
 {
-    RESOLVE(User32, SetWindowPos);
+    USER32_API(SetWindowPos);
     if (SetWindowPosFunc) {
         if (!g_xamlIslandWindowHandle) {
             OutputDebugStringW(L"Failed to sync the geometry of the XAML Island window due to its window handle is null.");
@@ -358,7 +282,7 @@ static inline void DisplayErrorDialog(LPCWSTR text) noexcept
 
 [[nodiscard]] static inline bool SyncXAMLIslandPosition() noexcept
 {
-    RESOLVE(User32, GetClientRect);
+    USER32_API(GetClientRect);
     if (GetClientRectFunc) {
         if (!g_mainWindowHandle) {
             OutputDebugStringW(L"Failed to sync the geometry of the XAML Island window due to the main window handle is null.");
@@ -382,8 +306,8 @@ static inline void DisplayErrorDialog(LPCWSTR text) noexcept
 
 [[nodiscard]] static inline bool GenerateGUID(LPCWSTR *str) noexcept
 {
-    RESOLVE(Ole32, CoCreateGuid);
-    RESOLVE(Ole32, StringFromGUID2);
+    OLE32_API(CoCreateGuid);
+    OLE32_API(StringFromGUID2);
     if (CoCreateGuidFunc && StringFromGUID2Func) {
         if (!str) {
             OutputDebugStringW(L"Failed to generate GUID due to the given string address is null.");
@@ -434,16 +358,9 @@ static inline void DisplayErrorDialog(LPCWSTR text) noexcept
             g_manager = nullptr;
         }
         g_xamlIslandWindowHandle = nullptr;
-        g_instance = nullptr;
-        g_AdvApi32DLL.Unload();
-        g_Gdi32DLL.Unload();
-        g_Ole32DLL.Unload();
-        g_UxThemeDLL.Unload();
-        g_DwmApiDLL.Unload();
-        RESOLVE(User32, PostQuitMessage);
+        USER32_API(PostQuitMessage);
         if (PostQuitMessageFunc) {
             PostQuitMessageFunc(0);
-            g_User32DLL.Unload();
             return 0;
         } else {
             OutputDebugStringW(L"PostQuitMessage() is not available.");
@@ -476,7 +393,7 @@ static inline void DisplayErrorDialog(LPCWSTR text) noexcept
     default:
         break;
     }
-    RESOLVE(User32, DefWindowProcW);
+    USER32_API(DefWindowProcW);
     if (DefWindowProcWFunc) {
         return DefWindowProcWFunc(hWnd, message, wParam, lParam);
     } else {
@@ -487,30 +404,37 @@ static inline void DisplayErrorDialog(LPCWSTR text) noexcept
 
 [[nodiscard]] static inline bool RegisterMainWindowClass(LPCWSTR name) noexcept
 {
-    RESOLVE(User32, LoadCursorW);
-    RESOLVE(User32, LoadIconW);
-    RESOLVE(User32, RegisterClassExW);
-    if (LoadCursorWFunc && LoadIconWFunc && RegisterClassExWFunc) {
-        if (!g_instance) {
-            OutputDebugStringW(L"Failed to register main window class due to the HINSTANCE is null.");
-            return false;
+    USER32_API(LoadCursorW);
+    USER32_API(LoadIconW);
+    USER32_API(RegisterClassExW);
+    USER32_API(GetClassInfoExW);
+    if (LoadCursorWFunc && LoadIconWFunc && RegisterClassExWFunc && GetClassInfoExWFunc) {
+        bool exists = false;
+        WNDCLASSEXW wcex = {};
+        if (name) {
+            exists = (GetClassInfoExWFunc(HINST_THISCOMPONENT, name, &wcex) != FALSE);
+        }
+        if (!exists) {
+            if (g_mainWindowAtom != INVALID_ATOM) {
+                exists = (GetClassInfoExWFunc(HINST_THISCOMPONENT, ATOM_TO_STRING(g_mainWindowAtom), &wcex) != FALSE);
+            }
         }
         LPCWSTR guid = nullptr;
-        if (!GenerateGUID(&guid)) {
-            OutputDebugStringW(L"Failed to register the window class due to can't generate a new GUID.");
-            return false;
+        if (!exists) {
+            if (!GenerateGUID(&guid)) {
+                OutputDebugStringW(L"Failed to register the window class due to can't generate a new GUID.");
+                return false;
+            }
+            SecureZeroMemory(&wcex, sizeof(wcex));
+            wcex.cbSize = sizeof(wcex);
+            wcex.style = CS_HREDRAW | CS_VREDRAW;
+            wcex.lpfnWndProc = MessageHandler;
+            wcex.hInstance = HINST_THISCOMPONENT;
+            wcex.lpszClassName = (name ? name : guid);
+            wcex.hCursor = LoadCursorWFunc(nullptr, IDC_ARROW);
+            wcex.hIcon = LoadIconWFunc(HINST_THISCOMPONENT, MAKEINTRESOURCEW(IDI_APPICON));
+            wcex.hIconSm = LoadIconWFunc(HINST_THISCOMPONENT, MAKEINTRESOURCEW(IDI_APPICON_SMALL));
         }
-        // todo: getclassinfo, reuse the previous class
-        WNDCLASSEXW wcex;
-        SecureZeroMemory(&wcex, sizeof(wcex));
-        wcex.cbSize = sizeof(wcex);
-        wcex.style = CS_HREDRAW | CS_VREDRAW;
-        wcex.lpfnWndProc = MessageHandler;
-        wcex.hInstance = g_instance;
-        wcex.lpszClassName = (name ? name : guid);
-        wcex.hCursor = LoadCursorWFunc(nullptr, IDC_ARROW);
-        wcex.hIcon = LoadIconWFunc(g_instance, MAKEINTRESOURCEW(IDI_APPICON));
-        wcex.hIconSm = LoadIconWFunc(g_instance, MAKEINTRESOURCEW(IDI_APPICON_SMALL));
         g_mainWindowAtom = RegisterClassExWFunc(&wcex);
         if (guid) {
             delete [] guid;
@@ -518,30 +442,26 @@ static inline void DisplayErrorDialog(LPCWSTR text) noexcept
         }
         return (g_mainWindowAtom != INVALID_ATOM);
     } else {
-        OutputDebugStringW(L"LoadCursorW(), LoadIconW() and RegisterClassExW() are not available.");
+        OutputDebugStringW(L"LoadCursorW(), LoadIconW(), RegisterClassExW() and GetClassInfoExW() are not available.");
         return false;
     }
 }
 
 [[nodiscard]] static inline bool CreateMainWindow(LPCWSTR title) noexcept
 {
-    RESOLVE(User32, CreateWindowExW);
+    USER32_API(CreateWindowExW);
     if (CreateWindowExWFunc) {
         if (g_mainWindowAtom == INVALID_ATOM) {
             OutputDebugStringW(L"Failed to create main window due to the main window ATOM is invalid.");
             return false;
         }
-        if (!g_instance) {
-            OutputDebugStringW(L"Failed to create main window due to the HINSTANCE is null.");
-            return false;
-        }
         g_mainWindowHandle = CreateWindowExWFunc(
             WS_EX_NOREDIRECTIONBITMAP,
-            reinterpret_cast<LPCWSTR>(static_cast<WORD>(MAKELONG(g_mainWindowAtom, 0))),
+            ATOM_TO_STRING(g_mainWindowAtom),
             (title ? title : g_defaultWindowTitle),
             WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN | WS_CLIPSIBLINGS,
             CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
-            nullptr, nullptr, g_instance, nullptr);
+            nullptr, nullptr, HINST_THISCOMPONENT, nullptr);
         return (g_mainWindowHandle != nullptr);
     } else {
         OutputDebugStringW(L"CreateWindowExW() is not available.");
@@ -551,8 +471,8 @@ static inline void DisplayErrorDialog(LPCWSTR text) noexcept
 
 [[nodiscard]] static inline bool ShowMainWindow(const int nCmdShow) noexcept
 {
-    RESOLVE(User32, ShowWindow);
-    RESOLVE(User32, UpdateWindow);
+    USER32_API(ShowWindow);
+    USER32_API(UpdateWindow);
     if (ShowWindowFunc && UpdateWindowFunc) {
         if (!g_mainWindowHandle) {
             OutputDebugStringW(L"Failed to show the main window due to the main window handle is null.");
@@ -622,9 +542,9 @@ static inline void DisplayErrorDialog(LPCWSTR text) noexcept
 
 [[nodiscard]] static inline int MessageLoop() noexcept
 {
-    RESOLVE(User32, GetMessageW);
-    RESOLVE(User32, TranslateMessage);
-    RESOLVE(User32, DispatchMessageW);
+    USER32_API(GetMessageW);
+    USER32_API(TranslateMessage);
+    USER32_API(DispatchMessageW);
     if (GetMessageWFunc && TranslateMessageFunc && DispatchMessageWFunc) {
         MSG msg = {};
         while (GetMessageWFunc(&msg, nullptr, 0, 0) != FALSE) {
@@ -655,6 +575,7 @@ wWinMain(
     _In_ int           nCmdShow
 )
 {
+    UNREFERENCED_PARAMETER(hInstance);
     UNREFERENCED_PARAMETER(hPrevInstance);
     UNREFERENCED_PARAMETER(lpCmdLine);
 
@@ -662,8 +583,6 @@ wWinMain(
         DisplayErrorDialog(L"This application only supports Windows 10 19H1 and onwards.");
         return -1;
     }
-
-    g_instance = hInstance;
 
     if (!RegisterMainWindowClass(nullptr)) {
         DisplayErrorDialog(L"Failed to register the main window class.");

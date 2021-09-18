@@ -13,6 +13,10 @@ set(SOURCES
     RuntimeObject.cpp
     SystemLibrary.h
     SystemLibrary.cpp
+    SystemLibraryManager.h
+    SystemLibraryManager.cpp
+    WindowsVersion.h
+    WindowsVersion.cpp
     main.cpp
 )
 

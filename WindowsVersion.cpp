@@ -22,43 +22,22 @@
  * SOFTWARE.
  */
 
-#pragma once
-
+#include "WindowsVersion.h"
 #include <SDKDDKVer.h>
 #include <Windows.h>
-#include <memory>
 
-class SystemLibraryPrivate;
-
-class SystemLibrary
+[[nodiscard]] bool IsWindowsOrGreater(const WindowsVersion &version) noexcept
 {
-public:
-    explicit SystemLibrary() noexcept;
-    explicit SystemLibrary(LPCWSTR fileName) noexcept;
-    ~SystemLibrary() noexcept;
-
-    void FileName(LPCWSTR fileName) noexcept;
-    [[nodiscard]] LPCWSTR FileName() const noexcept;
-
-    [[nodiscard]] bool IsLoaded() const noexcept;
-    [[nodiscard]] bool Load() noexcept;
-    void Unload() noexcept;
-
-    [[nodiscard]] FARPROC GetSymbol(LPCWSTR function) noexcept;
-
-    inline friend bool operator==(const SystemLibrary &lhs, const SystemLibrary &rhs) noexcept {
-        return (_wcsicmp(lhs.FileName(), rhs.FileName()) == 0);
-    }
-    inline friend bool operator!=(const SystemLibrary &lhs, const SystemLibrary &rhs) noexcept {
-        return (!(lhs == rhs));
-    }
-
-private:
-    SystemLibrary(const SystemLibrary &) = delete;
-    SystemLibrary &operator=(const SystemLibrary &) = delete;
-    SystemLibrary(SystemLibrary &&) = delete;
-    SystemLibrary &operator=(SystemLibrary &&) = delete;
-
-private:
-    std::unique_ptr<SystemLibraryPrivate> d_ptr;
-};
+    OSVERSIONINFOEXW osvi;
+    SecureZeroMemory(&osvi, sizeof(osvi));
+    osvi.dwOSVersionInfoSize = sizeof(osvi);
+    osvi.dwMajorVersion = version.Major();
+    osvi.dwMinorVersion = version.Minor();
+    osvi.dwBuildNumber = version.Build();
+    const BYTE op = VER_GREATER_EQUAL;
+    DWORDLONG dwlConditionMask = 0;
+    VER_SET_CONDITION(dwlConditionMask, VER_MAJORVERSION, op);
+    VER_SET_CONDITION(dwlConditionMask, VER_MINORVERSION, op);
+    VER_SET_CONDITION(dwlConditionMask, VER_BUILDNUMBER, op);
+    return (VerifyVersionInfoW(&osvi, VER_MAJORVERSION | VER_MINORVERSION | VER_BUILDNUMBER, dwlConditionMask) != FALSE);
+}

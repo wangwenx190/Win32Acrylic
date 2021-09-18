@@ -43,8 +43,8 @@ public:
     explicit SystemLibraryPrivate(SystemLibrary *q) noexcept;
     ~SystemLibraryPrivate() noexcept;
 
-    void SetFileName(LPCWSTR fileName) noexcept;
-    [[nodiscard]] LPCWSTR GetFileName() const noexcept;
+    void FileName(LPCWSTR fileName) noexcept;
+    [[nodiscard]] LPCWSTR FileName() const noexcept;
 
     [[nodiscard]] bool IsLoaded() const noexcept;
     [[nodiscard]] bool Load() noexcept;
@@ -67,7 +67,8 @@ private:
     HMODULE m_module = nullptr;
     std::unordered_map<LPCWSTR, FARPROC> m_resolvedSymbols = {};
     static inline bool m_tried = false;
-    static inline decltype(&::LoadLibraryExW) m_LoadLibraryExWFunc = nullptr;
+    using LoadLibraryExWSig = decltype(&::LoadLibraryExW);
+    static inline LoadLibraryExWSig m_LoadLibraryExWFunc = nullptr;
 };
 
 void SystemLibraryPrivate::Initialize() noexcept
@@ -82,16 +83,16 @@ void SystemLibraryPrivate::Initialize() noexcept
     MEMORY_BASIC_INFORMATION mbi;
     SecureZeroMemory(&mbi, sizeof(mbi));
     if (VirtualQuery(reinterpret_cast<LPCVOID>(&VirtualQuery), &mbi, sizeof(mbi)) == 0) {
-        //
+        OutputDebugStringW(L"Failed to retrieve the memory basic information.");
     } else {
         const auto kernel32 = static_cast<HMODULE>(mbi.AllocationBase);
         if (kernel32) {
-            m_LoadLibraryExWFunc = reinterpret_cast<decltype(&::LoadLibraryExW)>(GetProcAddress(kernel32, "LoadLibraryExW"));
+            m_LoadLibraryExWFunc = reinterpret_cast<LoadLibraryExWSig>(GetProcAddress(kernel32, "LoadLibraryExW"));
             if (!m_LoadLibraryExWFunc) {
-                //
+                OutputDebugStringW(L"Failed to resolve symbol LoadLibraryExW().");
             }
         } else {
-            //
+            OutputDebugStringW(L"Failed to retrieve the base address of Kernel32.dll.");
         }
     }
 }
@@ -109,7 +110,7 @@ SystemLibraryPrivate::~SystemLibraryPrivate() noexcept
     }
 }
 
-void SystemLibraryPrivate::SetFileName(LPCWSTR fileName) noexcept
+void SystemLibraryPrivate::FileName(LPCWSTR fileName) noexcept
 {
     if (IsLoaded()) {
         OutputDebugStringW(L"The library has been loaded already, can't change the file name now.");
@@ -120,7 +121,7 @@ void SystemLibraryPrivate::SetFileName(LPCWSTR fileName) noexcept
     }
 }
 
-LPCWSTR SystemLibraryPrivate::GetFileName() const noexcept
+LPCWSTR SystemLibraryPrivate::FileName() const noexcept
 {
     return m_fileName;
 }
@@ -195,19 +196,19 @@ SystemLibrary::SystemLibrary() noexcept
 
 SystemLibrary::SystemLibrary(LPCWSTR fileName) noexcept : SystemLibrary()
 {
-    SetFileName(fileName);
+    FileName(fileName);
 }
 
 SystemLibrary::~SystemLibrary() noexcept = default;
 
-void SystemLibrary::SetFileName(LPCWSTR fileName) noexcept
+void SystemLibrary::FileName(LPCWSTR fileName) noexcept
 {
-    d_ptr->SetFileName(fileName);
+    d_ptr->FileName(fileName);
 }
 
-LPCWSTR SystemLibrary::GetFileName() noexcept
+LPCWSTR SystemLibrary::FileName() const noexcept
 {
-    return d_ptr->GetFileName();
+    return d_ptr->FileName();
 }
 
 bool SystemLibrary::IsLoaded() const noexcept

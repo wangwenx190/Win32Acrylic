@@ -22,128 +22,35 @@
  * SOFTWARE.
  */
 
-#include <SDKDDKVer.h>
-#include <Windows.h>
+#include "SystemLibraryManager.h"
 
-#ifndef WIN32ACRYLIC_TRY_EXECUTE_FUNCTION_PART1
-#define WIN32ACRYLIC_TRY_EXECUTE_FUNCTION_PART1(funcName) \
-    static bool __tried = false; \
-    using __sig = decltype(&::funcName); \
-    static __sig __func = nullptr; \
-    if (!__func) { \
-        if (__tried) {
+#ifndef OLEAUT32_API
+#define OLEAUT32_API(symbol) __RESOLVE_API(OleAut32.dll, symbol)
 #endif
 
-#ifndef WIN32ACRYLIC_TRY_EXECUTE_FUNCTION_PART2
-#define WIN32ACRYLIC_TRY_EXECUTE_FUNCTION_PART2(libName) \
-        } else { \
-            __tried = true; \
-            const HMODULE __module = LoadLibraryExW(L#libName ".dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32); \
-            if (!__module) { \
-                OutputDebugStringW(L"Failed to load dynamic link library " #libName ".dll.");
+#ifndef COMBASE_API
+#define COMBASE_API(symbol) __RESOLVE_API(ComBase.dll, symbol)
 #endif
 
-#ifndef WIN32ACRYLIC_TRY_EXECUTE_FUNCTION_PART3
-#define WIN32ACRYLIC_TRY_EXECUTE_FUNCTION_PART3(funcName) \
-            } \
-            __func = reinterpret_cast<__sig>(GetProcAddress(__module, #funcName)); \
-            if (!__func) { \
-                OutputDebugStringW(L"Failed to resolve symbol " #funcName "().");
-#endif
-
-#ifndef WIN32ACRYLIC_TRY_EXECUTE_FUNCTION_PART4
-#define WIN32ACRYLIC_TRY_EXECUTE_FUNCTION_PART4 \
-            } \
-        } \
+#ifndef RUNTIMEOBJECT_API_VOID
+#define RUNTIMEOBJECT_API_VOID(symbol, ...) \
+    COMBASE_API(symbol); \
+    if (symbol##Func) { \
+        symbol##Func(__VA_ARGS__); \
+    } else { \
+        OutputDebugStringW(L#symbol L"() is not available."); \
     }
 #endif
 
-#ifndef WIN32ACRYLIC_TRY_EXECUTE_FUNCTION_RETURN_VOID
-#define WIN32ACRYLIC_TRY_EXECUTE_FUNCTION_RETURN_VOID \
-            SetLastError(ERROR_SUCCESS); \
-            return;
-#endif
-
-#ifndef WIN32ACRYLIC_TRY_EXECUTE_FUNCTION_RETURN_VALUE
-#define WIN32ACRYLIC_TRY_EXECUTE_FUNCTION_RETURN_VALUE(value) \
-            SetLastError(ERROR_SUCCESS); \
-            return (value);
-#endif
-
-#ifndef WIN32ACRYLIC_TRY_EXECUTE_FUNCTION_CALL_FUNC
-#define WIN32ACRYLIC_TRY_EXECUTE_FUNCTION_CALL_FUNC(...) __func(__VA_ARGS__);
-#endif
-
-#ifndef WIN32ACRYLIC_TRY_EXECUTE_FUNCTION_CALL_FUNC_RETURN
-#define WIN32ACRYLIC_TRY_EXECUTE_FUNCTION_CALL_FUNC_RETURN(...) return __func(__VA_ARGS__);
-#endif
-
-#ifndef WIN32ACRYLIC_TRY_EXECUTE_VOID_FUNCTION
-#define WIN32ACRYLIC_TRY_EXECUTE_VOID_FUNCTION(libName, funcName, ...) \
-WIN32ACRYLIC_TRY_EXECUTE_FUNCTION_PART1(funcName) \
-WIN32ACRYLIC_TRY_EXECUTE_FUNCTION_RETURN_VOID \
-WIN32ACRYLIC_TRY_EXECUTE_FUNCTION_PART2(libName) \
-WIN32ACRYLIC_TRY_EXECUTE_FUNCTION_RETURN_VOID \
-WIN32ACRYLIC_TRY_EXECUTE_FUNCTION_PART3(funcName) \
-WIN32ACRYLIC_TRY_EXECUTE_FUNCTION_RETURN_VOID \
-WIN32ACRYLIC_TRY_EXECUTE_FUNCTION_PART4 \
-WIN32ACRYLIC_TRY_EXECUTE_FUNCTION_CALL_FUNC(__VA_ARGS__)
-#endif
-
-#ifndef WIN32ACRYLIC_TRY_EXECUTE_RETURN_FUNCTION
-#define WIN32ACRYLIC_TRY_EXECUTE_RETURN_FUNCTION(libName, funcName, defVal, ...) \
-WIN32ACRYLIC_TRY_EXECUTE_FUNCTION_PART1(funcName) \
-WIN32ACRYLIC_TRY_EXECUTE_FUNCTION_RETURN_VALUE(defVal) \
-WIN32ACRYLIC_TRY_EXECUTE_FUNCTION_PART2(libName) \
-WIN32ACRYLIC_TRY_EXECUTE_FUNCTION_RETURN_VALUE(defVal) \
-WIN32ACRYLIC_TRY_EXECUTE_FUNCTION_PART3(funcName) \
-WIN32ACRYLIC_TRY_EXECUTE_FUNCTION_RETURN_VALUE(defVal) \
-WIN32ACRYLIC_TRY_EXECUTE_FUNCTION_PART4 \
-WIN32ACRYLIC_TRY_EXECUTE_FUNCTION_CALL_FUNC_RETURN(__VA_ARGS__)
-#endif
-
-#ifndef WIN32ACRYLIC_TRY_EXECUTE_WINRT_FUNCTION_RETURN
-#define WIN32ACRYLIC_TRY_EXECUTE_WINRT_FUNCTION_RETURN(funcName, defVal, ...) WIN32ACRYLIC_TRY_EXECUTE_RETURN_FUNCTION(ComBase, funcName, defVal, ##__VA_ARGS__)
-#endif
-
-#ifndef WIN32ACRYLIC_TRY_EXECUTE_WINRT_FUNCTION
-#define WIN32ACRYLIC_TRY_EXECUTE_WINRT_FUNCTION(funcName, ...) WIN32ACRYLIC_TRY_EXECUTE_WINRT_FUNCTION_RETURN(funcName, E_NOTIMPL, ##__VA_ARGS__)
-#endif
-
-#ifndef WIN32ACRYLIC_TRY_EXECUTE_WINRT_VOID_FUNCTION
-#define WIN32ACRYLIC_TRY_EXECUTE_WINRT_VOID_FUNCTION(funcName, ...) WIN32ACRYLIC_TRY_EXECUTE_VOID_FUNCTION(ComBase, funcName, ##__VA_ARGS__)
-#endif
-
-#ifndef WIN32ACRYLIC_TRY_EXECUTE_WINRT_INT_FUNCTION
-#define WIN32ACRYLIC_TRY_EXECUTE_WINRT_INT_FUNCTION(funcName, ...) WIN32ACRYLIC_TRY_EXECUTE_WINRT_FUNCTION_RETURN(funcName, 0, ##__VA_ARGS__)
-#endif
-
-#ifndef WIN32ACRYLIC_TRY_EXECUTE_WINRT_BOOL_FUNCTION
-#define WIN32ACRYLIC_TRY_EXECUTE_WINRT_BOOL_FUNCTION(funcName, ...) WIN32ACRYLIC_TRY_EXECUTE_WINRT_FUNCTION_RETURN(funcName, FALSE, ##__VA_ARGS__)
-#endif
-
-#ifndef WIN32ACRYLIC_TRY_EXECUTE_WINRT_PTR_FUNCTION
-#define WIN32ACRYLIC_TRY_EXECUTE_WINRT_PTR_FUNCTION(funcName, ...) WIN32ACRYLIC_TRY_EXECUTE_WINRT_FUNCTION_RETURN(funcName, nullptr, ##__VA_ARGS__)
-#endif
-
-#ifndef WIN32ACRYLIC_TRY_EXECUTE_COM_FUNCTION_RETURN
-#define WIN32ACRYLIC_TRY_EXECUTE_COM_FUNCTION_RETURN(funcName, defVal, ...) WIN32ACRYLIC_TRY_EXECUTE_RETURN_FUNCTION(Ole32, funcName, defVal, ##__VA_ARGS__)
-#endif
-
-#ifndef WIN32ACRYLIC_TRY_EXECUTE_COM_FUNCTION
-#define WIN32ACRYLIC_TRY_EXECUTE_COM_FUNCTION(funcName, ...) WIN32ACRYLIC_TRY_EXECUTE_COM_FUNCTION_RETURN(funcName, E_NOTIMPL, ##__VA_ARGS__)
-#endif
-
-#ifndef WIN32ACRYLIC_TRY_EXECUTE_COM_INT_FUNCTION
-#define WIN32ACRYLIC_TRY_EXECUTE_COM_INT_FUNCTION(funcName, ...) WIN32ACRYLIC_TRY_EXECUTE_COM_FUNCTION_RETURN(funcName, 0, ##__VA_ARGS__)
-#endif
-
-#ifndef WIN32ACRYLIC_TRY_EXECUTE_COM_VOID_FUNCTION
-#define WIN32ACRYLIC_TRY_EXECUTE_COM_VOID_FUNCTION(funcName, ...) WIN32ACRYLIC_TRY_EXECUTE_VOID_FUNCTION(Ole32, funcName, ##__VA_ARGS__)
-#endif
-
-#ifndef WIN32ACRYLIC_TRY_EXECUTE_COMAUTO_VOID_FUNCTION
-#define WIN32ACRYLIC_TRY_EXECUTE_COMAUTO_VOID_FUNCTION(funcName, ...) WIN32ACRYLIC_TRY_EXECUTE_VOID_FUNCTION(OleAut32, funcName, ##__VA_ARGS__)
+#ifndef RUNTIMEOBJECT_API_RETURN
+#define RUNTIMEOBJECT_API_RETURN(symbol, defVal, ...) \
+    COMBASE_API(symbol); \
+    if (symbol##Func) { \
+        return symbol##Func(__VA_ARGS__); \
+    } else { \
+        OutputDebugStringW(L#symbol L"() is not available."); \
+        return defVal; \
+    }
 #endif
 
 // Define these macros first before including their header files to avoid linking
@@ -183,7 +90,7 @@ RoActivateInstance(
     IInspectable **instance
 )
 {
-    WIN32ACRYLIC_TRY_EXECUTE_WINRT_FUNCTION(RoActivateInstance, activatableClassId, instance)
+    RUNTIMEOBJECT_API_RETURN(RoActivateInstance, E_NOTIMPL, activatableClassId, instance)
 }
 
 HRESULT WINAPI
@@ -193,7 +100,7 @@ RoGetActivationFactory(
     void    **factory
 )
 {
-    WIN32ACRYLIC_TRY_EXECUTE_WINRT_FUNCTION(RoGetActivationFactory, activatableClassId, iid, factory)
+    RUNTIMEOBJECT_API_RETURN(RoGetActivationFactory, E_NOTIMPL, activatableClassId, iid, factory)
 }
 
 HRESULT WINAPI
@@ -201,7 +108,7 @@ RoGetApartmentIdentifier(
     UINT64 *apartmentIdentifier
 )
 {
-    WIN32ACRYLIC_TRY_EXECUTE_WINRT_FUNCTION(RoGetApartmentIdentifier, apartmentIdentifier)
+    RUNTIMEOBJECT_API_RETURN(RoGetApartmentIdentifier, E_NOTIMPL, apartmentIdentifier)
 }
 
 HRESULT WINAPI
@@ -209,7 +116,7 @@ RoInitialize(
     RO_INIT_TYPE initType
 )
 {
-    WIN32ACRYLIC_TRY_EXECUTE_WINRT_FUNCTION(RoInitialize, initType)
+    RUNTIMEOBJECT_API_RETURN(RoInitialize, E_NOTIMPL, initType)
 }
 
 HRESULT WINAPI
@@ -220,7 +127,7 @@ RoRegisterActivationFactories(
     RO_REGISTRATION_COOKIE  *cookie
 )
 {
-    WIN32ACRYLIC_TRY_EXECUTE_WINRT_FUNCTION(RoRegisterActivationFactories, activatableClassIds, activationFactoryCallbacks, count, cookie)
+    RUNTIMEOBJECT_API_RETURN(RoRegisterActivationFactories, E_NOTIMPL, activatableClassIds, activationFactoryCallbacks, count, cookie)
 }
 
 HRESULT WINAPI
@@ -230,7 +137,7 @@ RoRegisterForApartmentShutdown(
     APARTMENT_SHUTDOWN_REGISTRATION_COOKIE *regCookie
 )
 {
-    WIN32ACRYLIC_TRY_EXECUTE_WINRT_FUNCTION(RoRegisterForApartmentShutdown, callbackObject, apartmentIdentifier, regCookie)
+    RUNTIMEOBJECT_API_RETURN(RoRegisterForApartmentShutdown, E_NOTIMPL, callbackObject, apartmentIdentifier, regCookie)
 }
 
 void WINAPI
@@ -238,13 +145,13 @@ RoRevokeActivationFactories(
     RO_REGISTRATION_COOKIE cookie
 )
 {
-    WIN32ACRYLIC_TRY_EXECUTE_WINRT_VOID_FUNCTION(RoRevokeActivationFactories, cookie)
+    RUNTIMEOBJECT_API_VOID(RoRevokeActivationFactories, cookie)
 }
 
 void WINAPI
 RoUninitialize()
 {
-    WIN32ACRYLIC_TRY_EXECUTE_WINRT_VOID_FUNCTION(RoUninitialize)
+    RUNTIMEOBJECT_API_VOID(RoUninitialize)
 }
 
 HRESULT WINAPI
@@ -252,7 +159,7 @@ RoUnregisterForApartmentShutdown(
     APARTMENT_SHUTDOWN_REGISTRATION_COOKIE regCookie
 )
 {
-    WIN32ACRYLIC_TRY_EXECUTE_WINRT_FUNCTION(RoUnregisterForApartmentShutdown, regCookie)
+    RUNTIMEOBJECT_API_RETURN(RoUnregisterForApartmentShutdown, E_NOTIMPL, regCookie)
 }
 
 HRESULT WINAPI
@@ -260,7 +167,7 @@ GetRestrictedErrorInfo(
     IRestrictedErrorInfo **ppRestrictedErrorInfo
 )
 {
-    WIN32ACRYLIC_TRY_EXECUTE_WINRT_FUNCTION(GetRestrictedErrorInfo, ppRestrictedErrorInfo)
+    RUNTIMEOBJECT_API_RETURN(GetRestrictedErrorInfo, E_NOTIMPL, ppRestrictedErrorInfo)
 }
 
 HRESULT WINAPI
@@ -268,7 +175,7 @@ RoCaptureErrorContext(
     HRESULT hr
 )
 {
-    WIN32ACRYLIC_TRY_EXECUTE_WINRT_FUNCTION(RoCaptureErrorContext, hr)
+    RUNTIMEOBJECT_API_RETURN(RoCaptureErrorContext, E_NOTIMPL, hr)
 }
 
 void WINAPI
@@ -276,7 +183,7 @@ RoFailFastWithErrorContext(
     HRESULT hrError
 )
 {
-    WIN32ACRYLIC_TRY_EXECUTE_WINRT_VOID_FUNCTION(RoFailFastWithErrorContext, hrError)
+    RUNTIMEOBJECT_API_VOID(RoFailFastWithErrorContext, hrError)
 }
 
 HRESULT WINAPI
@@ -284,7 +191,7 @@ RoGetErrorReportingFlags(
     UINT32 *pFlags
 )
 {
-    WIN32ACRYLIC_TRY_EXECUTE_WINRT_FUNCTION(RoGetErrorReportingFlags, pFlags)
+    RUNTIMEOBJECT_API_RETURN(RoGetErrorReportingFlags, E_NOTIMPL, pFlags)
 }
 
 BOOL WINAPI
@@ -293,7 +200,7 @@ RoOriginateError(
     HSTRING message
 )
 {
-    WIN32ACRYLIC_TRY_EXECUTE_WINRT_BOOL_FUNCTION(RoOriginateError, error, message)
+    RUNTIMEOBJECT_API_RETURN(RoOriginateError, FALSE, error, message)
 }
 
 BOOL WINAPI
@@ -303,7 +210,7 @@ RoOriginateErrorW(
     PCWSTR  message
 )
 {
-    WIN32ACRYLIC_TRY_EXECUTE_WINRT_BOOL_FUNCTION(RoOriginateErrorW, error, cchMax, message)
+    RUNTIMEOBJECT_API_RETURN(RoOriginateErrorW, FALSE, error, cchMax, message)
 }
 
 HRESULT WINAPI
@@ -312,7 +219,7 @@ RoResolveRestrictedErrorInfoReference(
     IRestrictedErrorInfo **ppRestrictedErrorInfo
 )
 {
-    WIN32ACRYLIC_TRY_EXECUTE_WINRT_FUNCTION(RoResolveRestrictedErrorInfoReference, reference, ppRestrictedErrorInfo)
+    RUNTIMEOBJECT_API_RETURN(RoResolveRestrictedErrorInfoReference, E_NOTIMPL, reference, ppRestrictedErrorInfo)
 }
 
 HRESULT WINAPI
@@ -320,7 +227,7 @@ RoSetErrorReportingFlags(
     UINT32 flags
 )
 {
-    WIN32ACRYLIC_TRY_EXECUTE_WINRT_FUNCTION(RoSetErrorReportingFlags, flags)
+    RUNTIMEOBJECT_API_RETURN(RoSetErrorReportingFlags, E_NOTIMPL, flags)
 }
 
 BOOL WINAPI
@@ -330,7 +237,7 @@ RoTransformError(
     HSTRING message
 )
 {
-    WIN32ACRYLIC_TRY_EXECUTE_WINRT_BOOL_FUNCTION(RoTransformError, oldError, newError, message)
+    RUNTIMEOBJECT_API_RETURN(RoTransformError, FALSE, oldError, newError, message)
 }
 
 BOOL WINAPI
@@ -341,7 +248,7 @@ RoTransformErrorW(
     PCWSTR  message
 )
 {
-    WIN32ACRYLIC_TRY_EXECUTE_WINRT_BOOL_FUNCTION(RoTransformErrorW, oldError, newError, cchMax, message)
+    RUNTIMEOBJECT_API_RETURN(RoTransformErrorW, FALSE, oldError, newError, cchMax, message)
 }
 
 HRESULT WINAPI
@@ -349,19 +256,19 @@ SetRestrictedErrorInfo(
     IRestrictedErrorInfo *pRestrictedErrorInfo
 )
 {
-    WIN32ACRYLIC_TRY_EXECUTE_WINRT_FUNCTION(SetRestrictedErrorInfo, pRestrictedErrorInfo)
+    RUNTIMEOBJECT_API_RETURN(SetRestrictedErrorInfo, E_NOTIMPL, pRestrictedErrorInfo)
 }
 
 BOOL WINAPI
 IsErrorPropagationEnabled()
 {
-    WIN32ACRYLIC_TRY_EXECUTE_WINRT_BOOL_FUNCTION(IsErrorPropagationEnabled)
+    RUNTIMEOBJECT_API_RETURN(IsErrorPropagationEnabled, FALSE)
 }
 
 void WINAPI
 RoClearError()
 {
-    WIN32ACRYLIC_TRY_EXECUTE_WINRT_VOID_FUNCTION(RoClearError)
+    RUNTIMEOBJECT_API_VOID(RoClearError)
 }
 
 HRESULT WINAPI
@@ -370,7 +277,7 @@ RoGetMatchingRestrictedErrorInfo(
     IRestrictedErrorInfo **ppRestrictedErrorInfo
 )
 {
-    WIN32ACRYLIC_TRY_EXECUTE_WINRT_FUNCTION(RoGetMatchingRestrictedErrorInfo, hrIn, ppRestrictedErrorInfo)
+    RUNTIMEOBJECT_API_RETURN(RoGetMatchingRestrictedErrorInfo, E_NOTIMPL, hrIn, ppRestrictedErrorInfo)
 }
 
 HRESULT WINAPI
@@ -383,7 +290,7 @@ RoInspectCapturedStackBackTrace(
     UINT_PTR                 *targetBackTraceAddress
 )
 {
-    WIN32ACRYLIC_TRY_EXECUTE_WINRT_FUNCTION(RoInspectCapturedStackBackTrace, targetErrorInfoAddress, machine, readMemoryCallback, context, frameCount, targetBackTraceAddress)
+    RUNTIMEOBJECT_API_RETURN(RoInspectCapturedStackBackTrace, E_NOTIMPL, targetErrorInfoAddress, machine, readMemoryCallback, context, frameCount, targetBackTraceAddress)
 }
 
 HRESULT WINAPI
@@ -395,7 +302,7 @@ RoInspectThreadErrorInfo(
     UINT_PTR                 *targetErrorInfoAddress
 )
 {
-    WIN32ACRYLIC_TRY_EXECUTE_WINRT_FUNCTION(RoInspectThreadErrorInfo, targetTebAddress, machine, readMemoryCallback, context, targetErrorInfoAddress)
+    RUNTIMEOBJECT_API_RETURN(RoInspectThreadErrorInfo, E_NOTIMPL, targetTebAddress, machine, readMemoryCallback, context, targetErrorInfoAddress)
 }
 
 BOOL WINAPI
@@ -405,7 +312,7 @@ RoOriginateLanguageException(
     IUnknown *languageException
 )
 {
-    WIN32ACRYLIC_TRY_EXECUTE_WINRT_BOOL_FUNCTION(RoOriginateLanguageException, error, message, languageException)
+    RUNTIMEOBJECT_API_RETURN(RoOriginateLanguageException, FALSE, error, message, languageException)
 }
 
 HRESULT WINAPI
@@ -414,7 +321,7 @@ RoReportFailedDelegate(
     IRestrictedErrorInfo *pRestrictedErrorInfo
 )
 {
-    WIN32ACRYLIC_TRY_EXECUTE_WINRT_FUNCTION(RoReportFailedDelegate, punkDelegate, pRestrictedErrorInfo)
+    RUNTIMEOBJECT_API_RETURN(RoReportFailedDelegate, E_NOTIMPL, punkDelegate, pRestrictedErrorInfo)
 }
 
 HRESULT WINAPI
@@ -422,7 +329,7 @@ RoReportUnhandledError(
     IRestrictedErrorInfo *pRestrictedErrorInfo
 )
 {
-    WIN32ACRYLIC_TRY_EXECUTE_WINRT_FUNCTION(RoReportUnhandledError, pRestrictedErrorInfo)
+    RUNTIMEOBJECT_API_RETURN(RoReportUnhandledError, E_NOTIMPL, pRestrictedErrorInfo)
 }
 
 HRESULT WINAPI
@@ -431,7 +338,7 @@ RoGetActivatableClassRegistration(
     PActivatableClassRegistration *activatableClassRegistration
 )
 {
-    WIN32ACRYLIC_TRY_EXECUTE_WINRT_FUNCTION(RoGetActivatableClassRegistration, activatableClassId, activatableClassRegistration)
+    RUNTIMEOBJECT_API_RETURN(RoGetActivatableClassRegistration, E_NOTIMPL, activatableClassId, activatableClassRegistration)
 }
 
 HRESULT WINAPI
@@ -441,7 +348,7 @@ RoGetServerActivatableClasses(
     DWORD   *count
 )
 {
-    WIN32ACRYLIC_TRY_EXECUTE_WINRT_FUNCTION(RoGetServerActivatableClasses, serverName, activatableClassIds, count)
+    RUNTIMEOBJECT_API_RETURN(RoGetServerActivatableClasses, E_NOTIMPL, serverName, activatableClassIds, count)
 }
 
 void WINAPI
@@ -450,7 +357,7 @@ HSTRING_UserFree(
     HSTRING *ppidl
 )
 {
-    WIN32ACRYLIC_TRY_EXECUTE_WINRT_VOID_FUNCTION(HSTRING_UserFree, pFlags, ppidl)
+    RUNTIMEOBJECT_API_VOID(HSTRING_UserFree, pFlags, ppidl)
 }
 
 void WINAPI
@@ -459,7 +366,7 @@ HSTRING_UserFree64(
     HSTRING *unnamedParam2
 )
 {
-    WIN32ACRYLIC_TRY_EXECUTE_WINRT_VOID_FUNCTION(HSTRING_UserFree64, unnamedParam1, unnamedParam2)
+    RUNTIMEOBJECT_API_VOID(HSTRING_UserFree64, unnamedParam1, unnamedParam2)
 }
 
 UCHAR * WINAPI
@@ -469,7 +376,7 @@ HSTRING_UserMarshal(
     HSTRING *ppidl
 )
 {
-    WIN32ACRYLIC_TRY_EXECUTE_WINRT_PTR_FUNCTION(HSTRING_UserMarshal, pFlags, pBuffer, ppidl)
+    RUNTIMEOBJECT_API_RETURN(HSTRING_UserMarshal, nullptr, pFlags, pBuffer, ppidl)
 }
 
 UCHAR * WINAPI
@@ -479,7 +386,7 @@ HSTRING_UserMarshal64(
     HSTRING *unnamedParam3
 )
 {
-    WIN32ACRYLIC_TRY_EXECUTE_WINRT_PTR_FUNCTION(HSTRING_UserMarshal64, unnamedParam1, unnamedParam2, unnamedParam3)
+    RUNTIMEOBJECT_API_RETURN(HSTRING_UserMarshal64, nullptr, unnamedParam1, unnamedParam2, unnamedParam3)
 }
 
 ULONG WINAPI
@@ -489,7 +396,7 @@ HSTRING_UserSize(
     HSTRING *unnamedParam3
 )
 {
-    WIN32ACRYLIC_TRY_EXECUTE_WINRT_INT_FUNCTION(HSTRING_UserSize, unnamedParam1, unnamedParam2, unnamedParam3)
+    RUNTIMEOBJECT_API_RETURN(HSTRING_UserSize, 0, unnamedParam1, unnamedParam2, unnamedParam3)
 }
 
 ULONG WINAPI
@@ -499,7 +406,7 @@ HSTRING_UserSize64(
     HSTRING *unnamedParam3
 )
 {
-    WIN32ACRYLIC_TRY_EXECUTE_WINRT_INT_FUNCTION(HSTRING_UserSize64, unnamedParam1, unnamedParam2, unnamedParam3)
+    RUNTIMEOBJECT_API_RETURN(HSTRING_UserSize64, 0, unnamedParam1, unnamedParam2, unnamedParam3)
 }
 
 UCHAR * WINAPI
@@ -509,7 +416,7 @@ HSTRING_UserUnmarshal(
     HSTRING *unnamedParam3
 )
 {
-    WIN32ACRYLIC_TRY_EXECUTE_WINRT_PTR_FUNCTION(HSTRING_UserUnmarshal, unnamedParam1, unnamedParam2, unnamedParam3)
+    RUNTIMEOBJECT_API_RETURN(HSTRING_UserUnmarshal, nullptr, unnamedParam1, unnamedParam2, unnamedParam3)
 }
 
 UCHAR * WINAPI
@@ -519,7 +426,7 @@ HSTRING_UserUnmarshal64(
     HSTRING *unnamedParam3
 )
 {
-    WIN32ACRYLIC_TRY_EXECUTE_WINRT_PTR_FUNCTION(HSTRING_UserUnmarshal64, unnamedParam1, unnamedParam2, unnamedParam3)
+    RUNTIMEOBJECT_API_RETURN(HSTRING_UserUnmarshal64, nullptr, unnamedParam1, unnamedParam2, unnamedParam3)
 }
 
 HRESULT WINAPI
@@ -529,7 +436,7 @@ WindowsCompareStringOrdinal(
     INT32   *result
 )
 {
-    WIN32ACRYLIC_TRY_EXECUTE_WINRT_FUNCTION(WindowsCompareStringOrdinal, string1, string2, result)
+    RUNTIMEOBJECT_API_RETURN(WindowsCompareStringOrdinal, E_NOTIMPL, string1, string2, result)
 }
 
 HRESULT WINAPI
@@ -539,7 +446,7 @@ WindowsConcatString(
     HSTRING *newString
 )
 {
-    WIN32ACRYLIC_TRY_EXECUTE_WINRT_FUNCTION(WindowsConcatString, string1, string2, newString)
+    RUNTIMEOBJECT_API_RETURN(WindowsConcatString, E_NOTIMPL, string1, string2, newString)
 }
 
 HRESULT WINAPI
@@ -549,7 +456,7 @@ WindowsCreateString(
     HSTRING *string
 )
 {
-    WIN32ACRYLIC_TRY_EXECUTE_WINRT_FUNCTION(WindowsCreateString, sourceString, length, string)
+    RUNTIMEOBJECT_API_RETURN(WindowsCreateString, E_NOTIMPL, sourceString, length, string)
 }
 
 HRESULT WINAPI
@@ -560,7 +467,7 @@ WindowsCreateStringReference(
     HSTRING        *string
 )
 {
-    WIN32ACRYLIC_TRY_EXECUTE_WINRT_FUNCTION(WindowsCreateStringReference, sourceString, length, hstringHeader, string)
+    RUNTIMEOBJECT_API_RETURN(WindowsCreateStringReference, E_NOTIMPL, sourceString, length, hstringHeader, string)
 }
 
 HRESULT WINAPI
@@ -568,7 +475,7 @@ WindowsDeleteString(
     HSTRING string
 )
 {
-    WIN32ACRYLIC_TRY_EXECUTE_WINRT_FUNCTION(WindowsDeleteString, string)
+    RUNTIMEOBJECT_API_RETURN(WindowsDeleteString, E_NOTIMPL, string)
 }
 
 HRESULT WINAPI
@@ -576,7 +483,7 @@ WindowsDeleteStringBuffer(
     HSTRING_BUFFER bufferHandle
 )
 {
-    WIN32ACRYLIC_TRY_EXECUTE_WINRT_FUNCTION(WindowsDeleteStringBuffer, bufferHandle)
+    RUNTIMEOBJECT_API_RETURN(WindowsDeleteStringBuffer, E_NOTIMPL, bufferHandle)
 }
 
 HRESULT WINAPI
@@ -585,7 +492,7 @@ WindowsDuplicateString(
     HSTRING *newString
 )
 {
-    WIN32ACRYLIC_TRY_EXECUTE_WINRT_FUNCTION(WindowsDuplicateString, string, newString)
+    RUNTIMEOBJECT_API_RETURN(WindowsDuplicateString, E_NOTIMPL, string, newString)
 }
 
 UINT32 WINAPI
@@ -593,7 +500,7 @@ WindowsGetStringLen(
     HSTRING string
 )
 {
-    WIN32ACRYLIC_TRY_EXECUTE_WINRT_INT_FUNCTION(WindowsGetStringLen, string)
+    RUNTIMEOBJECT_API_RETURN(WindowsGetStringLen, 0, string)
 }
 
 PCWSTR WINAPI
@@ -602,7 +509,7 @@ WindowsGetStringRawBuffer(
     UINT32  *length
 )
 {
-    WIN32ACRYLIC_TRY_EXECUTE_WINRT_PTR_FUNCTION(WindowsGetStringRawBuffer, string, length)
+    RUNTIMEOBJECT_API_RETURN(WindowsGetStringRawBuffer, nullptr, string, length)
 }
 
 HRESULT WINAPI
@@ -615,7 +522,7 @@ WindowsInspectString(
     UINT_PTR                  *targetStringAddress
 )
 {
-    WIN32ACRYLIC_TRY_EXECUTE_WINRT_FUNCTION(WindowsInspectString, targetHString, machine, callback, context, length, targetStringAddress)
+    RUNTIMEOBJECT_API_RETURN(WindowsInspectString, E_NOTIMPL, targetHString, machine, callback, context, length, targetStringAddress)
 }
 
 BOOL WINAPI
@@ -623,7 +530,7 @@ WindowsIsStringEmpty(
     HSTRING string
 )
 {
-    WIN32ACRYLIC_TRY_EXECUTE_WINRT_BOOL_FUNCTION(WindowsIsStringEmpty, string)
+    RUNTIMEOBJECT_API_RETURN(WindowsIsStringEmpty, FALSE, string)
 }
 
 HRESULT WINAPI
@@ -633,7 +540,7 @@ WindowsPreallocateStringBuffer(
     HSTRING_BUFFER *bufferHandle
 )
 {
-    WIN32ACRYLIC_TRY_EXECUTE_WINRT_FUNCTION(WindowsPreallocateStringBuffer, length, charBuffer, bufferHandle)
+    RUNTIMEOBJECT_API_RETURN(WindowsPreallocateStringBuffer, E_NOTIMPL, length, charBuffer, bufferHandle)
 }
 
 HRESULT WINAPI
@@ -642,7 +549,7 @@ WindowsPromoteStringBuffer(
     HSTRING        *string
 )
 {
-    WIN32ACRYLIC_TRY_EXECUTE_WINRT_FUNCTION(WindowsPromoteStringBuffer, bufferHandle, string)
+    RUNTIMEOBJECT_API_RETURN(WindowsPromoteStringBuffer, E_NOTIMPL, bufferHandle, string)
 }
 
 HRESULT WINAPI
@@ -653,7 +560,7 @@ WindowsReplaceString(
     HSTRING *newString
 )
 {
-    WIN32ACRYLIC_TRY_EXECUTE_WINRT_FUNCTION(WindowsReplaceString, string, stringReplaced, stringReplaceWith, newString)
+    RUNTIMEOBJECT_API_RETURN(WindowsReplaceString, E_NOTIMPL, string, stringReplaced, stringReplaceWith, newString)
 }
 
 HRESULT WINAPI
@@ -662,7 +569,7 @@ WindowsStringHasEmbeddedNull(
     BOOL    *hasEmbedNull
 )
 {
-    WIN32ACRYLIC_TRY_EXECUTE_WINRT_FUNCTION(WindowsStringHasEmbeddedNull, string, hasEmbedNull)
+    RUNTIMEOBJECT_API_RETURN(WindowsStringHasEmbeddedNull, E_NOTIMPL, string, hasEmbedNull)
 }
 
 HRESULT WINAPI
@@ -672,7 +579,7 @@ WindowsSubstring(
     HSTRING *newString
 )
 {
-    WIN32ACRYLIC_TRY_EXECUTE_WINRT_FUNCTION(WindowsSubstring, string, startIndex, newString)
+    RUNTIMEOBJECT_API_RETURN(WindowsSubstring, E_NOTIMPL, string, startIndex, newString)
 }
 
 HRESULT WINAPI
@@ -683,7 +590,7 @@ WindowsSubstringWithSpecifiedLength(
     HSTRING *newString
 )
 {
-    WIN32ACRYLIC_TRY_EXECUTE_WINRT_FUNCTION(WindowsSubstringWithSpecifiedLength, string, startIndex, length, newString)
+    RUNTIMEOBJECT_API_RETURN(WindowsSubstringWithSpecifiedLength, E_NOTIMPL, string, startIndex, length, newString)
 }
 
 HRESULT WINAPI
@@ -693,7 +600,7 @@ WindowsTrimStringEnd(
     HSTRING *newString
 )
 {
-    WIN32ACRYLIC_TRY_EXECUTE_WINRT_FUNCTION(WindowsTrimStringEnd, string, trimString, newString)
+    RUNTIMEOBJECT_API_RETURN(WindowsTrimStringEnd, E_NOTIMPL, string, trimString, newString)
 }
 
 HRESULT WINAPI
@@ -703,7 +610,7 @@ WindowsTrimStringStart(
     HSTRING *newString
 )
 {
-    WIN32ACRYLIC_TRY_EXECUTE_WINRT_FUNCTION(WindowsTrimStringStart, string, trimString, newString)
+    RUNTIMEOBJECT_API_RETURN(WindowsTrimStringStart, E_NOTIMPL, string, trimString, newString)
 }
 
 HRESULT WINAPI
@@ -711,7 +618,7 @@ RoGetBufferMarshaler(
     IMarshal **bufferMarshaler
 )
 {
-    WIN32ACRYLIC_TRY_EXECUTE_WINRT_FUNCTION(RoGetBufferMarshaler, bufferMarshaler)
+    RUNTIMEOBJECT_API_RETURN(RoGetBufferMarshaler, E_NOTIMPL, bufferMarshaler)
 }
 
 void WINAPI
@@ -719,7 +626,7 @@ RoFreeParameterizedTypeExtra(
     ROPARAMIIDHANDLE extra
 )
 {
-    WIN32ACRYLIC_TRY_EXECUTE_WINRT_VOID_FUNCTION(RoFreeParameterizedTypeExtra, extra)
+    RUNTIMEOBJECT_API_VOID(RoFreeParameterizedTypeExtra, extra)
 }
 
 HRESULT WINAPI
@@ -731,7 +638,7 @@ RoGetParameterizedTypeInstanceIID(
     ROPARAMIIDHANDLE           *pExtra
 )
 {
-    WIN32ACRYLIC_TRY_EXECUTE_WINRT_FUNCTION(RoGetParameterizedTypeInstanceIID, nameElementCount, nameElements, metaDataLocator, iid, pExtra)
+    RUNTIMEOBJECT_API_RETURN(RoGetParameterizedTypeInstanceIID, E_NOTIMPL, nameElementCount, nameElements, metaDataLocator, iid, pExtra)
 }
 
 PCSTR WINAPI
@@ -739,7 +646,7 @@ RoParameterizedTypeExtraGetTypeSignature(
     ROPARAMIIDHANDLE extra
 )
 {
-    WIN32ACRYLIC_TRY_EXECUTE_WINRT_PTR_FUNCTION(RoParameterizedTypeExtraGetTypeSignature, extra)
+    RUNTIMEOBJECT_API_RETURN(RoParameterizedTypeExtraGetTypeSignature, nullptr, extra)
 }
 
 HRESULT WINAPI
@@ -751,7 +658,7 @@ RoGetMetaDataFile(
     mdTypeDef            *typeDefToken
 )
 {
-    WIN32ACRYLIC_TRY_EXECUTE_WINRT_FUNCTION(RoGetMetaDataFile, name, metaDataDispenser, metaDataFilePath, metaDataImport, typeDefToken)
+    RUNTIMEOBJECT_API_RETURN(RoGetMetaDataFile, E_NOTIMPL, name, metaDataDispenser, metaDataFilePath, metaDataImport, typeDefToken)
 }
 
 HRESULT WINAPI
@@ -761,7 +668,7 @@ RoParseTypeName(
     HSTRING **typeNameParts
 )
 {
-    WIN32ACRYLIC_TRY_EXECUTE_WINRT_FUNCTION(RoParseTypeName, typeName, partsCount, typeNameParts)
+    RUNTIMEOBJECT_API_RETURN(RoParseTypeName, E_NOTIMPL, typeName, partsCount, typeNameParts)
 }
 
 HRESULT WINAPI
@@ -776,7 +683,7 @@ RoResolveNamespace(
     HSTRING       **subNamespaces
 )
 {
-    WIN32ACRYLIC_TRY_EXECUTE_WINRT_FUNCTION(RoResolveNamespace, name, windowsMetaDataDir, packageGraphDirsCount, packageGraphDirs, metaDataFilePathsCount, metaDataFilePaths, subNamespacesCount, subNamespaces)
+    RUNTIMEOBJECT_API_RETURN(RoResolveNamespace, E_NOTIMPL, name, windowsMetaDataDir, packageGraphDirsCount, packageGraphDirs, metaDataFilePathsCount, metaDataFilePaths, subNamespacesCount, subNamespaces)
 }
 
 // ComBaseApi
@@ -787,7 +694,13 @@ IIDFromString(
     LPIID     lpiid
 )
 {
-    WIN32ACRYLIC_TRY_EXECUTE_COM_FUNCTION(IIDFromString, lpsz, lpiid)
+    OLE32_API(IIDFromString);
+    if (IIDFromStringFunc) {
+        return IIDFromStringFunc(lpsz, lpiid);
+    } else {
+        OutputDebugStringW(L"IIDFromString() is not available.");
+        return E_NOTIMPL;
+    }
 }
 
 HRESULT WINAPI
@@ -795,7 +708,13 @@ CoIncrementMTAUsage(
     CO_MTA_USAGE_COOKIE *pCookie
 )
 {
-    WIN32ACRYLIC_TRY_EXECUTE_COM_FUNCTION(CoIncrementMTAUsage, pCookie)
+    OLE32_API(CoIncrementMTAUsage);
+    if (CoIncrementMTAUsageFunc) {
+        return CoIncrementMTAUsageFunc(pCookie);
+    } else {
+        OutputDebugStringW(L"CoIncrementMTAUsage() is not available.");
+        return E_NOTIMPL;
+    }
 }
 
 // COM Automation
@@ -805,7 +724,12 @@ SysFreeString(
     BSTR bstrString
 )
 {
-    WIN32ACRYLIC_TRY_EXECUTE_COMAUTO_VOID_FUNCTION(SysFreeString, bstrString)
+    OLEAUT32_API(SysFreeString);
+    if (SysFreeStringFunc) {
+        SysFreeStringFunc(bstrString);
+    } else {
+        OutputDebugStringW(L"SysFreeString() is not available.");
+    }
 }
 
 // Wrappers

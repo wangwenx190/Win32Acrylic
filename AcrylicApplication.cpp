@@ -24,6 +24,7 @@
 
 #include <SDKDDKVer.h>
 #include <Windows.h>
+#include <ShellApi.h>
 #include <Unknwn.h>
 #pragma push_macro("GetCurrentTime")
 #pragma push_macro("TRY")
@@ -42,6 +43,14 @@
 #include "SystemLibraryManager.h"
 #include "Utils.h"
 
+#ifndef GET_X_LPARAM
+#define GET_X_LPARAM(lp) ((int)(short)LOWORD(lp))
+#endif
+
+#ifndef GET_Y_LPARAM
+#define GET_Y_LPARAM(lp) ((int)(short)HIWORD(lp))
+#endif
+
 namespace Constants {
 namespace Light {
 static constexpr winrt::Windows::UI::Color TintColor = {255, 252, 252, 252};
@@ -59,6 +68,8 @@ namespace HighContrast {
 // ### TO BE IMPLEMENTED
 } // namespace HighContrast
 } // namespace Constants
+
+static constexpr UINT g_autoHideTaskbarThickness = 2;
 
 static constexpr wchar_t g_defaultWindowTitle[] = L"Win32AcrylicHelper Application Main Window";
 
@@ -147,9 +158,178 @@ static winrt::Windows::UI::Xaml::Media::AcrylicBrush g_backgroundBrush = nullptr
 {
     switch (message) {
     case WM_NCCALCSIZE: {
+        if (wParam == FALSE) {
+            return 0;
+        }
+        const auto clientRect = &(reinterpret_cast<LPNCCALCSIZE_PARAMS>(lParam)->rgrc[0]);
+        USER32_API(DefWindowProcW);
+        if (DefWindowProcWFunc && IsWindows10OrGreater()) {
+            // Store the original top before the default window proc applies the default frame.
+            const LONG originalTop = clientRect->top;
+            // Apply the default frame
+            const LRESULT ret = DefWindowProcWFunc(hWnd, WM_NCCALCSIZE, TRUE, lParam);
+            if (ret != 0) {
+                return ret;
+            }
+            // Re-apply the original top from before the size of the default frame was applied.
+            clientRect->top = originalTop;
+        }
+        // We don't need this correction when we're fullscreen. We will
+        // have the WS_POPUP size, so we don't have to worry about
+        // borders, and the default frame will be fine.
+        bool nonClientAreaExists = false;
+        const bool max = Utils::IsWindowMaximized(hWnd);
+        const bool full = Utils::IsWindowFullScreen(hWnd);
+        if (max && !full) {
+            // When a window is maximized, its size is actually a little bit more
+            // than the monitor's work area. The window is positioned and sized in
+            // such a way that the resize handles are outside of the monitor and
+            // then the window is clipped to the monitor so that the resize handle
+            // do not appear because you don't need them (because you can't resize
+            // a window when it's maximized unless you restore it).
+            const UINT resizeBorderThicknessY = Utils::GetResizeBorderThickness(hWnd, false);
+            clientRect->top += resizeBorderThicknessY;
+            if (!IsWindows10OrGreater()) {
+                clientRect->bottom -= resizeBorderThicknessY;
+                const UINT resizeBorderThicknessX = Utils::GetResizeBorderThickness(hWnd, true);
+                clientRect->left += resizeBorderThicknessX;
+                clientRect->right -= resizeBorderThicknessX;
+            }
+            nonClientAreaExists = true;
+        }
+        // Attempt to detect if there's an autohide taskbar, and if
+        // there is, reduce our size a bit on the side with the taskbar,
+        // so the user can still mouse-over the taskbar to reveal it.
+        // Make sure to use MONITOR_DEFAULTTONEAREST, so that this will
+        // still find the right monitor even when we're restoring from
+        // minimized.
+        SHELL32_API(SHAppBarMessage);
+        if (SHAppBarMessageFunc && (max || full)) {
+            APPBARDATA abd;
+            SecureZeroMemory(&abd, sizeof(abd));
+            abd.cbSize = sizeof(abd);
+            // First, check if we have an auto-hide taskbar at all:
+            if (SHAppBarMessageFunc(ABM_GETSTATE, &abd) & ABS_AUTOHIDE) {
+                const HMONITOR mon = Utils::GetWindowScreen(hWnd, true);
+                if (mon) {
+                    MONITORINFO mi;
+                    SecureZeroMemory(&mi, sizeof(mi));
+                    mi.cbSize = sizeof(mi);
+                    USER32_API(GetMonitorInfoW);
+                    if (GetMonitorInfoWFunc) {
+                        if (GetMonitorInfoWFunc(mon, &mi) != FALSE) {
+                            const RECT screenRect = mi.rcMonitor;
+                            // This helper can be used to determine if there's a
+                            // auto-hide taskbar on the given edge of the monitor
+                            // we're currently on.
+                            const auto hasAutohideTaskbar = [&screenRect](const UINT edge) -> bool {
+                                APPBARDATA abd2;
+                                SecureZeroMemory(&abd2, sizeof(abd2));
+                                abd2.cbSize = sizeof(abd2);
+                                abd2.uEdge = edge;
+                                abd2.rc = screenRect;
+                                return (reinterpret_cast<HWND>(SHAppBarMessageFunc(ABM_GETAUTOHIDEBAREX, &abd2)) != nullptr);
+                            };
+                            // If there's a taskbar on any side of the monitor, reduce
+                            // our size a little bit on that edge.
+                            // Note to future code archeologists:
+                            // This doesn't seem to work for fullscreen on the primary
+                            // display. However, testing a bunch of other apps with
+                            // fullscreen modes and an auto-hiding taskbar has
+                            // shown that _none_ of them reveal the taskbar from
+                            // fullscreen mode. This includes Edge, Firefox, Chrome,
+                            // Sublime Text, PowerPoint - none seemed to support this.
+                            // This does however work fine for maximized.
+                            if (hasAutohideTaskbar(ABE_TOP)) {
+                                // Peculiarly, when we're fullscreen,
+                                clientRect->top += g_autoHideTaskbarThickness;
+                                nonClientAreaExists = true;
+                            } else if (hasAutohideTaskbar(ABE_BOTTOM)) {
+                                clientRect->bottom -= g_autoHideTaskbarThickness;
+                                nonClientAreaExists = true;
+                            } else if (hasAutohideTaskbar(ABE_LEFT)) {
+                                clientRect->left += g_autoHideTaskbarThickness;
+                                nonClientAreaExists = true;
+                            } else if (hasAutohideTaskbar(ABE_RIGHT)) {
+                                clientRect->right -= g_autoHideTaskbarThickness;
+                                nonClientAreaExists = true;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        // If the window bounds change, we're going to relayout and repaint
+        // anyway. Returning WVR_REDRAW avoids an extra paint before that of
+        // the old client pixels in the (now wrong) location, and thus makes
+        // actions like resizing a window from the left edge look slightly
+        // less broken.
         //
+        // We cannot return WVR_REDRAW when there is nonclient area, or
+        // Windows exhibits bugs where client pixels and child HWNDs are
+        // mispositioned by the width/height of the upper-left nonclient
+        // area.
+        return (nonClientAreaExists ? 0 : WVR_REDRAW);
     } break;
-    case WM_NCHITTEST: {} break;
+    case WM_NCHITTEST: {
+        const POINT screenPos = {GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)};
+        POINT windowPos = screenPos;
+        USER32_API(ScreenToClient);
+        if (ScreenToClientFunc(hWnd, &windowPos) == FALSE) {
+            PRINT_WIN32_ERROR_MESSAGE(ScreenToClient, L"")
+            return HTNOWHERE;
+        }
+        const bool max = Utils::IsWindowMaximized(hWnd);
+        const bool full = Utils::IsWindowFullScreen(hWnd);
+        const bool normal = Utils::IsWindowNoState(hWnd);
+        RECT windowRect = {0, 0, 0, 0};
+        USER32_API(GetWindowRect);
+        if (GetWindowRectFunc) {
+            if (GetWindowRectFunc(hWnd, &windowRect) == FALSE) {
+                PRINT_WIN32_ERROR_MESSAGE(GetWindowRect, L"")
+                return HTNOWHERE;
+            }
+        }
+        const SIZE windowSize = {std::abs(windowRect.right - windowRect.left), std::abs(windowRect.bottom - windowRect.top)};
+        const LONG windowWidth = windowSize.cx;
+        const auto resizeBorderThicknessX = static_cast<LONG>(Utils::GetResizeBorderThickness(hWnd, true));
+        const auto resizeBorderThicknessY = static_cast<LONG>(Utils::GetResizeBorderThickness(hWnd, false));
+        const auto captionHeight = static_cast<LONG>(Utils::GetCaptionHeight(hWnd));
+        bool isTitleBar = false;
+        if (max || full) {
+            isTitleBar = ((windowPos.y >= 0) && (windowPos.y <= captionHeight)
+                          && (windowPos.x >= 0) && (windowPos.x <= windowWidth));
+        } else if (normal) {
+            isTitleBar = ((windowPos.y > resizeBorderThicknessY)
+                          && (windowPos.y <= (resizeBorderThicknessY + captionHeight))
+                          && (windowPos.x > resizeBorderThicknessX)
+                          && (windowPos.x < (windowWidth - resizeBorderThicknessX)));
+        }
+        const bool isTop = (normal ? (windowPos.y <= resizeBorderThicknessY) : false);
+        // This will handle the left, right and bottom parts of the frame
+        // because we didn't change them.
+        USER32_API(DefWindowProcW);
+        if (DefWindowProcWFunc) {
+            const LRESULT originalRet = DefWindowProcWFunc(hWnd, WM_NCHITTEST, 0, lParam);
+            if (originalRet != HTCLIENT) {
+                return originalRet;
+            }
+            // At this point, we know that the cursor is inside the client area
+            // so it has to be either the little border at the top of our custom
+            // title bar or the drag bar. Apparently, it must be the drag bar or
+            // the little border at the top which the user can use to move or
+            // resize the window.
+            if (isTop) {
+                return HTTOP;
+            }
+            if (isTitleBar) {
+                return HTCAPTION;
+            }
+            return HTCLIENT;
+        } else {
+            return HTNOWHERE;
+        }
+    } break;
     case WM_CLOSE: {
         if (Utils::CloseWindow(g_mainWindowHandle, g_mainWindowAtom)) {
             g_mainWindowHandle = nullptr;

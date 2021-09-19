@@ -25,6 +25,7 @@
 #include "Utils.h"
 #include "WindowsVersion.h"
 #include "SystemLibraryManager.h"
+#include <ShellScalingApi.h>
 #include <ComBaseApi.h>
 #include <DwmApi.h>
 #include <cmath>
@@ -53,9 +54,8 @@ static constexpr UINT g_defaultCaptionHeight = 23;
 static constexpr UINT g_defaultTitleBarHeight = 31;
 static constexpr UINT g_defaultFrameBorderThickness = 1;
 static constexpr UINT g_defaultWindowDPI = USER_DEFAULT_SCREEN_DPI;
-static constexpr double g_defaultScreenDPR = 1.0;
 
-[[nodiscard]] static inline HMONITOR GetWindowScreen(const HWND hWnd, const bool current) noexcept
+HMONITOR Utils::GetWindowScreen(const HWND hWnd, const bool current) noexcept
 {
     USER32_API(MonitorFromWindow);
     if (MonitorFromWindowFunc) {
@@ -397,7 +397,45 @@ bool Utils::IsWindowNoState(const HWND hWnd) noexcept
 
 UINT Utils::GetWindowDPI(const HWND hWnd) noexcept
 {
-
+    if (!hWnd) {
+        return g_defaultWindowDPI;
+    }
+    USER32_API(GetDpiForWindow);
+    if (GetDpiForWindowFunc) {
+        return GetDpiForWindowFunc(hWnd);
+    }
+    USER32_API(GetSystemDpiForProcess);
+    if (GetSystemDpiForProcessFunc) {
+        GetSystemDpiForProcessFunc(GetCurrentProcess());
+    }
+    USER32_API(GetDpiForSystem);
+    if (GetDpiForSystemFunc) {
+        return GetDpiForSystemFunc();
+    }
+    SHCORE_API(GetDpiForMonitor);
+    if (GetDpiForMonitorFunc) {
+        const HMONITOR mon = GetWindowScreen(hWnd, true);
+        if (mon) {
+            UINT dpiX = 0, dpiY = 0;
+            const HRESULT hr = GetDpiForMonitorFunc(mon, MDT_EFFECTIVE_DPI, &dpiX, &dpiY);
+            if (SUCCEEDED(hr)) {
+                return static_cast<UINT>(std::round(static_cast<double>(dpiX + dpiY) / 2.0));
+            }
+        }
+    }
+    USER32_API(GetDC);
+    GDI32_API(GetDeviceCaps);
+    USER32_API(ReleaseDC);
+    if (GetDCFunc && GetDeviceCapsFunc && ReleaseDCFunc) {
+        const HDC hdc = GetDCFunc(nullptr);
+        if (hdc) {
+            const int dpiX = GetDeviceCapsFunc(hdc, LOGPIXELSX);
+            const int dpiY = GetDeviceCapsFunc(hdc, LOGPIXELSY);
+            ReleaseDCFunc(nullptr, hdc);
+            return static_cast<UINT>(std::round(static_cast<double>(dpiX + dpiY) / 2.0));
+        }
+    }
+    return g_defaultWindowDPI;
 }
 
 UINT Utils::GetResizeBorderThickness(const HWND hWnd, const bool x) noexcept
@@ -463,12 +501,12 @@ UINT Utils::GetFrameBorderThickness(const HWND hWnd) noexcept
         UINT value = 0;
         const HRESULT hr = DwmGetWindowAttributeFunc(hWnd, g_DWMWA_VISIBLE_FRAME_BORDER_THICKNESS, &value, sizeof(value));
         if (SUCCEEDED(hr)) {
-            return std::round(static_cast<double>(value) * dpr);
+            return static_cast<UINT>(std::round(static_cast<double>(value) * dpr));
         } else {
             // We just eat this error because this enum value was introduced in a very
             // late Windows 10 version, so querying it's value will always result in
             // a "parameter error" (code: 87) on systems before that value was introduced.
-            return std::round(static_cast<double>(g_defaultFrameBorderThickness) * dpr);
+            return static_cast<UINT>(std::round(static_cast<double>(g_defaultFrameBorderThickness) * dpr));
         }
     } else {
         OutputDebugStringW(L"DwmGetWindowAttribute() is not available.");

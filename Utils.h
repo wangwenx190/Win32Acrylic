@@ -49,6 +49,7 @@ namespace Utils
     [[nodiscard]] UINT GetCaptionHeight(const HWND hWnd) noexcept;
     [[nodiscard]] UINT GetTitleBarHeight(const HWND hWnd) noexcept;
     [[nodiscard]] UINT GetFrameBorderThickness(const HWND hWnd) noexcept;
+    [[nodiscard]] HMONITOR GetWindowScreen(const HWND hWnd, const bool current) noexcept;
 } // namespace Utils
 
 #ifndef __PRINT_ERROR_MESSAGE

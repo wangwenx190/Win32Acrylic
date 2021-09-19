@@ -74,6 +74,14 @@ private:
 #define OLE32_API(symbol) __RESOLVE_API(Ole32.dll, symbol)
 #endif
 
+#ifndef SHELL32_API
+#define SHELL32_API(symbol) __RESOLVE_API(Shell32.dll, symbol)
+#endif
+
+#ifndef SHCORE_API
+#define SHCORE_API(symbol) __RESOLVE_API(SHCore.dll, symbol)
+#endif
+
 #ifndef UXTHEME_API
 #define UXTHEME_API(symbol) __RESOLVE_API(UxTheme.dll, symbol)
 #endif

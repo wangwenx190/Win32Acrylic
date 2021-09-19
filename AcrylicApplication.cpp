@@ -30,6 +30,15 @@
 #pragma push_macro("TRY")
 #undef GetCurrentTime
 #undef TRY
+#include <WinRT\Base.h>
+// This hack is needed to resolve circular dependencies in
+// Windows.Foundation.h. We just forward-declare the method that
+// causes the problems.
+namespace winrt::impl
+{
+    template <typename Async>
+    auto wait_for(Async const& async, Windows::Foundation::TimeSpan const& timeout);
+}
 #include <WinRT\Windows.Foundation.Collections.h>
 #include <WinRT\Windows.UI.Xaml.Hosting.h>
 #include <WinRT\Windows.UI.Xaml.Controls.h>
@@ -42,6 +51,10 @@
 #include "WindowsVersion.h"
 #include "SystemLibraryManager.h"
 #include "Utils.h"
+
+#ifndef ABM_GETAUTOHIDEBAREX
+#define ABM_GETAUTOHIDEBAREX (0x0000000b)
+#endif
 
 #ifndef GET_X_LPARAM
 #define GET_X_LPARAM(lp) ((int)(short)LOWORD(lp))
@@ -69,6 +82,7 @@ namespace HighContrast {
 } // namespace HighContrast
 } // namespace Constants
 
+// The thickness of an auto-hide taskbar in pixels.
 static constexpr UINT g_autoHideTaskbarThickness = 2;
 
 static constexpr wchar_t g_defaultWindowTitle[] = L"Win32AcrylicHelper Application Main Window";

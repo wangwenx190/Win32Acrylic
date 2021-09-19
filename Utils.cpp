@@ -123,7 +123,8 @@ LPCWSTR Utils::GetSystemErrorMessage(LPCWSTR function, const HRESULT hr) noexcep
         OutputDebugStringW(L"Operation succeeded.");
         return nullptr;
     }
-    return GetSystemErrorMessage(function, HRESULT_CODE(hr));
+    const DWORD dwError = HRESULT_CODE(hr);
+    return GetSystemErrorMessage(function, dwError);
 }
 
 LPCWSTR Utils::GetSystemErrorMessage(LPCWSTR function) noexcept
@@ -132,7 +133,8 @@ LPCWSTR Utils::GetSystemErrorMessage(LPCWSTR function) noexcept
         OutputDebugStringW(L"Failed to retrieve the system error message due to the function name is empty.");
         return nullptr;
     } else {
-        return GetSystemErrorMessage(function, GetLastError());
+        const DWORD dwError = GetLastError();
+        return GetSystemErrorMessage(function, dwError);
     }
 }
 
@@ -486,9 +488,6 @@ UINT Utils::GetTitleBarHeight(const HWND hWnd) noexcept
 
 UINT Utils::GetFrameBorderThickness(const HWND hWnd) noexcept
 {
-    if (!IsWindows10OrGreater()) {
-        return 0;
-    }
     DWMAPI_API(DwmGetWindowAttribute);
     if (DwmGetWindowAttributeFunc) {
         if (!hWnd) {

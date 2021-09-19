@@ -33,12 +33,13 @@ class SystemLibraryManagerPrivate;
 class SystemLibraryManager
 {
 public:
-    explicit SystemLibraryManager() noexcept;
-    ~SystemLibraryManager() noexcept;
-
     [[nodiscard]] static SystemLibraryManager &instance() noexcept;
 
     [[nodiscard]] FARPROC GetSymbol(LPCWSTR fileName, LPCWSTR symbolName) noexcept;
+
+private:
+    explicit SystemLibraryManager() noexcept;
+    ~SystemLibraryManager() noexcept;
 
 private:
     SystemLibraryManager(const SystemLibraryManager &) = delete;

@@ -65,7 +65,8 @@ namespace Utils
 
 #ifndef PRINT_WIN32_ERROR_MESSAGE
 #define PRINT_WIN32_ERROR_MESSAGE(function, additionalMessage) \
-    auto __error_message_from_os = Utils::GetSystemErrorMessage(L#function, GetLastError()); \
+    const DWORD __dw_error_code = GetLastError(); \
+    auto __error_message_from_os = Utils::GetSystemErrorMessage(L#function, __dw_error_code); \
     __PRINT_ERROR_MESSAGE(additionalMessage)
 #endif
 

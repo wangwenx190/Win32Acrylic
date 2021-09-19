@@ -101,8 +101,8 @@ private:
     int m_build = 0;
 };
 
-[[nodiscard]] extern WindowsVersion GetCurrentSystemVersion() noexcept;
-[[nodiscard]] extern bool IsWindowsOrGreater(const WindowsVersion &version) noexcept;
+//[[nodiscard]] extern WindowsVersion GetCurrentSystemVersion() noexcept;
+[[nodiscard]] extern bool IsWindowsVersionOrGreater(const WindowsVersion &version) noexcept;
 
 [[maybe_unused]] constexpr WindowsVersion Windows_2000 = WindowsVersion(5, 0, 2195);
 [[maybe_unused]] constexpr WindowsVersion Windows_XP = WindowsVersion(5, 1, 2600);
@@ -128,16 +128,23 @@ private:
 [[maybe_unused]] constexpr WindowsVersion Windows10_20Half2 = WindowsVersion(10, 0, 19042);
 [[maybe_unused]] constexpr WindowsVersion Windows10_21Half1 = WindowsVersion(10, 0, 19043);
 
+[[nodiscard]] inline bool IsWindows10OrGreater() noexcept
+{
+    // Windows 10 Version 1507
+    static const bool result = IsWindowsVersionOrGreater(Windows10_ThresHold1);
+    return result;
+}
+
 [[nodiscard]] inline bool IsWindows10RS1OrGreater() noexcept
 {
     // Windows 10 Version 1607 (Anniversary Update)
-    static const bool result = IsWindowsOrGreater(Windows10_RedStone1);
+    static const bool result = IsWindowsVersionOrGreater(Windows10_RedStone1);
     return result;
 }
 
 [[nodiscard]] inline bool IsWindows1019H1OrGreater() noexcept
 {
     // Windows 10 Version 1903 (May 2019 Update)
-    static const bool result = IsWindowsOrGreater(Windows10_19Half1);
+    static const bool result = IsWindowsVersionOrGreater(Windows10_19Half1);
     return result;
 }

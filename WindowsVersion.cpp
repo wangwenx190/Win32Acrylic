@@ -26,13 +26,21 @@
 #include <SDKDDKVer.h>
 #include <Windows.h>
 
+#if 0
 [[nodiscard]] WindowsVersion GetCurrentSystemVersion() noexcept
 {
-    // todo
-    return {};
+    OSVERSIONINFOW osvi;
+    SecureZeroMemory(&osvi, sizeof(osvi));
+    osvi.dwOSVersionInfoSize = sizeof(osvi);
+    if (GetVersionExW(&osvi) == FALSE) {
+        return WindowsVersion(-1, -1, -1);
+    } else {
+        return WindowsVersion(osvi.dwMajorVersion, osvi.dwMinorVersion, osvi.dwBuildNumber);
+    }
 }
+#endif
 
-[[nodiscard]] bool IsWindowsOrGreater(const WindowsVersion &version) noexcept
+[[nodiscard]] bool IsWindowsVersionOrGreater(const WindowsVersion &version) noexcept
 {
     OSVERSIONINFOEXW osvi;
     SecureZeroMemory(&osvi, sizeof(osvi));

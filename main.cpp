@@ -437,11 +437,11 @@ static winrt::Windows::UI::Xaml::Media::AcrylicBrush g_backgroundBrush = nullptr
                 if (interop2) {
                     const HRESULT hr = interop2->PreTranslateMessage(&msg, &filtered);
                     if (FAILED(hr)) {
-                        auto msg = Utils::GetSystemErrorMessage(L"PreTranslateMessage", hr);
-                        if (msg) {
-                            Utils::DisplayErrorDialog(msg);
-                            delete [] msg;
-                            msg = nullptr;
+                        auto errMsg = Utils::GetSystemErrorMessage(L"PreTranslateMessage", hr);
+                        if (errMsg) {
+                            Utils::DisplayErrorDialog(errMsg);
+                            delete [] errMsg;
+                            errMsg = nullptr;
                         } else {
                             OutputDebugStringW(L"Failed to pre-translate win32 messages.");
                         }

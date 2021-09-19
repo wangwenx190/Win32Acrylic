@@ -146,6 +146,10 @@ static winrt::Windows::UI::Xaml::Media::AcrylicBrush g_backgroundBrush = nullptr
 [[nodiscard]] static inline LRESULT CALLBACK MessageHandler(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) noexcept
 {
     switch (message) {
+    case WM_NCCALCSIZE: {
+        //
+    } break;
+    case WM_NCHITTEST: {} break;
     case WM_CLOSE: {
         if (Utils::CloseWindow(g_mainWindowHandle, g_mainWindowAtom)) {
             g_mainWindowHandle = nullptr;
@@ -230,7 +234,8 @@ static winrt::Windows::UI::Xaml::Media::AcrylicBrush g_backgroundBrush = nullptr
         }
         LPCWSTR guid = nullptr;
         if (!exists) {
-            if (!Utils::GenerateGUID(&guid)) {
+            guid = Utils::GenerateGUID();
+            if (!guid) {
                 OutputDebugStringW(L"Failed to register the window class due to can't generate a new GUID.");
                 return false;
             }

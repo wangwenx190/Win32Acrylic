@@ -37,10 +37,18 @@ namespace Utils
     void DisplayErrorDialog(LPCWSTR text) noexcept;
     [[nodiscard]] bool IsHighContrastModeEnabled() noexcept;
     [[nodiscard]] bool ShouldAppsUseDarkMode() noexcept;
-    [[nodiscard]] bool ShouldSystemUsesDarkMode() noexcept;
-    [[nodiscard]] bool GenerateGUID(LPCWSTR *str) noexcept;
+    [[nodiscard]] LPCWSTR GenerateGUID() noexcept;
     [[nodiscard]] bool RefreshWindowTheme(const HWND hWnd) noexcept;
     [[nodiscard]] bool CloseWindow(const HWND hWnd, const ATOM atom) noexcept;
+    [[nodiscard]] bool IsWindowMinimized(const HWND hWnd) noexcept;
+    [[nodiscard]] bool IsWindowMaximized(const HWND hWnd) noexcept;
+    [[nodiscard]] bool IsWindowFullScreen(const HWND hWnd) noexcept;
+    [[nodiscard]] bool IsWindowNoState(const HWND hWnd) noexcept;
+    [[nodiscard]] UINT GetWindowDPI(const HWND hWnd) noexcept;
+    [[nodiscard]] UINT GetResizeBorderThickness(const HWND hWnd, const bool x) noexcept;
+    [[nodiscard]] UINT GetCaptionHeight(const HWND hWnd) noexcept;
+    [[nodiscard]] UINT GetTitleBarHeight(const HWND hWnd) noexcept;
+    [[nodiscard]] UINT GetFrameBorderThickness(const HWND hWnd) noexcept;
 } // namespace Utils
 
 #ifndef __PRINT_ERROR_MESSAGE

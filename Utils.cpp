@@ -27,6 +27,15 @@
 #include "SystemLibraryManager.h"
 #include <ComBaseApi.h>
 #include <DwmApi.h>
+#include <cmath>
+
+#ifndef USER_DEFAULT_SCREEN_DPI
+#define USER_DEFAULT_SCREEN_DPI (96)
+#endif
+
+#ifndef SM_CXPADDEDBORDER
+#define SM_CXPADDEDBORDER (92)
+#endif
 
 #ifndef HINST_THISCOMPONENT
 EXTERN_C IMAGE_DOS_HEADER __ImageBase;
@@ -35,8 +44,35 @@ EXTERN_C IMAGE_DOS_HEADER __ImageBase;
 
 static constexpr DWORD g_DWMWA_USE_IMMERSIVE_DARK_MODE_BEFORE_20H1 = 19;
 static constexpr DWORD g_DWMWA_USE_IMMERSIVE_DARK_MODE = 20;
+static constexpr DWORD g_DWMWA_VISIBLE_FRAME_BORDER_THICKNESS = 37;
 
 static constexpr wchar_t g_personalizeRegistryKey[] = LR"(Software\Microsoft\Windows\CurrentVersion\Themes\Personalize)";
+
+static constexpr UINT g_defaultResizeBorderThickness = 8;
+static constexpr UINT g_defaultCaptionHeight = 23;
+static constexpr UINT g_defaultTitleBarHeight = 31;
+static constexpr UINT g_defaultFrameBorderThickness = 1;
+static constexpr UINT g_defaultWindowDPI = USER_DEFAULT_SCREEN_DPI;
+static constexpr double g_defaultScreenDPR = 1.0;
+
+[[nodiscard]] static inline HMONITOR GetWindowScreen(const HWND hWnd, const bool current) noexcept
+{
+    USER32_API(MonitorFromWindow);
+    if (MonitorFromWindowFunc) {
+        if (!hWnd) {
+            return nullptr;
+        }
+        const HMONITOR mon = MonitorFromWindowFunc(hWnd, (current ? MONITOR_DEFAULTTONEAREST : MONITOR_DEFAULTTOPRIMARY));
+        if (!mon) {
+            PRINT_WIN32_ERROR_MESSAGE(MonitorFromWindow, L"Failed to retrieve the window's corresponding screen.")
+            return nullptr;
+        }
+        return mon;
+    } else {
+        OutputDebugStringW(L"MonitorFromWindow() is not available.");
+        return nullptr;
+    }
+}
 
 HINSTANCE Utils::GetCurrentInstance() noexcept
 {
@@ -178,34 +214,16 @@ bool Utils::ShouldAppsUseDarkMode() noexcept
     }
 }
 
-bool Utils::ShouldSystemUsesDarkMode() noexcept
-{
-    if (!IsWindows10RS1OrGreater()) {
-        return false;
-    }
-    static const auto ShouldSystemUsesDarkModeFunc = reinterpret_cast<BOOL(WINAPI *)()>(SystemLibraryManager::instance().GetSymbol(L"UxTheme.dll", MAKEINTRESOURCEW(138)));
-    if (ShouldSystemUsesDarkModeFunc) {
-        return (ShouldSystemUsesDarkModeFunc() != FALSE);
-    } else {
-        OutputDebugStringW(L"ShouldSystemUsesDarkMode() is not available.");
-        return false;
-    }
-}
-
-bool Utils::GenerateGUID(LPCWSTR *str) noexcept
+LPCWSTR Utils::GenerateGUID() noexcept
 {
     OLE32_API(CoCreateGuid);
     OLE32_API(StringFromGUID2);
     if (CoCreateGuidFunc && StringFromGUID2Func) {
-        if (!str) {
-            OutputDebugStringW(L"Failed to generate GUID due to the given string address is null.");
-            return false;
-        }
         GUID guid = {};
         const HRESULT hr = CoCreateGuidFunc(&guid);
         if (FAILED(hr)) {
             PRINT_HR_ERROR_MESSAGE(CoCreateGuid, hr, L"Failed to generate a new GUID.")
-            return false;
+            return nullptr;
         }
         auto buf = new wchar_t[MAX_PATH];
         SecureZeroMemory(buf, sizeof(buf));
@@ -213,13 +231,12 @@ bool Utils::GenerateGUID(LPCWSTR *str) noexcept
             delete [] buf;
             buf = nullptr;
             PRINT_WIN32_ERROR_MESSAGE(StringFromGUID2, L"Failed to convert GUID to string.")
-            return false;
+            return nullptr;
         }
-        *str = buf;
-        return true;
+        return buf;
     } else {
         OutputDebugStringW(L"CoCreateGuid() and StringFromGUID2() are not available.");
-        return false;
+        return nullptr;
     }
 }
 
@@ -289,5 +306,172 @@ bool Utils::CloseWindow(const HWND hWnd, const ATOM atom) noexcept
     } else {
         OutputDebugStringW(L"DestroyWindow() and UnregisterClassW() are not available.");
         return false;
+    }
+}
+
+bool Utils::IsWindowMinimized(const HWND hWnd) noexcept
+{
+    USER32_API(IsIconic);
+    if (IsIconicFunc) {
+        if (!hWnd) {
+            return false;
+        }
+        return (IsIconicFunc(hWnd) != FALSE);
+    } else {
+        OutputDebugStringW(L"IsIconic() is not available.");
+        return false;
+    }
+}
+
+bool Utils::IsWindowMaximized(const HWND hWnd) noexcept
+{
+    USER32_API(IsZoomed);
+    if (IsZoomedFunc) {
+        if (!hWnd) {
+            return false;
+        }
+        return (IsZoomedFunc(hWnd) != FALSE);
+    } else {
+        OutputDebugStringW(L"IsZoomed() is not available.");
+        return false;
+    }
+}
+
+bool Utils::IsWindowFullScreen(const HWND hWnd) noexcept
+{
+    USER32_API(GetMonitorInfoW);
+    USER32_API(GetWindowRect);
+    if (GetMonitorInfoWFunc && GetWindowRectFunc) {
+        if (!hWnd) {
+            return false;
+        }
+        const HMONITOR mon = GetWindowScreen(hWnd, false);
+        if (!mon) {
+            OutputDebugStringW(L"Failed to retrieve the primary screen.");
+            return false;
+        }
+        MONITORINFO mi;
+        SecureZeroMemory(&mi, sizeof(mi));
+        mi.cbSize = sizeof(mi);
+        if (GetMonitorInfoWFunc(mon, &mi) == FALSE) {
+            PRINT_WIN32_ERROR_MESSAGE(GetMonitorInfoW, L"Failed to retrieve the screen information.")
+            return false;
+        }
+        RECT rect = {0, 0, 0, 0};
+        if (GetWindowRectFunc(hWnd, &rect) == FALSE) {
+            PRINT_WIN32_ERROR_MESSAGE(GetWindowRect, L"Failed to retrieve the window geometry.")
+            return false;
+        }
+        const RECT windowRect = rect;
+        const RECT screenRect = mi.rcMonitor;
+        return ((windowRect.top == screenRect.top)
+                && (windowRect.bottom == screenRect.bottom)
+                && (windowRect.left == screenRect.left)
+                && (windowRect.right == screenRect.right));
+    } else {
+        OutputDebugStringW(L"GetMonitorInfoW() and GetWindowRect() are not available.");
+        return false;
+    }
+}
+
+bool Utils::IsWindowNoState(const HWND hWnd) noexcept
+{
+    USER32_API(GetWindowPlacement);
+    if (GetWindowPlacementFunc) {
+        if (!hWnd) {
+            return false;
+        }
+        WINDOWPLACEMENT wp;
+        SecureZeroMemory(&wp, sizeof(wp));
+        wp.length = sizeof(wp);
+        if (GetWindowPlacementFunc(hWnd, &wp) == FALSE) {
+            PRINT_WIN32_ERROR_MESSAGE(GetWindowPlacement, L"Failed to retrieve the current window state.")
+            return false;
+        }
+        return (wp.showCmd == SW_NORMAL);
+    } else {
+        OutputDebugStringW(L"GetWindowPlacement() is not available.");
+        return false;
+    }
+}
+
+UINT Utils::GetWindowDPI(const HWND hWnd) noexcept
+{
+
+}
+
+UINT Utils::GetResizeBorderThickness(const HWND hWnd, const bool x) noexcept
+{
+    USER32_API(GetSystemMetricsForDpi);
+    if (GetSystemMetricsForDpiFunc) {
+        if (!hWnd) {
+            return g_defaultResizeBorderThickness;
+        }
+        const UINT dpi = GetWindowDPI(hWnd);
+        // There is no "SM_CYPADDEDBORDER".
+        const int paddedBorderThickness = GetSystemMetricsForDpiFunc(SM_CXPADDEDBORDER, dpi);
+        const int sizeFrameThickness = GetSystemMetricsForDpiFunc((x ? SM_CXSIZEFRAME : SM_CYSIZEFRAME), dpi);
+        return static_cast<UINT>(paddedBorderThickness + sizeFrameThickness);
+    } else {
+        OutputDebugStringW(L"GetSystemMetricsForDpi() is not available.");
+        return g_defaultResizeBorderThickness;
+    }
+}
+
+UINT Utils::GetCaptionHeight(const HWND hWnd) noexcept
+{
+    USER32_API(GetSystemMetricsForDpi);
+    if (GetSystemMetricsForDpiFunc) {
+        if (!hWnd) {
+            return g_defaultCaptionHeight;
+        }
+        const UINT dpi = GetWindowDPI(hWnd);
+        return static_cast<UINT>(GetSystemMetricsForDpiFunc(SM_CYCAPTION, dpi));
+    } else {
+        OutputDebugStringW(L"GetSystemMetricsForDpi() is not available.");
+        return g_defaultCaptionHeight;
+    }
+}
+
+UINT Utils::GetTitleBarHeight(const HWND hWnd) noexcept
+{
+    if (!hWnd) {
+        return g_defaultTitleBarHeight;
+    }
+    const UINT captionHeight = GetCaptionHeight(hWnd);
+    if (IsWindowMaximized(hWnd) || IsWindowFullScreen(hWnd)) {
+        return captionHeight;
+    } else {
+        return (captionHeight + GetResizeBorderThickness(hWnd, false));
+    }
+}
+
+UINT Utils::GetFrameBorderThickness(const HWND hWnd) noexcept
+{
+    if (!IsWindows10OrGreater()) {
+        return 0;
+    }
+    DWMAPI_API(DwmGetWindowAttribute);
+    if (DwmGetWindowAttributeFunc) {
+        if (!hWnd) {
+            return 0;
+        }
+        if (IsWindowMaximized(hWnd) || IsWindowFullScreen(hWnd)) {
+            return 0;
+        }
+        const auto dpr = (static_cast<double>(GetWindowDPI(hWnd)) / static_cast<double>(g_defaultWindowDPI));
+        UINT value = 0;
+        const HRESULT hr = DwmGetWindowAttributeFunc(hWnd, g_DWMWA_VISIBLE_FRAME_BORDER_THICKNESS, &value, sizeof(value));
+        if (SUCCEEDED(hr)) {
+            return std::round(static_cast<double>(value) * dpr);
+        } else {
+            // We just eat this error because this enum value was introduced in a very
+            // late Windows 10 version, so querying it's value will always result in
+            // a "parameter error" (code: 87) on systems before that value was introduced.
+            return std::round(static_cast<double>(g_defaultFrameBorderThickness) * dpr);
+        }
+    } else {
+        OutputDebugStringW(L"DwmGetWindowAttribute() is not available.");
+        return g_defaultFrameBorderThickness;
     }
 }

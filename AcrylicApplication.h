@@ -22,21 +22,9 @@
  * SOFTWARE.
  */
 
-#include <SDKDDKVer.h>
-#include <Windows.h>
-#include "AcrylicApplication.h"
+#pragma once
 
-EXTERN_C int APIENTRY
-wWinMain(
-    _In_ HINSTANCE     hInstance,
-    _In_opt_ HINSTANCE hPrevInstance,
-    _In_ LPWSTR        lpCmdLine,
-    _In_ int           nCmdShow
-)
+namespace AcrylicApplication
 {
-    UNREFERENCED_PARAMETER(hInstance);
-    UNREFERENCED_PARAMETER(hPrevInstance);
-    UNREFERENCED_PARAMETER(lpCmdLine);
-
-    return AcrylicApplication::Main(nCmdShow);
-}
+    [[nodiscard]] int Main(const int nCmdShow) noexcept;
+} // namespace AcrylicApplication

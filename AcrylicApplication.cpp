@@ -109,14 +109,7 @@ static winrt::Windows::UI::Xaml::Media::AcrylicBrush g_backgroundBrush = nullptr
             return false;
         }
         if (SetWindowPosFunc(g_xamlIslandWindowHandle, nullptr, 0, 0, width, height, SWP_SHOWWINDOW | SWP_NOACTIVATE | SWP_NOZORDER | SWP_NOOWNERZORDER) == FALSE) {
-            auto msg = Utils::GetSystemErrorMessage(L"SetWindowPos");
-            if (msg) {
-                Utils::DisplayErrorDialog(msg);
-                delete [] msg;
-                msg = nullptr;
-            } else {
-                OutputDebugStringW(L"Failed to sync the geometry of the XAML Island window.");
-            }
+            PRINT_WIN32_ERROR_MESSAGE(SetWindowPos, L"Failed to sync the geometry of the XAML Island window.")
             return false;
         }
         return true;
@@ -140,14 +133,7 @@ static winrt::Windows::UI::Xaml::Media::AcrylicBrush g_backgroundBrush = nullptr
         }
         RECT clientRect = {0, 0, 0, 0};
         if (GetClientRectFunc(g_mainWindowHandle, &clientRect) == FALSE) {
-            auto msg = Utils::GetSystemErrorMessage(L"GetClientRect");
-            if (msg) {
-                Utils::DisplayErrorDialog(msg);
-                delete [] msg;
-                msg = nullptr;
-            } else {
-                OutputDebugStringW(L"Failed to retrieve the client rect of the window.");
-            }
+            PRINT_WIN32_ERROR_MESSAGE(GetClientRect, L"Failed to retrieve the client rect of the window.")
             return false;
         }
         return SyncXAMLIslandPosition(clientRect.right, clientRect.bottom);
@@ -264,14 +250,7 @@ static winrt::Windows::UI::Xaml::Media::AcrylicBrush g_backgroundBrush = nullptr
             guid = nullptr;
         }
         if (g_mainWindowAtom == INVALID_ATOM) {
-            auto msg = Utils::GetSystemErrorMessage(L"RegisterClassExW");
-            if (msg) {
-                Utils::DisplayErrorDialog(msg);
-                delete [] msg;
-                msg = nullptr;
-            } else {
-                OutputDebugStringW(L"Failed to register the window class for the main window.");
-            }
+            PRINT_WIN32_ERROR_MESSAGE(RegisterClassExW, L"Failed to register the window class for the main window.")
             return false;
         }
         return true;
@@ -297,14 +276,7 @@ static winrt::Windows::UI::Xaml::Media::AcrylicBrush g_backgroundBrush = nullptr
             CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
             nullptr, nullptr, Utils::GetCurrentInstance(), nullptr);
         if (!g_mainWindowHandle) {
-            auto msg = Utils::GetSystemErrorMessage(L"CreateWindowExW");
-            if (msg) {
-                Utils::DisplayErrorDialog(msg);
-                delete [] msg;
-                msg = nullptr;
-            } else {
-                OutputDebugStringW(L"Failed to create the main window.");
-            }
+            PRINT_WIN32_ERROR_MESSAGE(CreateWindowExW, L"Failed to create the main window.")
             return false;
         }
         return true;
@@ -325,14 +297,7 @@ static winrt::Windows::UI::Xaml::Media::AcrylicBrush g_backgroundBrush = nullptr
         }
         ShowWindowFunc(g_mainWindowHandle, nCmdShow);
         if (UpdateWindowFunc(g_mainWindowHandle) == FALSE) {
-            auto msg = Utils::GetSystemErrorMessage(L"UpdateWindow");
-            if (msg) {
-                Utils::DisplayErrorDialog(msg);
-                delete [] msg;
-                msg = nullptr;
-            } else {
-                OutputDebugStringW(L"Failed to update the main window.");
-            }
+            PRINT_WIN32_ERROR_MESSAGE(UpdateWindow, L"Failed to update the main window.")
             return false;
         }
         return true;
@@ -368,27 +333,13 @@ static winrt::Windows::UI::Xaml::Media::AcrylicBrush g_backgroundBrush = nullptr
     // Parent the DesktopWindowXamlSource object to the current window.
     HRESULT hr = interop->AttachToWindow(g_mainWindowHandle);
     if (FAILED(hr)) {
-        auto msg = Utils::GetSystemErrorMessage(L"AttachToWindow", hr);
-        if (msg) {
-            Utils::DisplayErrorDialog(msg);
-            delete [] msg;
-            msg = nullptr;
-        } else {
-            OutputDebugStringW(L"Failed to attach the XAML Island window to the main window.");
-        }
+        PRINT_HR_ERROR_MESSAGE(AttachToWindow, hr, L"Failed to attach the XAML Island window to the main window.")
         return false;
     }
     // Get the new child window's HWND.
     hr = interop->get_WindowHandle(&g_xamlIslandWindowHandle);
     if (FAILED(hr)) {
-        auto msg = Utils::GetSystemErrorMessage(L"get_WindowHandle", hr);
-        if (msg) {
-            Utils::DisplayErrorDialog(msg);
-            delete [] msg;
-            msg = nullptr;
-        } else {
-            OutputDebugStringW(L"Failed to retrieve the XAML Island window's handle.");
-        }
+        PRINT_HR_ERROR_MESSAGE(get_WindowHandle, hr, L"Failed to retrieve the XAML Island window's handle.")
         return false;
     }
     if (!g_xamlIslandWindowHandle) {
@@ -438,14 +389,7 @@ static winrt::Windows::UI::Xaml::Media::AcrylicBrush g_backgroundBrush = nullptr
                 if (interop2) {
                     const HRESULT hr = interop2->PreTranslateMessage(&msg, &filtered);
                     if (FAILED(hr)) {
-                        auto errMsg = Utils::GetSystemErrorMessage(L"PreTranslateMessage", hr);
-                        if (errMsg) {
-                            Utils::DisplayErrorDialog(errMsg);
-                            delete [] errMsg;
-                            errMsg = nullptr;
-                        } else {
-                            OutputDebugStringW(L"Failed to pre-translate win32 messages.");
-                        }
+                        PRINT_HR_ERROR_MESSAGE(PreTranslateMessage, hr, L"Failed to pre-translate win32 messages.")
                     }
                 } else {
                     OutputDebugStringW(L"Failed to retrieve the IDesktopWindowXamlSourceNative2.");

@@ -84,27 +84,13 @@ void SystemLibraryPrivate::Initialize() noexcept
     MEMORY_BASIC_INFORMATION mbi;
     SecureZeroMemory(&mbi, sizeof(mbi));
     if (VirtualQuery(reinterpret_cast<LPCVOID>(&VirtualQuery), &mbi, sizeof(mbi)) == 0) {
-        auto msg = Utils::GetSystemErrorMessage(L"VirtualQuery");
-        if (msg) {
-            Utils::DisplayErrorDialog(msg);
-            delete [] msg;
-            msg = nullptr;
-        } else {
-            OutputDebugStringW(L"Failed to retrieve the memory basic information.");
-        }
+        PRINT_WIN32_ERROR_MESSAGE(VirtualQuery, L"Failed to retrieve the memory basic information.")
     } else {
         const auto kernel32 = static_cast<HMODULE>(mbi.AllocationBase);
         if (kernel32) {
             m_LoadLibraryExWFunc = reinterpret_cast<LoadLibraryExWSig>(GetProcAddress(kernel32, "LoadLibraryExW"));
             if (!m_LoadLibraryExWFunc) {
-                auto msg = Utils::GetSystemErrorMessage(L"GetProcAddress");
-                if (msg) {
-                    Utils::DisplayErrorDialog(msg);
-                    delete [] msg;
-                    msg = nullptr;
-                } else {
-                    OutputDebugStringW(L"Failed to resolve symbol LoadLibraryExW().");
-                }
+                PRINT_WIN32_ERROR_MESSAGE(GetProcAddress, L"Failed to resolve symbol LoadLibraryExW().")
             }
         } else {
             OutputDebugStringW(L"Failed to retrieve the base address of Kernel32.dll.");
@@ -158,14 +144,7 @@ bool SystemLibraryPrivate::Load() noexcept
     }
     m_module = m_LoadLibraryExWFunc(m_fileName, nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
     if (!m_module) {
-        auto msg = Utils::GetSystemErrorMessage(L"LoadLibraryExW");
-        if (msg) {
-            Utils::DisplayErrorDialog(msg);
-            delete [] msg;
-            msg = nullptr;
-        } else {
-            OutputDebugStringW(L"Failed to load dynamic link library.");
-        }
+        PRINT_WIN32_ERROR_MESSAGE(LoadLibraryExW, L"Failed to load dynamic link library.")
         return false;
     }
     return true;
@@ -179,14 +158,7 @@ void SystemLibraryPrivate::Unload() noexcept
     m_fileName = nullptr;
     m_resolvedSymbols.clear();
     if (FreeLibrary(m_module) == FALSE) {
-        auto msg = Utils::GetSystemErrorMessage(L"FreeLibrary");
-        if (msg) {
-            Utils::DisplayErrorDialog(msg);
-            delete [] msg;
-            msg = nullptr;
-        } else {
-            OutputDebugStringW(L"Failed to unload dynamic link library.");
-        }
+        PRINT_WIN32_ERROR_MESSAGE(FreeLibrary, L"Failed to unload dynamic link library.")
     }
     m_module = nullptr;
 }
@@ -211,18 +183,11 @@ FARPROC SystemLibraryPrivate::GetSymbol(LPCWSTR function) noexcept
             return nullptr;
         }
         const auto addr = GetProcAddress(m_module, name);
-        if (!addr) {
-            auto msg = Utils::GetSystemErrorMessage(L"GetProcAddress");
-            if (msg) {
-                Utils::DisplayErrorDialog(msg);
-                delete [] msg;
-                msg = nullptr;
-            } else {
-                OutputDebugStringW(L"Failed to resolve symbol.");
-            }
-        }
         delete [] name;
         name = nullptr;
+        if (!addr) {
+            PRINT_WIN32_ERROR_MESSAGE(GetProcAddress, L"Failed to resolve symbol.")
+        }
         m_resolvedSymbols.insert({function, addr});
         return addr;
     } else {

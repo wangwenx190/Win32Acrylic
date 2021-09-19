@@ -42,3 +42,26 @@ namespace Utils
     [[nodiscard]] bool RefreshWindowTheme(const HWND hWnd) noexcept;
     [[nodiscard]] bool CloseWindow(const HWND hWnd, const ATOM atom) noexcept;
 } // namespace Utils
+
+#ifndef __PRINT_ERROR_MESSAGE
+#define __PRINT_ERROR_MESSAGE(additionalMessage) \
+    if (__error_message_from_os) { \
+        Utils::DisplayErrorDialog(__error_message_from_os); \
+        delete [] __error_message_from_os; \
+        __error_message_from_os = nullptr; \
+    } else { \
+        OutputDebugStringW(additionalMessage); \
+    }
+#endif
+
+#ifndef PRINT_WIN32_ERROR_MESSAGE
+#define PRINT_WIN32_ERROR_MESSAGE(function, additionalMessage) \
+    auto __error_message_from_os = Utils::GetSystemErrorMessage(L#function, GetLastError()); \
+    __PRINT_ERROR_MESSAGE(additionalMessage)
+#endif
+
+#ifndef PRINT_HR_ERROR_MESSAGE
+#define PRINT_HR_ERROR_MESSAGE(function, hresult, additionalMessage) \
+    auto __error_message_from_os = Utils::GetSystemErrorMessage(L#function, hresult); \
+    __PRINT_ERROR_MESSAGE(additionalMessage)
+#endif

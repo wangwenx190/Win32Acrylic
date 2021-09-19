@@ -54,12 +54,13 @@ SystemLibraryManagerPrivate::~SystemLibraryManagerPrivate() noexcept
 {
     if (!m_loadedLibraries.empty()) {
         for (auto &&library : std::as_const(m_loadedLibraries)) {
-            const auto pLibrary = library.second;
+            auto pLibrary = library.second;
             if (pLibrary) {
                 if (pLibrary->IsLoaded()) {
                     pLibrary->Unload();
                 }
                 delete pLibrary;
+                pLibrary = nullptr;
             }
         }
         m_loadedLibraries.clear();

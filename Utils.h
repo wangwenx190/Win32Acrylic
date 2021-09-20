@@ -50,6 +50,8 @@ namespace Utils
     [[nodiscard]] UINT GetTitleBarHeight(const HWND hWnd) noexcept;
     [[nodiscard]] UINT GetFrameBorderThickness(const HWND hWnd) noexcept;
     [[nodiscard]] HMONITOR GetWindowScreen(const HWND hWnd, const bool current) noexcept;
+    [[nodiscard]] bool OpenSystemMenu(const HWND hWnd, const POINT pos) noexcept;
+    [[nodiscard]] bool EnableHiDPIScaling() noexcept;
 } // namespace Utils
 
 #ifndef __PRINT_ERROR_MESSAGE

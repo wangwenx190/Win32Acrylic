@@ -43,6 +43,8 @@ EXTERN_C IMAGE_DOS_HEADER __ImageBase;
 #define HINST_THISCOMPONENT (reinterpret_cast<HINSTANCE>(&__ImageBase))
 #endif
 
+static constexpr int g_PROCESS_PER_MONITOR_DPI_AWARE_V2 = 3;
+
 static constexpr DWORD g_DWMWA_USE_IMMERSIVE_DARK_MODE_BEFORE_20H1 = 19;
 static constexpr DWORD g_DWMWA_USE_IMMERSIVE_DARK_MODE = 20;
 static constexpr DWORD g_DWMWA_VISIBLE_FRAME_BORDER_THICKNESS = 37;
@@ -510,5 +512,109 @@ UINT Utils::GetFrameBorderThickness(const HWND hWnd) noexcept
     } else {
         OutputDebugStringW(L"DwmGetWindowAttribute() is not available.");
         return g_defaultFrameBorderThickness;
+    }
+}
+
+bool Utils::OpenSystemMenu(const HWND hWnd, const POINT pos) noexcept
+{
+    USER32_API(GetSystemMenu);
+    USER32_API(SetMenuItemInfoW);
+    USER32_API(SetMenuDefaultItem);
+    USER32_API(TrackPopupMenu);
+    USER32_API(PostMessageW);
+    if (GetSystemMenuFunc && SetMenuItemInfoWFunc && SetMenuDefaultItemFunc && TrackPopupMenuFunc && PostMessageWFunc) {
+        if (!hWnd) {
+            return false;
+        }
+        const HMENU menu = GetSystemMenuFunc(hWnd, FALSE);
+        if (!menu) {
+            PRINT_WIN32_ERROR_MESSAGE(GetSystemMenu, L"Failed to retrieve the system menu of the window.")
+            return false;
+        }
+        // Update the options based on window state.
+        MENUITEMINFOW mii;
+        SecureZeroMemory(&mii, sizeof(mii));
+        mii.cbSize = sizeof(mii);
+        mii.fMask = MIIM_STATE;
+        mii.fType = MFT_STRING;
+        const auto setState = [&mii, menu](const UINT item, const bool enabled) -> bool {
+            mii.fState = (enabled ? MF_ENABLED : MF_DISABLED);
+            if (SetMenuItemInfoWFunc(menu, item, FALSE, &mii) == FALSE) {
+                PRINT_WIN32_ERROR_MESSAGE(SetMenuItemInfoW, L"Failed to set menu item information.")
+                return false;
+            }
+            return true;
+        };
+        const bool maxOrFull = (IsWindowMaximized(hWnd) || IsWindowFullScreen(hWnd));
+        if (!setState(SC_RESTORE, maxOrFull)) {
+            return false;
+        }
+        if (!setState(SC_MOVE, !maxOrFull)) {
+            return false;
+        }
+        if (!setState(SC_SIZE, !maxOrFull)) {
+            return false;
+        }
+        if (!setState(SC_MINIMIZE, true)) {
+            return false;
+        }
+        if (!setState(SC_MAXIMIZE, !maxOrFull)) {
+            return false;
+        }
+        if (!setState(SC_CLOSE, true)) {
+            return false;
+        }
+        if (SetMenuDefaultItemFunc(menu, UINT_MAX, FALSE) == FALSE) {
+            PRINT_WIN32_ERROR_MESSAGE(SetMenuDefaultItem, L"Failed to set default menu item.")
+            return false;
+        }
+        // ### TODO: support RTL layout: TPM_LAYOUTRTL
+        const auto ret = TrackPopupMenuFunc(menu, TPM_RETURNCMD, pos.x, pos.y, 0, hWnd, nullptr);
+        if (ret != 0) {
+            if (PostMessageWFunc(hWnd, WM_SYSCOMMAND, ret, 0) == FALSE) {
+                PRINT_WIN32_ERROR_MESSAGE(PostMessageW, L"Failed to post message.")
+                return false;
+            }
+        }
+        return true;
+    } else {
+        OutputDebugStringW(L"GetSystemMenu(), SetMenuItemInfoW(), SetMenuDefaultItem(), TrackPopupMenu() and PostMessageW() are not available.");
+        return false;
+    }
+}
+
+bool Utils::EnableHiDPIScaling() noexcept
+{
+    USER32_API(SetProcessDpiAwarenessContext);
+    SHCORE_API(SetProcessDpiAwareness);
+    if (SetProcessDpiAwarenessContextFunc && SetProcessDpiAwarenessFunc) {
+        if (SetProcessDpiAwarenessContextFunc(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2) != FALSE) {
+            return true;
+        }
+        if (SetProcessDpiAwarenessContextFunc(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE) != FALSE) {
+            return true;
+        }
+        if (SetProcessDpiAwarenessContextFunc(DPI_AWARENESS_CONTEXT_SYSTEM_AWARE) != FALSE) {
+            return true;
+        }
+        if (SetProcessDpiAwarenessContextFunc(DPI_AWARENESS_CONTEXT_UNAWARE_GDISCALED) != FALSE) {
+            return true;
+        }
+        HRESULT hr = SetProcessDpiAwarenessFunc(static_cast<PROCESS_DPI_AWARENESS>(g_PROCESS_PER_MONITOR_DPI_AWARE_V2));
+        if (SUCCEEDED(hr)) {
+            return true;
+        }
+        hr = SetProcessDpiAwarenessFunc(PROCESS_PER_MONITOR_DPI_AWARE);
+        if (SUCCEEDED(hr)) {
+            return true;
+        }
+        hr = SetProcessDpiAwarenessFunc(PROCESS_SYSTEM_DPI_AWARE);
+        if (SUCCEEDED(hr)) {
+            return true;
+        }
+        return false;
+    } else {
+        OutputDebugStringW(L"SetProcessDpiAwarenessContext() and SetProcessDpiAwareness() are not available.");
+        return false;
     }
 }

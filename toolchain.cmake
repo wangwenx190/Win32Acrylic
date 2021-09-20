@@ -33,8 +33,7 @@ set(CMAKE_CXX_EXTENSIONS OFF CACHE BOOL "" FORCE)
 #set(CMAKE_C_STANDARD_LIBRARIES "" CACHE STRING "" FORCE)
 
 set(NTDDI_WIN10_19H1 0x0A000007)
-# /await:strict
-set(_common_flags "/await /bigobj /d2FH4 /D_CRT_NON_CONFORMING_SWPRINTFS /D_CRT_SECURE_NO_WARNINGS /D_ENABLE_EXTENDED_ALIGNED_STORAGE /DNOMINMAX /DUNICODE /D_UNICODE /DWIN32 /D_WINDOWS /DWIN32_LEAN_AND_MEAN /DWINRT_LEAN_AND_MEAN /DWINVER=${NTDDI_WIN10_19H1} /D_WIN32_WINNT=${NTDDI_WIN10_19H1} /EHsc /GR- /MP /nologo /permissive- /utf-8 /W4 /WX /Zc:char8_t,__cplusplus,externConstexpr,hiddenFriend,lambda,referenceBinding,rvalueCast,strictStrings,ternary,throwingNew")
+set(_common_flags "/bigobj /D_CRT_NON_CONFORMING_SWPRINTFS /D_CRT_SECURE_NO_WARNINGS /D_ENABLE_EXTENDED_ALIGNED_STORAGE /DNOMINMAX /DUNICODE /D_UNICODE /DWIN32 /D_WINDOWS /DWIN32_LEAN_AND_MEAN /DWINRT_LEAN_AND_MEAN /DWINVER=${NTDDI_WIN10_19H1} /D_WIN32_WINNT=${NTDDI_WIN10_19H1} /MP /nologo /utf-8 /W4 /WX")
 set(_debug_flags "/D_DEBUG /JMC /MTd /Od /Ob0 /RTC1 /Z7")
 # /GA (Optimize for Windows Application): using it for a DLL can result in bad code generation.
 set(_release_flags "/DNDEBUG /GA /GL /GT /Gw /Gy /guard:cf /guard:ehcont /MT /Zc:inline")
@@ -44,15 +43,16 @@ set(CMAKE_C_FLAGS "${_common_flags} /std:c17" CACHE STRING "" FORCE)
 set(CMAKE_C_FLAGS_DEBUG "${_debug_flags}" CACHE STRING "" FORCE)
 set(CMAKE_C_FLAGS_MINSIZEREL "${_release_flags} /O1 /Ob1" CACHE STRING "" FORCE)
 set(CMAKE_C_FLAGS_RELEASE "${_release_flags} /O2 /Ob3 /Oi" CACHE STRING "" FORCE)
-set(CMAKE_C_FLAGS_RELWITHDEBINFO "${_release_flags} /O2 /Ob3 /Oi /Z7" CACHE STRING "" FORCE)
+set(CMAKE_C_FLAGS_RELWITHDEBINFO "${_release_flags} /O2 /Ob3 /Oi /Z7 /Zo" CACHE STRING "" FORCE)
 
 set(CMAKE_CXX_STANDARD_LIBRARIES "Kernel32.lib" CACHE STRING "" FORCE)
 
-set(CMAKE_CXX_FLAGS "${_common_flags} /std:c++20" CACHE STRING "" FORCE)
+# /await:strict
+set(CMAKE_CXX_FLAGS "${_common_flags} /await /d2FH4 /EHsc /GR- /permissive- /std:c++20 /Zc:char8_t,__cplusplus,externConstexpr,hiddenFriend,lambda,referenceBinding,rvalueCast,strictStrings,ternary,throwingNew" CACHE STRING "" FORCE)
 set(CMAKE_CXX_FLAGS_DEBUG "${_debug_flags}" CACHE STRING "" FORCE)
 set(CMAKE_CXX_FLAGS_MINSIZEREL "${_release_flags} /O1 /Ob1" CACHE STRING "" FORCE)
 set(CMAKE_CXX_FLAGS_RELEASE "${_release_flags} /O2 /Ob3 /Oi" CACHE STRING "" FORCE)
-set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "${_release_flags} /O2 /Ob3 /Oi /Z7" CACHE STRING "" FORCE)
+set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "${_release_flags} /O2 /Ob3 /Oi /Z7 /Zo" CACHE STRING "" FORCE)
 
 set(CMAKE_RC_FLAGS "-c65001 /DWIN32 /nologo" CACHE STRING "" FORCE)
 

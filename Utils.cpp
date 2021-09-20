@@ -587,7 +587,8 @@ bool Utils::EnableHiDPIScaling() noexcept
 {
     USER32_API(SetProcessDpiAwarenessContext);
     SHCORE_API(SetProcessDpiAwareness);
-    if (SetProcessDpiAwarenessContextFunc && SetProcessDpiAwarenessFunc) {
+    USER32_API(SetProcessDPIAware);
+    if (SetProcessDpiAwarenessContextFunc && SetProcessDpiAwarenessFunc && SetProcessDPIAwareFunc) {
         if (SetProcessDpiAwarenessContextFunc(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2) != FALSE) {
             return true;
         }
@@ -612,9 +613,12 @@ bool Utils::EnableHiDPIScaling() noexcept
         if (SUCCEEDED(hr)) {
             return true;
         }
+        if (SetProcessDPIAwareFunc() != FALSE) {
+            return true;
+        }
         return false;
     } else {
-        OutputDebugStringW(L"SetProcessDpiAwarenessContext() and SetProcessDpiAwareness() are not available.");
+        OutputDebugStringW(L"SetProcessDpiAwarenessContext(), SetProcessDpiAwareness() and SetProcessDPIAware() are not available.");
         return false;
     }
 }

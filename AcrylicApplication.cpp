@@ -60,6 +60,10 @@ namespace winrt::impl
 #include "SystemLibraryManager.h"
 #include "Utils.h"
 
+#ifndef USER_DEFAULT_SCREEN_DPI
+#define USER_DEFAULT_SCREEN_DPI (96)
+#endif
+
 #ifndef ABM_GETAUTOHIDEBAREX
 #define ABM_GETAUTOHIDEBAREX (0x0000000b)
 #endif
@@ -104,6 +108,7 @@ static ATOM g_dragBarWindowAtom = INVALID_ATOM;
 static HWND g_mainWindowHandle = nullptr;
 static HWND g_dragBarWindowHandle = nullptr;
 static HWND g_xamlIslandWindowHandle = nullptr;
+static UINT g_mainWindowDPI = USER_DEFAULT_SCREEN_DPI;
 
 static winrt::Windows::UI::Xaml::Hosting::WindowsXamlManager g_manager = nullptr;
 static winrt::Windows::UI::Xaml::Hosting::DesktopWindowXamlSource g_source = nullptr;
@@ -242,6 +247,16 @@ static winrt::Windows::UI::Xaml::Media::AcrylicBrush g_backgroundBrush = nullptr
 [[nodiscard]] static inline LRESULT CALLBACK MainWindowMessageHandler(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) noexcept
 {
     switch (message) {
+    case WM_NCCREATE: {
+        USER32_API(EnableNonClientDpiScaling);
+        if (EnableNonClientDpiScalingFunc) {
+            if (EnableNonClientDpiScalingFunc(hWnd) == FALSE) {
+                // We intend to do nothing here.
+            }
+        } else {
+            OutputDebugStringW(L"EnableNonClientDpiScaling() is not available.");
+        }
+    } break;
     case WM_NCCALCSIZE: {
         if (wParam == FALSE) {
             return 0;
@@ -492,9 +507,6 @@ static winrt::Windows::UI::Xaml::Media::AcrylicBrush g_backgroundBrush = nullptr
         }
     } break;
     case WM_CREATE: {
-        if (!Utils::EnableHiDPIScaling()) {
-            // We intend to do nothing here.
-        }
         if (!Utils::UpdateFrameMargins(hWnd)) {
             OutputDebugStringW(L"Failed to update the frame margins for the main window.");
             break;
@@ -551,6 +563,9 @@ static winrt::Windows::UI::Xaml::Media::AcrylicBrush g_backgroundBrush = nullptr
         }
     } break;
     case WM_DPICHANGED: {
+        const UINT dpiX = LOWORD(wParam);
+        const UINT dpiY = HIWORD(wParam);
+        g_mainWindowDPI = static_cast<UINT>(std::round(static_cast<double>(dpiX + dpiY) / 2.0));
         USER32_API(SetWindowPos);
         if (SetWindowPosFunc) {
             const auto prcNewWindow = reinterpret_cast<LPRECT>(lParam);
@@ -577,6 +592,7 @@ static winrt::Windows::UI::Xaml::Media::AcrylicBrush g_backgroundBrush = nullptr
         if (Utils::CloseWindow(hWnd, g_mainWindowAtom)) {
             g_mainWindowHandle = nullptr;
             g_mainWindowAtom = INVALID_ATOM;
+            g_mainWindowDPI = USER_DEFAULT_SCREEN_DPI;
             return 0;
         } else {
             Utils::DisplayErrorDialog(L"Failed to close the main window.");
@@ -681,6 +697,19 @@ static winrt::Windows::UI::Xaml::Media::AcrylicBrush g_backgroundBrush = nullptr
         }
     } else {
         switch (message) {
+        case WM_NCCREATE: {
+            USER32_API(EnableNonClientDpiScaling);
+            if (EnableNonClientDpiScalingFunc) {
+                if (EnableNonClientDpiScalingFunc(hWnd) == FALSE) {
+                    // We intend to do nothing here.
+                }
+            } else {
+                OutputDebugStringW(L"EnableNonClientDpiScaling() is not available.");
+            }
+        } break;
+        case WM_NCCALCSIZE: {
+            return WVR_REDRAW;
+        } break;
         case WM_PAINT: {
             return 0;
         } break;
@@ -989,9 +1018,17 @@ static winrt::Windows::UI::Xaml::Media::AcrylicBrush g_backgroundBrush = nullptr
 
 int AcrylicApplication::Main(const int nCmdShow) noexcept
 {
+    // XAML Island is only supported on Windows 10 19H1 and onwards.
     if (!IsWindows1019H1OrGreater()) {
         Utils::DisplayErrorDialog(L"This application only supports Windows 10 19H1 and onwards.");
         return -1;
+    }
+
+    if (!Utils::EnableHiDPIScaling()) {
+        // We are using the manifest file to set the DPI awareness of our
+        // application, so any attempt to change it programmatically will
+        // always fail. This function is just a safe guard in case the
+        // manifest file is not functional, it's a very rare case though.
     }
 
     if (!RegisterMainWindowClass(nullptr)) {

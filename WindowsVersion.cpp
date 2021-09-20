@@ -23,21 +23,3 @@
  */
 
 #include "WindowsVersion.h"
-#include <SDKDDKVer.h>
-#include <Windows.h>
-
-[[nodiscard]] bool IsWindowsVersionOrGreater(const WindowsVersion &version) noexcept
-{
-    OSVERSIONINFOEXW osvi;
-    SecureZeroMemory(&osvi, sizeof(osvi));
-    osvi.dwOSVersionInfoSize = sizeof(osvi);
-    osvi.dwMajorVersion = version.Major();
-    osvi.dwMinorVersion = version.Minor();
-    osvi.dwBuildNumber = version.Build();
-    const BYTE op = VER_GREATER_EQUAL;
-    DWORDLONG dwlConditionMask = 0;
-    VER_SET_CONDITION(dwlConditionMask, VER_MAJORVERSION, op);
-    VER_SET_CONDITION(dwlConditionMask, VER_MINORVERSION, op);
-    VER_SET_CONDITION(dwlConditionMask, VER_BUILDNUMBER, op);
-    return (VerifyVersionInfoW(&osvi, VER_MAJORVERSION | VER_MINORVERSION | VER_BUILDNUMBER, dwlConditionMask) != FALSE);
-}

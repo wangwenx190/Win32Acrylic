@@ -52,6 +52,7 @@ namespace Utils
     [[nodiscard]] HMONITOR GetWindowScreen(const HWND hWnd, const bool current) noexcept;
     [[nodiscard]] bool OpenSystemMenu(const HWND hWnd, const POINT pos) noexcept;
     [[nodiscard]] bool EnableHiDPIScaling() noexcept;
+    [[nodiscard]] bool UpdateFrameMargins(const HWND hWnd) noexcept;
 } // namespace Utils
 
 #ifndef __PRINT_ERROR_MESSAGE

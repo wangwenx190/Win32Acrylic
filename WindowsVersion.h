@@ -24,6 +24,9 @@
 
 #pragma once
 
+#include <SDKDDKVer.h>
+#include <Windows.h>
+
 class WindowsVersion
 {
 public:
@@ -101,8 +104,6 @@ private:
     int m_build = 0;
 };
 
-[[nodiscard]] extern bool IsWindowsVersionOrGreater(const WindowsVersion &version) noexcept;
-
 [[maybe_unused]] constexpr WindowsVersion Windows_2000 = WindowsVersion(5, 0, 2195);
 [[maybe_unused]] constexpr WindowsVersion Windows_XP = WindowsVersion(5, 1, 2600);
 [[maybe_unused]] constexpr WindowsVersion Windows_XP_x64 = WindowsVersion(5, 2, 3790);
@@ -126,6 +127,22 @@ private:
 [[maybe_unused]] constexpr WindowsVersion Windows10_20Half1 = WindowsVersion(10, 0, 19041);
 [[maybe_unused]] constexpr WindowsVersion Windows10_20Half2 = WindowsVersion(10, 0, 19042);
 [[maybe_unused]] constexpr WindowsVersion Windows10_21Half1 = WindowsVersion(10, 0, 19043);
+
+[[nodiscard]] inline bool IsWindowsVersionOrGreater(const WindowsVersion &version) noexcept
+{
+    OSVERSIONINFOEXW osvi;
+    SecureZeroMemory(&osvi, sizeof(osvi));
+    osvi.dwOSVersionInfoSize = sizeof(osvi);
+    osvi.dwMajorVersion = version.Major();
+    osvi.dwMinorVersion = version.Minor();
+    osvi.dwBuildNumber = version.Build();
+    const BYTE op = VER_GREATER_EQUAL;
+    DWORDLONG dwlConditionMask = 0;
+    VER_SET_CONDITION(dwlConditionMask, VER_MAJORVERSION, op);
+    VER_SET_CONDITION(dwlConditionMask, VER_MINORVERSION, op);
+    VER_SET_CONDITION(dwlConditionMask, VER_BUILDNUMBER, op);
+    return (VerifyVersionInfoW(&osvi, VER_MAJORVERSION | VER_MINORVERSION | VER_BUILDNUMBER, dwlConditionMask) != FALSE);
+}
 
 [[nodiscard]] inline bool IsWindows10RS1OrGreater() noexcept
 {

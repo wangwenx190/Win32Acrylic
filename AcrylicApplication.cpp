@@ -495,7 +495,10 @@ static winrt::Windows::UI::Xaml::Media::AcrylicBrush g_backgroundBrush = nullptr
         if (!Utils::EnableHiDPIScaling()) {
             // We intend to do nothing here.
         }
-        // Update frame margins ?
+        if (!Utils::UpdateFrameMargins(hWnd)) {
+            OutputDebugStringW(L"Failed to update the frame margins for the main window.");
+            break;
+        }
         USER32_API(SetWindowPos);
         if (SetWindowPosFunc) {
             if (SetWindowPosFunc(hWnd, nullptr, 0, 0, 0, 0, SWP_FRAMECHANGED | SWP_NOSIZE | SWP_NOMOVE | SWP_NOZORDER | SWP_NOOWNERZORDER) == FALSE) {
@@ -511,7 +514,11 @@ static winrt::Windows::UI::Xaml::Media::AcrylicBrush g_backgroundBrush = nullptr
         }
     } break;
     case WM_SIZE: {
-        if ((wParam == SIZE_MAXIMIZED) || (wParam == SIZE_RESTORED)) {
+        if ((wParam == SIZE_MAXIMIZED) || (wParam == SIZE_RESTORED) || Utils::IsWindowFullScreen(hWnd)) {
+            if (!Utils::UpdateFrameMargins(hWnd)) {
+                OutputDebugStringW(L"Failed to update the frame margins for the main window.");
+                break;
+            }
             const UINT width = LOWORD(lParam);
             if (g_xamlIslandWindowHandle) {
                 const UINT height = HIWORD(lParam);
@@ -559,6 +566,12 @@ static winrt::Windows::UI::Xaml::Media::AcrylicBrush g_backgroundBrush = nullptr
         } else {
             OutputDebugStringW(L"SetWindowPos() is not available.");
         }
+    } break;
+    case WM_PAINT: {
+        return 0;
+    } break;
+    case WM_ERASEBKGND: {
+        return 1;
     } break;
     case WM_CLOSE: {
         if (Utils::CloseWindow(hWnd, g_mainWindowAtom)) {
@@ -668,6 +681,12 @@ static winrt::Windows::UI::Xaml::Media::AcrylicBrush g_backgroundBrush = nullptr
         }
     } else {
         switch (message) {
+        case WM_PAINT: {
+            return 0;
+        } break;
+        case WM_ERASEBKGND: {
+            return 1;
+        } break;
         case WM_CLOSE: {
             if (Utils::CloseWindow(hWnd, g_dragBarWindowAtom)) {
                 g_dragBarWindowHandle = nullptr;

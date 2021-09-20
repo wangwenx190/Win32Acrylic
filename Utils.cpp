@@ -618,3 +618,25 @@ bool Utils::EnableHiDPIScaling() noexcept
         return false;
     }
 }
+
+bool Utils::UpdateFrameMargins(const HWND hWnd) noexcept
+{
+    DWMAPI_API(DwmExtendFrameIntoClientArea);
+    if (DwmExtendFrameIntoClientAreaFunc) {
+        if (!hWnd) {
+            return false;
+        }
+        const bool maxOrFull = (IsWindowMaximized(hWnd) || IsWindowFullScreen(hWnd));
+        const auto borderThickness = static_cast<int>(GetFrameBorderThickness(hWnd));
+        const MARGINS margins = {0, 0, (maxOrFull ? 0 : borderThickness), 0};
+        const HRESULT hr = DwmExtendFrameIntoClientAreaFunc(hWnd, &margins);
+        if (FAILED(hr)) {
+            PRINT_HR_ERROR_MESSAGE(DwmExtendFrameIntoClientArea, hr, L"Failed to update the frame margins for the window.")
+            return false;
+        }
+        return true;
+    } else {
+        OutputDebugStringW(L"DwmExtendFrameIntoClientArea() is not available.");
+        return false;
+    }
+}

@@ -23,7 +23,6 @@
  */
 
 #include "Utils.h"
-#include "WindowsVersion.h"
 #include "SystemLibraryManager.h"
 #include <ShellScalingApi.h>
 #include <ComBaseApi.h>

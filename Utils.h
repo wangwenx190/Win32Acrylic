@@ -62,7 +62,7 @@ namespace Utils
         delete [] __error_message_from_os; \
         __error_message_from_os = nullptr; \
     } else { \
-        OutputDebugStringW(additionalMessage); \
+        Utils::DisplayErrorDialog(additionalMessage); \
     }
 #endif
 

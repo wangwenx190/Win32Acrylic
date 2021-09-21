@@ -56,7 +56,7 @@ namespace winrt::impl
 
 #include "AcrylicApplication.h"
 #include "Resource.h"
-#include "WindowsVersion.h"
+#include "WindowsVersion.hpp"
 #include "SystemLibraryManager.h"
 #include "Utils.h"
 

@@ -60,10 +60,6 @@ namespace winrt::impl
 #include "SystemLibraryManager.h"
 #include "Utils.h"
 
-#ifndef USER_DEFAULT_SCREEN_DPI
-#define USER_DEFAULT_SCREEN_DPI (96)
-#endif
-
 #ifndef ABM_GETAUTOHIDEBAREX
 #define ABM_GETAUTOHIDEBAREX (0x0000000b)
 #endif
@@ -108,7 +104,7 @@ static ATOM g_dragBarWindowAtom = INVALID_ATOM;
 static HWND g_mainWindowHandle = nullptr;
 static HWND g_dragBarWindowHandle = nullptr;
 static HWND g_xamlIslandWindowHandle = nullptr;
-static UINT g_mainWindowDPI = USER_DEFAULT_SCREEN_DPI;
+static UINT g_mainWindowDPI = 0;
 
 static winrt::Windows::UI::Xaml::Hosting::WindowsXamlManager g_manager = nullptr;
 static winrt::Windows::UI::Xaml::Hosting::DesktopWindowXamlSource g_source = nullptr;
@@ -117,9 +113,6 @@ static winrt::Windows::UI::Xaml::Media::AcrylicBrush g_backgroundBrush = nullptr
 
 [[nodiscard]] static inline bool RefreshBackgroundBrush() noexcept
 {
-    if (!IsWindows10RS1OrGreater()) {
-        return false;
-    }
     if (g_backgroundBrush == nullptr) {
         OutputDebugStringW(L"Failed to refresh the background brush due to the brush is null.");
         return false;
@@ -507,6 +500,7 @@ static winrt::Windows::UI::Xaml::Media::AcrylicBrush g_backgroundBrush = nullptr
         }
     } break;
     case WM_CREATE: {
+        g_mainWindowDPI = Utils::GetWindowDPI(hWnd);
         if (!Utils::UpdateFrameMargins(hWnd)) {
             OutputDebugStringW(L"Failed to update the frame margins for the main window.");
             break;
@@ -547,11 +541,9 @@ static winrt::Windows::UI::Xaml::Media::AcrylicBrush g_backgroundBrush = nullptr
         }
     } break;
     case WM_SETTINGCHANGE: {
-        if (!IsWindows10RS1OrGreater()) {
-            break;
-        }
         // wParam == 0: User-wide setting change
         // wParam == 1: System-wide setting change
+        // ### TODO: how to detect high contrast theme here
         if (((wParam == 0) || (wParam == 1)) && (_wcsicmp(reinterpret_cast<LPCWSTR>(lParam), L"ImmersiveColorSet") == 0)) {
             if (!Utils::RefreshWindowTheme(hWnd)) {
                 Utils::DisplayErrorDialog(L"Failed to refresh the main window theme.");
@@ -563,9 +555,16 @@ static winrt::Windows::UI::Xaml::Media::AcrylicBrush g_backgroundBrush = nullptr
         }
     } break;
     case WM_DPICHANGED: {
+        const UINT oldMainWindowDPI = g_mainWindowDPI;
         const UINT dpiX = LOWORD(wParam);
         const UINT dpiY = HIWORD(wParam);
         g_mainWindowDPI = static_cast<UINT>(std::round(static_cast<double>(dpiX + dpiY) / 2.0));
+        auto buf = new wchar_t[MAX_PATH];
+        SecureZeroMemory(buf, sizeof(buf));
+        swprintf(buf, L"The DotsPerInch of main window has changed. Old value: %d, new value: %d.", oldMainWindowDPI, g_mainWindowDPI);
+        OutputDebugStringW(buf);
+        delete [] buf;
+        buf = nullptr;
         USER32_API(SetWindowPos);
         if (SetWindowPosFunc) {
             const auto prcNewWindow = reinterpret_cast<LPRECT>(lParam);
@@ -592,7 +591,7 @@ static winrt::Windows::UI::Xaml::Media::AcrylicBrush g_backgroundBrush = nullptr
         if (Utils::CloseWindow(hWnd, g_mainWindowAtom)) {
             g_mainWindowHandle = nullptr;
             g_mainWindowAtom = INVALID_ATOM;
-            g_mainWindowDPI = USER_DEFAULT_SCREEN_DPI;
+            g_mainWindowDPI = 0;
             return 0;
         } else {
             Utils::DisplayErrorDialog(L"Failed to close the main window.");
@@ -697,16 +696,6 @@ static winrt::Windows::UI::Xaml::Media::AcrylicBrush g_backgroundBrush = nullptr
         }
     } else {
         switch (message) {
-        case WM_NCCREATE: {
-            USER32_API(EnableNonClientDpiScaling);
-            if (EnableNonClientDpiScalingFunc) {
-                if (EnableNonClientDpiScalingFunc(hWnd) == FALSE) {
-                    // We intend to do nothing here.
-                }
-            } else {
-                OutputDebugStringW(L"EnableNonClientDpiScaling() is not available.");
-            }
-        } break;
         case WM_NCCALCSIZE: {
             return WVR_REDRAW;
         } break;
@@ -929,10 +918,6 @@ static winrt::Windows::UI::Xaml::Media::AcrylicBrush g_backgroundBrush = nullptr
     // This DesktopWindowXamlSource is the object that enables a non-UWP desktop application
     // to host WinRT XAML controls in any UI element that is associated with a window handle (HWND).
     g_source = winrt::Windows::UI::Xaml::Hosting::DesktopWindowXamlSource();
-    if (g_source == nullptr) {
-        Utils::DisplayErrorDialog(L"Failed to create the Desktop Window XAML Source.");
-        return false;
-    }
     // Get handle to the core window.
     const auto interop = g_source.as<IDesktopWindowXamlSourceNative>();
     if (!interop) {
@@ -962,15 +947,7 @@ static winrt::Windows::UI::Xaml::Media::AcrylicBrush g_backgroundBrush = nullptr
     }
     // Create the XAML content.
     g_rootGrid = winrt::Windows::UI::Xaml::Controls::Grid();
-    if (g_rootGrid == nullptr) {
-        Utils::DisplayErrorDialog(L"Failed to create the XAML Grid.");
-        return false;
-    }
     g_backgroundBrush = winrt::Windows::UI::Xaml::Media::AcrylicBrush();
-    if (g_backgroundBrush == nullptr) {
-        Utils::DisplayErrorDialog(L"Failed to create the XAML AcrylicBrush");
-        return false;
-    }
     if (!RefreshBackgroundBrush()) {
         Utils::DisplayErrorDialog(L"Failed to refresh the background brush.");
         return false;
@@ -1001,7 +978,7 @@ static winrt::Windows::UI::Xaml::Media::AcrylicBrush g_backgroundBrush = nullptr
                         PRINT_HR_ERROR_MESSAGE(PreTranslateMessage, hr, L"Failed to pre-translate win32 messages.")
                     }
                 } else {
-                    OutputDebugStringW(L"Failed to retrieve the IDesktopWindowXamlSourceNative2.");
+                    Utils::DisplayErrorDialog(L"Failed to retrieve the IDesktopWindowXamlSourceNative2.");
                 }
             }
             if (filtered == FALSE) {

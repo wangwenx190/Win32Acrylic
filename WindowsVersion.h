@@ -144,13 +144,6 @@ private:
     return (VerifyVersionInfoW(&osvi, VER_MAJORVERSION | VER_MINORVERSION | VER_BUILDNUMBER, dwlConditionMask) != FALSE);
 }
 
-[[nodiscard]] inline bool IsWindows10RS1OrGreater() noexcept
-{
-    // Windows 10 Version 1607 (Anniversary Update)
-    static const bool result = IsWindowsVersionOrGreater(Windows10_RedStone1);
-    return result;
-}
-
 [[nodiscard]] inline bool IsWindows1019H1OrGreater() noexcept
 {
     // Windows 10 Version 1903 (May 2019 Update)

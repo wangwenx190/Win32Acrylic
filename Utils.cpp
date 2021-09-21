@@ -175,46 +175,29 @@ bool Utils::IsHighContrastModeEnabled() noexcept
 
 bool Utils::ShouldAppsUseDarkMode() noexcept
 {
-    if (!IsWindows10RS1OrGreater()) {
-        return false;
-    }
-    // Starting from Windows 10 19H1, ShouldAppsUseDarkMode() always return "TRUE"
-    // (actually, a random non-zero number at runtime), so we can't use it due to
-    // this unreliability. In this case, we just simply read the user's setting from
-    // the registry instead, it's not elegant but at least it works well.
-    if (IsWindows1019H1OrGreater()) {
-        ADVAPI32_API(RegOpenKeyExW);
-        ADVAPI32_API(RegQueryValueExW);
-        ADVAPI32_API(RegCloseKey);
-        if (RegOpenKeyExWFunc && RegQueryValueExWFunc && RegCloseKeyFunc) {
-            HKEY hKey = nullptr;
-            if (RegOpenKeyExWFunc(HKEY_CURRENT_USER, g_personalizeRegistryKey, 0, KEY_READ, &hKey) != ERROR_SUCCESS) {
-                PRINT_WIN32_ERROR_MESSAGE(RegOpenKeyExW, L"Failed to open the registry key to read.")
-                return false;
-            }
-            DWORD dwValue = 0;
-            DWORD dwType = REG_DWORD;
-            DWORD dwSize = sizeof(dwValue);
-            const bool success = (RegQueryValueExWFunc(hKey, L"AppsUseLightTheme", nullptr, &dwType, reinterpret_cast<LPBYTE>(&dwValue),&dwSize) == ERROR_SUCCESS);
-            if (!success) {
-                PRINT_WIN32_ERROR_MESSAGE(RegQueryValueExW, L"Failed to query the registry key value.")
-            }
-            if (RegCloseKeyFunc(hKey) != ERROR_SUCCESS) {
-                PRINT_WIN32_ERROR_MESSAGE(RegCloseKey, L"Failed to close the registry key.")
-            }
-            return (success && (dwValue == 0));
-        } else {
-            OutputDebugStringW(L"RegOpenKeyExW(), RegQueryValueExW() and RegCloseKey() are not available.");
+    ADVAPI32_API(RegOpenKeyExW);
+    ADVAPI32_API(RegQueryValueExW);
+    ADVAPI32_API(RegCloseKey);
+    if (RegOpenKeyExWFunc && RegQueryValueExWFunc && RegCloseKeyFunc) {
+        HKEY hKey = nullptr;
+        if (RegOpenKeyExWFunc(HKEY_CURRENT_USER, g_personalizeRegistryKey, 0, KEY_READ, &hKey) != ERROR_SUCCESS) {
+            PRINT_WIN32_ERROR_MESSAGE(RegOpenKeyExW, L"Failed to open the registry key to read.")
             return false;
         }
+        DWORD dwValue = 0;
+        DWORD dwType = REG_DWORD;
+        DWORD dwSize = sizeof(dwValue);
+        const bool success = (RegQueryValueExWFunc(hKey, L"AppsUseLightTheme", nullptr, &dwType, reinterpret_cast<LPBYTE>(&dwValue),&dwSize) == ERROR_SUCCESS);
+        if (!success) {
+            PRINT_WIN32_ERROR_MESSAGE(RegQueryValueExW, L"Failed to query the registry key value.")
+        }
+        if (RegCloseKeyFunc(hKey) != ERROR_SUCCESS) {
+            PRINT_WIN32_ERROR_MESSAGE(RegCloseKey, L"Failed to close the registry key.")
+        }
+        return (success && (dwValue == 0));
     } else {
-        static const auto ShouldAppsUseDarkModeFunc = reinterpret_cast<BOOL(WINAPI *)()>(SystemLibraryManager::instance().GetSymbol(L"UxTheme.dll", MAKEINTRESOURCEW(132)));
-        if (ShouldAppsUseDarkModeFunc) {
-            return (ShouldAppsUseDarkModeFunc() != FALSE);
-        } else {
-            OutputDebugStringW(L"ShouldAppsUseDarkMode() is not available.");
-            return false;
-        }
+        OutputDebugStringW(L"RegOpenKeyExW(), RegQueryValueExW() and RegCloseKey() are not available.");
+        return false;
     }
 }
 
@@ -246,9 +229,6 @@ LPCWSTR Utils::GenerateGUID() noexcept
 
 bool Utils::RefreshWindowTheme(const HWND hWnd) noexcept
 {
-    if (!IsWindows10RS1OrGreater()) {
-        return false;
-    }
     DWMAPI_API(DwmSetWindowAttribute);
     UXTHEME_API(SetWindowTheme);
     if (DwmSetWindowAttributeFunc && SetWindowThemeFunc) {

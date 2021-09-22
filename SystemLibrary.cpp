@@ -28,7 +28,7 @@
 
 [[nodiscard]] static inline LPCSTR WideToMulti(LPCWSTR str) noexcept
 {
-    if (!str) {
+    if (!str || (wcscmp(str, L"") == 0)) {
         return nullptr;
     }
     const int required = WideCharToMultiByte(CP_UTF8, 0, str, -1, nullptr, 0, nullptr, nullptr);
@@ -117,7 +117,7 @@ void SystemLibraryPrivate::FileName(LPCWSTR fileName) noexcept
         OutputDebugStringW(L"The library has been loaded already, can't change the file name now.");
         return;
     }
-    if (fileName) {
+    if (fileName && (wcscmp(fileName, L"") != 0)) {
         m_fileName = fileName;
     }
 }
@@ -138,7 +138,7 @@ bool SystemLibraryPrivate::Load() noexcept
         OutputDebugStringW(L"LoadLibraryExW() is not available.");
         return false;
     }
-    if (!m_fileName) {
+    if (!m_fileName || (wcscmp(m_fileName, L"") == 0)) {
         OutputDebugStringW(L"The file name has not been set, can't load library now.");
         return false;
     }
@@ -171,14 +171,14 @@ FARPROC SystemLibraryPrivate::GetSymbol(LPCWSTR function) noexcept
             return nullptr;
         }
     }
-    if (!function) {
+    if (!function || (wcscmp(function, L"") == 0)) {
         OutputDebugStringW(L"Can't resolve the symbol due to its name is empty.");
         return nullptr;
     }
     const auto search = m_resolvedSymbols.find(function);
     if (search == m_resolvedSymbols.cend()) {
         auto name = WideToMulti(function);
-        if (!name) {
+        if (!name/* || (strcmp(name, "") == 0)*/) {
             OutputDebugStringW(L"Can't convert a wide char array to multi-byte char array.");
             return nullptr;
         }

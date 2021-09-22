@@ -25,7 +25,7 @@ set(SOURCES
     SystemLibrary.cpp
     SystemLibraryManager.h
     SystemLibraryManager.cpp
-    WindowsVersion.hpp
+    VersionNumber.hpp
     Utils.h
     Utils.cpp
     AcrylicApplication.h

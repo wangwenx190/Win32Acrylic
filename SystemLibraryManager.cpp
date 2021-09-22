@@ -69,11 +69,11 @@ SystemLibraryManagerPrivate::~SystemLibraryManagerPrivate() noexcept
 
 FARPROC SystemLibraryManagerPrivate::GetSymbol(LPCWSTR fileName, LPCWSTR symbolName) noexcept
 {
-    if (!fileName) {
+    if (!fileName || (wcscmp(fileName, L"") == 0)) {
         OutputDebugStringW(L"Failed to resolve symbol from library due to the given file name is empty.");
         return nullptr;
     }
-    if (!symbolName) {
+    if (!symbolName || (wcscmp(symbolName, L"") == 0)) {
         OutputDebugStringW(L"Failed to resolve symbol from library due to the given symbol name is empty.");
         return nullptr;
     }

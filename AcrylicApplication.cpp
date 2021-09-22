@@ -56,7 +56,7 @@ namespace winrt::impl
 
 #include "AcrylicApplication.h"
 #include "Resource.h"
-#include "WindowsVersion.hpp"
+#include "VersionNumber.hpp"
 #include "SystemLibraryManager.h"
 #include "Utils.h"
 
@@ -756,7 +756,7 @@ static winrt::Windows::UI::Xaml::Media::AcrylicBrush g_backgroundBrush = nullptr
             wcex.style = CS_HREDRAW | CS_VREDRAW;
             wcex.lpfnWndProc = MainWindowMessageHandler;
             wcex.hInstance = Utils::GetCurrentInstance();
-            wcex.lpszClassName = (name ? name : guid);
+            wcex.lpszClassName = ((name && (wcscmp(name, L"") != 0)) ? name : guid);
             wcex.hCursor = LoadCursorWFunc(nullptr, IDC_ARROW);
             wcex.hIcon = LoadIconWFunc(Utils::GetCurrentInstance(), MAKEINTRESOURCEW(IDI_APPICON));
             wcex.hIconSm = LoadIconWFunc(Utils::GetCurrentInstance(), MAKEINTRESOURCEW(IDI_APPICON_SMALL));
@@ -820,7 +820,7 @@ static winrt::Windows::UI::Xaml::Media::AcrylicBrush g_backgroundBrush = nullptr
         g_mainWindowHandle = CreateWindowExWFunc(
             WS_EX_NOREDIRECTIONBITMAP,
             Utils::GetWindowClassName(g_mainWindowAtom),
-            (title ? title : g_defaultWindowTitle),
+            ((title && (wcscmp(title, L"") != 0)) ? title : g_defaultWindowTitle),
             (WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN | WS_CLIPSIBLINGS),
             CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
             nullptr, nullptr, Utils::GetCurrentInstance(), nullptr);

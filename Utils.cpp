@@ -93,7 +93,7 @@ LPCWSTR Utils::GetWindowClassName(const ATOM atom) noexcept
 
 LPCWSTR Utils::GetSystemErrorMessage(LPCWSTR function, const DWORD code) noexcept
 {
-    if (!function) {
+    if (!function || (wcscmp(function, L"") == 0)) {
         OutputDebugStringW(L"Failed to retrieve the system error message due to the function name is empty.");
         return nullptr;
     }
@@ -116,7 +116,7 @@ LPCWSTR Utils::GetSystemErrorMessage(LPCWSTR function, const DWORD code) noexcep
 
 LPCWSTR Utils::GetSystemErrorMessage(LPCWSTR function, const HRESULT hr) noexcept
 {
-    if (!function) {
+    if (!function || (wcscmp(function, L"") == 0)) {
         OutputDebugStringW(L"Failed to retrieve the system error message due to the function name is empty.");
         return nullptr;
     }
@@ -130,7 +130,7 @@ LPCWSTR Utils::GetSystemErrorMessage(LPCWSTR function, const HRESULT hr) noexcep
 
 LPCWSTR Utils::GetSystemErrorMessage(LPCWSTR function) noexcept
 {
-    if (!function) {
+    if (!function || (wcscmp(function, L"") == 0)) {
         OutputDebugStringW(L"Failed to retrieve the system error message due to the function name is empty.");
         return nullptr;
     } else {
@@ -143,7 +143,7 @@ void Utils::DisplayErrorDialog(LPCWSTR text) noexcept
 {
     USER32_API(MessageBoxW);
     if (MessageBoxWFunc) {
-        if (text) {
+        if (text && (wcscmp(text, L"") != 0)) {
             OutputDebugStringW(text);
             MessageBoxWFunc(nullptr, text, L"Error", MB_ICONERROR | MB_OK);
         } else {

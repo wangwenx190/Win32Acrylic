@@ -56,6 +56,303 @@ static constexpr UINT g_defaultTitleBarHeight = 31;
 static constexpr UINT g_defaultFrameBorderThickness = 1;
 static constexpr UINT g_defaultWindowDPI = USER_DEFAULT_SCREEN_DPI;
 
+[[nodiscard]] static inline SIZE GetWindowClientSize(const HWND hWnd) noexcept
+{
+    USER32_API(GetClientRect);
+    if (GetClientRectFunc) {
+        if (!hWnd) {
+            return {};
+        }
+        RECT rect = {0, 0, 0, 0};
+        if (GetClientRectFunc(hWnd, &rect) == FALSE) {
+            PRINT_WIN32_ERROR_MESSAGE(GetClientRect, L"Failed to retrieve the client area size of the window.")
+            return {};
+        } else {
+            return {rect.right, rect.bottom};
+        }
+    } else {
+        OutputDebugStringW(L"GetClientRect() is not available.");
+        return {};
+    }
+}
+
+[[nodiscard]] static inline RECT GetWindowGeometry(const HWND hWnd) noexcept
+{
+    USER32_API(GetWindowRect);
+    if (GetWindowRectFunc) {
+        if (!hWnd) {
+            return {};
+        }
+        RECT rect = {0, 0, 0, 0};
+        if (GetWindowRectFunc(hWnd, &rect) == FALSE) {
+            PRINT_WIN32_ERROR_MESSAGE(GetWindowRect, L"Failed to retrieve the geometry of the window.")
+            return {};
+        } else {
+            return rect;
+        }
+    } else {
+        OutputDebugStringW(L"GetWindowRect() is not available.");
+        return {};
+    }
+}
+
+[[nodiscard]] static inline POINT GetWindowPosition(const HWND hWnd) noexcept
+{
+    if (!hWnd) {
+        return {};
+    }
+    const RECT geometry = GetWindowGeometry(hWnd);
+    return {geometry.left, geometry.top};
+}
+
+[[nodiscard]] static inline bool IsWindowNoState(const HWND hWnd) noexcept
+{
+    USER32_API(GetWindowPlacement);
+    if (GetWindowPlacementFunc) {
+        if (!hWnd) {
+            return false;
+        }
+        WINDOWPLACEMENT wp;
+        SecureZeroMemory(&wp, sizeof(wp));
+        wp.length = sizeof(wp);
+        if (GetWindowPlacementFunc(hWnd, &wp) == FALSE) {
+            PRINT_WIN32_ERROR_MESSAGE(GetWindowPlacement, L"Failed to retrieve the current window state.")
+            return false;
+        }
+        return (wp.showCmd == SW_NORMAL);
+    } else {
+        OutputDebugStringW(L"GetWindowPlacement() is not available.");
+        return false;
+    }
+}
+
+[[nodiscard]] static inline bool IsWindowMinimized(const HWND hWnd) noexcept
+{
+    USER32_API(IsIconic);
+    if (IsIconicFunc) {
+        if (!hWnd) {
+            return false;
+        }
+        return (IsIconicFunc(hWnd) != FALSE);
+    } else {
+        OutputDebugStringW(L"IsIconic() is not available.");
+        return false;
+    }
+}
+
+[[nodiscard]] static inline bool IsWindowMaximized(const HWND hWnd) noexcept
+{
+    USER32_API(IsZoomed);
+    if (IsZoomedFunc) {
+        if (!hWnd) {
+            return false;
+        }
+        return (IsZoomedFunc(hWnd) != FALSE);
+    } else {
+        OutputDebugStringW(L"IsZoomed() is not available.");
+        return false;
+    }
+}
+
+[[nodiscard]] static inline bool IsWindowFullScreen(const HWND hWnd) noexcept
+{
+    USER32_API(GetMonitorInfoW);
+    USER32_API(GetWindowRect);
+    if (GetMonitorInfoWFunc && GetWindowRectFunc) {
+        if (!hWnd) {
+            return false;
+        }
+        const HMONITOR mon = Utils::GetWindowScreen(hWnd, false);
+        if (!mon) {
+            OutputDebugStringW(L"Failed to retrieve the primary screen.");
+            return false;
+        }
+        MONITORINFO mi;
+        SecureZeroMemory(&mi, sizeof(mi));
+        mi.cbSize = sizeof(mi);
+        if (GetMonitorInfoWFunc(mon, &mi) == FALSE) {
+            PRINT_WIN32_ERROR_MESSAGE(GetMonitorInfoW, L"Failed to retrieve the screen information.")
+            return false;
+        }
+        RECT rect = {0, 0, 0, 0};
+        if (GetWindowRectFunc(hWnd, &rect) == FALSE) {
+            PRINT_WIN32_ERROR_MESSAGE(GetWindowRect, L"Failed to retrieve the window geometry.")
+            return false;
+        }
+        const RECT windowRect = rect;
+        const RECT screenRect = mi.rcMonitor;
+        return ((windowRect.top == screenRect.top)
+                && (windowRect.bottom == screenRect.bottom)
+                && (windowRect.left == screenRect.left)
+                && (windowRect.right == screenRect.right));
+    } else {
+        OutputDebugStringW(L"GetMonitorInfoW() and GetWindowRect() are not available.");
+        return false;
+    }
+}
+
+[[nodiscard]] static inline bool IsHighContrastModeEnabled() noexcept
+{
+    USER32_API(SystemParametersInfoW);
+    if (SystemParametersInfoWFunc) {
+        HIGHCONTRASTW hc;
+        SecureZeroMemory(&hc, sizeof(hc));
+        hc.cbSize = sizeof(hc);
+        if (SystemParametersInfoWFunc(SPI_GETHIGHCONTRAST, sizeof(hc), &hc, 0) == FALSE) {
+            PRINT_WIN32_ERROR_MESSAGE(SystemParametersInfoW, L"Failed to retrieve the high contrast mode state.")
+            return false;
+        }
+        return (hc.dwFlags & HCF_HIGHCONTRASTON);
+    } else {
+        OutputDebugStringW(L"SystemParametersInfoW() is not available.");
+        return false;
+    }
+}
+
+[[nodiscard]] static inline bool ShouldAppsUseDarkMode() noexcept
+{
+    ADVAPI32_API(RegOpenKeyExW);
+    ADVAPI32_API(RegQueryValueExW);
+    ADVAPI32_API(RegCloseKey);
+    if (RegOpenKeyExWFunc && RegQueryValueExWFunc && RegCloseKeyFunc) {
+        HKEY hKey = nullptr;
+        if (RegOpenKeyExWFunc(HKEY_CURRENT_USER, g_personalizeRegistryKey, 0, KEY_READ, &hKey) != ERROR_SUCCESS) {
+            PRINT_WIN32_ERROR_MESSAGE(RegOpenKeyExW, L"Failed to open the registry key to read.")
+            return false;
+        }
+        DWORD dwValue = 0;
+        DWORD dwType = REG_DWORD;
+        DWORD dwSize = sizeof(dwValue);
+        const bool success = (RegQueryValueExWFunc(hKey, L"AppsUseLightTheme", nullptr, &dwType, reinterpret_cast<LPBYTE>(&dwValue),&dwSize) == ERROR_SUCCESS);
+        if (!success) {
+            PRINT_WIN32_ERROR_MESSAGE(RegQueryValueExW, L"Failed to query the registry key value.")
+        }
+        if (RegCloseKeyFunc(hKey) != ERROR_SUCCESS) {
+            PRINT_WIN32_ERROR_MESSAGE(RegCloseKey, L"Failed to close the registry key.")
+        }
+        return (success && (dwValue == 0));
+    } else {
+        OutputDebugStringW(L"RegOpenKeyExW(), RegQueryValueExW() and RegCloseKey() are not available.");
+        return false;
+    }
+}
+
+[[nodiscard]] static inline UINT GetWindowDPI(const HWND hWnd) noexcept
+{
+    if (!hWnd) {
+        return g_defaultWindowDPI;
+    }
+    USER32_API(GetDpiForWindow);
+    if (GetDpiForWindowFunc) {
+        return GetDpiForWindowFunc(hWnd);
+    }
+    USER32_API(GetSystemDpiForProcess);
+    if (GetSystemDpiForProcessFunc) {
+        GetSystemDpiForProcessFunc(GetCurrentProcess());
+    }
+    USER32_API(GetDpiForSystem);
+    if (GetDpiForSystemFunc) {
+        return GetDpiForSystemFunc();
+    }
+    SHCORE_API(GetDpiForMonitor);
+    if (GetDpiForMonitorFunc) {
+        const HMONITOR mon = Utils::GetWindowScreen(hWnd, true);
+        if (mon) {
+            UINT dpiX = 0, dpiY = 0;
+            const HRESULT hr = GetDpiForMonitorFunc(mon, MDT_EFFECTIVE_DPI, &dpiX, &dpiY);
+            if (SUCCEEDED(hr)) {
+                return static_cast<UINT>(std::round(static_cast<double>(dpiX + dpiY) / 2.0));
+            }
+        }
+    }
+    USER32_API(GetDC);
+    GDI32_API(GetDeviceCaps);
+    USER32_API(ReleaseDC);
+    if (GetDCFunc && GetDeviceCapsFunc && ReleaseDCFunc) {
+        const HDC hdc = GetDCFunc(nullptr);
+        if (hdc) {
+            const int dpiX = GetDeviceCapsFunc(hdc, LOGPIXELSX);
+            const int dpiY = GetDeviceCapsFunc(hdc, LOGPIXELSY);
+            ReleaseDCFunc(nullptr, hdc);
+            return static_cast<UINT>(std::round(static_cast<double>(dpiX + dpiY) / 2.0));
+        }
+    }
+    return g_defaultWindowDPI;
+}
+
+[[nodiscard]] static inline UINT GetResizeBorderThickness(const HWND hWnd, const bool x) noexcept
+{
+    USER32_API(GetSystemMetricsForDpi);
+    if (GetSystemMetricsForDpiFunc) {
+        if (!hWnd) {
+            return g_defaultResizeBorderThickness;
+        }
+        const UINT dpi = GetWindowDPI(hWnd);
+        // There is no "SM_CYPADDEDBORDER".
+        const int paddedBorderThickness = GetSystemMetricsForDpiFunc(SM_CXPADDEDBORDER, dpi);
+        const int sizeFrameThickness = GetSystemMetricsForDpiFunc((x ? SM_CXSIZEFRAME : SM_CYSIZEFRAME), dpi);
+        return static_cast<UINT>(paddedBorderThickness + sizeFrameThickness);
+    } else {
+        OutputDebugStringW(L"GetSystemMetricsForDpi() is not available.");
+        return g_defaultResizeBorderThickness;
+    }
+}
+
+[[nodiscard]] static inline UINT GetCaptionHeight(const HWND hWnd) noexcept
+{
+    USER32_API(GetSystemMetricsForDpi);
+    if (GetSystemMetricsForDpiFunc) {
+        if (!hWnd) {
+            return g_defaultCaptionHeight;
+        }
+        const UINT dpi = GetWindowDPI(hWnd);
+        return static_cast<UINT>(GetSystemMetricsForDpiFunc(SM_CYCAPTION, dpi));
+    } else {
+        OutputDebugStringW(L"GetSystemMetricsForDpi() is not available.");
+        return g_defaultCaptionHeight;
+    }
+}
+
+[[nodiscard]] static inline UINT GetTitleBarHeight(const HWND hWnd) noexcept
+{
+    if (!hWnd) {
+        return g_defaultTitleBarHeight;
+    }
+    const UINT captionHeight = GetCaptionHeight(hWnd);
+    if (IsWindowMaximized(hWnd) || IsWindowFullScreen(hWnd)) {
+        return captionHeight;
+    } else {
+        return (captionHeight + GetResizeBorderThickness(hWnd, false));
+    }
+}
+
+[[nodiscard]] static inline UINT GetFrameBorderThickness(const HWND hWnd) noexcept
+{
+    DWMAPI_API(DwmGetWindowAttribute);
+    if (DwmGetWindowAttributeFunc) {
+        if (!hWnd) {
+            return 0;
+        }
+        if (IsWindowMaximized(hWnd) || IsWindowFullScreen(hWnd)) {
+            return 0;
+        }
+        const auto dpr = (static_cast<double>(GetWindowDPI(hWnd)) / static_cast<double>(g_defaultWindowDPI));
+        UINT value = 0;
+        const HRESULT hr = DwmGetWindowAttributeFunc(hWnd, g_DWMWA_VISIBLE_FRAME_BORDER_THICKNESS, &value, sizeof(value));
+        if (SUCCEEDED(hr)) {
+            return static_cast<UINT>(std::round(static_cast<double>(value) * dpr));
+        } else {
+            // We just eat this error because this enum value was introduced in a very
+            // late Windows 10 version, so querying it's value will always result in
+            // a "parameter error" (code: 87) on systems before that value was introduced.
+            return static_cast<UINT>(std::round(static_cast<double>(g_defaultFrameBorderThickness) * dpr));
+        }
+    } else {
+        OutputDebugStringW(L"DwmGetWindowAttribute() is not available.");
+        return g_defaultFrameBorderThickness;
+    }
+}
+
 HMONITOR Utils::GetWindowScreen(const HWND hWnd, const bool current) noexcept
 {
     USER32_API(MonitorFromWindow);
@@ -75,10 +372,42 @@ HMONITOR Utils::GetWindowScreen(const HWND hWnd, const bool current) noexcept
     }
 }
 
-HINSTANCE Utils::GetCurrentInstance() noexcept
+HINSTANCE Utils::GetCurrentModuleInstance() noexcept
 {
     static const auto result = HINST_THISCOMPONENT;
     return result;
+}
+
+HINSTANCE Utils::GetWindowInstance(const HWND hWnd) noexcept
+{
+#if (defined(WIN64) || defined(_WIN64))
+    USER32_API(GetWindowLongPtrW);
+    if (GetWindowLongPtrWFunc)
+#else
+    USER32_API(GetWindowLongW);
+    if (GetWindowLongWFunc)
+#endif
+    {
+        if (!hWnd) {
+            return nullptr;
+        }
+        const LONG_PTR result =
+#if (defined(WIN64) || defined(_WIN64))
+            GetWindowLongPtrWFunc
+#else
+            GetWindowLongWFunc
+#endif
+            (hWnd, GWLP_HINSTANCE);
+        if (result == 0) {
+            PRINT_WIN32_ERROR_MESSAGE(GetWindowLongPtrW, L"Failed to retrieve the window's HINSTANCE.")
+            return nullptr;
+        } else {
+            return reinterpret_cast<HINSTANCE>(result);
+        }
+    } else {
+        OutputDebugStringW(L"GetWindowLongPtrW() is not available.");
+        return nullptr;
+    }
 }
 
 LPCWSTR Utils::GetWindowClassName(const ATOM atom) noexcept
@@ -88,6 +417,38 @@ LPCWSTR Utils::GetWindowClassName(const ATOM atom) noexcept
         return nullptr;
     } else {
         return reinterpret_cast<LPCWSTR>(static_cast<WORD>(MAKELONG(atom, 0)));
+    }
+}
+
+LPCWSTR Utils::GetWindowClassName(const HWND hWnd) noexcept
+{
+#if (defined(WIN64) || defined(_WIN64))
+    USER32_API(GetClassLongPtrW);
+    if (GetClassLongPtrWFunc)
+#else
+    USER32_API(GetClassLongW);
+    if (GetClassLongWFunc)
+#endif
+    {
+        if (!hWnd) {
+            return nullptr;
+        }
+        const ULONG_PTR result =
+#if (defined(WIN64) || defined(_WIN64))
+            GetClassLongPtrWFunc
+#else
+            GetClassLongWFunc
+#endif
+            (hWnd, GCW_ATOM);
+        if (result == 0) {
+            PRINT_WIN32_ERROR_MESSAGE(GetClassLongPtrW, L"Failed to retrieve the class ATOM of the window.")
+            return nullptr;
+        } else {
+            return GetWindowClassName(static_cast<ATOM>(result));
+        }
+    } else {
+        OutputDebugStringW(L"GetClassLongPtrW() is not available.");
+        return nullptr;
     }
 }
 
@@ -151,52 +512,6 @@ void Utils::DisplayErrorDialog(LPCWSTR text) noexcept
         }
     } else {
         OutputDebugStringW(L"MessageBoxW() is not available.");
-    }
-}
-
-bool Utils::IsHighContrastModeEnabled() noexcept
-{
-    USER32_API(SystemParametersInfoW);
-    if (SystemParametersInfoWFunc) {
-        HIGHCONTRASTW hc;
-        SecureZeroMemory(&hc, sizeof(hc));
-        hc.cbSize = sizeof(hc);
-        if (SystemParametersInfoWFunc(SPI_GETHIGHCONTRAST, sizeof(hc), &hc, 0) == FALSE) {
-            PRINT_WIN32_ERROR_MESSAGE(SystemParametersInfoW, L"Failed to retrieve the high contrast mode state.")
-            return false;
-        }
-        return (hc.dwFlags & HCF_HIGHCONTRASTON);
-    } else {
-        OutputDebugStringW(L"SystemParametersInfoW() is not available.");
-        return false;
-    }
-}
-
-bool Utils::ShouldAppsUseDarkMode() noexcept
-{
-    ADVAPI32_API(RegOpenKeyExW);
-    ADVAPI32_API(RegQueryValueExW);
-    ADVAPI32_API(RegCloseKey);
-    if (RegOpenKeyExWFunc && RegQueryValueExWFunc && RegCloseKeyFunc) {
-        HKEY hKey = nullptr;
-        if (RegOpenKeyExWFunc(HKEY_CURRENT_USER, g_personalizeRegistryKey, 0, KEY_READ, &hKey) != ERROR_SUCCESS) {
-            PRINT_WIN32_ERROR_MESSAGE(RegOpenKeyExW, L"Failed to open the registry key to read.")
-            return false;
-        }
-        DWORD dwValue = 0;
-        DWORD dwType = REG_DWORD;
-        DWORD dwSize = sizeof(dwValue);
-        const bool success = (RegQueryValueExWFunc(hKey, L"AppsUseLightTheme", nullptr, &dwType, reinterpret_cast<LPBYTE>(&dwValue),&dwSize) == ERROR_SUCCESS);
-        if (!success) {
-            PRINT_WIN32_ERROR_MESSAGE(RegQueryValueExW, L"Failed to query the registry key value.")
-        }
-        if (RegCloseKeyFunc(hKey) != ERROR_SUCCESS) {
-            PRINT_WIN32_ERROR_MESSAGE(RegCloseKey, L"Failed to close the registry key.")
-        }
-        return (success && (dwValue == 0));
-    } else {
-        OutputDebugStringW(L"RegOpenKeyExW(), RegQueryValueExW() and RegCloseKey() are not available.");
-        return false;
     }
 }
 
@@ -281,7 +596,7 @@ bool Utils::CloseWindow(const HWND hWnd, const ATOM atom) noexcept
             PRINT_WIN32_ERROR_MESSAGE(DestroyWindow, L"Failed to destroy the window.")
             return false;
         }
-        if (UnregisterClassWFunc(GetWindowClassName(atom), GetCurrentInstance()) == FALSE) {
+        if (UnregisterClassWFunc(GetWindowClassName(atom), GetWindowInstance(hWnd)) == FALSE) {
             PRINT_WIN32_ERROR_MESSAGE(UnregisterClassW, L"Failed to unregister the window class.")
             return false;
         }
@@ -289,208 +604,6 @@ bool Utils::CloseWindow(const HWND hWnd, const ATOM atom) noexcept
     } else {
         OutputDebugStringW(L"DestroyWindow() and UnregisterClassW() are not available.");
         return false;
-    }
-}
-
-bool Utils::IsWindowMinimized(const HWND hWnd) noexcept
-{
-    USER32_API(IsIconic);
-    if (IsIconicFunc) {
-        if (!hWnd) {
-            return false;
-        }
-        return (IsIconicFunc(hWnd) != FALSE);
-    } else {
-        OutputDebugStringW(L"IsIconic() is not available.");
-        return false;
-    }
-}
-
-bool Utils::IsWindowMaximized(const HWND hWnd) noexcept
-{
-    USER32_API(IsZoomed);
-    if (IsZoomedFunc) {
-        if (!hWnd) {
-            return false;
-        }
-        return (IsZoomedFunc(hWnd) != FALSE);
-    } else {
-        OutputDebugStringW(L"IsZoomed() is not available.");
-        return false;
-    }
-}
-
-bool Utils::IsWindowFullScreen(const HWND hWnd) noexcept
-{
-    USER32_API(GetMonitorInfoW);
-    USER32_API(GetWindowRect);
-    if (GetMonitorInfoWFunc && GetWindowRectFunc) {
-        if (!hWnd) {
-            return false;
-        }
-        const HMONITOR mon = GetWindowScreen(hWnd, false);
-        if (!mon) {
-            OutputDebugStringW(L"Failed to retrieve the primary screen.");
-            return false;
-        }
-        MONITORINFO mi;
-        SecureZeroMemory(&mi, sizeof(mi));
-        mi.cbSize = sizeof(mi);
-        if (GetMonitorInfoWFunc(mon, &mi) == FALSE) {
-            PRINT_WIN32_ERROR_MESSAGE(GetMonitorInfoW, L"Failed to retrieve the screen information.")
-            return false;
-        }
-        RECT rect = {0, 0, 0, 0};
-        if (GetWindowRectFunc(hWnd, &rect) == FALSE) {
-            PRINT_WIN32_ERROR_MESSAGE(GetWindowRect, L"Failed to retrieve the window geometry.")
-            return false;
-        }
-        const RECT windowRect = rect;
-        const RECT screenRect = mi.rcMonitor;
-        return ((windowRect.top == screenRect.top)
-                && (windowRect.bottom == screenRect.bottom)
-                && (windowRect.left == screenRect.left)
-                && (windowRect.right == screenRect.right));
-    } else {
-        OutputDebugStringW(L"GetMonitorInfoW() and GetWindowRect() are not available.");
-        return false;
-    }
-}
-
-bool Utils::IsWindowNoState(const HWND hWnd) noexcept
-{
-    USER32_API(GetWindowPlacement);
-    if (GetWindowPlacementFunc) {
-        if (!hWnd) {
-            return false;
-        }
-        WINDOWPLACEMENT wp;
-        SecureZeroMemory(&wp, sizeof(wp));
-        wp.length = sizeof(wp);
-        if (GetWindowPlacementFunc(hWnd, &wp) == FALSE) {
-            PRINT_WIN32_ERROR_MESSAGE(GetWindowPlacement, L"Failed to retrieve the current window state.")
-            return false;
-        }
-        return (wp.showCmd == SW_NORMAL);
-    } else {
-        OutputDebugStringW(L"GetWindowPlacement() is not available.");
-        return false;
-    }
-}
-
-UINT Utils::GetWindowDPI(const HWND hWnd) noexcept
-{
-    if (!hWnd) {
-        return g_defaultWindowDPI;
-    }
-    USER32_API(GetDpiForWindow);
-    if (GetDpiForWindowFunc) {
-        return GetDpiForWindowFunc(hWnd);
-    }
-    USER32_API(GetSystemDpiForProcess);
-    if (GetSystemDpiForProcessFunc) {
-        GetSystemDpiForProcessFunc(GetCurrentProcess());
-    }
-    USER32_API(GetDpiForSystem);
-    if (GetDpiForSystemFunc) {
-        return GetDpiForSystemFunc();
-    }
-    SHCORE_API(GetDpiForMonitor);
-    if (GetDpiForMonitorFunc) {
-        const HMONITOR mon = GetWindowScreen(hWnd, true);
-        if (mon) {
-            UINT dpiX = 0, dpiY = 0;
-            const HRESULT hr = GetDpiForMonitorFunc(mon, MDT_EFFECTIVE_DPI, &dpiX, &dpiY);
-            if (SUCCEEDED(hr)) {
-                return static_cast<UINT>(std::round(static_cast<double>(dpiX + dpiY) / 2.0));
-            }
-        }
-    }
-    USER32_API(GetDC);
-    GDI32_API(GetDeviceCaps);
-    USER32_API(ReleaseDC);
-    if (GetDCFunc && GetDeviceCapsFunc && ReleaseDCFunc) {
-        const HDC hdc = GetDCFunc(nullptr);
-        if (hdc) {
-            const int dpiX = GetDeviceCapsFunc(hdc, LOGPIXELSX);
-            const int dpiY = GetDeviceCapsFunc(hdc, LOGPIXELSY);
-            ReleaseDCFunc(nullptr, hdc);
-            return static_cast<UINT>(std::round(static_cast<double>(dpiX + dpiY) / 2.0));
-        }
-    }
-    return g_defaultWindowDPI;
-}
-
-UINT Utils::GetResizeBorderThickness(const HWND hWnd, const bool x) noexcept
-{
-    USER32_API(GetSystemMetricsForDpi);
-    if (GetSystemMetricsForDpiFunc) {
-        if (!hWnd) {
-            return g_defaultResizeBorderThickness;
-        }
-        const UINT dpi = GetWindowDPI(hWnd);
-        // There is no "SM_CYPADDEDBORDER".
-        const int paddedBorderThickness = GetSystemMetricsForDpiFunc(SM_CXPADDEDBORDER, dpi);
-        const int sizeFrameThickness = GetSystemMetricsForDpiFunc((x ? SM_CXSIZEFRAME : SM_CYSIZEFRAME), dpi);
-        return static_cast<UINT>(paddedBorderThickness + sizeFrameThickness);
-    } else {
-        OutputDebugStringW(L"GetSystemMetricsForDpi() is not available.");
-        return g_defaultResizeBorderThickness;
-    }
-}
-
-UINT Utils::GetCaptionHeight(const HWND hWnd) noexcept
-{
-    USER32_API(GetSystemMetricsForDpi);
-    if (GetSystemMetricsForDpiFunc) {
-        if (!hWnd) {
-            return g_defaultCaptionHeight;
-        }
-        const UINT dpi = GetWindowDPI(hWnd);
-        return static_cast<UINT>(GetSystemMetricsForDpiFunc(SM_CYCAPTION, dpi));
-    } else {
-        OutputDebugStringW(L"GetSystemMetricsForDpi() is not available.");
-        return g_defaultCaptionHeight;
-    }
-}
-
-UINT Utils::GetTitleBarHeight(const HWND hWnd) noexcept
-{
-    if (!hWnd) {
-        return g_defaultTitleBarHeight;
-    }
-    const UINT captionHeight = GetCaptionHeight(hWnd);
-    if (IsWindowMaximized(hWnd) || IsWindowFullScreen(hWnd)) {
-        return captionHeight;
-    } else {
-        return (captionHeight + GetResizeBorderThickness(hWnd, false));
-    }
-}
-
-UINT Utils::GetFrameBorderThickness(const HWND hWnd) noexcept
-{
-    DWMAPI_API(DwmGetWindowAttribute);
-    if (DwmGetWindowAttributeFunc) {
-        if (!hWnd) {
-            return 0;
-        }
-        if (IsWindowMaximized(hWnd) || IsWindowFullScreen(hWnd)) {
-            return 0;
-        }
-        const auto dpr = (static_cast<double>(GetWindowDPI(hWnd)) / static_cast<double>(g_defaultWindowDPI));
-        UINT value = 0;
-        const HRESULT hr = DwmGetWindowAttributeFunc(hWnd, g_DWMWA_VISIBLE_FRAME_BORDER_THICKNESS, &value, sizeof(value));
-        if (SUCCEEDED(hr)) {
-            return static_cast<UINT>(std::round(static_cast<double>(value) * dpr));
-        } else {
-            // We just eat this error because this enum value was introduced in a very
-            // late Windows 10 version, so querying it's value will always result in
-            // a "parameter error" (code: 87) on systems before that value was introduced.
-            return static_cast<UINT>(std::round(static_cast<double>(g_defaultFrameBorderThickness) * dpr));
-        }
-    } else {
-        OutputDebugStringW(L"DwmGetWindowAttribute() is not available.");
-        return g_defaultFrameBorderThickness;
     }
 }
 
@@ -562,46 +675,6 @@ bool Utils::OpenSystemMenu(const HWND hWnd, const POINT pos) noexcept
     }
 }
 
-bool Utils::EnableHiDPIScaling() noexcept
-{
-    USER32_API(SetProcessDpiAwarenessContext);
-    SHCORE_API(SetProcessDpiAwareness);
-    USER32_API(SetProcessDPIAware);
-    if (SetProcessDpiAwarenessContextFunc && SetProcessDpiAwarenessFunc && SetProcessDPIAwareFunc) {
-        if (SetProcessDpiAwarenessContextFunc(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2) != FALSE) {
-            return true;
-        }
-        if (SetProcessDpiAwarenessContextFunc(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE) != FALSE) {
-            return true;
-        }
-        if (SetProcessDpiAwarenessContextFunc(DPI_AWARENESS_CONTEXT_SYSTEM_AWARE) != FALSE) {
-            return true;
-        }
-        if (SetProcessDpiAwarenessContextFunc(DPI_AWARENESS_CONTEXT_UNAWARE_GDISCALED) != FALSE) {
-            return true;
-        }
-        HRESULT hr = SetProcessDpiAwarenessFunc(static_cast<PROCESS_DPI_AWARENESS>(g_PROCESS_PER_MONITOR_DPI_AWARE_V2));
-        if (SUCCEEDED(hr)) {
-            return true;
-        }
-        hr = SetProcessDpiAwarenessFunc(PROCESS_PER_MONITOR_DPI_AWARE);
-        if (SUCCEEDED(hr)) {
-            return true;
-        }
-        hr = SetProcessDpiAwarenessFunc(PROCESS_SYSTEM_DPI_AWARE);
-        if (SUCCEEDED(hr)) {
-            return true;
-        }
-        if (SetProcessDPIAwareFunc() != FALSE) {
-            return true;
-        }
-        return false;
-    } else {
-        OutputDebugStringW(L"SetProcessDpiAwarenessContext(), SetProcessDpiAwareness() and SetProcessDPIAware() are not available.");
-        return false;
-    }
-}
-
 bool Utils::UpdateFrameMargins(const HWND hWnd) noexcept
 {
     DWMAPI_API(DwmExtendFrameIntoClientArea);
@@ -622,4 +695,195 @@ bool Utils::UpdateFrameMargins(const HWND hWnd) noexcept
         OutputDebugStringW(L"DwmExtendFrameIntoClientArea() is not available.");
         return false;
     }
+}
+
+bool Utils::IsWindowsVersionOrGreater(const VersionNumber &version) noexcept
+{
+    OSVERSIONINFOEXW osvi;
+    SecureZeroMemory(&osvi, sizeof(osvi));
+    osvi.dwOSVersionInfoSize = sizeof(osvi);
+    osvi.dwMajorVersion = version.Major();
+    osvi.dwMinorVersion = version.Minor();
+    osvi.dwBuildNumber = version.Patch();
+    const BYTE op = VER_GREATER_EQUAL;
+    DWORDLONG dwlConditionMask = 0;
+    VER_SET_CONDITION(dwlConditionMask, VER_MAJORVERSION, op);
+    VER_SET_CONDITION(dwlConditionMask, VER_MINORVERSION, op);
+    VER_SET_CONDITION(dwlConditionMask, VER_BUILDNUMBER, op);
+    return (VerifyVersionInfoW(&osvi, VER_MAJORVERSION | VER_MINORVERSION | VER_BUILDNUMBER, dwlConditionMask) != FALSE);
+}
+
+WindowTheme Utils::GetWindowTheme(const HWND hWnd) noexcept
+{
+
+}
+
+bool Utils::SetWindowTheme(const HWND hWnd, const WindowTheme theme) noexcept
+{
+
+}
+
+WindowState Utils::GetWindowState(const HWND hWnd) noexcept
+{
+    if (!hWnd) {
+        return WindowState::Normal;
+    }
+    if (IsWindowMinimized(hWnd)) {
+        return WindowState::Minimized;
+    } else if (IsWindowNoState(hWnd)) {
+        return WindowState::Normal;
+    } else if (IsWindowMaximized(hWnd)) {
+        return WindowState::Maximized;
+    } else if (IsWindowFullScreen(hWnd)) {
+        return WindowState::FullScreen;
+    } else {
+        OutputDebugStringW(L"Failed to retrieve the window state.");
+        return WindowState::Normal;
+    }
+}
+
+bool Utils::SetWindowState(const HWND hWnd, const WindowState state) noexcept
+{
+    USER32_API(ShowWindow);
+    if (ShowWindowFunc) {
+        if (!hWnd) {
+            return false;
+        }
+        int nCmdShow = SW_SHOW;
+        switch (state) {
+        case WindowState::Minimized: {
+            nCmdShow = SW_MINIMIZE;
+        } break;
+        case WindowState::Normal: {
+            nCmdShow = SW_RESTORE;
+        } break;
+        case WindowState::Maximized: {
+            nCmdShow = SW_MAXIMIZE;
+        } break;
+        case WindowState::FullScreen: {
+            // ### TODO
+        } break;
+        }
+        ShowWindowFunc(hWnd, nCmdShow);
+    } else {
+        OutputDebugStringW(L"ShowWindow() is not available.");
+        return false;
+    }
+}
+
+DPIAwareness Utils::GetProcessDPIAwareness() noexcept
+{
+
+}
+
+bool Utils::SetProcessDPIAwareness(const DPIAwareness dpiAwareness) noexcept
+{
+    DPI_AWARENESS_CONTEXT dac = DPI_AWARENESS_CONTEXT_UNAWARE;
+    PROCESS_DPI_AWARENESS pda = PROCESS_DPI_UNAWARE;
+    switch (dpiAwareness) {
+    case DPIAwareness::PerMonitorV2: {
+        dac = DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2;
+        pda = static_cast<PROCESS_DPI_AWARENESS>(g_PROCESS_PER_MONITOR_DPI_AWARE_V2);
+    } break;
+    case DPIAwareness::PerMonitor: {
+        dac = DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE;
+        pda = PROCESS_PER_MONITOR_DPI_AWARE;
+    } break;
+    case DPIAwareness::System: {
+        dac = DPI_AWARENESS_CONTEXT_SYSTEM_AWARE;
+        pda = PROCESS_SYSTEM_DPI_AWARE;
+    } break;
+    case DPIAwareness::GdiScaled: {
+        dac = DPI_AWARENESS_CONTEXT_UNAWARE_GDISCALED;
+        pda = PROCESS_DPI_UNAWARE;
+    } break;
+    case DPIAwareness::Unaware: {
+        dac = DPI_AWARENESS_CONTEXT_UNAWARE;
+        pda = PROCESS_DPI_UNAWARE;
+    } break;
+    }
+    USER32_API(SetProcessDpiAwarenessContext);
+    if (SetProcessDpiAwarenessContextFunc) {
+        if (SetProcessDpiAwarenessContextFunc(dac) == FALSE) {
+            PRINT_WIN32_ERROR_MESSAGE(SetProcessDpiAwarenessContext, L"Failed to set DPI awareness for the process.")
+            return false;
+        } else {
+            return true;
+        }
+    } else {
+        OutputDebugStringW(L"SetProcessDpiAwarenessContext() is not available.");
+        SHCORE_API(SetProcessDpiAwareness);
+        if (SetProcessDpiAwarenessFunc) {
+            const HRESULT hr = SetProcessDpiAwarenessFunc(pda);
+            if (FAILED(hr)) {
+                PRINT_HR_ERROR_MESSAGE(SetProcessDpiAwareness, hr, L"Failed to set DPI awareness for the process.")
+                return false;
+            } else {
+                return true;
+            }
+        } else {
+            OutputDebugStringW(L"SetProcessDpiAwareness() is not available.");
+            USER32_API(SetProcessDPIAware);
+            if (SetProcessDPIAwareFunc) {
+                if (SetProcessDPIAwareFunc() == FALSE) {
+                    PRINT_WIN32_ERROR_MESSAGE(SetProcessDPIAware, L"Failed to set DPI awareness for the process.")
+                    return false;
+                } else {
+                    return true;
+                }
+            } else {
+                OutputDebugStringW(L"SetProcessDPIAware() is not available.");
+                return false;
+            }
+        }
+    }
+    return false;
+}
+
+UINT Utils::GetWindowMetric(const HWND hWnd, const WindowMetric metric) noexcept
+{
+    if (!hWnd) {
+        return 0;
+    }
+    switch (metric) {
+    case WindowMetric::X: {
+        return GetWindowPosition(hWnd).x;
+    } break;
+    case WindowMetric::Y: {
+        return GetWindowPosition(hWnd).y;
+    } break;
+    case WindowMetric::Width: {
+        return GetWindowClientSize(hWnd).cx;
+    } break;
+    case WindowMetric::Height: {
+        return GetWindowClientSize(hWnd).cy;
+    } break;
+    case WindowMetric::FrameWidth: {
+        const RECT geometry = GetWindowGeometry(hWnd);
+        return std::abs(geometry.right - geometry.left);
+    } break;
+    case WindowMetric::FrameHeight: {
+        const RECT geometry = GetWindowGeometry(hWnd);
+        return std::abs(geometry.bottom - geometry.top);
+    } break;
+    case WindowMetric::DotsPerInch: {
+        return GetWindowDPI(hWnd);
+    } break;
+    case WindowMetric::ResizeBorderThicknessX: {
+        return GetResizeBorderThickness(hWnd, true);
+    } break;
+    case WindowMetric::ResizeBorderThicknessY: {
+        return GetResizeBorderThickness(hWnd, false);
+    } break;
+    case WindowMetric::CaptionHeight: {
+        return GetCaptionHeight(hWnd);
+    } break;
+    case WindowMetric::TitleBarHeight: {
+        return GetTitleBarHeight(hWnd);
+    } break;
+    case WindowMetric::FrameBorderThickness: {
+        return GetFrameBorderThickness(hWnd);
+    } break;
+    }
+    return 0;
 }

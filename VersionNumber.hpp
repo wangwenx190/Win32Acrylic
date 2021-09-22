@@ -24,8 +24,6 @@
 
 #pragma once
 
-#include <SDKDDKVer.h>
-#include <Windows.h>
 #include <iostream>
 
 class VersionNumber
@@ -71,7 +69,7 @@ public:
         return m_tweak;
     }
 
-    [[nodiscard]] inline constexpr static VersionNumber FromString(LPCWSTR str) noexcept {
+    [[nodiscard]] inline constexpr static VersionNumber FromString(const wchar_t *str) noexcept {
         if (!str || (wcscmp(str, L"") == 0)) {
             return VersionNumber();
         } else {
@@ -84,9 +82,9 @@ public:
         }
     }
 
-    [[nodiscard]] inline LPCWSTR ToString() const noexcept {
-        const auto buf = new wchar_t[MAX_PATH];
-        SecureZeroMemory(buf, sizeof(buf));
+    [[nodiscard]] inline const wchar_t *ToString() const noexcept {
+        const auto buf = new wchar_t[80];
+        memset(buf, 0, sizeof(*buf));
         swprintf(buf, L"%d.%d.%d.%d", m_major, m_minor, m_patch, m_tweak);
         return buf;
     }
@@ -143,50 +141,3 @@ private:
     int m_patch = 0;
     int m_tweak = 0;
 };
-
-[[maybe_unused]] constexpr VersionNumber Windows_2000 = VersionNumber(5, 0, 2195);
-[[maybe_unused]] constexpr VersionNumber Windows_XP = VersionNumber(5, 1, 2600);
-[[maybe_unused]] constexpr VersionNumber Windows_XP_x64 = VersionNumber(5, 2, 3790);
-[[maybe_unused]] constexpr VersionNumber Windows_Vista = VersionNumber(6, 0, 6000);
-[[maybe_unused]] constexpr VersionNumber Windows_Vista_ServicePack1 = VersionNumber(6, 0, 6001);
-[[maybe_unused]] constexpr VersionNumber Windows_Vista_ServicePack2 = VersionNumber(6, 0, 6002);
-[[maybe_unused]] constexpr VersionNumber Windows_7 = VersionNumber(6, 1, 7600);
-[[maybe_unused]] constexpr VersionNumber Windows_7_ServicePack1 = VersionNumber(6, 1, 7601);
-[[maybe_unused]] constexpr VersionNumber Windows_8 = VersionNumber(6, 2, 9200);
-[[maybe_unused]] constexpr VersionNumber Windows_8_1 = VersionNumber(6, 3, 9200);
-[[maybe_unused]] constexpr VersionNumber Windows_8_1_Update1 = VersionNumber(6, 3, 9600);
-[[maybe_unused]] constexpr VersionNumber Windows10_ThresHold1 = VersionNumber(10, 0, 10240);
-[[maybe_unused]] constexpr VersionNumber Windows10_ThresHold2 = VersionNumber(10, 0, 10586);
-[[maybe_unused]] constexpr VersionNumber Windows10_RedStone1 = VersionNumber(10, 0, 14393);
-[[maybe_unused]] constexpr VersionNumber Windows10_RedStone2 = VersionNumber(10, 0, 15063);
-[[maybe_unused]] constexpr VersionNumber Windows10_RedStone3 = VersionNumber(10, 0, 16299);
-[[maybe_unused]] constexpr VersionNumber Windows10_RedStone4 = VersionNumber(10, 0, 17134);
-[[maybe_unused]] constexpr VersionNumber Windows10_RedStone5 = VersionNumber(10, 0, 17763);
-[[maybe_unused]] constexpr VersionNumber Windows10_19Half1 = VersionNumber(10, 0, 18362);
-[[maybe_unused]] constexpr VersionNumber Windows10_19Half2 = VersionNumber(10, 0, 18363);
-[[maybe_unused]] constexpr VersionNumber Windows10_20Half1 = VersionNumber(10, 0, 19041);
-[[maybe_unused]] constexpr VersionNumber Windows10_20Half2 = VersionNumber(10, 0, 19042);
-[[maybe_unused]] constexpr VersionNumber Windows10_21Half1 = VersionNumber(10, 0, 19043);
-
-[[nodiscard]] inline bool IsWindowsVersionOrGreater(const VersionNumber &version) noexcept
-{
-    OSVERSIONINFOEXW osvi;
-    SecureZeroMemory(&osvi, sizeof(osvi));
-    osvi.dwOSVersionInfoSize = sizeof(osvi);
-    osvi.dwMajorVersion = version.Major();
-    osvi.dwMinorVersion = version.Minor();
-    osvi.dwBuildNumber = version.Patch();
-    const BYTE op = VER_GREATER_EQUAL;
-    DWORDLONG dwlConditionMask = 0;
-    VER_SET_CONDITION(dwlConditionMask, VER_MAJORVERSION, op);
-    VER_SET_CONDITION(dwlConditionMask, VER_MINORVERSION, op);
-    VER_SET_CONDITION(dwlConditionMask, VER_BUILDNUMBER, op);
-    return (VerifyVersionInfoW(&osvi, VER_MAJORVERSION | VER_MINORVERSION | VER_BUILDNUMBER, dwlConditionMask) != FALSE);
-}
-
-[[nodiscard]] inline bool IsWindows1019H1OrGreater() noexcept
-{
-    // Windows 10 Version 1903 (May 2019 Update)
-    static const bool result = IsWindowsVersionOrGreater(Windows10_19Half1);
-    return result;
-}

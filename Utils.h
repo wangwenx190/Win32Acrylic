@@ -76,7 +76,7 @@ enum class DPIAwareness : int
     PerMonitorV2
 };
 
-enum class WindowMetric : int
+enum class WindowMetrics : int
 {
     X = 0,
     Y,
@@ -110,13 +110,13 @@ namespace Utils
     [[nodiscard]] bool OpenSystemMenu(const HWND hWnd, const POINT pos) noexcept;
     [[nodiscard]] bool UpdateFrameMargins(const HWND hWnd) noexcept;
     [[nodiscard]] bool IsWindowsVersionOrGreater(const VersionNumber &version) noexcept;
-    [[nodiscard]] WindowTheme GetWindowTheme(const HWND hWnd) noexcept;
+    [[nodiscard]] WindowTheme GetSystemTheme() noexcept;
     [[nodiscard]] bool SetWindowTheme(const HWND hWnd, const WindowTheme theme) noexcept;
     [[nodiscard]] WindowState GetWindowState(const HWND hWnd) noexcept;
     [[nodiscard]] bool SetWindowState(const HWND hWnd, const WindowState state) noexcept;
     [[nodiscard]] DPIAwareness GetProcessDPIAwareness() noexcept;
     [[nodiscard]] bool SetProcessDPIAwareness(const DPIAwareness dpiAwareness) noexcept;
-    [[nodiscard]] UINT GetWindowMetric(const HWND hWnd, const WindowMetric metric) noexcept;
+    [[nodiscard]] UINT GetWindowMetrics(const HWND hWnd, const WindowMetrics metrics) noexcept;
 } // namespace Utils
 
 [[nodiscard]] inline bool IsWindows1019H1OrGreater() noexcept

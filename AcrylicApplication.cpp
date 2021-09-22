@@ -56,7 +56,6 @@ namespace winrt::impl
 
 #include "AcrylicApplication.h"
 #include "Resource.h"
-#include "VersionNumber.hpp"
 #include "SystemLibraryManager.h"
 #include "Utils.h"
 
@@ -111,26 +110,41 @@ static winrt::Windows::UI::Xaml::Hosting::DesktopWindowXamlSource g_source = nul
 static winrt::Windows::UI::Xaml::Controls::Grid g_rootGrid = nullptr;
 static winrt::Windows::UI::Xaml::Media::AcrylicBrush g_backgroundBrush = nullptr;
 
-[[nodiscard]] static inline bool RefreshBackgroundBrush() noexcept
+static inline void RefreshBackgroundBrush() noexcept
 {
     if (g_backgroundBrush == nullptr) {
         OutputDebugStringW(L"Failed to refresh the background brush due to the brush is null.");
-        return false;
+        return;
     }
-    if (Utils::IsHighContrastModeEnabled()) {
-        // ### TO BE IMPLEMENTED
-    } else if (Utils::ShouldAppsUseDarkMode()) {
-        g_backgroundBrush.TintColor(Constants::Dark::TintColor);
-        g_backgroundBrush.TintOpacity(Constants::Dark::TintOpacity);
-        g_backgroundBrush.TintLuminosityOpacity(Constants::Dark::LuminosityOpacity);
-        g_backgroundBrush.FallbackColor(Constants::Dark::FallbackColor);
-    } else {
+    const WindowTheme systemTheme = Utils::GetSystemTheme();
+    switch (systemTheme) {
+    case WindowTheme::Light: {
         g_backgroundBrush.TintColor(Constants::Light::TintColor);
         g_backgroundBrush.TintOpacity(Constants::Light::TintOpacity);
         g_backgroundBrush.TintLuminosityOpacity(Constants::Light::LuminosityOpacity);
         g_backgroundBrush.FallbackColor(Constants::Light::FallbackColor);
+    } break;
+    case WindowTheme::Dark: {
+        g_backgroundBrush.TintColor(Constants::Dark::TintColor);
+        g_backgroundBrush.TintOpacity(Constants::Dark::TintOpacity);
+        g_backgroundBrush.TintLuminosityOpacity(Constants::Dark::LuminosityOpacity);
+        g_backgroundBrush.FallbackColor(Constants::Dark::FallbackColor);
+    } break;
+    case WindowTheme::HighContrast: {
+        // ### TODO
+    } break;
     }
-    return true;
+}
+
+static inline void RefreshWindowTheme(const HWND hWnd) noexcept
+{
+    if (!hWnd) {
+        OutputDebugStringW(L"Failed to refresh the window theme due to the window handle is null.");
+        return;
+    }
+    const WindowTheme systemTheme = Utils::GetSystemTheme();
+    const bool result = Utils::SetWindowTheme(hWnd, systemTheme);
+    UNREFERENCED_PARAMETER(result);
 }
 
 [[nodiscard]] static inline bool SyncXAMLIslandPosition(const UINT width, const UINT height) noexcept
@@ -149,7 +163,7 @@ static winrt::Windows::UI::Xaml::Media::AcrylicBrush g_backgroundBrush = nullptr
             OutputDebugStringW(L"Failed to sync the geometry of the XAML Island window due to the main window width and height are invalid.");
             return false;
         }
-        const UINT borderThickness = Utils::GetFrameBorderThickness(g_mainWindowHandle);
+        const UINT borderThickness = Utils::GetWindowMetrics(g_mainWindowHandle, WindowMetrics::FrameBorderThickness);
         if (SetWindowPosFunc(g_xamlIslandWindowHandle, HWND_BOTTOM, 0, borderThickness, width, height, SWP_SHOWWINDOW | SWP_NOOWNERZORDER) == FALSE) {
             PRINT_WIN32_ERROR_MESSAGE(SetWindowPos, L"Failed to sync the geometry of the XAML Island window.")
             return false;
@@ -163,26 +177,17 @@ static winrt::Windows::UI::Xaml::Media::AcrylicBrush g_backgroundBrush = nullptr
 
 [[nodiscard]] static inline bool SyncXAMLIslandPosition() noexcept
 {
-    USER32_API(GetClientRect);
-    if (GetClientRectFunc) {
-        if (!g_mainWindowHandle) {
-            OutputDebugStringW(L"Failed to sync the geometry of the XAML Island window due to the main window handle is null.");
-            return false;
-        }
-        if (!g_xamlIslandWindowHandle) {
-            OutputDebugStringW(L"Failed to sync the geometry of the XAML Island window due to its window handle is null.");
-            return false;
-        }
-        RECT clientRect = {0, 0, 0, 0};
-        if (GetClientRectFunc(g_mainWindowHandle, &clientRect) == FALSE) {
-            PRINT_WIN32_ERROR_MESSAGE(GetClientRect, L"Failed to retrieve the client rect of the main window.")
-            return false;
-        }
-        return SyncXAMLIslandPosition(clientRect.right, clientRect.bottom);
-    } else {
-        OutputDebugStringW(L"GetClientRect() is not available.");
+    if (!g_mainWindowHandle) {
+        OutputDebugStringW(L"Failed to sync the geometry of the XAML Island window due to the main window handle is null.");
         return false;
     }
+    if (!g_xamlIslandWindowHandle) {
+        OutputDebugStringW(L"Failed to sync the geometry of the XAML Island window due to its window handle is null.");
+        return false;
+    }
+    const UINT width = Utils::GetWindowMetrics(g_mainWindowHandle, WindowMetrics::Width);
+    const UINT height = Utils::GetWindowMetrics(g_mainWindowHandle, WindowMetrics::Height);
+    return SyncXAMLIslandPosition(width, height);
 }
 
 [[nodiscard]] static inline bool SyncDragBarPosition(const UINT width) noexcept
@@ -201,7 +206,7 @@ static winrt::Windows::UI::Xaml::Media::AcrylicBrush g_backgroundBrush = nullptr
             OutputDebugStringW(L"Failed to sync the geometry of the drag bar window due to the main window width is invalid.");
             return false;
         }
-        const UINT titleBarHeight = Utils::GetTitleBarHeight(g_mainWindowHandle);
+        const UINT titleBarHeight = Utils::GetWindowMetrics(g_mainWindowHandle, WindowMetrics::TitleBarHeight);
         if (SetWindowPosFunc(g_dragBarWindowHandle, HWND_TOP, 0, 0, width, titleBarHeight, SWP_SHOWWINDOW | SWP_NOOWNERZORDER) == FALSE) {
             PRINT_WIN32_ERROR_MESSAGE(SetWindowPos, L"Failed to sync the geometry of the drag bar window.")
             return false;
@@ -215,26 +220,16 @@ static winrt::Windows::UI::Xaml::Media::AcrylicBrush g_backgroundBrush = nullptr
 
 [[nodiscard]] static inline bool SyncDragBarPosition() noexcept
 {
-    USER32_API(GetClientRect);
-    if (GetClientRectFunc) {
-        if (!g_mainWindowHandle) {
-            OutputDebugStringW(L"Failed to sync the geometry of the drag bar window due to the main window handle is null.");
-            return false;
-        }
-        if (!g_dragBarWindowHandle) {
-            OutputDebugStringW(L"Failed to sync the geometry of the drag bar window due to the drag bar window handle is null.");
-            return false;
-        }
-        RECT clientRect = {0, 0, 0, 0};
-        if (GetClientRectFunc(g_mainWindowHandle, &clientRect) == FALSE) {
-            PRINT_WIN32_ERROR_MESSAGE(GetClientRect, L"Failed to retrieve the client rect of the main window.")
-            return false;
-        }
-        return SyncDragBarPosition(clientRect.right);
-    } else {
-        OutputDebugStringW(L"GetClientRect() is not available.");
+    if (!g_mainWindowHandle) {
+        OutputDebugStringW(L"Failed to sync the geometry of the drag bar window due to the main window handle is null.");
         return false;
     }
+    if (!g_dragBarWindowHandle) {
+        OutputDebugStringW(L"Failed to sync the geometry of the drag bar window due to the drag bar window handle is null.");
+        return false;
+    }
+    const UINT width = Utils::GetWindowMetrics(g_mainWindowHandle, WindowMetrics::Width);
+    return SyncDragBarPosition(width);
 }
 
 [[nodiscard]] static inline LRESULT CALLBACK MainWindowMessageHandler(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) noexcept
@@ -271,8 +266,9 @@ static winrt::Windows::UI::Xaml::Media::AcrylicBrush g_backgroundBrush = nullptr
             break;
         }
         bool nonClientAreaExists = false;
-        const bool max = Utils::IsWindowMaximized(hWnd);
-        const bool full = Utils::IsWindowFullScreen(hWnd);
+        const WindowState windowState = Utils::GetWindowState(hWnd);
+        const bool max = (windowState == WindowState::Maximized);
+        const bool full = (windowState == WindowState::FullScreen);
         // We don't need this correction when we're fullscreen. We will
         // have the WS_POPUP size, so we don't have to worry about
         // borders, and the default frame will be fine.
@@ -283,7 +279,7 @@ static winrt::Windows::UI::Xaml::Media::AcrylicBrush g_backgroundBrush = nullptr
             // then the window is clipped to the monitor so that the resize handle
             // do not appear because you don't need them (because you can't resize
             // a window when it's maximized unless you restore it).
-            const UINT resizeBorderThicknessY = Utils::GetResizeBorderThickness(hWnd, false);
+            const UINT resizeBorderThicknessY = Utils::GetWindowMetrics(hWnd, WindowMetrics::ResizeBorderThicknessY);
             clientRect->top += resizeBorderThicknessY;
             nonClientAreaExists = true;
         }
@@ -388,24 +384,14 @@ static winrt::Windows::UI::Xaml::Media::AcrylicBrush g_backgroundBrush = nullptr
             OutputDebugStringW(L"ScreenToClient() is not available.");
             break;
         }
-        const bool normal = Utils::IsWindowNoState(hWnd);
-        RECT windowRect = {0, 0, 0, 0};
-        USER32_API(GetWindowRect);
-        if (GetWindowRectFunc) {
-            if (GetWindowRectFunc(hWnd, &windowRect) == FALSE) {
-                PRINT_WIN32_ERROR_MESSAGE(GetWindowRect, L"Failed to retrieve the main window geometry.")
-                break;
-            }
-        } else {
-            OutputDebugStringW(L"GetWindowRect() is not available.");
-            break;
-        }
-        const auto windowWidth = static_cast<LONG>(std::abs(windowRect.right - windowRect.left));
-        const auto resizeBorderThicknessX = static_cast<LONG>(Utils::GetResizeBorderThickness(hWnd, true));
-        const auto resizeBorderThicknessY = static_cast<LONG>(Utils::GetResizeBorderThickness(hWnd, false));
-        const auto captionHeight = static_cast<LONG>(Utils::GetCaptionHeight(hWnd));
+        const WindowState windowState = Utils::GetWindowState(hWnd);
+        const bool normal = (windowState == WindowState::Normal);
+        const auto windowWidth = static_cast<LONG>(Utils::GetWindowMetrics(hWnd, WindowMetrics::FrameWidth));
+        const auto resizeBorderThicknessX = static_cast<LONG>(Utils::GetWindowMetrics(hWnd, WindowMetrics::ResizeBorderThicknessX));
+        const auto resizeBorderThicknessY = static_cast<LONG>(Utils::GetWindowMetrics(hWnd, WindowMetrics::ResizeBorderThicknessY));
+        const auto captionHeight = static_cast<LONG>(Utils::GetWindowMetrics(hWnd, WindowMetrics::CaptionHeight));
         bool isTitleBar = false;
-        if (Utils::IsWindowMaximized(hWnd) || Utils::IsWindowFullScreen(hWnd)) {
+        if ((windowState == WindowState::Maximized) || (windowState == WindowState::FullScreen)) {
             isTitleBar = ((windowPos.y >= 0) && (windowPos.y <= captionHeight)
                           && (windowPos.x >= 0) && (windowPos.x <= windowWidth));
         } else if (normal) {
@@ -500,7 +486,7 @@ static winrt::Windows::UI::Xaml::Media::AcrylicBrush g_backgroundBrush = nullptr
         }
     } break;
     case WM_CREATE: {
-        g_mainWindowDPI = Utils::GetWindowDPI(hWnd);
+        g_mainWindowDPI = Utils::GetWindowMetrics(hWnd, WindowMetrics::DotsPerInch);
         if (!Utils::UpdateFrameMargins(hWnd)) {
             OutputDebugStringW(L"Failed to update the frame margins for the main window.");
             break;
@@ -515,12 +501,10 @@ static winrt::Windows::UI::Xaml::Media::AcrylicBrush g_backgroundBrush = nullptr
             OutputDebugStringW(L"SetWindowPos() is not available.");
             break;
         }
-        if (!Utils::RefreshWindowTheme(hWnd)) {
-            OutputDebugStringW(L"Failed to refresh the window theme for the main window.");
-        }
+        RefreshWindowTheme(hWnd);
     } break;
     case WM_SIZE: {
-        if ((wParam == SIZE_MAXIMIZED) || (wParam == SIZE_RESTORED) || Utils::IsWindowFullScreen(hWnd)) {
+        if ((wParam == SIZE_MAXIMIZED) || (wParam == SIZE_RESTORED) || (Utils::GetWindowState(hWnd) == WindowState::FullScreen)) {
             if (!Utils::UpdateFrameMargins(hWnd)) {
                 OutputDebugStringW(L"Failed to update the frame margins for the main window.");
                 break;
@@ -545,13 +529,8 @@ static winrt::Windows::UI::Xaml::Media::AcrylicBrush g_backgroundBrush = nullptr
         // wParam == 1: System-wide setting change
         // ### TODO: how to detect high contrast theme here
         if (((wParam == 0) || (wParam == 1)) && (_wcsicmp(reinterpret_cast<LPCWSTR>(lParam), L"ImmersiveColorSet") == 0)) {
-            if (!Utils::RefreshWindowTheme(hWnd)) {
-                Utils::DisplayErrorDialog(L"Failed to refresh the main window theme.");
-                break;
-            }
-            if (!RefreshBackgroundBrush()) {
-                Utils::DisplayErrorDialog(L"Failed to refresh the background brush.");
-            }
+            RefreshWindowTheme(hWnd);
+            RefreshBackgroundBrush();
         }
     } break;
     case WM_DPICHANGED: {
@@ -737,11 +716,11 @@ static winrt::Windows::UI::Xaml::Media::AcrylicBrush g_backgroundBrush = nullptr
         bool exists = false;
         WNDCLASSEXW wcex = {};
         if (name) {
-            exists = (GetClassInfoExWFunc(Utils::GetCurrentInstance(), name, &wcex) != FALSE);
+            exists = (GetClassInfoExWFunc(Utils::GetCurrentModuleInstance(), name, &wcex) != FALSE);
         }
         if (!exists) {
             if (g_mainWindowAtom != INVALID_ATOM) {
-                exists = (GetClassInfoExWFunc(Utils::GetCurrentInstance(), Utils::GetWindowClassName(g_mainWindowAtom), &wcex) != FALSE);
+                exists = (GetClassInfoExWFunc(Utils::GetCurrentModuleInstance(), Utils::GetWindowClassName(g_mainWindowAtom), &wcex) != FALSE);
             }
         }
         LPCWSTR guid = nullptr;
@@ -755,11 +734,11 @@ static winrt::Windows::UI::Xaml::Media::AcrylicBrush g_backgroundBrush = nullptr
             wcex.cbSize = sizeof(wcex);
             wcex.style = CS_HREDRAW | CS_VREDRAW;
             wcex.lpfnWndProc = MainWindowMessageHandler;
-            wcex.hInstance = Utils::GetCurrentInstance();
+            wcex.hInstance = Utils::GetCurrentModuleInstance();
             wcex.lpszClassName = ((name && (wcscmp(name, L"") != 0)) ? name : guid);
             wcex.hCursor = LoadCursorWFunc(nullptr, IDC_ARROW);
-            wcex.hIcon = LoadIconWFunc(Utils::GetCurrentInstance(), MAKEINTRESOURCEW(IDI_APPICON));
-            wcex.hIconSm = LoadIconWFunc(Utils::GetCurrentInstance(), MAKEINTRESOURCEW(IDI_APPICON_SMALL));
+            wcex.hIcon = LoadIconWFunc(Utils::GetCurrentModuleInstance(), MAKEINTRESOURCEW(IDI_APPICON));
+            wcex.hIconSm = LoadIconWFunc(Utils::GetCurrentModuleInstance(), MAKEINTRESOURCEW(IDI_APPICON_SMALL));
         }
         g_mainWindowAtom = RegisterClassExWFunc(&wcex);
         if (guid) {
@@ -792,7 +771,7 @@ static winrt::Windows::UI::Xaml::Media::AcrylicBrush g_backgroundBrush = nullptr
         wcex.cbSize = sizeof(wcex);
         wcex.style = CS_HREDRAW | CS_VREDRAW | CS_DBLCLKS;
         wcex.lpfnWndProc = DragBarMessageHandler;
-        wcex.hInstance = Utils::GetCurrentInstance();
+        wcex.hInstance = Utils::GetCurrentModuleInstance();
         wcex.lpszClassName = guid;
         wcex.hCursor = LoadCursorWFunc(nullptr, IDC_ARROW);
         g_dragBarWindowAtom = RegisterClassExWFunc(&wcex);
@@ -823,7 +802,7 @@ static winrt::Windows::UI::Xaml::Media::AcrylicBrush g_backgroundBrush = nullptr
             ((title && (wcscmp(title, L"") != 0)) ? title : g_defaultWindowTitle),
             (WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN | WS_CLIPSIBLINGS),
             CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
-            nullptr, nullptr, Utils::GetCurrentInstance(), nullptr);
+            nullptr, nullptr, Utils::GetCurrentModuleInstance(), nullptr);
         if (!g_mainWindowHandle) {
             PRINT_WIN32_ERROR_MESSAGE(CreateWindowExW, L"Failed to create the main window.")
             return false;
@@ -862,7 +841,7 @@ static winrt::Windows::UI::Xaml::Media::AcrylicBrush g_backgroundBrush = nullptr
             nullptr,
             WS_CHILD,
             CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
-            g_mainWindowHandle, nullptr, Utils::GetCurrentInstance(), nullptr);
+            g_mainWindowHandle, nullptr, Utils::GetCurrentModuleInstance(), nullptr);
         if (!g_dragBarWindowHandle) {
             PRINT_WIN32_ERROR_MESSAGE(CreateWindowExW, L"Failed to create the drag bar window.")
             return false;
@@ -948,10 +927,7 @@ static winrt::Windows::UI::Xaml::Media::AcrylicBrush g_backgroundBrush = nullptr
     // Create the XAML content.
     g_rootGrid = winrt::Windows::UI::Xaml::Controls::Grid();
     g_backgroundBrush = winrt::Windows::UI::Xaml::Media::AcrylicBrush();
-    if (!RefreshBackgroundBrush()) {
-        Utils::DisplayErrorDialog(L"Failed to refresh the background brush.");
-        return false;
-    }
+    RefreshBackgroundBrush();
     g_backgroundBrush.BackgroundSource(winrt::Windows::UI::Xaml::Media::AcrylicBackgroundSource::HostBackdrop);
     g_rootGrid.Background(g_backgroundBrush);
     //g_rootGrid.Children().Clear();
@@ -1001,11 +977,14 @@ int AcrylicApplication::Main(const int nCmdShow) noexcept
         return -1;
     }
 
-    if (!Utils::EnableHiDPIScaling()) {
-        // We are using the manifest file to set the DPI awareness of our
-        // application, so any attempt to change it programmatically will
-        // always fail. This function is just a safe guard in case the
-        // manifest file is not functional, it's a very rare case though.
+    if (!Utils::SetProcessDPIAwareness(DPIAwareness::PerMonitorV2)) {
+        if (!Utils::SetProcessDPIAwareness(DPIAwareness::PerMonitor)) {
+            if (!Utils::SetProcessDPIAwareness(DPIAwareness::System)) {
+                if (!Utils::SetProcessDPIAwareness(DPIAwareness::GdiScaled)) {
+                    OutputDebugStringW(L"Failed to set the DPI awareness for the current process.");
+                }
+            }
+        }
     }
 
     if (!RegisterMainWindowClass(nullptr)) {

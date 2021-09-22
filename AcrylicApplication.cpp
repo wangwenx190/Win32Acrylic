@@ -239,7 +239,7 @@ static inline void RefreshWindowTheme(const HWND hWnd) noexcept
         USER32_API(EnableNonClientDpiScaling);
         if (EnableNonClientDpiScalingFunc) {
             if (EnableNonClientDpiScalingFunc(hWnd) == FALSE) {
-                // We intend to do nothing here.
+                OutputDebugStringW(L"Failed to enable non-client area DPI auto-scaling.");
             }
         } else {
             OutputDebugStringW(L"EnableNonClientDpiScaling() is not available.");
@@ -297,61 +297,41 @@ static inline void RefreshWindowTheme(const HWND hWnd) noexcept
                 abd.cbSize = sizeof(abd);
                 // First, check if we have an auto-hide taskbar at all:
                 if (SHAppBarMessageFunc(ABM_GETSTATE, &abd) & ABS_AUTOHIDE) {
-                    const HMONITOR mon = Utils::GetWindowScreen(hWnd, true);
-                    if (mon) {
-                        USER32_API(GetMonitorInfoW);
-                        if (GetMonitorInfoWFunc) {
-                            MONITORINFO mi;
-                            SecureZeroMemory(&mi, sizeof(mi));
-                            mi.cbSize = sizeof(mi);
-                            if (GetMonitorInfoWFunc(mon, &mi) == FALSE) {
-                                PRINT_WIN32_ERROR_MESSAGE(GetMonitorInfoW, L"Failed to retrieve the screen information.")
-                                break;
-                            } else {
-                                const RECT screenRect = mi.rcMonitor;
-                                // This helper can be used to determine if there's a
-                                // auto-hide taskbar on the given edge of the monitor
-                                // we're currently on.
-                                const auto hasAutohideTaskbar = [&screenRect](const UINT edge) -> bool {
-                                    APPBARDATA abd2;
-                                    SecureZeroMemory(&abd2, sizeof(abd2));
-                                    abd2.cbSize = sizeof(abd2);
-                                    abd2.uEdge = edge;
-                                    abd2.rc = screenRect;
-                                    return (reinterpret_cast<HWND>(SHAppBarMessageFunc(ABM_GETAUTOHIDEBAREX, &abd2)) != nullptr);
-                                };
-                                // If there's a taskbar on any side of the monitor, reduce
-                                // our size a little bit on that edge.
-                                // Note to future code archeologists:
-                                // This doesn't seem to work for fullscreen on the primary
-                                // display. However, testing a bunch of other apps with
-                                // fullscreen modes and an auto-hiding taskbar has
-                                // shown that _none_ of them reveal the taskbar from
-                                // fullscreen mode. This includes Edge, Firefox, Chrome,
-                                // Sublime Text, PowerPoint - none seemed to support this.
-                                // This does however work fine for maximized.
-                                if (hasAutohideTaskbar(ABE_TOP)) {
-                                    // Peculiarly, when we're fullscreen,
-                                    clientRect->top += g_autoHideTaskbarThickness;
-                                    nonClientAreaExists = true;
-                                } else if (hasAutohideTaskbar(ABE_BOTTOM)) {
-                                    clientRect->bottom -= g_autoHideTaskbarThickness;
-                                    nonClientAreaExists = true;
-                                } else if (hasAutohideTaskbar(ABE_LEFT)) {
-                                    clientRect->left += g_autoHideTaskbarThickness;
-                                    nonClientAreaExists = true;
-                                } else if (hasAutohideTaskbar(ABE_RIGHT)) {
-                                    clientRect->right -= g_autoHideTaskbarThickness;
-                                    nonClientAreaExists = true;
-                                }
-                            }
-                        } else {
-                            OutputDebugStringW(L"GetMonitorInfoW() is not available.");
-                            break;
-                        }
-                    } else {
-                        OutputDebugStringW(L"Failed to retrieve the main window's corresponding screen.");
-                        break;
+                    const RECT screenRect = Utils::GetScreenGeometry(hWnd);
+                    // This helper can be used to determine if there's a
+                    // auto-hide taskbar on the given edge of the monitor
+                    // we're currently on.
+                    const auto hasAutohideTaskbar = [&screenRect](const UINT edge) -> bool {
+                        APPBARDATA abd2;
+                        SecureZeroMemory(&abd2, sizeof(abd2));
+                        abd2.cbSize = sizeof(abd2);
+                        abd2.uEdge = edge;
+                        abd2.rc = screenRect;
+                        return (reinterpret_cast<HWND>(SHAppBarMessageFunc(ABM_GETAUTOHIDEBAREX, &abd2)) != nullptr);
+                    };
+                    // If there's a taskbar on any side of the monitor, reduce
+                    // our size a little bit on that edge.
+                    // Note to future code archeologists:
+                    // This doesn't seem to work for fullscreen on the primary
+                    // display. However, testing a bunch of other apps with
+                    // fullscreen modes and an auto-hiding taskbar has
+                    // shown that _none_ of them reveal the taskbar from
+                    // fullscreen mode. This includes Edge, Firefox, Chrome,
+                    // Sublime Text, PowerPoint - none seemed to support this.
+                    // This does however work fine for maximized.
+                    if (hasAutohideTaskbar(ABE_TOP)) {
+                        // Peculiarly, when we're fullscreen,
+                        clientRect->top += g_autoHideTaskbarThickness;
+                        nonClientAreaExists = true;
+                    } else if (hasAutohideTaskbar(ABE_BOTTOM)) {
+                        clientRect->bottom -= g_autoHideTaskbarThickness;
+                        nonClientAreaExists = true;
+                    } else if (hasAutohideTaskbar(ABE_LEFT)) {
+                        clientRect->left += g_autoHideTaskbarThickness;
+                        nonClientAreaExists = true;
+                    } else if (hasAutohideTaskbar(ABE_RIGHT)) {
+                        clientRect->right -= g_autoHideTaskbarThickness;
+                        nonClientAreaExists = true;
                     }
                 }
             }
@@ -539,7 +519,6 @@ static inline void RefreshWindowTheme(const HWND hWnd) noexcept
         const UINT dpiY = HIWORD(wParam);
         g_mainWindowDPI = static_cast<UINT>(std::round(static_cast<double>(dpiX + dpiY) / 2.0));
         auto buf = new wchar_t[MAX_PATH];
-        SecureZeroMemory(buf, sizeof(buf));
         swprintf(buf, L"The DotsPerInch of main window has changed. Old value: %d, new value: %d.", oldMainWindowDPI, g_mainWindowDPI);
         OutputDebugStringW(buf);
         delete [] buf;
@@ -567,7 +546,7 @@ static inline void RefreshWindowTheme(const HWND hWnd) noexcept
         return 1;
     } break;
     case WM_CLOSE: {
-        if (Utils::CloseWindow(hWnd, g_mainWindowAtom)) {
+        if (Utils::CloseWindow(hWnd)) {
             g_mainWindowHandle = nullptr;
             g_mainWindowAtom = INVALID_ATOM;
             g_mainWindowDPI = 0;
@@ -685,7 +664,7 @@ static inline void RefreshWindowTheme(const HWND hWnd) noexcept
             return 1;
         } break;
         case WM_CLOSE: {
-            if (Utils::CloseWindow(hWnd, g_dragBarWindowAtom)) {
+            if (Utils::CloseWindow(hWnd)) {
                 g_dragBarWindowHandle = nullptr;
                 g_dragBarWindowAtom = INVALID_ATOM;
                 return 0;

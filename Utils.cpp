@@ -59,6 +59,52 @@ static constexpr UINT g_defaultTitleBarHeight = 31;
 static constexpr UINT g_defaultFrameBorderThickness = 1;
 static constexpr UINT g_defaultWindowDPI = USER_DEFAULT_SCREEN_DPI;
 
+[[nodiscard]] static inline HMONITOR GetWindowScreen(const HWND hWnd, const bool defaultToNearest) noexcept
+{
+    USER32_API(MonitorFromWindow);
+    if (MonitorFromWindowFunc) {
+        if (!hWnd) {
+            return nullptr;
+        }
+        const HMONITOR mon = MonitorFromWindowFunc(hWnd, (defaultToNearest ? MONITOR_DEFAULTTONEAREST : MONITOR_DEFAULTTOPRIMARY));
+        if (!mon) {
+            PRINT_WIN32_ERROR_MESSAGE(MonitorFromWindow, L"Failed to retrieve the window's corresponding screen.")
+            return nullptr;
+        }
+        return mon;
+    } else {
+        OutputDebugStringW(L"MonitorFromWindow() is not available.");
+        return nullptr;
+    }
+}
+
+[[nodiscard]] static inline RECT GetScreenGeometry(const HWND hWnd, const bool defaultToNearest, const bool workArea) noexcept
+{
+    USER32_API(GetMonitorInfoW);
+    if (GetMonitorInfoWFunc) {
+        if (!hWnd) {
+            return {};
+        }
+        const HMONITOR mon = GetWindowScreen(hWnd, defaultToNearest);
+        if (!mon) {
+            OutputDebugStringW(L"Failed to retrieve the corresponding screen.");
+            return {};
+        }
+        MONITORINFO mi;
+        SecureZeroMemory(&mi, sizeof(mi));
+        mi.cbSize = sizeof(mi);
+        if (GetMonitorInfoWFunc(mon, &mi) == FALSE) {
+            PRINT_WIN32_ERROR_MESSAGE(GetMonitorInfoW, L"Failed to retrieve the screen information.")
+            return {};
+        } else {
+            return (workArea ? mi.rcWork : mi.rcMonitor);
+        }
+    } else {
+        OutputDebugStringW(L"GetMonitorInfoW() is not available.");
+        return {};
+    }
+}
+
 [[nodiscard]] static inline SIZE GetWindowClientSize(const HWND hWnd) noexcept
 {
     USER32_API(GetClientRect);
@@ -159,33 +205,15 @@ static constexpr UINT g_defaultWindowDPI = USER_DEFAULT_SCREEN_DPI;
 
 [[nodiscard]] static inline bool IsWindowFullScreen(const HWND hWnd) noexcept
 {
-    USER32_API(GetMonitorInfoW);
-    if (GetMonitorInfoWFunc) {
-        if (!hWnd) {
-            return false;
-        }
-        const HMONITOR mon = Utils::GetWindowScreen(hWnd, false);
-        if (!mon) {
-            OutputDebugStringW(L"Failed to retrieve the primary screen.");
-            return false;
-        }
-        MONITORINFO mi;
-        SecureZeroMemory(&mi, sizeof(mi));
-        mi.cbSize = sizeof(mi);
-        if (GetMonitorInfoWFunc(mon, &mi) == FALSE) {
-            PRINT_WIN32_ERROR_MESSAGE(GetMonitorInfoW, L"Failed to retrieve the screen information.")
-            return false;
-        }
-        const RECT windowRect = GetWindowGeometry(hWnd);
-        const RECT screenRect = mi.rcMonitor;
-        return ((windowRect.top == screenRect.top)
-                && (windowRect.bottom == screenRect.bottom)
-                && (windowRect.left == screenRect.left)
-                && (windowRect.right == screenRect.right));
-    } else {
-        OutputDebugStringW(L"GetMonitorInfoW() is not available.");
+    if (!hWnd) {
         return false;
     }
+    const RECT windowRect = GetWindowGeometry(hWnd);
+    const RECT screenRect = GetScreenGeometry(hWnd, false, false);
+    return ((windowRect.top == screenRect.top)
+            && (windowRect.bottom == screenRect.bottom)
+            && (windowRect.left == screenRect.left)
+            && (windowRect.right == screenRect.right));
 }
 
 [[nodiscard]] static inline bool IsHighContrastModeEnabled() noexcept
@@ -253,7 +281,7 @@ static constexpr UINT g_defaultWindowDPI = USER_DEFAULT_SCREEN_DPI;
     }
     SHCORE_API(GetDpiForMonitor);
     if (GetDpiForMonitorFunc) {
-        const HMONITOR mon = Utils::GetWindowScreen(hWnd, true);
+        const HMONITOR mon = GetWindowScreen(hWnd, true);
         if (mon) {
             UINT dpiX = 0, dpiY = 0;
             const HRESULT hr = GetDpiForMonitorFunc(mon, MDT_EFFECTIVE_DPI, &dpiX, &dpiY);
@@ -347,25 +375,6 @@ static constexpr UINT g_defaultWindowDPI = USER_DEFAULT_SCREEN_DPI;
     } else {
         OutputDebugStringW(L"DwmGetWindowAttribute() is not available.");
         return g_defaultFrameBorderThickness;
-    }
-}
-
-HMONITOR Utils::GetWindowScreen(const HWND hWnd, const bool current) noexcept
-{
-    USER32_API(MonitorFromWindow);
-    if (MonitorFromWindowFunc) {
-        if (!hWnd) {
-            return nullptr;
-        }
-        const HMONITOR mon = MonitorFromWindowFunc(hWnd, (current ? MONITOR_DEFAULTTONEAREST : MONITOR_DEFAULTTOPRIMARY));
-        if (!mon) {
-            PRINT_WIN32_ERROR_MESSAGE(MonitorFromWindow, L"Failed to retrieve the window's corresponding screen.")
-            return nullptr;
-        }
-        return mon;
-    } else {
-        OutputDebugStringW(L"MonitorFromWindow() is not available.");
-        return nullptr;
     }
 }
 
@@ -466,7 +475,6 @@ LPCWSTR Utils::GetSystemErrorMessage(LPCWSTR function, const DWORD code) noexcep
         return nullptr;
     }
     const auto str = new wchar_t[MAX_PATH];
-    SecureZeroMemory(str, sizeof(str));
     swprintf(str, L"%s failed with error %d: %s.", function, code, buf);
     LocalFree(buf);
     return str;
@@ -524,7 +532,6 @@ LPCWSTR Utils::GenerateGUID() noexcept
             return nullptr;
         }
         auto buf = new wchar_t[MAX_PATH];
-        SecureZeroMemory(buf, sizeof(buf));
         if (StringFromGUID2Func(guid, buf, MAX_PATH) == 0) {
             delete [] buf;
             buf = nullptr;
@@ -538,7 +545,7 @@ LPCWSTR Utils::GenerateGUID() noexcept
     }
 }
 
-bool Utils::CloseWindow(const HWND hWnd, const ATOM atom) noexcept
+bool Utils::CloseWindow(const HWND hWnd) noexcept
 {
     USER32_API(DestroyWindow);
     USER32_API(UnregisterClassW);
@@ -547,15 +554,11 @@ bool Utils::CloseWindow(const HWND hWnd, const ATOM atom) noexcept
             OutputDebugStringW(L"Failed to close the window due to the given window handle is null.");
             return false;
         }
-        if (atom == INVALID_ATOM) {
-            OutputDebugStringW(L"Failed to close the window due to the given window ATOM is invalid.");
-            return false;
-        }
         if (DestroyWindowFunc(hWnd) == FALSE) {
             PRINT_WIN32_ERROR_MESSAGE(DestroyWindow, L"Failed to destroy the window.")
             return false;
         }
-        if (UnregisterClassWFunc(GetWindowClassName(atom), GetWindowInstance(hWnd)) == FALSE) {
+        if (UnregisterClassWFunc(GetWindowClassName(hWnd), GetWindowInstance(hWnd)) == FALSE) {
             PRINT_WIN32_ERROR_MESSAGE(UnregisterClassW, L"Failed to unregister the window class.")
             return false;
         }
@@ -771,7 +774,14 @@ bool Utils::SetWindowState(const HWND hWnd, const WindowState state) noexcept
         ShowWindowFunc(hWnd, nCmdShow);
         const DWORD dwError = GetLastError();
         if (dwError != ERROR_SUCCESS) {
-            //
+            auto msg = GetSystemErrorMessage(L"ShowWindow", dwError);
+            if (msg) {
+                DisplayErrorDialog(msg);
+                delete [] msg;
+                msg = nullptr;
+            } else {
+                DisplayErrorDialog(L"Failed to change the window state.");
+            }
             return false;
         } else {
             return true;
@@ -971,4 +981,12 @@ UINT Utils::GetWindowMetrics(const HWND hWnd, const WindowMetrics metrics) noexc
     } break;
     }
     return 0;
+}
+
+RECT Utils::GetScreenGeometry(const HWND hWnd) noexcept
+{
+    if (!hWnd) {
+        return {};
+    }
+    return ::GetScreenGeometry(hWnd, true, false);
 }

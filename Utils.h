@@ -105,8 +105,7 @@ namespace Utils
     [[nodiscard]] LPCWSTR GetSystemErrorMessage(LPCWSTR function, const HRESULT hr) noexcept;
     [[nodiscard]] LPCWSTR GetSystemErrorMessage(LPCWSTR function) noexcept;
     [[nodiscard]] LPCWSTR GenerateGUID() noexcept;
-    [[nodiscard]] bool CloseWindow(const HWND hWnd, const ATOM atom) noexcept;
-    [[nodiscard]] HMONITOR GetWindowScreen(const HWND hWnd, const bool current) noexcept;
+    [[nodiscard]] bool CloseWindow(const HWND hWnd) noexcept;
     [[nodiscard]] bool OpenSystemMenu(const HWND hWnd, const POINT pos) noexcept;
     [[nodiscard]] bool UpdateFrameMargins(const HWND hWnd) noexcept;
     [[nodiscard]] bool IsWindowsVersionOrGreater(const VersionNumber &version) noexcept;
@@ -117,6 +116,7 @@ namespace Utils
     [[nodiscard]] DPIAwareness GetProcessDPIAwareness() noexcept;
     [[nodiscard]] bool SetProcessDPIAwareness(const DPIAwareness dpiAwareness) noexcept;
     [[nodiscard]] UINT GetWindowMetrics(const HWND hWnd, const WindowMetrics metrics) noexcept;
+    [[nodiscard]] RECT GetScreenGeometry(const HWND hWnd) noexcept;
 } // namespace Utils
 
 [[nodiscard]] inline bool IsWindows1019H1OrGreater() noexcept

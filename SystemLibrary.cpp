@@ -33,7 +33,6 @@
     }
     const int required = WideCharToMultiByte(CP_UTF8, 0, str, -1, nullptr, 0, nullptr, nullptr);
     const auto result = new char[required];
-    SecureZeroMemory(result, sizeof(result));
     WideCharToMultiByte(CP_UTF8, 0, str, -1, result, required, nullptr, nullptr);
     return result;
 }

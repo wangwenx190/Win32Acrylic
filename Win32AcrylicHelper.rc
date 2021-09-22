@@ -25,8 +25,8 @@
 #include <Windows.h>
 #include "Resource.h"
 
-IDI_APPICON ICON "Icon.ico"
-IDI_APPICON_SMALL ICON "SmallIcon.ico"
+IDI_APPICON ICON "Assets\\Icon.ico"
+IDI_APPICON_SMALL ICON "Assets\\SmallIcon.ico"
 
 VS_VERSION_INFO VERSIONINFO
 FILEVERSION     1,0,0,0

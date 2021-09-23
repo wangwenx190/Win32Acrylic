@@ -64,7 +64,9 @@ enum class WindowState : int
     Normal = 0,
     Minimized,
     Maximized,
-    FullScreen
+    FullScreen,
+    Shown,
+    Hidden
 };
 
 enum class DPIAwareness : int

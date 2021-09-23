@@ -26,5 +26,5 @@
 
 namespace AcrylicApplication
 {
-    [[nodiscard]] int Main(const int nCmdShow) noexcept;
+    [[nodiscard]] int Main() noexcept;
 } // namespace AcrylicApplication

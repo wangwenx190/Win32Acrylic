@@ -37,6 +37,7 @@ wWinMain(
     UNREFERENCED_PARAMETER(hInstance);
     UNREFERENCED_PARAMETER(hPrevInstance);
     UNREFERENCED_PARAMETER(lpCmdLine);
+    UNREFERENCED_PARAMETER(nCmdShow);
 
-    return AcrylicApplication::Main(nCmdShow);
+    return AcrylicApplication::Main();
 }

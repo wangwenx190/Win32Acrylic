@@ -110,11 +110,11 @@ static winrt::Windows::UI::Xaml::Hosting::DesktopWindowXamlSource g_source = nul
 static winrt::Windows::UI::Xaml::Controls::Grid g_rootGrid = nullptr;
 static winrt::Windows::UI::Xaml::Media::AcrylicBrush g_backgroundBrush = nullptr;
 
-static inline void RefreshBackgroundBrush() noexcept
+[[nodiscard]] static inline bool RefreshBackgroundBrush() noexcept
 {
     if (g_backgroundBrush == nullptr) {
         OutputDebugStringW(L"Failed to refresh the background brush due to the brush is null.");
-        return;
+        return false;
     }
     const WindowTheme systemTheme = Utils::GetSystemTheme();
     switch (systemTheme) {
@@ -123,28 +123,30 @@ static inline void RefreshBackgroundBrush() noexcept
         g_backgroundBrush.TintOpacity(Constants::Light::TintOpacity);
         g_backgroundBrush.TintLuminosityOpacity(Constants::Light::LuminosityOpacity);
         g_backgroundBrush.FallbackColor(Constants::Light::FallbackColor);
+        return true;
     } break;
     case WindowTheme::Dark: {
         g_backgroundBrush.TintColor(Constants::Dark::TintColor);
         g_backgroundBrush.TintOpacity(Constants::Dark::TintOpacity);
         g_backgroundBrush.TintLuminosityOpacity(Constants::Dark::LuminosityOpacity);
         g_backgroundBrush.FallbackColor(Constants::Dark::FallbackColor);
+        return true;
     } break;
     case WindowTheme::HighContrast: {
         // ### TODO
     } break;
     }
+    return false;
 }
 
-static inline void RefreshWindowTheme(const HWND hWnd) noexcept
+[[nodiscard]] static inline bool RefreshWindowTheme(const HWND hWnd) noexcept
 {
     if (!hWnd) {
         OutputDebugStringW(L"Failed to refresh the window theme due to the window handle is null.");
-        return;
+        return false;
     }
     const WindowTheme systemTheme = Utils::GetSystemTheme();
-    const bool result = Utils::SetWindowTheme(hWnd, systemTheme);
-    UNREFERENCED_PARAMETER(result);
+    return Utils::SetWindowTheme(hWnd, systemTheme);
 }
 
 [[nodiscard]] static inline bool SyncXAMLIslandPosition(const UINT width, const UINT height) noexcept
@@ -365,22 +367,10 @@ static inline void RefreshWindowTheme(const HWND hWnd) noexcept
             break;
         }
         const WindowState windowState = Utils::GetWindowState(hWnd);
-        const bool normal = (windowState == WindowState::Normal);
-        const auto windowWidth = static_cast<LONG>(Utils::GetWindowMetrics(hWnd, WindowMetrics::FrameWidth));
-        const auto resizeBorderThicknessX = static_cast<LONG>(Utils::GetWindowMetrics(hWnd, WindowMetrics::ResizeBorderThicknessX));
         const auto resizeBorderThicknessY = static_cast<LONG>(Utils::GetWindowMetrics(hWnd, WindowMetrics::ResizeBorderThicknessY));
-        const auto captionHeight = static_cast<LONG>(Utils::GetWindowMetrics(hWnd, WindowMetrics::CaptionHeight));
-        bool isTitleBar = false;
-        if ((windowState == WindowState::Maximized) || (windowState == WindowState::FullScreen)) {
-            isTitleBar = ((windowPos.y >= 0) && (windowPos.y <= captionHeight)
-                          && (windowPos.x >= 0) && (windowPos.x <= windowWidth));
-        } else if (normal) {
-            isTitleBar = ((windowPos.y > resizeBorderThicknessY)
-                          && (windowPos.y <= (resizeBorderThicknessY + captionHeight))
-                          && (windowPos.x > resizeBorderThicknessX)
-                          && (windowPos.x < (windowWidth - resizeBorderThicknessX)));
-        }
-        const bool isTop = (normal ? (windowPos.y <= resizeBorderThicknessY) : false);
+        const auto titleBarHeight = static_cast<LONG>(Utils::GetWindowMetrics(hWnd, WindowMetrics::TitleBarHeight));
+        const bool isTitleBar = ((windowState != WindowState::Minimized) ? (windowPos.y <= titleBarHeight) : false);
+        const bool isTop = ((windowState == WindowState::Normal) ? (windowPos.y <= resizeBorderThicknessY) : false);
         USER32_API(DefWindowProcW);
         if (DefWindowProcWFunc) {
             // This will handle the left, right and bottom parts of the frame
@@ -481,7 +471,9 @@ static inline void RefreshWindowTheme(const HWND hWnd) noexcept
             OutputDebugStringW(L"SetWindowPos() is not available.");
             break;
         }
-        RefreshWindowTheme(hWnd);
+        if (!RefreshWindowTheme(hWnd)) {
+            Utils::DisplayErrorDialog(L"Failed to refresh the window theme.");
+        }
     } break;
     case WM_SIZE: {
         if ((wParam == SIZE_MAXIMIZED) || (wParam == SIZE_RESTORED) || (Utils::GetWindowState(hWnd) == WindowState::FullScreen)) {
@@ -509,8 +501,13 @@ static inline void RefreshWindowTheme(const HWND hWnd) noexcept
         // wParam == 1: System-wide setting change
         // ### TODO: how to detect high contrast theme here
         if (((wParam == 0) || (wParam == 1)) && (_wcsicmp(reinterpret_cast<LPCWSTR>(lParam), L"ImmersiveColorSet") == 0)) {
-            RefreshWindowTheme(hWnd);
-            RefreshBackgroundBrush();
+            if (!RefreshWindowTheme(hWnd)) {
+                Utils::DisplayErrorDialog(L"Failed to refresh the window theme.");
+                break;
+            }
+            if (!RefreshBackgroundBrush()) {
+                Utils::DisplayErrorDialog(L"Failed to refresh the background brush.");
+            }
         }
     } break;
     case WM_DPICHANGED: {
@@ -817,9 +814,7 @@ static inline void RefreshWindowTheme(const HWND hWnd) noexcept
         g_dragBarWindowHandle = CreateWindowExWFunc(
             (WS_EX_LAYERED | WS_EX_NOREDIRECTIONBITMAP),
             Utils::GetWindowClassName(g_dragBarWindowAtom),
-            nullptr,
-            WS_CHILD,
-            CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
+            nullptr, WS_CHILD, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
             g_mainWindowHandle, nullptr, Utils::GetCurrentModuleInstance(), nullptr);
         if (!g_dragBarWindowHandle) {
             PRINT_WIN32_ERROR_MESSAGE(CreateWindowExW, L"Failed to create the drag bar window.")
@@ -838,27 +833,6 @@ static inline void RefreshWindowTheme(const HWND hWnd) noexcept
         return true;
     } else {
         OutputDebugStringW(L"CreateWindowExW() and SetLayeredWindowAttributes() are not available.");
-        return false;
-    }
-}
-
-[[nodiscard]] static inline bool ShowMainWindow(const int nCmdShow) noexcept
-{
-    USER32_API(ShowWindow);
-    USER32_API(UpdateWindow);
-    if (ShowWindowFunc && UpdateWindowFunc) {
-        if (!g_mainWindowHandle) {
-            OutputDebugStringW(L"Failed to show the main window due to the main window handle is null.");
-            return false;
-        }
-        ShowWindowFunc(g_mainWindowHandle, nCmdShow);
-        if (UpdateWindowFunc(g_mainWindowHandle) == FALSE) {
-            PRINT_WIN32_ERROR_MESSAGE(UpdateWindow, L"Failed to update the main window.")
-            return false;
-        }
-        return true;
-    } else {
-        OutputDebugStringW(L"ShowWindow() and UpdateWindow() are not available.");
         return false;
     }
 }
@@ -906,7 +880,10 @@ static inline void RefreshWindowTheme(const HWND hWnd) noexcept
     // Create the XAML content.
     g_rootGrid = winrt::Windows::UI::Xaml::Controls::Grid();
     g_backgroundBrush = winrt::Windows::UI::Xaml::Media::AcrylicBrush();
-    RefreshBackgroundBrush();
+    if (!RefreshBackgroundBrush()) {
+        Utils::DisplayErrorDialog(L"Failed to refresh the background brush.");
+        return false;
+    }
     g_backgroundBrush.BackgroundSource(winrt::Windows::UI::Xaml::Media::AcrylicBackgroundSource::HostBackdrop);
     g_rootGrid.Background(g_backgroundBrush);
     //g_rootGrid.Children().Clear();
@@ -948,7 +925,7 @@ static inline void RefreshWindowTheme(const HWND hWnd) noexcept
     }
 }
 
-int AcrylicApplication::Main(const int nCmdShow) noexcept
+int AcrylicApplication::Main() noexcept
 {
     // XAML Island is only supported on Windows 10 19H1 and onwards.
     if (!IsWindows1019H1OrGreater()) {
@@ -991,7 +968,7 @@ int AcrylicApplication::Main(const int nCmdShow) noexcept
         return -1;
     }
 
-    if (!ShowMainWindow(nCmdShow)) {
+    if (!Utils::SetWindowState(g_mainWindowHandle, WindowState::Shown)) {
         Utils::DisplayErrorDialog(L"Failed to show the main window.");
         return -1;
     }

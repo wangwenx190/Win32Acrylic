@@ -216,6 +216,65 @@ static constexpr UINT g_defaultWindowDPI = USER_DEFAULT_SCREEN_DPI;
             && (windowRect.right == screenRect.right));
 }
 
+[[nodiscard]] static inline bool WindowEnterFullScreen(const HWND hWnd) noexcept
+{
+    USER32_API(GetWindowLongPtrW);
+    USER32_API(SetWindowLongPtrW);
+    if (GetWindowLongPtrWFunc && SetWindowLongPtrWFunc) {
+        if (!hWnd) {
+            return false;
+        }
+        const auto oldStyle = static_cast<DWORD>(GetWindowLongPtrWFunc(hWnd, GWL_STYLE));
+        const DWORD newStyle = ((oldStyle & ~WS_THICKFRAME) | WS_POPUP);
+        if (SetWindowLongPtrWFunc(hWnd, GWL_STYLE, static_cast<LONG_PTR>(newStyle)) == 0) {
+            PRINT_WIN32_ERROR_MESSAGE(SetWindowLongPtrW, L"Failed to change the window style.")
+            return false;
+        } else {
+            USER32_API(SetWindowPos);
+            if (SetWindowPosFunc) {
+                const RECT screenRect = GetScreenGeometry(hWnd, true, false);
+                if (SetWindowPosFunc(hWnd, nullptr, screenRect.left, screenRect.top,
+                                     std::abs(screenRect.right - screenRect.left),
+                                     std::abs(screenRect.bottom - screenRect.top),
+                                     SWP_SHOWWINDOW | SWP_NOZORDER | SWP_NOOWNERZORDER) == FALSE) {
+                    PRINT_WIN32_ERROR_MESSAGE(SetWindowPos, L"Failed to change the window geometry.")
+                    return false;
+                } else {
+                    return true;
+                }
+            } else {
+                OutputDebugStringW(L"SetWindowPos() is not available.");
+                return false;
+            }
+        }
+    } else {
+        OutputDebugStringW(L"GetWindowLongPtrW() and SetWindowLongPtrW() are not available.");
+        return false;
+    }
+}
+
+[[nodiscard]] static inline bool WindowExitFullScreen(const HWND hWnd) noexcept
+{
+    USER32_API(GetWindowLongPtrW);
+    USER32_API(SetWindowLongPtrW);
+    if (GetWindowLongPtrWFunc && SetWindowLongPtrWFunc) {
+        if (!hWnd) {
+            return false;
+        }
+        const auto oldStyle = static_cast<DWORD>(GetWindowLongPtrWFunc(hWnd, GWL_STYLE));
+        const DWORD newStyle = ((oldStyle & ~WS_POPUP) | WS_THICKFRAME);
+        if (SetWindowLongPtrWFunc(hWnd, GWL_STYLE, static_cast<LONG_PTR>(newStyle)) == 0) {
+            PRINT_WIN32_ERROR_MESSAGE(SetWindowLongPtrW, L"Failed to change the window style.")
+            return false;
+        } else {
+            return true;
+        }
+    } else {
+        OutputDebugStringW(L"GetWindowLongPtrW() and SetWindowLongPtrW() are not available.");
+        return false;
+    }
+}
+
 [[nodiscard]] static inline bool IsHighContrastModeEnabled() noexcept
 {
     USER32_API(SystemParametersInfoW);
@@ -270,39 +329,62 @@ static constexpr UINT g_defaultWindowDPI = USER_DEFAULT_SCREEN_DPI;
     USER32_API(GetDpiForWindow);
     if (GetDpiForWindowFunc) {
         return GetDpiForWindowFunc(hWnd);
-    }
-    USER32_API(GetSystemDpiForProcess);
-    if (GetSystemDpiForProcessFunc) {
-        GetSystemDpiForProcessFunc(GetCurrentProcess());
-    }
-    USER32_API(GetDpiForSystem);
-    if (GetDpiForSystemFunc) {
-        return GetDpiForSystemFunc();
-    }
-    SHCORE_API(GetDpiForMonitor);
-    if (GetDpiForMonitorFunc) {
-        const HMONITOR mon = GetWindowScreen(hWnd, true);
-        if (mon) {
-            UINT dpiX = 0, dpiY = 0;
-            const HRESULT hr = GetDpiForMonitorFunc(mon, MDT_EFFECTIVE_DPI, &dpiX, &dpiY);
-            if (SUCCEEDED(hr)) {
-                return static_cast<UINT>(std::round(static_cast<double>(dpiX + dpiY) / 2.0));
+    } else {
+        OutputDebugStringW(L"GetDpiForWindow() is not available.");
+        USER32_API(GetSystemDpiForProcess);
+        if (GetSystemDpiForProcessFunc) {
+            return GetSystemDpiForProcessFunc(GetCurrentProcess());
+        } else {
+            OutputDebugStringW(L"GetSystemDpiForProcess() is not available.");
+            USER32_API(GetDpiForSystem);
+            if (GetDpiForSystemFunc) {
+                return GetDpiForSystemFunc();
+            } else {
+                OutputDebugStringW(L"GetDpiForSystem() is not available.");
+                SHCORE_API(GetDpiForMonitor);
+                if (GetDpiForMonitorFunc) {
+                    const HMONITOR mon = GetWindowScreen(hWnd, true);
+                    if (mon) {
+                        UINT dpiX = 0, dpiY = 0;
+                        const HRESULT hr = GetDpiForMonitorFunc(mon, MDT_EFFECTIVE_DPI, &dpiX, &dpiY);
+                        if (SUCCEEDED(hr)) {
+                            return static_cast<UINT>(std::round(static_cast<double>(dpiX + dpiY) / 2.0));
+                        } else {
+                            PRINT_HR_ERROR_MESSAGE(GetDpiForMonitor, hr, L"Failed to retrieve the screen's DPI.")
+                            return g_defaultWindowDPI;
+                        }
+                    } else {
+                        OutputDebugStringW(L"Failed to retrieve the corresponding screen.");
+                        return g_defaultWindowDPI;
+                    }
+                } else {
+                    OutputDebugStringW(L"GetDpiForMonitor() is not available.");
+                    USER32_API(GetDC);
+                    USER32_API(ReleaseDC);
+                    GDI32_API(GetDeviceCaps);
+                    if (GetDCFunc && GetDeviceCapsFunc && ReleaseDCFunc) {
+                        const HDC hdc = GetDCFunc(nullptr);
+                        if (hdc) {
+                            const int dpiX = GetDeviceCapsFunc(hdc, LOGPIXELSX);
+                            const int dpiY = GetDeviceCapsFunc(hdc, LOGPIXELSY);
+                            if (ReleaseDCFunc(nullptr, hdc) == 0) {
+                                PRINT_WIN32_ERROR_MESSAGE(ReleaseDC, L"Failed to release the desktop window's DC.")
+                                return g_defaultWindowDPI;
+                            } else {
+                                return static_cast<UINT>(std::round(static_cast<double>(dpiX + dpiY) / 2.0));
+                            }
+                        } else {
+                            PRINT_WIN32_ERROR_MESSAGE(GetDC, L"Failed to retrieve the desktop window's DC.")
+                            return g_defaultWindowDPI;
+                        }
+                    } else {
+                        OutputDebugStringW(L"GetDC(), ReleaseDC() and GetDeviceCaps() are not available.");
+                        return g_defaultWindowDPI;
+                    }
+                }
             }
         }
     }
-    USER32_API(GetDC);
-    GDI32_API(GetDeviceCaps);
-    USER32_API(ReleaseDC);
-    if (GetDCFunc && GetDeviceCapsFunc && ReleaseDCFunc) {
-        const HDC hdc = GetDCFunc(nullptr);
-        if (hdc) {
-            const int dpiX = GetDeviceCapsFunc(hdc, LOGPIXELSX);
-            const int dpiY = GetDeviceCapsFunc(hdc, LOGPIXELSY);
-            ReleaseDCFunc(nullptr, hdc);
-            return static_cast<UINT>(std::round(static_cast<double>(dpiX + dpiY) / 2.0));
-        }
-    }
-    return g_defaultWindowDPI;
 }
 
 [[nodiscard]] static inline UINT GetResizeBorderThickness(const HWND hWnd, const bool x) noexcept
@@ -428,32 +510,20 @@ LPCWSTR Utils::GetWindowClassName(const ATOM atom) noexcept
 
 LPCWSTR Utils::GetWindowClassName(const HWND hWnd) noexcept
 {
-#if (defined(WIN64) || defined(_WIN64))
-    USER32_API(GetClassLongPtrW);
-    if (GetClassLongPtrWFunc)
-#else
-    USER32_API(GetClassLongW);
-    if (GetClassLongWFunc)
-#endif
-    {
+    USER32_API(GetClassNameW);
+    if (GetClassNameWFunc) {
         if (!hWnd) {
             return nullptr;
         }
-        const ULONG_PTR result =
-#if (defined(WIN64) || defined(_WIN64))
-            GetClassLongPtrWFunc
-#else
-            GetClassLongWFunc
-#endif
-            (hWnd, GCW_ATOM);
-        if (result == 0) {
-            PRINT_WIN32_ERROR_MESSAGE(GetClassLongPtrW, L"Failed to retrieve the class ATOM of the window.")
+        const auto buf = new wchar_t[MAX_PATH];
+        if (GetClassNameWFunc(hWnd, buf, MAX_PATH) == 0) {
+            PRINT_WIN32_ERROR_MESSAGE(GetClassNameW, L"Failed to retrieve the window class name.")
             return nullptr;
         } else {
-            return GetWindowClassName(static_cast<ATOM>(result));
+            return buf;
         }
     } else {
-        OutputDebugStringW(L"GetClassLongPtrW() is not available.");
+        OutputDebugStringW(L"GetClassNameW() is not available.");
         return nullptr;
     }
 }
@@ -730,7 +800,7 @@ bool Utils::SetWindowTheme(const HWND hWnd, const WindowTheme theme) noexcept
 WindowState Utils::GetWindowState(const HWND hWnd) noexcept
 {
     if (!hWnd) {
-        return WindowState::Normal;
+        return WindowState::Shown;
     }
     if (IsWindowMinimized(hWnd)) {
         return WindowState::Minimized;
@@ -741,8 +811,17 @@ WindowState Utils::GetWindowState(const HWND hWnd) noexcept
     } else if (IsWindowFullScreen(hWnd)) {
         return WindowState::FullScreen;
     } else {
-        OutputDebugStringW(L"Failed to retrieve the window state.");
-        return WindowState::Normal;
+        USER32_API(IsWindowVisible);
+        if (IsWindowVisibleFunc) {
+            if (IsWindowVisibleFunc(hWnd) == FALSE) {
+                return WindowState::Hidden;
+            } else {
+                return WindowState::Shown;
+            }
+        } else {
+            OutputDebugStringW(L"IsWindowVisible() is not available.");
+            return WindowState::Shown;
+        }
     }
 }
 
@@ -753,24 +832,40 @@ bool Utils::SetWindowState(const HWND hWnd, const WindowState state) noexcept
         if (!hWnd) {
             return false;
         }
-        int nCmdShow = SW_SHOW;
+        const WindowState currentState = GetWindowState(hWnd);
+        if (currentState == state) {
+            OutputDebugStringW(L"Can't set a same window state.");
+            return false;
+        }
+        if ((currentState == WindowState::FullScreen) && (state != WindowState::FullScreen)) {
+            if (!WindowExitFullScreen(hWnd)) {
+                OutputDebugStringW(L"Failed to exit from fullScreen.");
+                return false;
+            }
+        }
+        int nCmdShow = SW_SHOW; // Activates the window and displays it in its current size and position.
         switch (state) {
         case WindowState::Minimized: {
             nCmdShow = SW_MINIMIZE;
         } break;
         case WindowState::Normal: {
-            nCmdShow = SW_RESTORE;
+            nCmdShow = SW_RESTORE; // An application should specify this flag when restoring a minimized window.
         } break;
         case WindowState::Maximized: {
             nCmdShow = SW_MAXIMIZE;
         } break;
         case WindowState::FullScreen: {
-            // ### TODO
+            return WindowEnterFullScreen(hWnd);
+        } break;
+        case WindowState::Shown: {
+            nCmdShow = SW_NORMAL; // An application should specify this flag when displaying the window for the first time.
+        } break;
+        case WindowState::Hidden: {
+            nCmdShow = SW_HIDE;
         } break;
         }
-        // Don't check it's result because it returns
-        // the previous window state rather than the
-        // operation result of itself.
+        // Don't check ShowWindow()'s result because it returns the previous window state rather than
+        // the operation result of itself.
         ShowWindowFunc(hWnd, nCmdShow);
         const DWORD dwError = GetLastError();
         if (dwError != ERROR_SUCCESS) {
@@ -783,9 +878,20 @@ bool Utils::SetWindowState(const HWND hWnd, const WindowState state) noexcept
                 DisplayErrorDialog(L"Failed to change the window state.");
             }
             return false;
-        } else {
-            return true;
         }
+        if ((nCmdShow != SW_HIDE) && (nCmdShow != SW_MINIMIZE)) {
+            USER32_API(UpdateWindow);
+            if (UpdateWindowFunc) {
+                if (UpdateWindowFunc(hWnd) == FALSE) {
+                    PRINT_WIN32_ERROR_MESSAGE(UpdateWindow, L"Failed to update the window.")
+                    return false;
+                }
+            } else {
+                OutputDebugStringW(L"UpdateWindow() is not available.");
+                return false;
+            }
+        }
+        return true;
     } else {
         OutputDebugStringW(L"ShowWindow() is not available.");
         return false;

@@ -143,7 +143,11 @@ bool SystemLibraryPrivate::Load() noexcept
     }
     m_module = m_LoadLibraryExWFunc(m_fileName, nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
     if (!m_module) {
-        PRINT_WIN32_ERROR_MESSAGE(LoadLibraryExW, L"Failed to load dynamic link library.")
+        auto buf = new wchar_t[MAX_PATH];
+        swprintf(buf, L"Failed to load dynamic link library \"%s\".", m_fileName);
+        PRINT_WIN32_ERROR_MESSAGE(LoadLibraryExW, buf)
+        delete [] buf;
+        buf = nullptr;
         return false;
     }
     return true;
@@ -154,12 +158,16 @@ void SystemLibraryPrivate::Unload() noexcept
     if (!IsLoaded()) {
         return;
     }
-    m_fileName = nullptr;
-    m_resolvedSymbols.clear();
     if (FreeLibrary(m_module) == FALSE) {
-        PRINT_WIN32_ERROR_MESSAGE(FreeLibrary, L"Failed to unload dynamic link library.")
+        auto buf = new wchar_t[MAX_PATH];
+        swprintf(buf, L"Failed to unload dynamic link library \"%s\".", m_fileName);
+        PRINT_WIN32_ERROR_MESSAGE(FreeLibrary, buf)
+        delete [] buf;
+        buf = nullptr;
     }
     m_module = nullptr;
+    m_fileName = nullptr;
+    m_resolvedSymbols.clear();
 }
 
 FARPROC SystemLibraryPrivate::GetSymbol(LPCWSTR function) noexcept
@@ -185,7 +193,11 @@ FARPROC SystemLibraryPrivate::GetSymbol(LPCWSTR function) noexcept
         delete [] name;
         name = nullptr;
         if (!addr) {
-            PRINT_WIN32_ERROR_MESSAGE(GetProcAddress, L"Failed to resolve symbol.")
+            auto buf = new wchar_t[MAX_PATH];
+            swprintf(buf, L"Failed to resolve symbol \"%s\".", function);
+            PRINT_WIN32_ERROR_MESSAGE(GetProcAddress, buf)
+            delete [] buf;
+            buf = nullptr;
         }
         m_resolvedSymbols.insert({function, addr});
         return addr;

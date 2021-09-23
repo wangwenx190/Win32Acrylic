@@ -28,6 +28,7 @@
 #include <Unknwn.h> // Place it before any WinRT headers.
 
 // Avoid collision with WinRT's same name function.
+// https://docs.microsoft.com/en-us/windows/uwp/cpp-and-winrt-apis/faq#how-do-i-resolve-ambiguities-with-getcurrenttime-and-or-try-
 #pragma push_macro("GetCurrentTime")
 #pragma push_macro("TRY")
 #undef GetCurrentTime
@@ -927,6 +928,8 @@ static winrt::Windows::UI::Xaml::Media::AcrylicBrush g_backgroundBrush = nullptr
 
 int AcrylicApplication::Main() noexcept
 {
+    Utils::DumpApplicationInformation();
+
     // XAML Island is only supported on Windows 10 19H1 and onwards.
     if (!IsWindows1019H1OrGreater()) {
         Utils::DisplayErrorDialog(L"This application only supports Windows 10 19H1 and onwards.");

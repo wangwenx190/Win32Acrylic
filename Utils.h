@@ -99,6 +99,7 @@ enum class WindowMetrics : int
 namespace Utils
 {
     void DisplayErrorDialog(LPCWSTR text) noexcept;
+    void DumpApplicationInformation() noexcept;
     [[nodiscard]] HINSTANCE GetCurrentModuleInstance() noexcept;
     [[nodiscard]] HINSTANCE GetWindowInstance(const HWND hWnd) noexcept;
     [[nodiscard]] LPCWSTR GetWindowClassName(const ATOM atom) noexcept;
@@ -119,6 +120,8 @@ namespace Utils
     [[nodiscard]] bool SetProcessDPIAwareness(const DPIAwareness dpiAwareness) noexcept;
     [[nodiscard]] UINT GetWindowMetrics(const HWND hWnd, const WindowMetrics metrics) noexcept;
     [[nodiscard]] RECT GetScreenGeometry(const HWND hWnd) noexcept;
+    [[nodiscard]] VersionNumber GetCurrentOSVersion() noexcept;
+    [[nodiscard]] double GetScreenDevicePixelRatio(const HWND hWnd) noexcept;
 } // namespace Utils
 
 [[nodiscard]] inline bool IsWindows1019H1OrGreater() noexcept

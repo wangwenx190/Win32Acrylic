@@ -58,6 +58,7 @@ static constexpr UINT g_defaultCaptionHeight = 23;
 static constexpr UINT g_defaultTitleBarHeight = 31;
 static constexpr UINT g_defaultFrameBorderThickness = 1;
 static constexpr UINT g_defaultWindowDPI = USER_DEFAULT_SCREEN_DPI;
+static constexpr double g_defaultScreenDPR = 1.0;
 
 [[nodiscard]] static inline HMONITOR GetWindowScreen(const HWND hWnd, const bool defaultToNearest) noexcept
 {
@@ -293,32 +294,43 @@ static constexpr UINT g_defaultWindowDPI = USER_DEFAULT_SCREEN_DPI;
     }
 }
 
-[[nodiscard]] static inline bool ShouldAppsUseDarkMode() noexcept
+[[nodiscard]] static inline bool GetBoolFromRegistry(const HKEY rootKey, LPCWSTR subKey, LPCWSTR keyName) noexcept
 {
     ADVAPI32_API(RegOpenKeyExW);
     ADVAPI32_API(RegQueryValueExW);
     ADVAPI32_API(RegCloseKey);
     if (RegOpenKeyExWFunc && RegQueryValueExWFunc && RegCloseKeyFunc) {
+        if (!rootKey || !subKey || (wcscmp(subKey, L"") == 0) || !keyName || (wcscmp(keyName, L"") == 0)) {
+            OutputDebugStringW(L"Can't query the registry due to invalid parameters are passed.");
+            return false;
+        }
         HKEY hKey = nullptr;
-        if (RegOpenKeyExWFunc(HKEY_CURRENT_USER, g_personalizeRegistryKey, 0, KEY_READ, &hKey) != ERROR_SUCCESS) {
+        if (RegOpenKeyExWFunc(rootKey, subKey, 0, KEY_READ, &hKey) != ERROR_SUCCESS) {
             PRINT_WIN32_ERROR_MESSAGE(RegOpenKeyExW, L"Failed to open the registry key to read.")
             return false;
         }
         DWORD dwValue = 0;
         DWORD dwType = REG_DWORD;
         DWORD dwSize = sizeof(dwValue);
-        const bool success = (RegQueryValueExWFunc(hKey, L"AppsUseLightTheme", nullptr, &dwType, reinterpret_cast<LPBYTE>(&dwValue),&dwSize) == ERROR_SUCCESS);
+        const bool success = (RegQueryValueExWFunc(hKey, keyName, nullptr, &dwType, reinterpret_cast<LPBYTE>(&dwValue), &dwSize) == ERROR_SUCCESS);
         if (!success) {
             PRINT_WIN32_ERROR_MESSAGE(RegQueryValueExW, L"Failed to query the registry key value.")
+            // Don't return early here because we have to close the opened registry key later.
         }
         if (RegCloseKeyFunc(hKey) != ERROR_SUCCESS) {
             PRINT_WIN32_ERROR_MESSAGE(RegCloseKey, L"Failed to close the registry key.")
+            return false;
         }
-        return (success && (dwValue == 0));
+        return (success && (dwValue != 0));
     } else {
         OutputDebugStringW(L"RegOpenKeyExW(), RegQueryValueExW() and RegCloseKey() are not available.");
         return false;
     }
+}
+
+[[nodiscard]] static inline bool ShouldAppsUseDarkMode() noexcept
+{
+    return GetBoolFromRegistry(HKEY_CURRENT_USER, g_personalizeRegistryKey, L"AppsUseLightTheme");
 }
 
 [[nodiscard]] static inline UINT GetWindowDPI(const HWND hWnd) noexcept
@@ -468,24 +480,12 @@ HINSTANCE Utils::GetCurrentModuleInstance() noexcept
 
 HINSTANCE Utils::GetWindowInstance(const HWND hWnd) noexcept
 {
-#if (defined(WIN64) || defined(_WIN64))
     USER32_API(GetWindowLongPtrW);
-    if (GetWindowLongPtrWFunc)
-#else
-    USER32_API(GetWindowLongW);
-    if (GetWindowLongWFunc)
-#endif
-    {
+    if (GetWindowLongPtrWFunc) {
         if (!hWnd) {
             return nullptr;
         }
-        const LONG_PTR result =
-#if (defined(WIN64) || defined(_WIN64))
-            GetWindowLongPtrWFunc
-#else
-            GetWindowLongWFunc
-#endif
-            (hWnd, GWLP_HINSTANCE);
+        const LONG_PTR result = GetWindowLongPtrWFunc(hWnd, GWLP_HINSTANCE);
         if (result == 0) {
             PRINT_WIN32_ERROR_MESSAGE(GetWindowLongPtrW, L"Failed to retrieve the window's HINSTANCE.")
             return nullptr;
@@ -628,8 +628,17 @@ bool Utils::CloseWindow(const HWND hWnd) noexcept
             PRINT_WIN32_ERROR_MESSAGE(DestroyWindow, L"Failed to destroy the window.")
             return false;
         }
-        if (UnregisterClassWFunc(GetWindowClassName(hWnd), GetWindowInstance(hWnd)) == FALSE) {
-            PRINT_WIN32_ERROR_MESSAGE(UnregisterClassW, L"Failed to unregister the window class.")
+        LPCWSTR name = GetWindowClassName(hWnd);
+        if (name && (wcscmp(name, L"") != 0)) {
+            const bool result = (UnregisterClassWFunc(name, GetWindowInstance(hWnd)) == FALSE);
+            delete [] name;
+            name = nullptr;
+            if (!result) {
+                PRINT_WIN32_ERROR_MESSAGE(UnregisterClassW, L"Failed to unregister the window class.")
+                return false;
+            }
+        } else {
+            OutputDebugStringW(L"Failed to retrieve the window class name.");
             return false;
         }
         return true;
@@ -1007,7 +1016,7 @@ bool Utils::SetProcessDPIAwareness(const DPIAwareness dpiAwareness) noexcept
     USER32_API(SetProcessDpiAwarenessContext);
     if (SetProcessDpiAwarenessContextFunc) {
         if (SetProcessDpiAwarenessContextFunc(dac) == FALSE) {
-            //PRINT_WIN32_ERROR_MESSAGE(SetProcessDpiAwarenessContext, L"Failed to set DPI awareness for the process.")
+            OutputDebugStringW(L"Failed to set DPI awareness for the process: SetProcessDpiAwarenessContext() returned FALSE.");
             return false;
         } else {
             return true;
@@ -1018,7 +1027,7 @@ bool Utils::SetProcessDPIAwareness(const DPIAwareness dpiAwareness) noexcept
         if (SetProcessDpiAwarenessFunc) {
             const HRESULT hr = SetProcessDpiAwarenessFunc(pda);
             if (FAILED(hr)) {
-                //PRINT_HR_ERROR_MESSAGE(SetProcessDpiAwareness, hr, L"Failed to set DPI awareness for the process.")
+                OutputDebugStringW(L"Failed to set DPI awareness for the process: SetProcessDpiAwareness() reported failed.");
                 return false;
             } else {
                 return true;
@@ -1028,7 +1037,7 @@ bool Utils::SetProcessDPIAwareness(const DPIAwareness dpiAwareness) noexcept
             USER32_API(SetProcessDPIAware);
             if (SetProcessDPIAwareFunc) {
                 if (SetProcessDPIAwareFunc() == FALSE) {
-                    //PRINT_WIN32_ERROR_MESSAGE(SetProcessDPIAware, L"Failed to set DPI awareness for the process.")
+                    OutputDebugStringW(L"Failed to set DPI awareness for the process: SetProcessDPIAware() returned FALSE.");
                     return false;
                 } else {
                     return true;
@@ -1095,4 +1104,94 @@ RECT Utils::GetScreenGeometry(const HWND hWnd) noexcept
         return {};
     }
     return ::GetScreenGeometry(hWnd, true, false);
+}
+
+VersionNumber Utils::GetCurrentOSVersion() noexcept
+{
+    // ### TODO
+    return VersionNumber();
+}
+
+void Utils::DumpApplicationInformation() noexcept
+{
+    LPCWSTR curOsVer = GetCurrentOSVersion().ToString();
+    LPCWSTR minOsVer = Windows10_19Half1.ToString();
+    LPCWSTR curCpuArch = L"TODO";
+    LPCWSTR tarCpuArch = L"TODO";
+    auto compiler = new wchar_t[MAX_PATH];
+    swprintf(compiler, L"Microsoft Visual C++ version %d", _MSC_FULL_VER);
+    LPCWSTR winrtVer = L"TODO";
+    LPCWSTR xamlVer = L"TODO";
+    LPCWSTR pda = L"Unknown";
+    const DPIAwareness awareness = GetProcessDPIAwareness();
+    switch (awareness) {
+    case DPIAwareness::PerMonitorV2: {
+        pda = L"PerMonitorV2";
+    } break;
+    case DPIAwareness::PerMonitor: {
+        pda = L"PerMonitor";
+    } break;
+    case DPIAwareness::System: {
+        pda = L"System";
+    } break;
+    case DPIAwareness::GdiScaled: {
+        pda = L"Unaware_GdiScaled";
+    } break;
+    case DPIAwareness::Unaware: {
+        pda = L"Unaware";
+    } break;
+    }
+    auto buf = new wchar_t[4096];
+    swprintf(buf, L"Current OS version: %s\r\n"
+                  "Minimum supported OS version: %s\r\n"
+                  "Current CPU architecture: %s\r\n"
+                  "Target CPU architecture: %s\r\n"
+                  "Compiler: %s\r\n"
+                  "Windows RunTime version: %s\r\n"
+                  "XAML Framework version: %s\r\n"
+                  "Process DPI awareness: %s\r\n"
+                  "Main window DPI: %d\r\n"
+                  "Screen device pixel ratio: %f",
+             curOsVer, minOsVer, curCpuArch, tarCpuArch,
+             compiler, winrtVer, xamlVer, pda,
+             GetWindowDPI(nullptr), GetScreenDevicePixelRatio(nullptr));
+    delete [] curOsVer;
+    curOsVer = nullptr;
+    delete [] minOsVer;
+    minOsVer = nullptr;
+    delete [] compiler;
+    compiler = nullptr;
+    OutputDebugStringW(buf);
+    delete [] buf;
+    buf = nullptr;
+}
+
+double Utils::GetScreenDevicePixelRatio(const HWND hWnd) noexcept
+{
+    SHCORE_API(GetScaleFactorForMonitor);
+    if (GetScaleFactorForMonitorFunc) {
+        if (!hWnd) {
+            return g_defaultScreenDPR;
+        }
+        const HMONITOR mon = GetWindowScreen(hWnd, true);
+        if (!mon) {
+            OutputDebugStringW(L"Failed to retrieve the corresponding screen.");
+            return g_defaultScreenDPR;
+        }
+        DEVICE_SCALE_FACTOR dsf = DEVICE_SCALE_FACTOR_INVALID;
+        const HRESULT hr = GetScaleFactorForMonitorFunc(mon, &dsf);
+        if (FAILED(hr)) {
+            PRINT_HR_ERROR_MESSAGE(GetScaleFactorForMonitor, hr, L"Failed to retrieve the device scale factor for the screen.")
+            return g_defaultScreenDPR;
+        }
+        const auto factor = static_cast<int>(dsf);
+        if (factor <= 0) {
+            OutputDebugStringW(L"The retrieved device scale factor is invalid.");
+            return g_defaultScreenDPR;
+        }
+        return (static_cast<double>(factor) / 100.0);
+    } else {
+        OutputDebugStringW(L"GetScaleFactorForMonitor() is not available.");
+        return g_defaultScreenDPR;
+    }
 }

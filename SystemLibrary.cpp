@@ -26,14 +26,18 @@
 #include "Utils.h"
 #include <unordered_map>
 
-[[nodiscard]] static inline LPCSTR WideToMulti(LPCWSTR str) noexcept
+[[nodiscard]] static inline std::string WideToMulti(const std::wstring &str) noexcept
 {
-    if (!str || (wcscmp(str, L"") == 0)) {
-        return nullptr;
+    if (str.empty()) {
+        return {};
     }
-    const int required = WideCharToMultiByte(CP_UTF8, 0, str, -1, nullptr, 0, nullptr, nullptr);
-    const auto result = new char[required];
-    WideCharToMultiByte(CP_UTF8, 0, str, -1, result, required, nullptr, nullptr);
+    const auto data = str.c_str();
+    const int required = WideCharToMultiByte(CP_UTF8, 0, data, -1, nullptr, 0, nullptr, nullptr);
+    auto strA = new char[required];
+    WideCharToMultiByte(CP_UTF8, 0, data, -1, strA, required, nullptr, nullptr);
+    const std::string result = strA;
+    delete [] strA;
+    strA = nullptr;
     return result;
 }
 
@@ -43,14 +47,14 @@ public:
     explicit SystemLibraryPrivate(SystemLibrary *q) noexcept;
     ~SystemLibraryPrivate() noexcept;
 
-    void FileName(LPCWSTR fileName) noexcept;
-    [[nodiscard]] LPCWSTR FileName() const noexcept;
+    void FileName(const std::wstring &fileName) noexcept;
+    [[nodiscard]] std::wstring FileName() const noexcept;
 
     [[nodiscard]] bool IsLoaded() const noexcept;
     [[nodiscard]] bool Load() noexcept;
     void Unload() noexcept;
 
-    [[nodiscard]] FARPROC GetSymbol(LPCWSTR function) noexcept;
+    [[nodiscard]] FARPROC GetSymbol(const std::wstring &function) noexcept;
 
 private:
     SystemLibraryPrivate(const SystemLibraryPrivate &) = delete;
@@ -63,9 +67,10 @@ private:
 
 private:
     SystemLibrary *q_ptr = nullptr;
-    LPCWSTR m_fileName = nullptr;
+    bool m_failedToLoad = false;
+    std::wstring m_fileName = {};
     HMODULE m_module = nullptr;
-    std::unordered_map<LPCWSTR, FARPROC> m_resolvedSymbols = {};
+    std::unordered_map<std::wstring, FARPROC> m_resolvedSymbols = {};
     static inline bool m_tried = false;
     using LoadLibraryExWSig = decltype(&::LoadLibraryExW);
     static inline LoadLibraryExWSig m_LoadLibraryExWFunc = nullptr;
@@ -89,10 +94,10 @@ void SystemLibraryPrivate::Initialize() noexcept
         if (kernel32) {
             m_LoadLibraryExWFunc = reinterpret_cast<LoadLibraryExWSig>(GetProcAddress(kernel32, "LoadLibraryExW"));
             if (!m_LoadLibraryExWFunc) {
-                PRINT_WIN32_ERROR_MESSAGE(GetProcAddress, L"Failed to resolve symbol LoadLibraryExW().")
+                PRINT_WIN32_ERROR_MESSAGE(GetProcAddress, L"Failed to resolve symbol \"LoadLibraryExW()\".")
             }
         } else {
-            OutputDebugStringW(L"Failed to retrieve the base address of Kernel32.dll.");
+            OutputDebugStringW(L"Failed to retrieve the base address of \"Kernel32.dll\".");
         }
     }
 }
@@ -110,18 +115,18 @@ SystemLibraryPrivate::~SystemLibraryPrivate() noexcept
     }
 }
 
-void SystemLibraryPrivate::FileName(LPCWSTR fileName) noexcept
+void SystemLibraryPrivate::FileName(const std::wstring &fileName) noexcept
 {
     if (IsLoaded()) {
         OutputDebugStringW(L"The library has been loaded already, can't change the file name now.");
         return;
     }
-    if (fileName && (wcscmp(fileName, L"") != 0)) {
+    if (!fileName.empty()) {
         m_fileName = fileName;
     }
 }
 
-LPCWSTR SystemLibraryPrivate::FileName() const noexcept
+std::wstring SystemLibraryPrivate::FileName() const noexcept
 {
     return m_fileName;
 }
@@ -133,18 +138,22 @@ bool SystemLibraryPrivate::IsLoaded() const noexcept
 
 bool SystemLibraryPrivate::Load() noexcept
 {
+    if (m_failedToLoad) {
+        return false;
+    }
     if (!m_LoadLibraryExWFunc) {
         OutputDebugStringW(L"LoadLibraryExW() is not available.");
         return false;
     }
-    if (!m_fileName || (wcscmp(m_fileName, L"") == 0)) {
+    if (m_fileName.empty()) {
         OutputDebugStringW(L"The file name has not been set, can't load library now.");
         return false;
     }
-    m_module = m_LoadLibraryExWFunc(m_fileName, nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
+    m_module = m_LoadLibraryExWFunc(m_fileName.c_str(), nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
     if (!m_module) {
+        m_failedToLoad = true;
         auto buf = new wchar_t[MAX_PATH];
-        swprintf(buf, L"Failed to load dynamic link library \"%s\".", m_fileName);
+        swprintf(buf, L"Failed to load dynamic link library \"%s\".", m_fileName.c_str());
         PRINT_WIN32_ERROR_MESSAGE(LoadLibraryExW, buf)
         delete [] buf;
         buf = nullptr;
@@ -155,46 +164,71 @@ bool SystemLibraryPrivate::Load() noexcept
 
 void SystemLibraryPrivate::Unload() noexcept
 {
+    if (m_failedToLoad) {
+        return;
+    }
     if (!IsLoaded()) {
         return;
     }
+    {
+        auto buf = new wchar_t[MAX_PATH];
+        swprintf(buf, L"Unloading dynamic link library \"%s\" ...", m_fileName.c_str());
+        OutputDebugStringW(buf);
+        delete [] buf;
+        buf = nullptr;
+    }
     if (FreeLibrary(m_module) == FALSE) {
         auto buf = new wchar_t[MAX_PATH];
-        swprintf(buf, L"Failed to unload dynamic link library \"%s\".", m_fileName);
+        swprintf(buf, L"Failed to unload dynamic link library \"%s\".", m_fileName.c_str());
         PRINT_WIN32_ERROR_MESSAGE(FreeLibrary, buf)
         delete [] buf;
         buf = nullptr;
     }
     m_module = nullptr;
-    m_fileName = nullptr;
-    m_resolvedSymbols.clear();
+    m_fileName = {};
+    if (m_resolvedSymbols.empty()) {
+        OutputDebugStringW(L"No symbols cached.");
+    } else {
+        for (auto &&symbol : std::as_const(m_resolvedSymbols)) {
+            const auto name = symbol.first;
+            if (!name.empty()) {
+                auto buf = new wchar_t[MAX_PATH];
+                swprintf(buf, L"Cached symbol: \"%s()\".", name.c_str());
+                OutputDebugStringW(buf);
+                delete [] buf;
+                buf = nullptr;
+            }
+        }
+        m_resolvedSymbols.clear();
+    }
 }
 
-FARPROC SystemLibraryPrivate::GetSymbol(LPCWSTR function) noexcept
+FARPROC SystemLibraryPrivate::GetSymbol(const std::wstring &function) noexcept
 {
+    if (m_failedToLoad) {
+        return nullptr;
+    }
     if (!IsLoaded()) {
         if (!Load()) {
             OutputDebugStringW(L"Can't resolve the symbol due to the library can't be loaded.");
             return nullptr;
         }
     }
-    if (!function || (wcscmp(function, L"") == 0)) {
+    if (function.empty()) {
         OutputDebugStringW(L"Can't resolve the symbol due to its name is empty.");
         return nullptr;
     }
     const auto search = m_resolvedSymbols.find(function);
     if (search == m_resolvedSymbols.cend()) {
-        auto name = WideToMulti(function);
-        if (!name/* || (strcmp(name, "") == 0)*/) {
+        const std::string name = WideToMulti(function);
+        if (name.empty()) {
             OutputDebugStringW(L"Can't convert a wide char array to multi-byte char array.");
             return nullptr;
         }
-        const auto addr = GetProcAddress(m_module, name);
-        delete [] name;
-        name = nullptr;
+        const auto addr = GetProcAddress(m_module, name.c_str());
         if (!addr) {
             auto buf = new wchar_t[MAX_PATH];
-            swprintf(buf, L"Failed to resolve symbol \"%s\".", function);
+            swprintf(buf, L"Failed to resolve symbol \"%s()\".", function.c_str());
             PRINT_WIN32_ERROR_MESSAGE(GetProcAddress, buf)
             delete [] buf;
             buf = nullptr;
@@ -211,19 +245,19 @@ SystemLibrary::SystemLibrary() noexcept
     d_ptr = std::make_unique<SystemLibraryPrivate>(this);
 }
 
-SystemLibrary::SystemLibrary(LPCWSTR fileName) noexcept : SystemLibrary()
+SystemLibrary::SystemLibrary(const std::wstring &fileName) noexcept : SystemLibrary()
 {
     FileName(fileName);
 }
 
 SystemLibrary::~SystemLibrary() noexcept = default;
 
-void SystemLibrary::FileName(LPCWSTR fileName) noexcept
+void SystemLibrary::FileName(const std::wstring &fileName) noexcept
 {
     d_ptr->FileName(fileName);
 }
 
-LPCWSTR SystemLibrary::FileName() const noexcept
+std::wstring SystemLibrary::FileName() const noexcept
 {
     return d_ptr->FileName();
 }
@@ -243,7 +277,7 @@ void SystemLibrary::Unload() noexcept
     d_ptr->Unload();
 }
 
-FARPROC SystemLibrary::GetSymbol(LPCWSTR function) noexcept
+FARPROC SystemLibrary::GetSymbol(const std::wstring &function) noexcept
 {
     return d_ptr->GetSymbol(function);
 }

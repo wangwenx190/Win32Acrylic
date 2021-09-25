@@ -32,7 +32,7 @@ public:
     explicit SystemLibraryManagerPrivate(SystemLibraryManager *q) noexcept;
     ~SystemLibraryManagerPrivate() noexcept;
 
-    [[nodiscard]] FARPROC GetSymbol(LPCWSTR fileName, LPCWSTR symbolName) noexcept;
+    [[nodiscard]] FARPROC GetSymbol(const std::wstring &fileName, const std::wstring &symbolName) noexcept;
 
 private:
     SystemLibraryManagerPrivate(const SystemLibraryManagerPrivate &) = delete;
@@ -42,7 +42,7 @@ private:
 
 private:
     SystemLibraryManager *q_ptr = nullptr;
-    std::unordered_map<LPCWSTR, SystemLibrary *> m_loadedLibraries = {};
+    std::unordered_map<std::wstring, SystemLibrary *> m_loadedLibraries = {};
 };
 
 SystemLibraryManagerPrivate::SystemLibraryManagerPrivate(SystemLibraryManager *q) noexcept
@@ -67,13 +67,13 @@ SystemLibraryManagerPrivate::~SystemLibraryManagerPrivate() noexcept
     }
 }
 
-FARPROC SystemLibraryManagerPrivate::GetSymbol(LPCWSTR fileName, LPCWSTR symbolName) noexcept
+FARPROC SystemLibraryManagerPrivate::GetSymbol(const std::wstring &fileName, const std::wstring &symbolName) noexcept
 {
-    if (!fileName || (wcscmp(fileName, L"") == 0)) {
+    if (fileName.empty()) {
         OutputDebugStringW(L"Failed to resolve symbol from library due to the given file name is empty.");
         return nullptr;
     }
-    if (!symbolName || (wcscmp(symbolName, L"") == 0)) {
+    if (symbolName.empty()) {
         OutputDebugStringW(L"Failed to resolve symbol from library due to the given symbol name is empty.");
         return nullptr;
     }
@@ -100,7 +100,7 @@ SystemLibraryManager &SystemLibraryManager::instance() noexcept
     return manager;
 }
 
-FARPROC SystemLibraryManager::GetSymbol(LPCWSTR fileName, LPCWSTR symbolName) noexcept
+FARPROC SystemLibraryManager::GetSymbol(const std::wstring &fileName, const std::wstring &symbolName) noexcept
 {
     return d_ptr->GetSymbol(fileName, symbolName);
 }

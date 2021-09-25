@@ -98,17 +98,15 @@ enum class WindowMetrics : int
 
 namespace Utils
 {
-    void DisplayErrorDialog(LPCWSTR text) noexcept;
-    void DumpApplicationInformation() noexcept;
+    void DisplayErrorDialog(const std::wstring &text) noexcept;
     [[nodiscard]] HINSTANCE GetCurrentModuleInstance() noexcept;
     [[nodiscard]] HINSTANCE GetWindowInstance(const HWND hWnd) noexcept;
     [[nodiscard]] LPCWSTR GetWindowClassName(const ATOM atom) noexcept;
-    [[nodiscard]] LPCWSTR GetWindowClassName(const HWND hWnd) noexcept;
-    [[nodiscard]] LPCWSTR GetSystemErrorMessage(LPCWSTR function, const DWORD code) noexcept;
-    [[nodiscard]] LPCWSTR GetSystemErrorMessage(LPCWSTR function, const HRESULT hr) noexcept;
-    [[nodiscard]] LPCWSTR GetSystemErrorMessage(LPCWSTR function) noexcept;
-    [[nodiscard]] LPCWSTR GenerateGUID() noexcept;
-    [[nodiscard]] bool CloseWindow(const HWND hWnd) noexcept;
+    [[nodiscard]] std::wstring GetSystemErrorMessage(const std::wstring &function, const DWORD code) noexcept;
+    [[nodiscard]] std::wstring GetSystemErrorMessage(const std::wstring &function, const HRESULT hr) noexcept;
+    [[nodiscard]] std::wstring GetSystemErrorMessage(const std::wstring &function) noexcept;
+    [[nodiscard]] std::wstring GenerateGUID() noexcept;
+    [[nodiscard]] bool CloseWindow(const HWND hWnd, const ATOM atom) noexcept;
     [[nodiscard]] bool OpenSystemMenu(const HWND hWnd, const POINT pos) noexcept;
     [[nodiscard]] bool UpdateFrameMargins(const HWND hWnd) noexcept;
     [[nodiscard]] bool IsWindowsVersionOrGreater(const VersionNumber &version) noexcept;
@@ -120,8 +118,6 @@ namespace Utils
     [[nodiscard]] bool SetProcessDPIAwareness(const DPIAwareness dpiAwareness) noexcept;
     [[nodiscard]] UINT GetWindowMetrics(const HWND hWnd, const WindowMetrics metrics) noexcept;
     [[nodiscard]] RECT GetScreenGeometry(const HWND hWnd) noexcept;
-    [[nodiscard]] VersionNumber GetCurrentOSVersion() noexcept;
-    [[nodiscard]] double GetScreenDevicePixelRatio(const HWND hWnd) noexcept;
 } // namespace Utils
 
 [[nodiscard]] inline bool IsWindows1019H1OrGreater() noexcept
@@ -131,26 +127,15 @@ namespace Utils
     return result;
 }
 
-#ifndef __PRINT_ERROR_MESSAGE
-#define __PRINT_ERROR_MESSAGE(additionalMessage) \
-    if (__error_message_from_os) { \
-        Utils::DisplayErrorDialog(__error_message_from_os); \
-        delete [] __error_message_from_os; \
-        __error_message_from_os = nullptr; \
-    } else { \
-        Utils::DisplayErrorDialog(additionalMessage); \
-    }
-#endif
-
 #ifndef PRINT_WIN32_ERROR_MESSAGE
 #define PRINT_WIN32_ERROR_MESSAGE(function, additionalMessage) \
     const DWORD __dw_error_code = GetLastError(); \
-    auto __error_message_from_os = Utils::GetSystemErrorMessage(L#function, __dw_error_code); \
-    __PRINT_ERROR_MESSAGE(additionalMessage)
+    const std::wstring __error_message_from_os = Utils::GetSystemErrorMessage(L#function, __dw_error_code); \
+    Utils::DisplayErrorDialog(__error_message_from_os.empty() ? additionalMessage : __error_message_from_os);
 #endif
 
 #ifndef PRINT_HR_ERROR_MESSAGE
 #define PRINT_HR_ERROR_MESSAGE(function, hresult, additionalMessage) \
-    auto __error_message_from_os = Utils::GetSystemErrorMessage(L#function, hresult); \
-    __PRINT_ERROR_MESSAGE(additionalMessage)
+    const std::wstring __error_message_from_os = Utils::GetSystemErrorMessage(L#function, hresult); \
+    Utils::DisplayErrorDialog(__error_message_from_os.empty() ? additionalMessage : __error_message_from_os);
 #endif

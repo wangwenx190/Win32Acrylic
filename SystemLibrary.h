@@ -27,6 +27,7 @@
 #include <SDKDDKVer.h>
 #include <Windows.h>
 #include <memory>
+#include <string>
 
 class SystemLibraryPrivate;
 
@@ -34,20 +35,20 @@ class SystemLibrary
 {
 public:
     explicit SystemLibrary() noexcept;
-    explicit SystemLibrary(LPCWSTR fileName) noexcept;
+    explicit SystemLibrary(const std::wstring &fileName) noexcept;
     ~SystemLibrary() noexcept;
 
-    void FileName(LPCWSTR fileName) noexcept;
-    [[nodiscard]] LPCWSTR FileName() const noexcept;
+    void FileName(const std::wstring &fileName) noexcept;
+    [[nodiscard]] std::wstring FileName() const noexcept;
 
     [[nodiscard]] bool IsLoaded() const noexcept;
     [[nodiscard]] bool Load() noexcept;
     void Unload() noexcept;
 
-    [[nodiscard]] FARPROC GetSymbol(LPCWSTR function) noexcept;
+    [[nodiscard]] FARPROC GetSymbol(const std::wstring &function) noexcept;
 
     inline friend bool operator==(const SystemLibrary &lhs, const SystemLibrary &rhs) noexcept {
-        return (_wcsicmp(lhs.FileName(), rhs.FileName()) == 0);
+        return (lhs.FileName() == rhs.FileName());
     }
     inline friend bool operator!=(const SystemLibrary &lhs, const SystemLibrary &rhs) noexcept {
         return (!(lhs == rhs));

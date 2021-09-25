@@ -544,7 +544,7 @@ static winrt::Windows::UI::Xaml::Media::AcrylicBrush g_backgroundBrush = nullptr
         return 1;
     } break;
     case WM_CLOSE: {
-        if (Utils::CloseWindow(hWnd)) {
+        if (Utils::CloseWindow(hWnd, g_mainWindowAtom)) {
             g_mainWindowHandle = nullptr;
             g_mainWindowAtom = INVALID_ATOM;
             g_mainWindowDPI = 0;
@@ -662,7 +662,7 @@ static winrt::Windows::UI::Xaml::Media::AcrylicBrush g_backgroundBrush = nullptr
             return 1;
         } break;
         case WM_CLOSE: {
-            if (Utils::CloseWindow(hWnd)) {
+            if (Utils::CloseWindow(hWnd, g_dragBarWindowAtom)) {
                 g_dragBarWindowHandle = nullptr;
                 g_dragBarWindowAtom = INVALID_ATOM;
                 return 0;
@@ -683,7 +683,7 @@ static winrt::Windows::UI::Xaml::Media::AcrylicBrush g_backgroundBrush = nullptr
     }
 }
 
-[[nodiscard]] static inline bool RegisterMainWindowClass(LPCWSTR name) noexcept
+[[nodiscard]] static inline bool RegisterMainWindowClass(const std::wstring &name) noexcept
 {
     USER32_API(LoadCursorW);
     USER32_API(LoadIconW);
@@ -692,18 +692,18 @@ static winrt::Windows::UI::Xaml::Media::AcrylicBrush g_backgroundBrush = nullptr
     if (LoadCursorWFunc && LoadIconWFunc && RegisterClassExWFunc && GetClassInfoExWFunc) {
         bool exists = false;
         WNDCLASSEXW wcex = {};
-        if (name) {
-            exists = (GetClassInfoExWFunc(Utils::GetCurrentModuleInstance(), name, &wcex) != FALSE);
+        if (!name.empty()) {
+            exists = (GetClassInfoExWFunc(Utils::GetCurrentModuleInstance(), name.c_str(), &wcex) != FALSE);
         }
         if (!exists) {
             if (g_mainWindowAtom != INVALID_ATOM) {
                 exists = (GetClassInfoExWFunc(Utils::GetCurrentModuleInstance(), Utils::GetWindowClassName(g_mainWindowAtom), &wcex) != FALSE);
             }
         }
-        LPCWSTR guid = nullptr;
+        std::wstring guid = {};
         if (!exists) {
             guid = Utils::GenerateGUID();
-            if (!guid) {
+            if (guid.empty()) {
                 OutputDebugStringW(L"Failed to register the main window class due to can't generate a new GUID.");
                 return false;
             }
@@ -712,16 +712,12 @@ static winrt::Windows::UI::Xaml::Media::AcrylicBrush g_backgroundBrush = nullptr
             wcex.style = CS_HREDRAW | CS_VREDRAW;
             wcex.lpfnWndProc = MainWindowMessageHandler;
             wcex.hInstance = Utils::GetCurrentModuleInstance();
-            wcex.lpszClassName = ((name && (wcscmp(name, L"") != 0)) ? name : guid);
+            wcex.lpszClassName = (name.empty() ? guid.c_str() : name.c_str());
             wcex.hCursor = LoadCursorWFunc(nullptr, IDC_ARROW);
             wcex.hIcon = LoadIconWFunc(Utils::GetCurrentModuleInstance(), MAKEINTRESOURCEW(IDI_APPICON));
             wcex.hIconSm = LoadIconWFunc(Utils::GetCurrentModuleInstance(), MAKEINTRESOURCEW(IDI_APPICON_SMALL));
         }
         g_mainWindowAtom = RegisterClassExWFunc(&wcex);
-        if (guid) {
-            delete [] guid;
-            guid = nullptr;
-        }
         if (g_mainWindowAtom == INVALID_ATOM) {
             PRINT_WIN32_ERROR_MESSAGE(RegisterClassExW, L"Failed to register the main window class.")
             return false;
@@ -738,8 +734,8 @@ static winrt::Windows::UI::Xaml::Media::AcrylicBrush g_backgroundBrush = nullptr
     USER32_API(LoadCursorW);
     USER32_API(RegisterClassExW);
     if (LoadCursorWFunc && RegisterClassExWFunc) {
-        LPCWSTR guid = Utils::GenerateGUID();
-        if (!guid) {
+        const std::wstring guid = Utils::GenerateGUID();
+        if (guid.empty()) {
             OutputDebugStringW(L"Failed to register the drag bar window class due to can't generate a new GUID.");
             return false;
         }
@@ -749,11 +745,9 @@ static winrt::Windows::UI::Xaml::Media::AcrylicBrush g_backgroundBrush = nullptr
         wcex.style = CS_HREDRAW | CS_VREDRAW | CS_DBLCLKS;
         wcex.lpfnWndProc = DragBarMessageHandler;
         wcex.hInstance = Utils::GetCurrentModuleInstance();
-        wcex.lpszClassName = guid;
+        wcex.lpszClassName = guid.c_str();
         wcex.hCursor = LoadCursorWFunc(nullptr, IDC_ARROW);
         g_dragBarWindowAtom = RegisterClassExWFunc(&wcex);
-        delete [] guid;
-        guid = nullptr;
         if (g_dragBarWindowAtom == INVALID_ATOM) {
             PRINT_WIN32_ERROR_MESSAGE(RegisterClassExW, L"Failed to register the drag bar window class.")
             return false;
@@ -765,7 +759,7 @@ static winrt::Windows::UI::Xaml::Media::AcrylicBrush g_backgroundBrush = nullptr
     }
 }
 
-[[nodiscard]] static inline bool CreateMainWindow(LPCWSTR title) noexcept
+[[nodiscard]] static inline bool CreateMainWindow(const std::wstring &title) noexcept
 {
     USER32_API(CreateWindowExW);
     if (CreateWindowExWFunc) {
@@ -776,7 +770,7 @@ static winrt::Windows::UI::Xaml::Media::AcrylicBrush g_backgroundBrush = nullptr
         g_mainWindowHandle = CreateWindowExWFunc(
             WS_EX_NOREDIRECTIONBITMAP,
             Utils::GetWindowClassName(g_mainWindowAtom),
-            ((title && (wcscmp(title, L"") != 0)) ? title : g_defaultWindowTitle),
+            (title.empty() ? g_defaultWindowTitle : title.c_str()),
             (WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN | WS_CLIPSIBLINGS),
             CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
             nullptr, nullptr, Utils::GetCurrentModuleInstance(), nullptr);
@@ -928,8 +922,6 @@ static winrt::Windows::UI::Xaml::Media::AcrylicBrush g_backgroundBrush = nullptr
 
 int AcrylicApplication::Main() noexcept
 {
-    Utils::DumpApplicationInformation();
-
     // XAML Island is only supported on Windows 10 19H1 and onwards.
     if (!IsWindows1019H1OrGreater()) {
         Utils::DisplayErrorDialog(L"This application only supports Windows 10 19H1 and onwards.");
@@ -946,12 +938,12 @@ int AcrylicApplication::Main() noexcept
         }
     }
 
-    if (!RegisterMainWindowClass(nullptr)) {
+    if (!RegisterMainWindowClass({})) {
         Utils::DisplayErrorDialog(L"Failed to register the main window class.");
         return -1;
     }
 
-    if (!CreateMainWindow(nullptr)) {
+    if (!CreateMainWindow({})) {
         Utils::DisplayErrorDialog(L"Failed to create the main window.");
         return -1;
     }

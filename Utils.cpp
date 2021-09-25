@@ -58,7 +58,6 @@ static constexpr UINT g_defaultCaptionHeight = 23;
 static constexpr UINT g_defaultTitleBarHeight = 31;
 static constexpr UINT g_defaultFrameBorderThickness = 1;
 static constexpr UINT g_defaultWindowDPI = USER_DEFAULT_SCREEN_DPI;
-static constexpr double g_defaultScreenDPR = 1.0;
 
 [[nodiscard]] static inline HMONITOR GetWindowScreen(const HWND hWnd, const bool defaultToNearest) noexcept
 {
@@ -237,7 +236,7 @@ static constexpr double g_defaultScreenDPR = 1.0;
                 if (SetWindowPosFunc(hWnd, nullptr, screenRect.left, screenRect.top,
                                      std::abs(screenRect.right - screenRect.left),
                                      std::abs(screenRect.bottom - screenRect.top),
-                                     SWP_SHOWWINDOW | SWP_NOZORDER | SWP_NOOWNERZORDER) == FALSE) {
+                                     SWP_FRAMECHANGED | SWP_SHOWWINDOW | SWP_NOZORDER | SWP_NOOWNERZORDER) == FALSE) {
                     PRINT_WIN32_ERROR_MESSAGE(SetWindowPos, L"Failed to change the window geometry.")
                     return false;
                 } else {
@@ -294,25 +293,25 @@ static constexpr double g_defaultScreenDPR = 1.0;
     }
 }
 
-[[nodiscard]] static inline bool GetBoolFromRegistry(const HKEY rootKey, LPCWSTR subKey, LPCWSTR keyName) noexcept
+[[nodiscard]] static inline bool GetBoolFromRegistry(const HKEY rootKey, const std::wstring &subKey, const std::wstring &keyName) noexcept
 {
     ADVAPI32_API(RegOpenKeyExW);
     ADVAPI32_API(RegQueryValueExW);
     ADVAPI32_API(RegCloseKey);
     if (RegOpenKeyExWFunc && RegQueryValueExWFunc && RegCloseKeyFunc) {
-        if (!rootKey || !subKey || (wcscmp(subKey, L"") == 0) || !keyName || (wcscmp(keyName, L"") == 0)) {
+        if (!rootKey || subKey.empty() || keyName.empty()) {
             OutputDebugStringW(L"Can't query the registry due to invalid parameters are passed.");
             return false;
         }
         HKEY hKey = nullptr;
-        if (RegOpenKeyExWFunc(rootKey, subKey, 0, KEY_READ, &hKey) != ERROR_SUCCESS) {
+        if (RegOpenKeyExWFunc(rootKey, subKey.c_str(), 0, KEY_READ, &hKey) != ERROR_SUCCESS) {
             PRINT_WIN32_ERROR_MESSAGE(RegOpenKeyExW, L"Failed to open the registry key to read.")
             return false;
         }
         DWORD dwValue = 0;
         DWORD dwType = REG_DWORD;
         DWORD dwSize = sizeof(dwValue);
-        const bool success = (RegQueryValueExWFunc(hKey, keyName, nullptr, &dwType, reinterpret_cast<LPBYTE>(&dwValue), &dwSize) == ERROR_SUCCESS);
+        const bool success = (RegQueryValueExWFunc(hKey, keyName.c_str(), nullptr, &dwType, reinterpret_cast<LPBYTE>(&dwValue), &dwSize) == ERROR_SUCCESS);
         if (!success) {
             PRINT_WIN32_ERROR_MESSAGE(RegQueryValueExW, L"Failed to query the registry key value.")
             // Don't return early here because we have to close the opened registry key later.
@@ -330,7 +329,7 @@ static constexpr double g_defaultScreenDPR = 1.0;
 
 [[nodiscard]] static inline bool ShouldAppsUseDarkMode() noexcept
 {
-    return GetBoolFromRegistry(HKEY_CURRENT_USER, g_personalizeRegistryKey, L"AppsUseLightTheme");
+    return !GetBoolFromRegistry(HKEY_CURRENT_USER, g_personalizeRegistryKey, L"AppsUseLightTheme");
 }
 
 [[nodiscard]] static inline UINT GetWindowDPI(const HWND hWnd) noexcept
@@ -501,96 +500,79 @@ HINSTANCE Utils::GetWindowInstance(const HWND hWnd) noexcept
 LPCWSTR Utils::GetWindowClassName(const ATOM atom) noexcept
 {
     if (atom == INVALID_ATOM) {
-        OutputDebugStringW(L"Failed to convert the given ATOM to window class name due to it's invalid.");
+        OutputDebugStringW(L"Failed to retrieve the class name due to the class ATOM is invalid.");
         return nullptr;
     } else {
         return reinterpret_cast<LPCWSTR>(static_cast<WORD>(MAKELONG(atom, 0)));
     }
 }
 
-LPCWSTR Utils::GetWindowClassName(const HWND hWnd) noexcept
+std::wstring Utils::GetSystemErrorMessage(const std::wstring &function, const DWORD code) noexcept
 {
-    USER32_API(GetClassNameW);
-    if (GetClassNameWFunc) {
-        if (!hWnd) {
-            return nullptr;
-        }
-        const auto buf = new wchar_t[MAX_PATH];
-        if (GetClassNameWFunc(hWnd, buf, MAX_PATH) == 0) {
-            PRINT_WIN32_ERROR_MESSAGE(GetClassNameW, L"Failed to retrieve the window class name.")
-            return nullptr;
-        } else {
-            return buf;
-        }
-    } else {
-        OutputDebugStringW(L"GetClassNameW() is not available.");
-        return nullptr;
-    }
-}
-
-LPCWSTR Utils::GetSystemErrorMessage(LPCWSTR function, const DWORD code) noexcept
-{
-    if (!function || (wcscmp(function, L"") == 0)) {
+    if (function.empty()) {
         OutputDebugStringW(L"Failed to retrieve the system error message due to the function name is empty.");
-        return nullptr;
+        return {};
     }
     if (code == ERROR_SUCCESS) {
         OutputDebugStringW(L"Operation succeeded.");
-        return nullptr;
+        return {};
     }
     LPWSTR buf = nullptr;
     if (FormatMessageW(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
         nullptr, code, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), buf, 0, nullptr) == 0) {
         OutputDebugStringW(L"Failed to retrieve the system error message.");
-        return nullptr;
+        return {};
     }
-    const auto str = new wchar_t[MAX_PATH];
-    swprintf(str, L"%s failed with error %d: %s.", function, code, buf);
+    auto str = new wchar_t[MAX_PATH];
+    swprintf(str, L"%s failed with error %d: %s.", function.c_str(), code, buf);
     LocalFree(buf);
-    return str;
+    const std::wstring result = str;
+    delete [] str;
+    str = nullptr;
+    return result;
 }
 
-LPCWSTR Utils::GetSystemErrorMessage(LPCWSTR function, const HRESULT hr) noexcept
+std::wstring Utils::GetSystemErrorMessage(const std::wstring &function, const HRESULT hr) noexcept
 {
-    if (!function || (wcscmp(function, L"") == 0)) {
+    if (function.empty()) {
         OutputDebugStringW(L"Failed to retrieve the system error message due to the function name is empty.");
-        return nullptr;
+        return {};
     }
     if (SUCCEEDED(hr)) {
         OutputDebugStringW(L"Operation succeeded.");
-        return nullptr;
+        return {};
     }
     const DWORD dwError = HRESULT_CODE(hr);
     return GetSystemErrorMessage(function, dwError);
 }
 
-LPCWSTR Utils::GetSystemErrorMessage(LPCWSTR function) noexcept
+std::wstring Utils::GetSystemErrorMessage(const std::wstring &function) noexcept
 {
-    if (!function || (wcscmp(function, L"") == 0)) {
+    if (function.empty()) {
         OutputDebugStringW(L"Failed to retrieve the system error message due to the function name is empty.");
-        return nullptr;
+        return {};
     } else {
         const DWORD dwError = GetLastError();
         return GetSystemErrorMessage(function, dwError);
     }
 }
 
-void Utils::DisplayErrorDialog(LPCWSTR text) noexcept
+void Utils::DisplayErrorDialog(const std::wstring &text) noexcept
 {
     USER32_API(MessageBoxW);
     if (MessageBoxWFunc) {
-        if (text && (wcscmp(text, L"") != 0)) {
-            OutputDebugStringW(text);
-            MessageBoxWFunc(nullptr, text, L"Error", MB_ICONERROR | MB_OK);
-        } else {
+        if (text.empty()) {
             OutputDebugStringW(L"Failed to show the message box due to the content is empty.");
+        } else {
+            OutputDebugStringW(text.c_str());
+            MessageBoxWFunc(nullptr, text.c_str(), L"Error", MB_ICONERROR | MB_OK);
         }
     } else {
         OutputDebugStringW(L"MessageBoxW() is not available.");
     }
 }
 
-LPCWSTR Utils::GenerateGUID() noexcept
+std::wstring Utils::GenerateGUID() noexcept
 {
     OLE32_API(CoCreateGuid);
     OLE32_API(StringFromGUID2);
@@ -599,23 +581,26 @@ LPCWSTR Utils::GenerateGUID() noexcept
         const HRESULT hr = CoCreateGuidFunc(&guid);
         if (FAILED(hr)) {
             PRINT_HR_ERROR_MESSAGE(CoCreateGuid, hr, L"Failed to generate a new GUID.")
-            return nullptr;
+            return {};
         }
         auto buf = new wchar_t[MAX_PATH];
         if (StringFromGUID2Func(guid, buf, MAX_PATH) == 0) {
             delete [] buf;
             buf = nullptr;
             PRINT_WIN32_ERROR_MESSAGE(StringFromGUID2, L"Failed to convert GUID to string.")
-            return nullptr;
+            return {};
         }
-        return buf;
+        const std::wstring result = buf;
+        delete [] buf;
+        buf = nullptr;
+        return result;
     } else {
         OutputDebugStringW(L"CoCreateGuid() and StringFromGUID2() are not available.");
-        return nullptr;
+        return {};
     }
 }
 
-bool Utils::CloseWindow(const HWND hWnd) noexcept
+bool Utils::CloseWindow(const HWND hWnd, const ATOM atom) noexcept
 {
     USER32_API(DestroyWindow);
     USER32_API(UnregisterClassW);
@@ -624,21 +609,16 @@ bool Utils::CloseWindow(const HWND hWnd) noexcept
             OutputDebugStringW(L"Failed to close the window due to the given window handle is null.");
             return false;
         }
+        if (atom == INVALID_ATOM) {
+            OutputDebugStringW(L"Failed to close the window due to the given class ATOM is invalid.");
+            return false;
+        }
         if (DestroyWindowFunc(hWnd) == FALSE) {
             PRINT_WIN32_ERROR_MESSAGE(DestroyWindow, L"Failed to destroy the window.")
             return false;
         }
-        LPCWSTR name = GetWindowClassName(hWnd);
-        if (name && (wcscmp(name, L"") != 0)) {
-            const bool result = (UnregisterClassWFunc(name, GetWindowInstance(hWnd)) == FALSE);
-            delete [] name;
-            name = nullptr;
-            if (!result) {
-                PRINT_WIN32_ERROR_MESSAGE(UnregisterClassW, L"Failed to unregister the window class.")
-                return false;
-            }
-        } else {
-            OutputDebugStringW(L"Failed to retrieve the window class name.");
+        if (UnregisterClassWFunc(GetWindowClassName(atom), GetWindowInstance(hWnd)) == FALSE) {
+            PRINT_WIN32_ERROR_MESSAGE(UnregisterClassW, L"Failed to unregister the window class.")
             return false;
         }
         return true;
@@ -774,11 +754,11 @@ bool Utils::SetWindowTheme(const HWND hWnd, const WindowTheme theme) noexcept
             return false;
         }
         BOOL enableDarkFrame = FALSE;
-        LPCWSTR themeName = nullptr;
+        std::wstring themeName = {};
         switch (theme) {
         case WindowTheme::Light: {
             enableDarkFrame = FALSE;
-            themeName = nullptr;
+            themeName = {};
         } break;
         case WindowTheme::Dark: {
             enableDarkFrame = TRUE;
@@ -790,7 +770,7 @@ bool Utils::SetWindowTheme(const HWND hWnd, const WindowTheme theme) noexcept
         }
         const HRESULT hr1 = DwmSetWindowAttributeFunc(hWnd, g_DWMWA_USE_IMMERSIVE_DARK_MODE_BEFORE_20H1, &enableDarkFrame, sizeof(enableDarkFrame));
         const HRESULT hr2 = DwmSetWindowAttributeFunc(hWnd, g_DWMWA_USE_IMMERSIVE_DARK_MODE, &enableDarkFrame, sizeof(enableDarkFrame));
-        const HRESULT hr3 = SetWindowThemeFunc(hWnd, themeName, nullptr);
+        const HRESULT hr3 = SetWindowThemeFunc(hWnd, themeName.c_str(), nullptr);
         if (FAILED(hr1) && FAILED(hr2)) {
             PRINT_HR_ERROR_MESSAGE(DwmSetWindowAttribute, hr2, L"Failed to set the window dark mode state.")
             return false;
@@ -876,18 +856,6 @@ bool Utils::SetWindowState(const HWND hWnd, const WindowState state) noexcept
         // Don't check ShowWindow()'s result because it returns the previous window state rather than
         // the operation result of itself.
         ShowWindowFunc(hWnd, nCmdShow);
-        const DWORD dwError = GetLastError();
-        if (dwError != ERROR_SUCCESS) {
-            auto msg = GetSystemErrorMessage(L"ShowWindow", dwError);
-            if (msg) {
-                DisplayErrorDialog(msg);
-                delete [] msg;
-                msg = nullptr;
-            } else {
-                DisplayErrorDialog(L"Failed to change the window state.");
-            }
-            return false;
-        }
         if ((nCmdShow != SW_HIDE) && (nCmdShow != SW_MINIMIZE)) {
             USER32_API(UpdateWindow);
             if (UpdateWindowFunc) {
@@ -1104,94 +1072,4 @@ RECT Utils::GetScreenGeometry(const HWND hWnd) noexcept
         return {};
     }
     return ::GetScreenGeometry(hWnd, true, false);
-}
-
-VersionNumber Utils::GetCurrentOSVersion() noexcept
-{
-    // ### TODO
-    return VersionNumber();
-}
-
-void Utils::DumpApplicationInformation() noexcept
-{
-    LPCWSTR curOsVer = GetCurrentOSVersion().ToString();
-    LPCWSTR minOsVer = Windows10_19Half1.ToString();
-    LPCWSTR curCpuArch = L"TODO";
-    LPCWSTR tarCpuArch = L"TODO";
-    auto compiler = new wchar_t[MAX_PATH];
-    swprintf(compiler, L"Microsoft Visual C++ version %d", _MSC_FULL_VER);
-    LPCWSTR winrtVer = L"TODO";
-    LPCWSTR xamlVer = L"TODO";
-    LPCWSTR pda = L"Unknown";
-    const DPIAwareness awareness = GetProcessDPIAwareness();
-    switch (awareness) {
-    case DPIAwareness::PerMonitorV2: {
-        pda = L"PerMonitorV2";
-    } break;
-    case DPIAwareness::PerMonitor: {
-        pda = L"PerMonitor";
-    } break;
-    case DPIAwareness::System: {
-        pda = L"System";
-    } break;
-    case DPIAwareness::GdiScaled: {
-        pda = L"Unaware_GdiScaled";
-    } break;
-    case DPIAwareness::Unaware: {
-        pda = L"Unaware";
-    } break;
-    }
-    auto buf = new wchar_t[4096];
-    swprintf(buf, L"Current OS version: %s\r\n"
-                  "Minimum supported OS version: %s\r\n"
-                  "Current CPU architecture: %s\r\n"
-                  "Target CPU architecture: %s\r\n"
-                  "Compiler: %s\r\n"
-                  "Windows RunTime version: %s\r\n"
-                  "XAML Framework version: %s\r\n"
-                  "Process DPI awareness: %s\r\n"
-                  "Main window DPI: %d\r\n"
-                  "Screen device pixel ratio: %f",
-             curOsVer, minOsVer, curCpuArch, tarCpuArch,
-             compiler, winrtVer, xamlVer, pda,
-             GetWindowDPI(nullptr), GetScreenDevicePixelRatio(nullptr));
-    delete [] curOsVer;
-    curOsVer = nullptr;
-    delete [] minOsVer;
-    minOsVer = nullptr;
-    delete [] compiler;
-    compiler = nullptr;
-    OutputDebugStringW(buf);
-    delete [] buf;
-    buf = nullptr;
-}
-
-double Utils::GetScreenDevicePixelRatio(const HWND hWnd) noexcept
-{
-    SHCORE_API(GetScaleFactorForMonitor);
-    if (GetScaleFactorForMonitorFunc) {
-        if (!hWnd) {
-            return g_defaultScreenDPR;
-        }
-        const HMONITOR mon = GetWindowScreen(hWnd, true);
-        if (!mon) {
-            OutputDebugStringW(L"Failed to retrieve the corresponding screen.");
-            return g_defaultScreenDPR;
-        }
-        DEVICE_SCALE_FACTOR dsf = DEVICE_SCALE_FACTOR_INVALID;
-        const HRESULT hr = GetScaleFactorForMonitorFunc(mon, &dsf);
-        if (FAILED(hr)) {
-            PRINT_HR_ERROR_MESSAGE(GetScaleFactorForMonitor, hr, L"Failed to retrieve the device scale factor for the screen.")
-            return g_defaultScreenDPR;
-        }
-        const auto factor = static_cast<int>(dsf);
-        if (factor <= 0) {
-            OutputDebugStringW(L"The retrieved device scale factor is invalid.");
-            return g_defaultScreenDPR;
-        }
-        return (static_cast<double>(factor) / 100.0);
-    } else {
-        OutputDebugStringW(L"GetScaleFactorForMonitor() is not available.");
-        return g_defaultScreenDPR;
-    }
 }

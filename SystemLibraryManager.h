@@ -27,6 +27,7 @@
 #include <SDKDDKVer.h>
 #include <Windows.h>
 #include <memory>
+#include <string>
 
 class SystemLibraryManagerPrivate;
 
@@ -37,7 +38,7 @@ public:
 
     [[nodiscard]] static SystemLibraryManager &instance() noexcept;
 
-    [[nodiscard]] FARPROC GetSymbol(LPCWSTR fileName, LPCWSTR symbolName) noexcept;
+    [[nodiscard]] FARPROC GetSymbol(const std::wstring &fileName, const std::wstring &symbolName) noexcept;
 
 private:
     explicit SystemLibraryManager() noexcept;

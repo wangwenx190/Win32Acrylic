@@ -24,7 +24,7 @@
 
 #pragma once
 
-#include <iostream>
+#include <string>
 
 class VersionNumber
 {
@@ -69,24 +69,26 @@ public:
         return m_tweak;
     }
 
-    [[nodiscard]] inline constexpr static VersionNumber FromString(const wchar_t *str) noexcept {
-        if (!str || (wcscmp(str, L"") == 0)) {
+    [[nodiscard]] inline constexpr static VersionNumber FromString(const std::wstring &str) noexcept {
+        if (str.empty()) {
             return VersionNumber();
         } else {
             int major = 0;
             int minor = 0;
             int patch = 0;
             int tweak = 0;
-            swscanf(str, L"%d.%d.%d.%d", &major, &minor, &patch, &tweak);
+            swscanf(str.c_str(), L"%d.%d.%d.%d", &major, &minor, &patch, &tweak);
             return VersionNumber(major, minor, patch, tweak);
         }
     }
 
-    [[nodiscard]] inline const wchar_t *ToString() const noexcept {
-        const auto buf = new wchar_t[80];
-        memset(buf, 0, sizeof(*buf));
+    [[nodiscard]] inline std::wstring ToString() const noexcept {
+        auto buf = new wchar_t[100];
         swprintf(buf, L"%d.%d.%d.%d", m_major, m_minor, m_patch, m_tweak);
-        return buf;
+        const std::wstring result = buf;
+        delete [] buf;
+        buf = nullptr;
+        return result;
     }
 
     inline friend bool operator==(const VersionNumber &lhs, const VersionNumber &rhs) noexcept {

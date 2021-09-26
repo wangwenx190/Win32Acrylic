@@ -101,12 +101,11 @@ namespace Utils
     void DisplayErrorDialog(const std::wstring &text) noexcept;
     [[nodiscard]] HINSTANCE GetCurrentModuleInstance() noexcept;
     [[nodiscard]] HINSTANCE GetWindowInstance(const HWND hWnd) noexcept;
-    [[nodiscard]] LPCWSTR GetWindowClassName(const ATOM atom) noexcept;
     [[nodiscard]] std::wstring GetSystemErrorMessage(const std::wstring &function, const DWORD code) noexcept;
     [[nodiscard]] std::wstring GetSystemErrorMessage(const std::wstring &function, const HRESULT hr) noexcept;
     [[nodiscard]] std::wstring GetSystemErrorMessage(const std::wstring &function) noexcept;
     [[nodiscard]] std::wstring GenerateGUID() noexcept;
-    [[nodiscard]] bool CloseWindow(const HWND hWnd, const ATOM atom) noexcept;
+    [[nodiscard]] bool CloseWindow(const HWND hWnd, const std::wstring &className) noexcept;
     [[nodiscard]] bool OpenSystemMenu(const HWND hWnd, const POINT pos) noexcept;
     [[nodiscard]] bool UpdateFrameMargins(const HWND hWnd) noexcept;
     [[nodiscard]] bool IsWindowsVersionOrGreater(const VersionNumber &version) noexcept;

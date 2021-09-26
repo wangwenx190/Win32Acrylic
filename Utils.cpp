@@ -225,27 +225,32 @@ static constexpr UINT g_defaultWindowDPI = USER_DEFAULT_SCREEN_DPI;
             return false;
         }
         const auto oldStyle = static_cast<DWORD>(GetWindowLongPtrWFunc(hWnd, GWL_STYLE));
-        const DWORD newStyle = ((oldStyle & ~WS_THICKFRAME) | WS_POPUP);
+        const auto oldExtendStyle = static_cast<DWORD>(GetWindowLongPtrWFunc(hWnd, GWL_EXSTYLE));
+        const DWORD newStyle = ((oldStyle & ~(WS_CAPTION | WS_THICKFRAME)) | WS_POPUP);
+        const DWORD newExtendStyle = (oldExtendStyle & ~(WS_EX_DLGMODALFRAME | WS_EX_WINDOWEDGE | WS_EX_CLIENTEDGE | WS_EX_STATICEDGE));
         if (SetWindowLongPtrWFunc(hWnd, GWL_STYLE, static_cast<LONG_PTR>(newStyle)) == 0) {
             PRINT_WIN32_ERROR_MESSAGE(SetWindowLongPtrW, L"Failed to change the window style.")
             return false;
-        } else {
-            USER32_API(SetWindowPos);
-            if (SetWindowPosFunc) {
-                const RECT screenRect = GetScreenGeometry(hWnd, true, false);
-                if (SetWindowPosFunc(hWnd, nullptr, screenRect.left, screenRect.top,
-                                     std::abs(screenRect.right - screenRect.left),
-                                     std::abs(screenRect.bottom - screenRect.top),
-                                     SWP_FRAMECHANGED | SWP_SHOWWINDOW | SWP_NOZORDER | SWP_NOOWNERZORDER) == FALSE) {
-                    PRINT_WIN32_ERROR_MESSAGE(SetWindowPos, L"Failed to change the window geometry.")
-                    return false;
-                } else {
-                    return true;
-                }
-            } else {
-                OutputDebugStringW(L"SetWindowPos() is not available.");
+        }
+        if (SetWindowLongPtrWFunc(hWnd, GWL_EXSTYLE, static_cast<LONG_PTR>(newExtendStyle)) == 0) {
+            PRINT_WIN32_ERROR_MESSAGE(SetWindowLongPtrW, L"Failed to change the extended window style.")
+            return false;
+        }
+        USER32_API(SetWindowPos);
+        if (SetWindowPosFunc) {
+            const RECT screenRect = GetScreenGeometry(hWnd, true, false);
+            if (SetWindowPosFunc(hWnd, nullptr, screenRect.left, screenRect.top,
+                                 std::abs(screenRect.right - screenRect.left),
+                                 std::abs(screenRect.bottom - screenRect.top),
+                                 SWP_FRAMECHANGED | SWP_SHOWWINDOW | SWP_NOZORDER | SWP_NOOWNERZORDER) == FALSE) {
+                PRINT_WIN32_ERROR_MESSAGE(SetWindowPos, L"Failed to change the window geometry.")
                 return false;
+            } else {
+                return true;
             }
+        } else {
+            OutputDebugStringW(L"SetWindowPos() is not available.");
+            return false;
         }
     } else {
         OutputDebugStringW(L"GetWindowLongPtrW() and SetWindowLongPtrW() are not available.");
@@ -262,13 +267,31 @@ static constexpr UINT g_defaultWindowDPI = USER_DEFAULT_SCREEN_DPI;
             return false;
         }
         const auto oldStyle = static_cast<DWORD>(GetWindowLongPtrWFunc(hWnd, GWL_STYLE));
-        const DWORD newStyle = ((oldStyle & ~WS_POPUP) | WS_THICKFRAME);
+        const auto oldExtendStyle = static_cast<DWORD>(GetWindowLongPtrWFunc(hWnd, GWL_EXSTYLE));
+        const DWORD newStyle = ((oldStyle & ~WS_POPUP) | (WS_CAPTION | WS_THICKFRAME));
+        const DWORD newExtendStyle = (oldExtendStyle); // ### TODO
         if (SetWindowLongPtrWFunc(hWnd, GWL_STYLE, static_cast<LONG_PTR>(newStyle)) == 0) {
             PRINT_WIN32_ERROR_MESSAGE(SetWindowLongPtrW, L"Failed to change the window style.")
             return false;
-        } else {
-            return true;
         }
+        if (SetWindowLongPtrWFunc(hWnd, GWL_EXSTYLE, static_cast<LONG_PTR>(newExtendStyle)) == 0) {
+            PRINT_WIN32_ERROR_MESSAGE(SetWindowLongPtrW, L"Failed to change the extended window style.")
+            return false;
+        }
+        USER32_API(SetWindowPos);
+        if (SetWindowPosFunc) {
+            if (SetWindowPosFunc(hWnd, nullptr, 0, 0, 0, 0,
+                                 SWP_FRAMECHANGED | SWP_SHOWWINDOW | SWP_NOSIZE | SWP_NOMOVE | SWP_NOZORDER | SWP_NOOWNERZORDER) == FALSE) {
+                PRINT_WIN32_ERROR_MESSAGE(SetWindowPos, L"Failed to trigger a frame change event.")
+                return false;
+            } else {
+                return true;
+            }
+        } else {
+            OutputDebugStringW(L"SetWindowPos() is not available.");
+            return false;
+        }
+        return true;
     } else {
         OutputDebugStringW(L"GetWindowLongPtrW() and SetWindowLongPtrW() are not available.");
         return false;
@@ -497,16 +520,6 @@ HINSTANCE Utils::GetWindowInstance(const HWND hWnd) noexcept
     }
 }
 
-LPCWSTR Utils::GetWindowClassName(const ATOM atom) noexcept
-{
-    if (atom == INVALID_ATOM) {
-        OutputDebugStringW(L"Failed to retrieve the class name due to the class ATOM is invalid.");
-        return nullptr;
-    } else {
-        return reinterpret_cast<LPCWSTR>(static_cast<WORD>(MAKELONG(atom, 0)));
-    }
-}
-
 std::wstring Utils::GetSystemErrorMessage(const std::wstring &function, const DWORD code) noexcept
 {
     if (function.empty()) {
@@ -523,12 +536,10 @@ std::wstring Utils::GetSystemErrorMessage(const std::wstring &function, const DW
         OutputDebugStringW(L"Failed to retrieve the system error message.");
         return {};
     }
-    auto str = new wchar_t[MAX_PATH];
-    swprintf(str, L"%s failed with error %d: %s.", function.c_str(), code, buf);
+    wchar_t codeStr[4] = { L'\0' };
+    _itow(code, codeStr, 3);
+    const std::wstring result = L"\"" + function + L"\" failed with error " + std::wstring(codeStr) + L": " + buf + L".";
     LocalFree(buf);
-    const std::wstring result = str;
-    delete [] str;
-    str = nullptr;
     return result;
 }
 
@@ -583,24 +594,19 @@ std::wstring Utils::GenerateGUID() noexcept
             PRINT_HR_ERROR_MESSAGE(CoCreateGuid, hr, L"Failed to generate a new GUID.")
             return {};
         }
-        auto buf = new wchar_t[MAX_PATH];
+        wchar_t buf[MAX_PATH] = { L'\0' };
         if (StringFromGUID2Func(guid, buf, MAX_PATH) == 0) {
-            delete [] buf;
-            buf = nullptr;
             PRINT_WIN32_ERROR_MESSAGE(StringFromGUID2, L"Failed to convert GUID to string.")
             return {};
         }
-        const std::wstring result = buf;
-        delete [] buf;
-        buf = nullptr;
-        return result;
+        return buf;
     } else {
         OutputDebugStringW(L"CoCreateGuid() and StringFromGUID2() are not available.");
         return {};
     }
 }
 
-bool Utils::CloseWindow(const HWND hWnd, const ATOM atom) noexcept
+bool Utils::CloseWindow(const HWND hWnd, const std::wstring &className) noexcept
 {
     USER32_API(DestroyWindow);
     USER32_API(UnregisterClassW);
@@ -609,15 +615,15 @@ bool Utils::CloseWindow(const HWND hWnd, const ATOM atom) noexcept
             OutputDebugStringW(L"Failed to close the window due to the given window handle is null.");
             return false;
         }
-        if (atom == INVALID_ATOM) {
-            OutputDebugStringW(L"Failed to close the window due to the given class ATOM is invalid.");
+        if (className.empty()) {
+            OutputDebugStringW(L"Failed to close the window due to the given class name is empty.");
             return false;
         }
         if (DestroyWindowFunc(hWnd) == FALSE) {
             PRINT_WIN32_ERROR_MESSAGE(DestroyWindow, L"Failed to destroy the window.")
             return false;
         }
-        if (UnregisterClassWFunc(GetWindowClassName(atom), GetWindowInstance(hWnd)) == FALSE) {
+        if (UnregisterClassWFunc(className.c_str(), GetWindowInstance(hWnd)) == FALSE) {
             PRINT_WIN32_ERROR_MESSAGE(UnregisterClassW, L"Failed to unregister the window class.")
             return false;
         }

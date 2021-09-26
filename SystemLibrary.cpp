@@ -31,13 +31,12 @@
     if (str.empty()) {
         return {};
     }
-    const auto data = str.c_str();
-    const int required = WideCharToMultiByte(CP_UTF8, 0, data, -1, nullptr, 0, nullptr, nullptr);
-    auto strA = new char[required];
-    WideCharToMultiByte(CP_UTF8, 0, data, -1, strA, required, nullptr, nullptr);
-    const std::string result = strA;
-    delete [] strA;
-    strA = nullptr;
+    const int required = WideCharToMultiByte(CP_UTF8, 0, str.c_str(), -1, nullptr, 0, nullptr, nullptr);
+    auto buf = new char[required];
+    WideCharToMultiByte(CP_UTF8, 0, str.c_str(), -1, buf, required, nullptr, nullptr);
+    const std::string result = buf;
+    delete [] buf;
+    buf = nullptr;
     return result;
 }
 
@@ -123,6 +122,10 @@ void SystemLibraryPrivate::FileName(const std::wstring &fileName) noexcept
     }
     if (!fileName.empty()) {
         m_fileName = fileName;
+        const auto suffix = m_fileName.find(L".dll");
+        if (suffix == std::string::npos) {
+            m_fileName += L".dll";
+        }
     }
 }
 
@@ -152,11 +155,8 @@ bool SystemLibraryPrivate::Load() noexcept
     m_module = m_LoadLibraryExWFunc(m_fileName.c_str(), nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
     if (!m_module) {
         m_failedToLoad = true;
-        auto buf = new wchar_t[MAX_PATH];
-        swprintf(buf, L"Failed to load dynamic link library \"%s\".", m_fileName.c_str());
-        PRINT_WIN32_ERROR_MESSAGE(LoadLibraryExW, buf)
-        delete [] buf;
-        buf = nullptr;
+        const std::wstring msg = L"Failed to load dynamic link library \"" + m_fileName + L"\".";
+        PRINT_WIN32_ERROR_MESSAGE(LoadLibraryExW, msg)
         return false;
     }
     return true;
@@ -171,34 +171,34 @@ void SystemLibraryPrivate::Unload() noexcept
         return;
     }
     {
-        auto buf = new wchar_t[MAX_PATH];
-        swprintf(buf, L"Unloading dynamic link library \"%s\" ...", m_fileName.c_str());
-        OutputDebugStringW(buf);
-        delete [] buf;
-        buf = nullptr;
+        const std::wstring msg = L"Unloading dynamic link library \"" + m_fileName + L"\" ...";
+        OutputDebugStringW(msg.c_str());
     }
     if (FreeLibrary(m_module) == FALSE) {
-        auto buf = new wchar_t[MAX_PATH];
-        swprintf(buf, L"Failed to unload dynamic link library \"%s\".", m_fileName.c_str());
-        PRINT_WIN32_ERROR_MESSAGE(FreeLibrary, buf)
-        delete [] buf;
-        buf = nullptr;
+        const std::wstring msg = L"Failed to unload dynamic link library \"" + m_fileName + L"\".";
+        PRINT_WIN32_ERROR_MESSAGE(FreeLibrary, msg)
     }
     m_module = nullptr;
     m_fileName = {};
     if (m_resolvedSymbols.empty()) {
         OutputDebugStringW(L"No symbols cached.");
     } else {
+        bool hasSymbol = false;
+        std::wstring msg = L"Cached symbols: [";
         for (auto &&symbol : std::as_const(m_resolvedSymbols)) {
             const auto name = symbol.first;
             if (!name.empty()) {
-                auto buf = new wchar_t[MAX_PATH];
-                swprintf(buf, L"Cached symbol: \"%s()\".", name.c_str());
-                OutputDebugStringW(buf);
-                delete [] buf;
-                buf = nullptr;
+                msg += L"\"" + name + L"()\", ";
+                if (!hasSymbol) {
+                    hasSymbol = true;
+                }
             }
         }
+        if (hasSymbol) {
+            msg.erase(msg.cend() - 2, msg.cend());
+        }
+        msg += L"].";
+        OutputDebugStringW(msg.c_str());
         m_resolvedSymbols.clear();
     }
 }
@@ -227,11 +227,8 @@ FARPROC SystemLibraryPrivate::GetSymbol(const std::wstring &function) noexcept
         }
         const auto addr = GetProcAddress(m_module, name.c_str());
         if (!addr) {
-            auto buf = new wchar_t[MAX_PATH];
-            swprintf(buf, L"Failed to resolve symbol \"%s()\".", function.c_str());
-            PRINT_WIN32_ERROR_MESSAGE(GetProcAddress, buf)
-            delete [] buf;
-            buf = nullptr;
+            const std::wstring msg = L"Failed to resolve symbol \"" + function + L"()\".";
+            PRINT_WIN32_ERROR_MESSAGE(GetProcAddress, msg)
         }
         m_resolvedSymbols.insert({function, addr});
         return addr;

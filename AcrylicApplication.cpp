@@ -25,7 +25,7 @@
 #include <SDKDDKVer.h>
 #include <Windows.h>
 #include <ShellApi.h>
-#include <Unknwn.h> // Place it before any WinRT headers.
+#include <Unknwn.h> // To enable support for non-WinRT interfaces, Unknwn.h must be included before any C++/WinRT headers.
 
 // Avoid collision with WinRT's same name function.
 // https://docs.microsoft.com/en-us/windows/uwp/cpp-and-winrt-apis/faq#how-do-i-resolve-ambiguities-with-getcurrenttime-and-or-try-
@@ -99,8 +99,8 @@ static constexpr UINT g_autoHideTaskbarThickness = 2;
 
 static constexpr wchar_t g_defaultWindowTitle[] = L"Win32AcrylicHelper Application Main Window";
 
-static ATOM g_mainWindowAtom = INVALID_ATOM;
-static ATOM g_dragBarWindowAtom = INVALID_ATOM;
+static std::wstring g_mainWindowClassName = {};
+static std::wstring g_dragBarWindowClassName = {};
 static HWND g_mainWindowHandle = nullptr;
 static HWND g_dragBarWindowHandle = nullptr;
 static HWND g_xamlIslandWindowHandle = nullptr;
@@ -516,11 +516,12 @@ static winrt::Windows::UI::Xaml::Media::AcrylicBrush g_backgroundBrush = nullptr
         const UINT dpiX = LOWORD(wParam);
         const UINT dpiY = HIWORD(wParam);
         g_mainWindowDPI = static_cast<UINT>(std::round(static_cast<double>(dpiX + dpiY) / 2.0));
-        auto buf = new wchar_t[MAX_PATH];
-        swprintf(buf, L"The DotsPerInch of main window has changed. Old value: %d, new value: %d.", oldMainWindowDPI, g_mainWindowDPI);
-        OutputDebugStringW(buf);
-        delete [] buf;
-        buf = nullptr;
+        wchar_t buf_old[4] = { L'\0' };
+        wchar_t buf_new[4] = { L'\0' };
+        _itow(oldMainWindowDPI, buf_old, 3);
+        _itow(g_mainWindowDPI, buf_new, 3);
+        const std::wstring debugMsg = L"The DotsPerInch of main window has changed. " + std::wstring(buf_old) + L" --> " + std::wstring(buf_new) + L".";
+        OutputDebugStringW(debugMsg.c_str());
         USER32_API(SetWindowPos);
         if (SetWindowPosFunc) {
             const auto prcNewWindow = reinterpret_cast<LPRECT>(lParam);
@@ -544,9 +545,9 @@ static winrt::Windows::UI::Xaml::Media::AcrylicBrush g_backgroundBrush = nullptr
         return 1;
     } break;
     case WM_CLOSE: {
-        if (Utils::CloseWindow(hWnd, g_mainWindowAtom)) {
+        if (Utils::CloseWindow(hWnd, g_mainWindowClassName)) {
             g_mainWindowHandle = nullptr;
-            g_mainWindowAtom = INVALID_ATOM;
+            g_mainWindowClassName = {};
             g_mainWindowDPI = 0;
             return 0;
         } else {
@@ -662,9 +663,9 @@ static winrt::Windows::UI::Xaml::Media::AcrylicBrush g_backgroundBrush = nullptr
             return 1;
         } break;
         case WM_CLOSE: {
-            if (Utils::CloseWindow(hWnd, g_dragBarWindowAtom)) {
+            if (Utils::CloseWindow(hWnd, g_dragBarWindowClassName)) {
                 g_dragBarWindowHandle = nullptr;
-                g_dragBarWindowAtom = INVALID_ATOM;
+                g_dragBarWindowClassName = {};
                 return 0;
             } else {
                 Utils::DisplayErrorDialog(L"Failed to close the drag bar window.");
@@ -696,29 +697,24 @@ static winrt::Windows::UI::Xaml::Media::AcrylicBrush g_backgroundBrush = nullptr
             exists = (GetClassInfoExWFunc(Utils::GetCurrentModuleInstance(), name.c_str(), &wcex) != FALSE);
         }
         if (!exists) {
-            if (g_mainWindowAtom != INVALID_ATOM) {
-                exists = (GetClassInfoExWFunc(Utils::GetCurrentModuleInstance(), Utils::GetWindowClassName(g_mainWindowAtom), &wcex) != FALSE);
+            if (!g_mainWindowClassName.empty()) {
+                exists = (GetClassInfoExWFunc(Utils::GetCurrentModuleInstance(), g_mainWindowClassName.c_str(), &wcex) != FALSE);
             }
         }
-        std::wstring guid = {};
+        g_mainWindowClassName = (name.empty() ? Utils::GenerateGUID() : name);
         if (!exists) {
-            guid = Utils::GenerateGUID();
-            if (guid.empty()) {
-                OutputDebugStringW(L"Failed to register the main window class due to can't generate a new GUID.");
-                return false;
-            }
             SecureZeroMemory(&wcex, sizeof(wcex));
             wcex.cbSize = sizeof(wcex);
             wcex.style = CS_HREDRAW | CS_VREDRAW;
             wcex.lpfnWndProc = MainWindowMessageHandler;
             wcex.hInstance = Utils::GetCurrentModuleInstance();
-            wcex.lpszClassName = (name.empty() ? guid.c_str() : name.c_str());
+            wcex.lpszClassName = g_mainWindowClassName.c_str();
             wcex.hCursor = LoadCursorWFunc(nullptr, IDC_ARROW);
             wcex.hIcon = LoadIconWFunc(Utils::GetCurrentModuleInstance(), MAKEINTRESOURCEW(IDI_APPICON));
             wcex.hIconSm = LoadIconWFunc(Utils::GetCurrentModuleInstance(), MAKEINTRESOURCEW(IDI_APPICON_SMALL));
         }
-        g_mainWindowAtom = RegisterClassExWFunc(&wcex);
-        if (g_mainWindowAtom == INVALID_ATOM) {
+        const ATOM atom = RegisterClassExWFunc(&wcex);
+        if (atom == INVALID_ATOM) {
             PRINT_WIN32_ERROR_MESSAGE(RegisterClassExW, L"Failed to register the main window class.")
             return false;
         }
@@ -734,21 +730,17 @@ static winrt::Windows::UI::Xaml::Media::AcrylicBrush g_backgroundBrush = nullptr
     USER32_API(LoadCursorW);
     USER32_API(RegisterClassExW);
     if (LoadCursorWFunc && RegisterClassExWFunc) {
-        const std::wstring guid = Utils::GenerateGUID();
-        if (guid.empty()) {
-            OutputDebugStringW(L"Failed to register the drag bar window class due to can't generate a new GUID.");
-            return false;
-        }
+        g_dragBarWindowClassName = Utils::GenerateGUID();
         WNDCLASSEXW wcex;
         SecureZeroMemory(&wcex, sizeof(wcex));
         wcex.cbSize = sizeof(wcex);
         wcex.style = CS_HREDRAW | CS_VREDRAW | CS_DBLCLKS;
         wcex.lpfnWndProc = DragBarMessageHandler;
         wcex.hInstance = Utils::GetCurrentModuleInstance();
-        wcex.lpszClassName = guid.c_str();
+        wcex.lpszClassName = g_dragBarWindowClassName.c_str();
         wcex.hCursor = LoadCursorWFunc(nullptr, IDC_ARROW);
-        g_dragBarWindowAtom = RegisterClassExWFunc(&wcex);
-        if (g_dragBarWindowAtom == INVALID_ATOM) {
+        const ATOM atom = RegisterClassExWFunc(&wcex);
+        if (atom == INVALID_ATOM) {
             PRINT_WIN32_ERROR_MESSAGE(RegisterClassExW, L"Failed to register the drag bar window class.")
             return false;
         }
@@ -763,13 +755,13 @@ static winrt::Windows::UI::Xaml::Media::AcrylicBrush g_backgroundBrush = nullptr
 {
     USER32_API(CreateWindowExW);
     if (CreateWindowExWFunc) {
-        if (g_mainWindowAtom == INVALID_ATOM) {
-            OutputDebugStringW(L"Failed to create the main window due to the main window ATOM is invalid.");
+        if (g_mainWindowClassName.empty()) {
+            OutputDebugStringW(L"Failed to create the main window due to the main window class is not registered.");
             return false;
         }
         g_mainWindowHandle = CreateWindowExWFunc(
             WS_EX_NOREDIRECTIONBITMAP,
-            Utils::GetWindowClassName(g_mainWindowAtom),
+            g_mainWindowClassName.c_str(),
             (title.empty() ? g_defaultWindowTitle : title.c_str()),
             (WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN | WS_CLIPSIBLINGS),
             CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
@@ -802,13 +794,13 @@ static winrt::Windows::UI::Xaml::Media::AcrylicBrush g_backgroundBrush = nullptr
             OutputDebugStringW(L"Failed to create the drag bar window due to the main window has not been created.");
             return false;
         }
-        if (g_dragBarWindowAtom == INVALID_ATOM) {
-            OutputDebugStringW(L"Failed to create the drag bar window due to the drag bar window ATOM is invalid.");
+        if (g_dragBarWindowClassName.empty()) {
+            OutputDebugStringW(L"Failed to create the drag bar window due to the drag bar window class is not registered.");
             return false;
         }
         g_dragBarWindowHandle = CreateWindowExWFunc(
             (WS_EX_LAYERED | WS_EX_NOREDIRECTIONBITMAP),
-            Utils::GetWindowClassName(g_dragBarWindowAtom),
+            g_dragBarWindowClassName.c_str(),
             nullptr, WS_CHILD, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
             g_mainWindowHandle, nullptr, Utils::GetCurrentModuleInstance(), nullptr);
         if (!g_dragBarWindowHandle) {

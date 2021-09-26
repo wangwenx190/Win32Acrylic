@@ -518,8 +518,8 @@ static winrt::Windows::UI::Xaml::Media::AcrylicBrush g_backgroundBrush = nullptr
         g_mainWindowDPI = static_cast<UINT>(std::round(static_cast<double>(dpiX + dpiY) / 2.0));
         wchar_t buf_old[4] = { L'\0' };
         wchar_t buf_new[4] = { L'\0' };
-        _itow(oldMainWindowDPI, buf_old, 3);
-        _itow(g_mainWindowDPI, buf_new, 3);
+        _itow(oldMainWindowDPI, buf_old, 10);
+        _itow(g_mainWindowDPI, buf_new, 10);
         const std::wstring debugMsg = L"The DotsPerInch of main window has changed. " + std::wstring(buf_old) + L" --> " + std::wstring(buf_new) + L".";
         OutputDebugStringW(debugMsg.c_str());
         USER32_API(SetWindowPos);
@@ -924,7 +924,8 @@ int AcrylicApplication::Main() noexcept
         if (!Utils::SetProcessDPIAwareness(DPIAwareness::PerMonitor)) {
             if (!Utils::SetProcessDPIAwareness(DPIAwareness::System)) {
                 if (!Utils::SetProcessDPIAwareness(DPIAwareness::GdiScaled)) {
-                    OutputDebugStringW(L"Failed to set the DPI awareness for the current process.");
+                    Utils::DisplayErrorDialog(L"Failed to set the DPI awareness for the current process.");
+                    return -1;
                 }
             }
         }

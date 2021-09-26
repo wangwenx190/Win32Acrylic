@@ -226,7 +226,7 @@ static constexpr UINT g_defaultWindowDPI = USER_DEFAULT_SCREEN_DPI;
         }
         const auto oldStyle = static_cast<DWORD>(GetWindowLongPtrWFunc(hWnd, GWL_STYLE));
         const auto oldExtendStyle = static_cast<DWORD>(GetWindowLongPtrWFunc(hWnd, GWL_EXSTYLE));
-        const DWORD newStyle = ((oldStyle & ~(WS_CAPTION | WS_THICKFRAME)) | WS_POPUP);
+        const DWORD newStyle = ((oldStyle & ~(WS_CAPTION | WS_MINIMIZEBOX | WS_MAXIMIZEBOX | WS_THICKFRAME)) | WS_POPUP);
         const DWORD newExtendStyle = (oldExtendStyle & ~(WS_EX_DLGMODALFRAME | WS_EX_WINDOWEDGE | WS_EX_CLIENTEDGE | WS_EX_STATICEDGE));
         if (SetWindowLongPtrWFunc(hWnd, GWL_STYLE, static_cast<LONG_PTR>(newStyle)) == 0) {
             PRINT_WIN32_ERROR_MESSAGE(SetWindowLongPtrW, L"Failed to change the window style.")
@@ -268,7 +268,7 @@ static constexpr UINT g_defaultWindowDPI = USER_DEFAULT_SCREEN_DPI;
         }
         const auto oldStyle = static_cast<DWORD>(GetWindowLongPtrWFunc(hWnd, GWL_STYLE));
         const auto oldExtendStyle = static_cast<DWORD>(GetWindowLongPtrWFunc(hWnd, GWL_EXSTYLE));
-        const DWORD newStyle = ((oldStyle & ~WS_POPUP) | (WS_CAPTION | WS_THICKFRAME));
+        const DWORD newStyle = ((oldStyle & ~WS_POPUP) | (WS_CAPTION | WS_MINIMIZEBOX | WS_MAXIMIZEBOX | WS_THICKFRAME));
         const DWORD newExtendStyle = (oldExtendStyle); // ### TODO
         if (SetWindowLongPtrWFunc(hWnd, GWL_STYLE, static_cast<LONG_PTR>(newStyle)) == 0) {
             PRINT_WIN32_ERROR_MESSAGE(SetWindowLongPtrW, L"Failed to change the window style.")
@@ -537,7 +537,7 @@ std::wstring Utils::GetSystemErrorMessage(const std::wstring &function, const DW
         return {};
     }
     wchar_t codeStr[4] = { L'\0' };
-    _itow(code, codeStr, 3);
+    _itow(code, codeStr, 10);
     const std::wstring result = L"\"" + function + L"\" failed with error " + std::wstring(codeStr) + L": " + buf + L".";
     LocalFree(buf);
     return result;
@@ -990,8 +990,15 @@ bool Utils::SetProcessDPIAwareness(const DPIAwareness dpiAwareness) noexcept
     USER32_API(SetProcessDpiAwarenessContext);
     if (SetProcessDpiAwarenessContextFunc) {
         if (SetProcessDpiAwarenessContextFunc(dac) == FALSE) {
-            OutputDebugStringW(L"Failed to set DPI awareness for the process: SetProcessDpiAwarenessContext() returned FALSE.");
-            return false;
+            const DWORD dwError = GetLastError();
+            if (dwError == ERROR_ACCESS_DENIED) {
+                // ERROR_ACCESS_DENIED means set externally (MSVC manifest or external app loading Qt plugin).
+                // We assume it's the most appropriate DPI awareness.
+                return true;
+            } else {
+                PRINT_WIN32_ERROR_MESSAGE(SetProcessDpiAwarenessContext, L"Failed to set DPI awareness for the process: SetProcessDpiAwarenessContext() returned FALSE.")
+                return false;
+            }
         } else {
             return true;
         }
@@ -1001,8 +1008,14 @@ bool Utils::SetProcessDPIAwareness(const DPIAwareness dpiAwareness) noexcept
         if (SetProcessDpiAwarenessFunc) {
             const HRESULT hr = SetProcessDpiAwarenessFunc(pda);
             if (FAILED(hr)) {
-                OutputDebugStringW(L"Failed to set DPI awareness for the process: SetProcessDpiAwareness() reported failed.");
-                return false;
+                if (hr == E_ACCESSDENIED) {
+                    // E_ACCESSDENIED means set externally (MSVC manifest or external app loading Qt plugin).
+                    // We assume it's the most appropriate DPI awareness.
+                    return true;
+                } else {
+                    PRINT_HR_ERROR_MESSAGE(SetProcessDpiAwareness, hr, L"Failed to set DPI awareness for the process: SetProcessDpiAwareness() reported failed.")
+                    return false;
+                }
             } else {
                 return true;
             }
@@ -1011,7 +1024,7 @@ bool Utils::SetProcessDPIAwareness(const DPIAwareness dpiAwareness) noexcept
             USER32_API(SetProcessDPIAware);
             if (SetProcessDPIAwareFunc) {
                 if (SetProcessDPIAwareFunc() == FALSE) {
-                    OutputDebugStringW(L"Failed to set DPI awareness for the process: SetProcessDPIAware() returned FALSE.");
+                    PRINT_WIN32_ERROR_MESSAGE(SetProcessDPIAware, L"Failed to set DPI awareness for the process: SetProcessDPIAware() returned FALSE.")
                     return false;
                 } else {
                     return true;

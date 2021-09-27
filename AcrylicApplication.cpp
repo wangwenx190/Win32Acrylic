@@ -101,6 +101,7 @@ namespace HighContrast {
 // The thickness of an auto-hide taskbar in pixels.
 static constexpr UINT g_autoHideTaskbarThickness = 2;
 
+static constexpr wchar_t g_defaultWindowClassNamePrefix[] = LR"(wangwenx190\Win32AcrylicHelper\WindowClasses\)";
 static constexpr wchar_t g_defaultWindowTitle[] = L"Win32AcrylicHelper Application Main Window";
 
 static std::wstring g_mainWindowClassName = {};
@@ -471,6 +472,10 @@ static winrt::Windows::UI::Xaml::Controls::Button::Click_revoker g_closeButtonCl
     } break;
     case WM_CREATE: {
         g_mainWindowDPI = Utils::GetWindowMetrics(hWnd, WindowMetrics::DotsPerInch);
+        wchar_t dpiBuf[4] = { L'\0' };
+        _itow(g_mainWindowDPI, dpiBuf, 10);
+        const std::wstring dpiMsg = L"Main window dots-per-inch (DPI): " + std::wstring(dpiBuf);
+        OutputDebugStringW(dpiMsg.c_str());
         if (!Utils::UpdateFrameMargins(hWnd)) {
             OutputDebugStringW(L"Failed to update the frame margins for the main window.");
             break;
@@ -529,12 +534,12 @@ static winrt::Windows::UI::Xaml::Controls::Button::Click_revoker g_closeButtonCl
         const UINT dpiX = LOWORD(wParam);
         const UINT dpiY = HIWORD(wParam);
         g_mainWindowDPI = static_cast<UINT>(std::round(static_cast<double>(dpiX + dpiY) / 2.0));
-        wchar_t buf_old[4] = { L'\0' };
-        wchar_t buf_new[4] = { L'\0' };
-        _itow(oldMainWindowDPI, buf_old, 10);
-        _itow(g_mainWindowDPI, buf_new, 10);
-        const std::wstring debugMsg = L"The DotsPerInch of main window has changed. " + std::wstring(buf_old) + L" --> " + std::wstring(buf_new) + L".";
-        OutputDebugStringW(debugMsg.c_str());
+        wchar_t oldDPIBuf[4] = { L'\0' };
+        wchar_t newDPIBuf[4] = { L'\0' };
+        _itow(oldMainWindowDPI, oldDPIBuf, 10);
+        _itow(g_mainWindowDPI, newDPIBuf, 10);
+        const std::wstring dpiMsg = L"The dots-per-inch (DPI) of main window has changed. " + std::wstring(oldDPIBuf) + L" --> " + std::wstring(newDPIBuf) + L".";
+        OutputDebugStringW(dpiMsg.c_str());
         USER32_API(SetWindowPos);
         if (SetWindowPosFunc) {
             const auto prcNewWindow = reinterpret_cast<LPRECT>(lParam);
@@ -554,7 +559,7 @@ static winrt::Windows::UI::Xaml::Controls::Button::Click_revoker g_closeButtonCl
     case WM_DWMCOLORIZATIONCOLORCHANGED: {
         // The color format is 0xAARRGGBB.
         const auto color = static_cast<DWORD>(wParam);
-        static_cast<void>(color);
+        static_cast<void>(color); // ### TODO
     } break;
     case WM_PAINT: {
         return 0;
@@ -564,6 +569,8 @@ static winrt::Windows::UI::Xaml::Controls::Button::Click_revoker g_closeButtonCl
     } break;
     case WM_CLOSE: {
         if (Utils::CloseWindow(hWnd, g_mainWindowClassName)) {
+            const std::wstring dbgMsg = L"Main window class \"" + g_mainWindowClassName + L"\" has been unregistered.";
+            OutputDebugStringW(dbgMsg.c_str());
             g_mainWindowHandle = nullptr;
             g_mainWindowClassName = {};
             g_mainWindowDPI = 0;
@@ -682,6 +689,8 @@ static winrt::Windows::UI::Xaml::Controls::Button::Click_revoker g_closeButtonCl
         } break;
         case WM_CLOSE: {
             if (Utils::CloseWindow(hWnd, g_dragBarWindowClassName)) {
+                const std::wstring dbgMsg = L"Drag bar window class \"" + g_dragBarWindowClassName + L"\" has been unregistered.";
+                OutputDebugStringW(dbgMsg.c_str());
                 g_dragBarWindowHandle = nullptr;
                 g_dragBarWindowClassName = {};
                 return 0;
@@ -719,7 +728,13 @@ static winrt::Windows::UI::Xaml::Controls::Button::Click_revoker g_closeButtonCl
                 exists = (GetClassInfoExWFunc(Utils::GetCurrentModuleInstance(), g_mainWindowClassName.c_str(), &wcex) != FALSE);
             }
         }
-        g_mainWindowClassName = (name.empty() ? Utils::GenerateGUID() : name);
+        const std::wstring guid = Utils::GenerateGUID();
+        if (guid.empty()) {
+            OutputDebugStringW(L"Failed to generate a new GUID.");
+            return false;
+        }
+        const std::wstring defaultWindowClassName = g_defaultWindowClassNamePrefix + guid + L"@MainWindow";
+        g_mainWindowClassName = (name.empty() ? defaultWindowClassName : name);
         if (!exists) {
             SecureZeroMemory(&wcex, sizeof(wcex));
             wcex.cbSize = sizeof(wcex);
@@ -736,6 +751,8 @@ static winrt::Windows::UI::Xaml::Controls::Button::Click_revoker g_closeButtonCl
             PRINT_WIN32_ERROR_MESSAGE(RegisterClassExW, L"Failed to register the main window class.")
             return false;
         }
+        const std::wstring dbgMsg = L"Main window class \"" + g_mainWindowClassName + L"\" has been registered.";
+        OutputDebugStringW(dbgMsg.c_str());
         return true;
     } else {
         OutputDebugStringW(L"LoadCursorW(), LoadIconW(), RegisterClassExW() and GetClassInfoExW() are not available.");
@@ -748,7 +765,12 @@ static winrt::Windows::UI::Xaml::Controls::Button::Click_revoker g_closeButtonCl
     USER32_API(LoadCursorW);
     USER32_API(RegisterClassExW);
     if (LoadCursorWFunc && RegisterClassExWFunc) {
-        g_dragBarWindowClassName = Utils::GenerateGUID();
+        const std::wstring guid = Utils::GenerateGUID();
+        if (guid.empty()) {
+            OutputDebugStringW(L"Failed to generate a new GUID.");
+            return false;
+        }
+        g_dragBarWindowClassName = g_defaultWindowClassNamePrefix + guid + L"@DragBarWindow";
         WNDCLASSEXW wcex;
         SecureZeroMemory(&wcex, sizeof(wcex));
         wcex.cbSize = sizeof(wcex);
@@ -762,6 +784,8 @@ static winrt::Windows::UI::Xaml::Controls::Button::Click_revoker g_closeButtonCl
             PRINT_WIN32_ERROR_MESSAGE(RegisterClassExW, L"Failed to register the drag bar window class.")
             return false;
         }
+        const std::wstring dbgMsg = L"Drag bar window class \"" + g_dragBarWindowClassName + L"\" has been registered.";
+        OutputDebugStringW(dbgMsg.c_str());
         return true;
     } else {
         OutputDebugStringW(L"LoadCursorW() and RegisterClassExW() are not available.");

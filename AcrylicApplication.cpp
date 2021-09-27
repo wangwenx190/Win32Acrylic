@@ -64,6 +64,10 @@ namespace winrt::impl
 #define ABM_GETAUTOHIDEBAREX (0x0000000b)
 #endif
 
+#ifndef WM_DWMCOLORIZATIONCOLORCHANGED
+#define WM_DWMCOLORIZATIONCOLORCHANGED (0x0320)
+#endif
+
 #ifndef WM_DPICHANGED
 #define WM_DPICHANGED (0x02E0)
 #endif
@@ -105,32 +109,41 @@ static HWND g_mainWindowHandle = nullptr;
 static HWND g_dragBarWindowHandle = nullptr;
 static HWND g_xamlIslandWindowHandle = nullptr;
 static UINT g_mainWindowDPI = 0;
+static bool g_comInitialized = false;
 
-static winrt::Windows::UI::Xaml::Hosting::WindowsXamlManager g_manager = nullptr;
-static winrt::Windows::UI::Xaml::Hosting::DesktopWindowXamlSource g_source = nullptr;
+static winrt::Windows::UI::Xaml::Hosting::WindowsXamlManager g_xamlManager = nullptr;
+static winrt::Windows::UI::Xaml::Hosting::DesktopWindowXamlSource g_xamlSource = nullptr;
 static winrt::Windows::UI::Xaml::Controls::Grid g_rootGrid = nullptr;
-static winrt::Windows::UI::Xaml::Media::AcrylicBrush g_backgroundBrush = nullptr;
+static winrt::Windows::UI::Xaml::Media::AcrylicBrush g_windowBackgroundBrush = nullptr;
+static winrt::Windows::UI::Xaml::Controls::Button g_windowIconButton = nullptr;
+static winrt::Windows::UI::Xaml::Controls::Button g_minimizeButton = nullptr;
+static winrt::Windows::UI::Xaml::Controls::Button g_maximizeButton = nullptr;
+static winrt::Windows::UI::Xaml::Controls::Button g_closeButton = nullptr;
+static winrt::Windows::UI::Xaml::Controls::Button::Click_revoker g_windowIconButtonClickRevoker;
+static winrt::Windows::UI::Xaml::Controls::Button::Click_revoker g_minimizeButtonClickRevoker;
+static winrt::Windows::UI::Xaml::Controls::Button::Click_revoker g_maximizeButtonClickRevoker;
+static winrt::Windows::UI::Xaml::Controls::Button::Click_revoker g_closeButtonClickRevoker;
 
 [[nodiscard]] static inline bool RefreshBackgroundBrush() noexcept
 {
-    if (g_backgroundBrush == nullptr) {
+    if (g_windowBackgroundBrush == nullptr) {
         OutputDebugStringW(L"Failed to refresh the background brush due to the brush is null.");
         return false;
     }
     const WindowTheme systemTheme = Utils::GetSystemTheme();
     switch (systemTheme) {
     case WindowTheme::Light: {
-        g_backgroundBrush.TintColor(Constants::Light::TintColor);
-        g_backgroundBrush.TintOpacity(Constants::Light::TintOpacity);
-        g_backgroundBrush.TintLuminosityOpacity(Constants::Light::LuminosityOpacity);
-        g_backgroundBrush.FallbackColor(Constants::Light::FallbackColor);
+        g_windowBackgroundBrush.TintColor(Constants::Light::TintColor);
+        g_windowBackgroundBrush.TintOpacity(Constants::Light::TintOpacity);
+        g_windowBackgroundBrush.TintLuminosityOpacity(Constants::Light::LuminosityOpacity);
+        g_windowBackgroundBrush.FallbackColor(Constants::Light::FallbackColor);
         return true;
     } break;
     case WindowTheme::Dark: {
-        g_backgroundBrush.TintColor(Constants::Dark::TintColor);
-        g_backgroundBrush.TintOpacity(Constants::Dark::TintOpacity);
-        g_backgroundBrush.TintLuminosityOpacity(Constants::Dark::LuminosityOpacity);
-        g_backgroundBrush.FallbackColor(Constants::Dark::FallbackColor);
+        g_windowBackgroundBrush.TintColor(Constants::Dark::TintColor);
+        g_windowBackgroundBrush.TintOpacity(Constants::Dark::TintOpacity);
+        g_windowBackgroundBrush.TintLuminosityOpacity(Constants::Dark::LuminosityOpacity);
+        g_windowBackgroundBrush.FallbackColor(Constants::Dark::FallbackColor);
         return true;
     } break;
     case WindowTheme::HighContrast: {
@@ -538,6 +551,11 @@ static winrt::Windows::UI::Xaml::Media::AcrylicBrush g_backgroundBrush = nullptr
             OutputDebugStringW(L"SetWindowPos() is not available.");
         }
     } break;
+    case WM_DWMCOLORIZATIONCOLORCHANGED: {
+        // The color format is 0xAARRGGBB.
+        const auto color = static_cast<DWORD>(wParam);
+        static_cast<void>(color);
+    } break;
     case WM_PAINT: {
         return 0;
     } break;
@@ -555,15 +573,15 @@ static winrt::Windows::UI::Xaml::Media::AcrylicBrush g_backgroundBrush = nullptr
         }
     } break;
     case WM_DESTROY: {
-        g_backgroundBrush = nullptr;
+        g_windowBackgroundBrush = nullptr;
         g_rootGrid = nullptr;
-        if (g_source != nullptr) {
-            g_source.Close();
-            g_source = nullptr;
+        if (g_xamlSource != nullptr) {
+            g_xamlSource.Close();
+            g_xamlSource = nullptr;
         }
-        if (g_manager != nullptr) {
-            g_manager.Close();
-            g_manager = nullptr;
+        if (g_xamlManager != nullptr) {
+            g_xamlManager.Close();
+            g_xamlManager = nullptr;
         }
         g_xamlIslandWindowHandle = nullptr;
         USER32_API(PostQuitMessage);
@@ -828,17 +846,18 @@ static winrt::Windows::UI::Xaml::Media::AcrylicBrush g_backgroundBrush = nullptr
 {
     // The call to winrt::init_apartment() initializes COM. By default, in a multithreaded apartment.
     winrt::init_apartment(winrt::apartment_type::single_threaded);
+    g_comInitialized = true;
     // Initialize the XAML framework's core window for the current thread.
-    g_manager = winrt::Windows::UI::Xaml::Hosting::WindowsXamlManager::InitializeForCurrentThread();
-    if (g_manager == nullptr) {
+    g_xamlManager = winrt::Windows::UI::Xaml::Hosting::WindowsXamlManager::InitializeForCurrentThread();
+    if (g_xamlManager == nullptr) {
         Utils::DisplayErrorDialog(L"Failed to initialize the Windows XAML Manager for the current thread.");
         return false;
     }
     // This DesktopWindowXamlSource is the object that enables a non-UWP desktop application
     // to host WinRT XAML controls in any UI element that is associated with a window handle (HWND).
-    g_source = winrt::Windows::UI::Xaml::Hosting::DesktopWindowXamlSource();
+    g_xamlSource = winrt::Windows::UI::Xaml::Hosting::DesktopWindowXamlSource();
     // Get handle to the core window.
-    const auto interop = g_source.as<IDesktopWindowXamlSourceNative>();
+    const auto interop = g_xamlSource.as<IDesktopWindowXamlSourceNative>();
     if (!interop) {
         Utils::DisplayErrorDialog(L"Failed to retrieve the IDesktopWindowXamlSourceNative.");
         return false;
@@ -866,17 +885,17 @@ static winrt::Windows::UI::Xaml::Media::AcrylicBrush g_backgroundBrush = nullptr
     }
     // Create the XAML content.
     g_rootGrid = winrt::Windows::UI::Xaml::Controls::Grid();
-    g_backgroundBrush = winrt::Windows::UI::Xaml::Media::AcrylicBrush();
+    g_windowBackgroundBrush = winrt::Windows::UI::Xaml::Media::AcrylicBrush();
     if (!RefreshBackgroundBrush()) {
         Utils::DisplayErrorDialog(L"Failed to refresh the background brush.");
         return false;
     }
-    g_backgroundBrush.BackgroundSource(winrt::Windows::UI::Xaml::Media::AcrylicBackgroundSource::HostBackdrop);
-    g_rootGrid.Background(g_backgroundBrush);
+    g_windowBackgroundBrush.BackgroundSource(winrt::Windows::UI::Xaml::Media::AcrylicBackgroundSource::HostBackdrop);
+    g_rootGrid.Background(g_windowBackgroundBrush);
     //g_rootGrid.Children().Clear();
     //g_rootGrid.Children().Append(/* some UWP control */);
     //g_rootGrid.UpdateLayout();
-    g_source.Content(g_rootGrid);
+    g_xamlSource.Content(g_rootGrid);
     return true;
 }
 
@@ -889,8 +908,8 @@ static winrt::Windows::UI::Xaml::Media::AcrylicBrush g_backgroundBrush = nullptr
         MSG msg = {};
         while (GetMessageWFunc(&msg, nullptr, 0, 0) != FALSE) {
             BOOL filtered = FALSE;
-            if (g_source != nullptr) {
-                const auto interop2 = g_source.as<IDesktopWindowXamlSourceNative2>();
+            if (g_xamlSource != nullptr) {
+                const auto interop2 = g_xamlSource.as<IDesktopWindowXamlSourceNative2>();
                 if (interop2) {
                     const HRESULT hr = interop2->PreTranslateMessage(&msg, &filtered);
                     if (FAILED(hr)) {

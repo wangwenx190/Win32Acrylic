@@ -52,6 +52,7 @@ static constexpr DWORD g_DWMWA_USE_IMMERSIVE_DARK_MODE = 20;
 static constexpr DWORD g_DWMWA_VISIBLE_FRAME_BORDER_THICKNESS = 37;
 
 static constexpr wchar_t g_personalizeRegistryKey[] = LR"(Software\Microsoft\Windows\CurrentVersion\Themes\Personalize)";
+static constexpr wchar_t g_dwmRegistryKey[] = LR"(Software\Microsoft\Windows\DWM)";
 
 static constexpr UINT g_defaultResizeBorderThickness = 8;
 static constexpr UINT g_defaultCaptionHeight = 23;
@@ -337,7 +338,7 @@ static RECT g_savedWindowGeometry = {0, 0, 0, 0};
     }
 }
 
-[[nodiscard]] static inline bool GetBoolFromRegistry(const HKEY rootKey, const std::wstring &subKey, const std::wstring &keyName) noexcept
+[[nodiscard]] static inline DWORD GetDWORDFromRegistry(const HKEY rootKey, const std::wstring &subKey, const std::wstring &keyName) noexcept
 {
     ADVAPI32_API(RegOpenKeyExW);
     ADVAPI32_API(RegQueryValueExW);
@@ -345,12 +346,12 @@ static RECT g_savedWindowGeometry = {0, 0, 0, 0};
     if (RegOpenKeyExWFunc && RegQueryValueExWFunc && RegCloseKeyFunc) {
         if (!rootKey || subKey.empty() || keyName.empty()) {
             OutputDebugStringW(L"Can't query the registry due to invalid parameters are passed.");
-            return false;
+            return 0;
         }
         HKEY hKey = nullptr;
         if (RegOpenKeyExWFunc(rootKey, subKey.c_str(), 0, KEY_READ, &hKey) != ERROR_SUCCESS) {
             PRINT_WIN32_ERROR_MESSAGE(RegOpenKeyExW, L"Failed to open the registry key to read.")
-            return false;
+            return 0;
         }
         DWORD dwValue = 0;
         DWORD dwType = REG_DWORD;
@@ -362,18 +363,18 @@ static RECT g_savedWindowGeometry = {0, 0, 0, 0};
         }
         if (RegCloseKeyFunc(hKey) != ERROR_SUCCESS) {
             PRINT_WIN32_ERROR_MESSAGE(RegCloseKey, L"Failed to close the registry key.")
-            return false;
+            return 0;
         }
-        return (success && (dwValue != 0));
+        return dwValue;
     } else {
         OutputDebugStringW(L"RegOpenKeyExW(), RegQueryValueExW() and RegCloseKey() are not available.");
-        return false;
+        return 0;
     }
 }
 
 [[nodiscard]] static inline bool ShouldAppsUseDarkMode() noexcept
 {
-    return !GetBoolFromRegistry(HKEY_CURRENT_USER, g_personalizeRegistryKey, L"AppsUseLightTheme");
+    return (GetDWORDFromRegistry(HKEY_CURRENT_USER, g_personalizeRegistryKey, L"AppsUseLightTheme") == 0);
 }
 
 [[nodiscard]] static inline UINT GetWindowDPI(const HWND hWnd) noexcept
@@ -1103,4 +1104,40 @@ RECT Utils::GetScreenGeometry(const HWND hWnd) noexcept
         return {};
     }
     return ::GetScreenGeometry(hWnd, true, false);
+}
+
+ColorizationArea Utils::GetColorizationArea() noexcept
+{
+    const HKEY rootKey = HKEY_CURRENT_USER;
+    const std::wstring keyName = L"ColorPrevalence";
+    const DWORD dwmValue = GetDWORDFromRegistry(rootKey, g_dwmRegistryKey, keyName);
+    const DWORD themeValue = GetDWORDFromRegistry(rootKey, g_personalizeRegistryKey, keyName);
+    const bool dwm = (dwmValue != 0);
+    const bool theme = (themeValue != 0);
+    if (dwm && theme) {
+        return ColorizationArea::All;
+    } else if (dwm) {
+        return ColorizationArea::TitleBar_WindowBorder;
+    } else if (theme) {
+        return ColorizationArea::StartMenu_TaskBar_ActionCenter;
+    }
+    return ColorizationArea::None;
+}
+
+DWORD Utils::GetColorizationColor() noexcept
+{
+    DWMAPI_API(DwmGetColorizationColor);
+    if (DwmGetColorizationColorFunc) {
+        DWORD color = 0; // The color format of the value is 0xAARRGGBB.
+        BOOL opaque = FALSE;
+        const HRESULT hr = DwmGetColorizationColorFunc(&color, &opaque);
+        if (FAILED(hr)) {
+            PRINT_HR_ERROR_MESSAGE(DwmGetColorizationColor, hr, L"Failed to retrieve the colorization color.")
+            return 0;
+        }
+        return color;
+    } else {
+        OutputDebugStringW(L"DwmGetColorizationColor() is not available.");
+        return 0;
+    }
 }

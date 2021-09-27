@@ -71,11 +71,11 @@ enum class WindowState : int
 
 enum class DPIAwareness : int
 {
-    Unaware = 0,
-    GdiScaled,
-    System,
+    PerMonitorV2 = 0,
     PerMonitor,
-    PerMonitorV2
+    System,
+    GdiScaled,
+    Unaware
 };
 
 enum class WindowMetrics : int
@@ -94,6 +94,14 @@ enum class WindowMetrics : int
     FrameBorderThickness,
     DPI = DotsPerInch,
     ResizeBorderThickness = ResizeBorderThicknessX
+};
+
+enum class ColorizationArea : int
+{
+    None = 0,
+    StartMenu_TaskBar_ActionCenter,
+    TitleBar_WindowBorder,
+    All
 };
 
 namespace Utils
@@ -117,6 +125,8 @@ namespace Utils
     [[nodiscard]] bool SetProcessDPIAwareness(const DPIAwareness dpiAwareness) noexcept;
     [[nodiscard]] UINT GetWindowMetrics(const HWND hWnd, const WindowMetrics metrics) noexcept;
     [[nodiscard]] RECT GetScreenGeometry(const HWND hWnd) noexcept;
+    [[nodiscard]] ColorizationArea GetColorizationArea() noexcept;
+    [[nodiscard]] DWORD GetColorizationColor() noexcept;
 } // namespace Utils
 
 [[nodiscard]] inline bool IsWindows1019H1OrGreater() noexcept

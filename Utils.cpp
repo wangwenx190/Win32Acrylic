@@ -59,6 +59,13 @@ static constexpr UINT g_defaultTitleBarHeight = 31;
 static constexpr UINT g_defaultFrameBorderThickness = 1;
 static constexpr UINT g_defaultWindowDPI = USER_DEFAULT_SCREEN_DPI;
 
+static constexpr DWORD g_defaultWindowStylesDiff = (WS_CAPTION | WS_MINIMIZEBOX | WS_MAXIMIZEBOX | WS_THICKFRAME);
+static constexpr DWORD g_defaultExtendedWindowStylesDiff = (WS_EX_DLGMODALFRAME | WS_EX_WINDOWEDGE | WS_EX_CLIENTEDGE | WS_EX_STATICEDGE);
+
+static DWORD g_savedWindowStyles = 0;
+static DWORD g_savedExtendedWindowStyles = 0;
+static RECT g_savedWindowGeometry = {0, 0, 0, 0};
+
 [[nodiscard]] static inline HMONITOR GetWindowScreen(const HWND hWnd, const bool defaultToNearest) noexcept
 {
     USER32_API(MonitorFromWindow);
@@ -216,84 +223,98 @@ static constexpr UINT g_defaultWindowDPI = USER_DEFAULT_SCREEN_DPI;
             && (windowRect.right == screenRect.right));
 }
 
-[[nodiscard]] static inline bool WindowEnterFullScreen(const HWND hWnd) noexcept
+[[nodiscard]] static inline bool IsWindowShown(const HWND hWnd) noexcept
 {
-    USER32_API(GetWindowLongPtrW);
-    USER32_API(SetWindowLongPtrW);
-    if (GetWindowLongPtrWFunc && SetWindowLongPtrWFunc) {
+    USER32_API(IsWindowVisible);
+    if (IsWindowVisibleFunc) {
         if (!hWnd) {
             return false;
         }
-        const auto oldStyle = static_cast<DWORD>(GetWindowLongPtrWFunc(hWnd, GWL_STYLE));
-        const auto oldExtendStyle = static_cast<DWORD>(GetWindowLongPtrWFunc(hWnd, GWL_EXSTYLE));
-        const DWORD newStyle = ((oldStyle & ~(WS_CAPTION | WS_MINIMIZEBOX | WS_MAXIMIZEBOX | WS_THICKFRAME)) | WS_POPUP);
-        const DWORD newExtendStyle = (oldExtendStyle & ~(WS_EX_DLGMODALFRAME | WS_EX_WINDOWEDGE | WS_EX_CLIENTEDGE | WS_EX_STATICEDGE));
-        if (SetWindowLongPtrWFunc(hWnd, GWL_STYLE, static_cast<LONG_PTR>(newStyle)) == 0) {
-            PRINT_WIN32_ERROR_MESSAGE(SetWindowLongPtrW, L"Failed to change the window style.")
-            return false;
-        }
-        if (SetWindowLongPtrWFunc(hWnd, GWL_EXSTYLE, static_cast<LONG_PTR>(newExtendStyle)) == 0) {
-            PRINT_WIN32_ERROR_MESSAGE(SetWindowLongPtrW, L"Failed to change the extended window style.")
-            return false;
-        }
-        USER32_API(SetWindowPos);
-        if (SetWindowPosFunc) {
-            const RECT screenRect = GetScreenGeometry(hWnd, true, false);
-            if (SetWindowPosFunc(hWnd, nullptr, screenRect.left, screenRect.top,
-                                 std::abs(screenRect.right - screenRect.left),
-                                 std::abs(screenRect.bottom - screenRect.top),
-                                 SWP_FRAMECHANGED | SWP_SHOWWINDOW | SWP_NOZORDER | SWP_NOOWNERZORDER) == FALSE) {
-                PRINT_WIN32_ERROR_MESSAGE(SetWindowPos, L"Failed to change the window geometry.")
-                return false;
-            } else {
-                return true;
-            }
-        } else {
-            OutputDebugStringW(L"SetWindowPos() is not available.");
-            return false;
-        }
+        return (IsWindowVisibleFunc(hWnd) != FALSE);
     } else {
-        OutputDebugStringW(L"GetWindowLongPtrW() and SetWindowLongPtrW() are not available.");
+        OutputDebugStringW(L"IsWindowVisible() is not available.");
+        return false;
+    }
+}
+
+[[nodiscard]] static inline bool WindowEnterFullScreen(const HWND hWnd) noexcept
+{
+    USER32_API(GetWindowRect);
+    USER32_API(GetWindowLongPtrW);
+    USER32_API(SetWindowLongPtrW);
+    USER32_API(SetWindowPos);
+    if (GetWindowRectFunc && GetWindowLongPtrWFunc && SetWindowLongPtrWFunc && SetWindowPosFunc) {
+        if (!hWnd) {
+            return false;
+        }
+        if (GetWindowRectFunc(hWnd, &g_savedWindowGeometry) == FALSE) {
+            PRINT_WIN32_ERROR_MESSAGE(GetWindowRect, L"Failed to retrieve the window geometry.")
+            return false;
+        }
+        g_savedWindowStyles = static_cast<DWORD>(GetWindowLongPtrWFunc(hWnd, GWL_STYLE));
+        if (g_savedWindowStyles == 0) {
+            PRINT_WIN32_ERROR_MESSAGE(GetWindowLongPtrW, L"Failed to retrieve the window styles.")
+            return false;
+        }
+        g_savedExtendedWindowStyles = static_cast<DWORD>(GetWindowLongPtrWFunc(hWnd, GWL_EXSTYLE));
+        if (g_savedExtendedWindowStyles == 0) {
+            PRINT_WIN32_ERROR_MESSAGE(GetWindowLongPtrW, L"Failed to retrieve the extended window styles.")
+            return false;
+        }
+        const DWORD newWindowStyles = ((g_savedWindowStyles & ~g_defaultWindowStylesDiff) | WS_POPUP);
+        if (SetWindowLongPtrWFunc(hWnd, GWL_STYLE, static_cast<LONG_PTR>(newWindowStyles)) == 0) {
+            PRINT_WIN32_ERROR_MESSAGE(SetWindowLongPtrW, L"Failed to change the window styles.")
+            return false;
+        }
+        const DWORD newExtendedWindowStyles = (g_savedExtendedWindowStyles & ~g_defaultExtendedWindowStylesDiff);
+        if (SetWindowLongPtrWFunc(hWnd, GWL_EXSTYLE, static_cast<LONG_PTR>(newExtendedWindowStyles)) == 0) {
+            PRINT_WIN32_ERROR_MESSAGE(SetWindowLongPtrW, L"Failed to change the extended window styles.")
+            return false;
+        }
+        const RECT screenRect = GetScreenGeometry(hWnd, true, false);
+        if (SetWindowPosFunc(hWnd, nullptr, screenRect.left, screenRect.top,
+                             std::abs(screenRect.right - screenRect.left),
+                             std::abs(screenRect.bottom - screenRect.top),
+                             SWP_FRAMECHANGED | SWP_SHOWWINDOW | SWP_NOZORDER | SWP_NOOWNERZORDER) == FALSE) {
+            PRINT_WIN32_ERROR_MESSAGE(SetWindowPos, L"Failed to change the window geometry.")
+            return false;
+        }
+        return true;
+    } else {
+        OutputDebugStringW(L"GetWindowRect(), GetWindowLongPtrW(), SetWindowLongPtrW() and SetWindowPos() are not available.");
         return false;
     }
 }
 
 [[nodiscard]] static inline bool WindowExitFullScreen(const HWND hWnd) noexcept
 {
-    USER32_API(GetWindowLongPtrW);
     USER32_API(SetWindowLongPtrW);
-    if (GetWindowLongPtrWFunc && SetWindowLongPtrWFunc) {
+    USER32_API(SetWindowPos);
+    if (SetWindowLongPtrWFunc && SetWindowPosFunc) {
         if (!hWnd) {
             return false;
         }
-        const auto oldStyle = static_cast<DWORD>(GetWindowLongPtrWFunc(hWnd, GWL_STYLE));
-        const auto oldExtendStyle = static_cast<DWORD>(GetWindowLongPtrWFunc(hWnd, GWL_EXSTYLE));
-        const DWORD newStyle = ((oldStyle & ~WS_POPUP) | (WS_CAPTION | WS_MINIMIZEBOX | WS_MAXIMIZEBOX | WS_THICKFRAME));
-        const DWORD newExtendStyle = (oldExtendStyle); // ### TODO
-        if (SetWindowLongPtrWFunc(hWnd, GWL_STYLE, static_cast<LONG_PTR>(newStyle)) == 0) {
-            PRINT_WIN32_ERROR_MESSAGE(SetWindowLongPtrW, L"Failed to change the window style.")
+        if (SetWindowLongPtrWFunc(hWnd, GWL_STYLE, static_cast<LONG_PTR>(g_savedWindowStyles)) == 0) {
+            PRINT_WIN32_ERROR_MESSAGE(SetWindowLongPtrW, L"Failed to change the window styles.")
             return false;
         }
-        if (SetWindowLongPtrWFunc(hWnd, GWL_EXSTYLE, static_cast<LONG_PTR>(newExtendStyle)) == 0) {
-            PRINT_WIN32_ERROR_MESSAGE(SetWindowLongPtrW, L"Failed to change the extended window style.")
+        g_savedWindowStyles = 0;
+        if (SetWindowLongPtrWFunc(hWnd, GWL_EXSTYLE, static_cast<LONG_PTR>(g_savedExtendedWindowStyles)) == 0) {
+            PRINT_WIN32_ERROR_MESSAGE(SetWindowLongPtrW, L"Failed to change the extended window styles.")
             return false;
         }
-        USER32_API(SetWindowPos);
-        if (SetWindowPosFunc) {
-            if (SetWindowPosFunc(hWnd, nullptr, 0, 0, 0, 0,
-                                 SWP_FRAMECHANGED | SWP_SHOWWINDOW | SWP_NOSIZE | SWP_NOMOVE | SWP_NOZORDER | SWP_NOOWNERZORDER) == FALSE) {
-                PRINT_WIN32_ERROR_MESSAGE(SetWindowPos, L"Failed to trigger a frame change event.")
-                return false;
-            } else {
-                return true;
-            }
-        } else {
-            OutputDebugStringW(L"SetWindowPos() is not available.");
+        g_savedExtendedWindowStyles = 0;
+        if (SetWindowPosFunc(hWnd, nullptr, g_savedWindowGeometry.left, g_savedWindowGeometry.top,
+                             std::abs(g_savedWindowGeometry.right - g_savedWindowGeometry.left),
+                             std::abs(g_savedWindowGeometry.bottom - g_savedWindowGeometry.top),
+                             SWP_FRAMECHANGED | SWP_SHOWWINDOW | SWP_NOZORDER | SWP_NOOWNERZORDER) == FALSE) {
+            PRINT_WIN32_ERROR_MESSAGE(SetWindowPos, L"Failed to change the window geometry.")
             return false;
         }
+        g_savedWindowGeometry = {0, 0, 0, 0};
         return true;
     } else {
-        OutputDebugStringW(L"GetWindowLongPtrW() and SetWindowLongPtrW() are not available.");
+        OutputDebugStringW(L"SetWindowLongPtrW() and SetWindowPos() are not available.");
         return false;
     }
 }
@@ -805,25 +826,18 @@ WindowState Utils::GetWindowState(const HWND hWnd) noexcept
         return WindowState::Maximized;
     } else if (IsWindowFullScreen(hWnd)) {
         return WindowState::FullScreen;
+    } else if (IsWindowShown(hWnd)) {
+        return WindowState::Shown;
     } else {
-        USER32_API(IsWindowVisible);
-        if (IsWindowVisibleFunc) {
-            if (IsWindowVisibleFunc(hWnd) == FALSE) {
-                return WindowState::Hidden;
-            } else {
-                return WindowState::Shown;
-            }
-        } else {
-            OutputDebugStringW(L"IsWindowVisible() is not available.");
-            return WindowState::Shown;
-        }
+        return WindowState::Hidden;
     }
 }
 
 bool Utils::SetWindowState(const HWND hWnd, const WindowState state) noexcept
 {
     USER32_API(ShowWindow);
-    if (ShowWindowFunc) {
+    USER32_API(UpdateWindow);
+    if (ShowWindowFunc && UpdateWindowFunc) {
         if (!hWnd) {
             return false;
         }
@@ -833,10 +847,7 @@ bool Utils::SetWindowState(const HWND hWnd, const WindowState state) noexcept
             return false;
         }
         if ((currentState == WindowState::FullScreen) && (state != WindowState::FullScreen)) {
-            if (!WindowExitFullScreen(hWnd)) {
-                OutputDebugStringW(L"Failed to exit from fullScreen.");
-                return false;
-            }
+            return WindowExitFullScreen(hWnd);
         }
         int nCmdShow = SW_SHOW; // Activates the window and displays it in its current size and position.
         switch (state) {
@@ -863,20 +874,14 @@ bool Utils::SetWindowState(const HWND hWnd, const WindowState state) noexcept
         // the operation result of itself.
         ShowWindowFunc(hWnd, nCmdShow);
         if ((nCmdShow != SW_HIDE) && (nCmdShow != SW_MINIMIZE)) {
-            USER32_API(UpdateWindow);
-            if (UpdateWindowFunc) {
-                if (UpdateWindowFunc(hWnd) == FALSE) {
-                    PRINT_WIN32_ERROR_MESSAGE(UpdateWindow, L"Failed to update the window.")
-                    return false;
-                }
-            } else {
-                OutputDebugStringW(L"UpdateWindow() is not available.");
+            if (UpdateWindowFunc(hWnd) == FALSE) {
+                PRINT_WIN32_ERROR_MESSAGE(UpdateWindow, L"Failed to update the window.")
                 return false;
             }
         }
         return true;
     } else {
-        OutputDebugStringW(L"ShowWindow() is not available.");
+        OutputDebugStringW(L"ShowWindow() and UpdateWindow() are not available.");
         return false;
     }
 }
@@ -992,7 +997,7 @@ bool Utils::SetProcessDPIAwareness(const DPIAwareness dpiAwareness) noexcept
         if (SetProcessDpiAwarenessContextFunc(dac) == FALSE) {
             const DWORD dwError = GetLastError();
             if (dwError == ERROR_ACCESS_DENIED) {
-                // ERROR_ACCESS_DENIED means set externally (MSVC manifest or external app loading Qt plugin).
+                // ERROR_ACCESS_DENIED means set externally (MSVC manifest or external application loading our library).
                 // We assume it's the most appropriate DPI awareness.
                 return true;
             } else {
@@ -1009,7 +1014,7 @@ bool Utils::SetProcessDPIAwareness(const DPIAwareness dpiAwareness) noexcept
             const HRESULT hr = SetProcessDpiAwarenessFunc(pda);
             if (FAILED(hr)) {
                 if (hr == E_ACCESSDENIED) {
-                    // E_ACCESSDENIED means set externally (MSVC manifest or external app loading Qt plugin).
+                    // E_ACCESSDENIED means set externally (MSVC manifest or external application loading our library).
                     // We assume it's the most appropriate DPI awareness.
                     return true;
                 } else {
@@ -1024,8 +1029,15 @@ bool Utils::SetProcessDPIAwareness(const DPIAwareness dpiAwareness) noexcept
             USER32_API(SetProcessDPIAware);
             if (SetProcessDPIAwareFunc) {
                 if (SetProcessDPIAwareFunc() == FALSE) {
-                    PRINT_WIN32_ERROR_MESSAGE(SetProcessDPIAware, L"Failed to set DPI awareness for the process: SetProcessDPIAware() returned FALSE.")
-                    return false;
+                    const DWORD dwError = GetLastError();
+                    if (dwError == ERROR_ACCESS_DENIED) {
+                        // ERROR_ACCESS_DENIED means set externally (MSVC manifest or external application loading our library).
+                        // We assume it's the most appropriate DPI awareness.
+                        return true;
+                    } else {
+                        PRINT_WIN32_ERROR_MESSAGE(SetProcessDPIAware, L"Failed to set DPI awareness for the process: SetProcessDPIAware() returned FALSE.")
+                        return false;
+                    }
                 } else {
                     return true;
                 }

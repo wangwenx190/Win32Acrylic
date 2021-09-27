@@ -19,19 +19,14 @@ include("${PROJECT_SOURCE_DIR}/toolchain.cmake")
 include("${PROJECT_SOURCE_DIR}/VC-LTL.cmake")
 
 set(SOURCES
-    Win32AcrylicHelper.rc
-    Win32AcrylicHelper.manifest
+    Win32AcrylicHelper.rc Win32AcrylicHelper.manifest
     Resource.h
-    RuntimeObject.cpp
-    SystemLibrary.h
-    SystemLibrary.cpp
-    SystemLibraryManager.h
-    SystemLibraryManager.cpp
     VersionNumber.hpp
-    Utils.h
-    Utils.cpp
-    AcrylicApplication.h
-    AcrylicApplication.cpp
+    RuntimeObject.cpp
+    Utils.h Utils.cpp
+    SystemLibrary.h SystemLibrary.cpp
+    SystemLibraryManager.h SystemLibraryManager.cpp
+    AcrylicApplication.h AcrylicApplication.cpp
     main.cpp
 )
 

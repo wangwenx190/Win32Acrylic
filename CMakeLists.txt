@@ -16,6 +16,8 @@ endif()
 
 include("${PROJECT_SOURCE_DIR}/toolchain.cmake")
 
+include("${PROJECT_SOURCE_DIR}/VC-LTL.cmake")
+
 set(SOURCES
     Win32AcrylicHelper.rc
     Win32AcrylicHelper.manifest

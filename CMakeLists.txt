@@ -27,7 +27,7 @@ set(SOURCES
     Utils.h Utils.cpp
     SystemLibrary.h SystemLibrary.cpp
     SystemLibraryManager.h SystemLibraryManager.cpp
-    CustomFrame.h CustomFrame.cpp
+    Window.h Window.cpp
     AcrylicApplication.h AcrylicApplication.cpp
     main.cpp
 )

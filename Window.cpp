@@ -22,7 +22,7 @@
  * SOFTWARE.
  */
 
-#include "CustomFrame.h"
+#include "Window.h"
 #include "SystemLibraryManager.h"
 
 Window::Window() noexcept

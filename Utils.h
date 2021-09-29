@@ -27,7 +27,7 @@
 #include <SDKDDKVer.h>
 #include <Windows.h>
 #include <string>
-#include "Global.h"
+#include "Definitions.h"
 
 namespace Utils
 {

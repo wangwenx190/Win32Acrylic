@@ -41,7 +41,8 @@ public:
     [[nodiscard]] bool Destroy() noexcept;
 
     [[nodiscard]] HWND WindowHandle() const noexcept;
-    [[nodiscard]] std::wstring ClassName() const noexcept;
+
+    [[nodiscard]] UINT DotsPerInch() const noexcept;
 
     [[nodiscard]] int MessageLoop() const noexcept;
 
@@ -79,13 +80,13 @@ private:
 
 private:
     HWND m_window = nullptr;
-    std::wstring m_class = {};
     int m_x = 0;
     int m_y = 0;
     UINT m_width = 0;
     UINT m_height = 0;
     WindowState m_visibility = WindowState::Normal;
     WindowTheme m_theme = WindowTheme::Light;
+    UINT m_dpi = 0;
     DWORD m_savedWindowStyles = 0;
     DWORD m_savedExtendedWindowStyles = 0;
     RECT m_savedWindowGeometry = {};

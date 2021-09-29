@@ -558,9 +558,7 @@ std::wstring Utils::GetSystemErrorMessage(const std::wstring &function, const DW
         OutputDebugStringW(L"Failed to retrieve the system error message.");
         return {};
     }
-    wchar_t codeStr[4] = { L'\0' };
-    _itow(code, codeStr, 10);
-    const std::wstring result = L"\"" + function + L"\" failed with error " + std::wstring(codeStr) + L": " + buf + L".";
+    const std::wstring result = L"\"" + function + L"\" failed with error " + IntegerToString(code, 10) + L": " + buf + L".";
     LocalFree(buf);
     return result;
 }
@@ -744,22 +742,6 @@ bool Utils::UpdateFrameMargins(const HWND hWnd) noexcept
         OutputDebugStringW(L"DwmExtendFrameIntoClientArea() is not available.");
         return false;
     }
-}
-
-bool Utils::IsWindowsVersionOrGreater(const VersionNumber &version) noexcept
-{
-    OSVERSIONINFOEXW osvi;
-    SecureZeroMemory(&osvi, sizeof(osvi));
-    osvi.dwOSVersionInfoSize = sizeof(osvi);
-    osvi.dwMajorVersion = version.Major();
-    osvi.dwMinorVersion = version.Minor();
-    osvi.dwBuildNumber = version.Patch();
-    const BYTE op = VER_GREATER_EQUAL;
-    DWORDLONG dwlConditionMask = 0;
-    VER_SET_CONDITION(dwlConditionMask, VER_MAJORVERSION, op);
-    VER_SET_CONDITION(dwlConditionMask, VER_MINORVERSION, op);
-    VER_SET_CONDITION(dwlConditionMask, VER_BUILDNUMBER, op);
-    return (VerifyVersionInfoW(&osvi, VER_MAJORVERSION | VER_MINORVERSION | VER_BUILDNUMBER, dwlConditionMask) != FALSE);
 }
 
 WindowTheme Utils::GetSystemTheme() noexcept
@@ -1133,4 +1115,11 @@ DWORD Utils::GetColorizationColor() noexcept
         OutputDebugStringW(L"DwmGetColorizationColor() is not available.");
         return 0;
     }
+}
+
+std::wstring Utils::IntegerToString(const int num, const int radix) noexcept
+{
+    wchar_t buf[MAX_PATH] = { L'\0' };
+    _itow(num, buf, radix);
+    return buf;
 }

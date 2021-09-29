@@ -115,6 +115,16 @@ void Window::Visibility(const WindowState value) noexcept
 
 }
 
+WindowTheme Window::Theme() const noexcept
+{
+    return m_theme;
+}
+
+void Window::Theme(const WindowTheme value) noexcept
+{
+
+}
+
 bool Window::Move(const int x, const int y) noexcept
 {
     return SetGeometry(x, y, m_width, m_height);

@@ -26,8 +26,8 @@
 
 #include <SDKDDKVer.h>
 #include <Windows.h>
-#include "Global.h"
 #include <string>
+#include "Definitions.h"
 
 class Window
 {
@@ -60,6 +60,9 @@ public:
     [[nodiscard]] WindowState Visibility() const noexcept;
     void Visibility(const WindowState value) noexcept;
 
+    [[nodiscard]] WindowTheme Theme() const noexcept;
+    void Theme(const WindowTheme value) noexcept;
+
     [[nodiscard]] bool Move(const int x, const int y) noexcept;
     [[nodiscard]] bool Resize(const UINT w, const UINT h) noexcept;
     [[nodiscard]] bool SetGeometry(const int x, const int y, const UINT w, const UINT h) noexcept;
@@ -82,6 +85,7 @@ private:
     UINT m_width = 0;
     UINT m_height = 0;
     WindowState m_visibility = WindowState::Normal;
+    WindowTheme m_theme = WindowTheme::Light;
     DWORD m_savedWindowStyles = 0;
     DWORD m_savedExtendedWindowStyles = 0;
     RECT m_savedWindowGeometry = {};

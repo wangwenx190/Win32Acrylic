@@ -30,10 +30,10 @@ class VersionNumber
 {
 public:
     inline explicit constexpr VersionNumber(const int major, const int minor, const int patch, const int tweak) noexcept {
-        Major(major);
-        Minor(minor);
-        Patch(patch);
-        Tweak(tweak);
+        m_major = major;
+        m_minor = minor;
+        m_patch = patch;
+        m_tweak = tweak;
     }
     inline explicit constexpr VersionNumber(const int major, const int minor, const int patch) noexcept : VersionNumber(major, minor, patch, 0) {}
     inline explicit constexpr VersionNumber(const int major, const int minor) noexcept : VersionNumber(major, minor, 0, 0) {}
@@ -67,6 +67,16 @@ public:
     }
     [[nodiscard]] inline constexpr int Tweak() const noexcept {
         return m_tweak;
+    }
+
+    [[nodiscard]] inline constexpr bool Null() const noexcept {
+        return ((m_major == 0) && (m_minor == 0) && (m_patch == 0) && (m_tweak == 0));
+    }
+    [[nodiscard]] inline constexpr bool Empty() const noexcept {
+        return Null();
+    }
+    [[nodiscard]] inline constexpr bool Valid() const noexcept {
+        return (Null() || ((m_major > 0) && (m_minor > 0) && (m_patch > 0) && (m_tweak > 0)));
     }
 
     [[nodiscard]] inline constexpr static VersionNumber FromString(const std::wstring &str) noexcept {
@@ -126,6 +136,12 @@ public:
     }
     inline friend bool operator<(const VersionNumber &lhs, const VersionNumber &rhs) noexcept {
         return ((lhs != rhs) && !(lhs > rhs));
+    }
+    inline friend bool operator>=(const VersionNumber &lhs, const VersionNumber &rhs) noexcept {
+        return ((lhs > rhs) || (lhs == rhs));
+    }
+    inline friend bool operator<=(const VersionNumber &lhs, const VersionNumber &rhs) noexcept {
+        return ((lhs < rhs) || (lhs == rhs));
     }
 
 private:

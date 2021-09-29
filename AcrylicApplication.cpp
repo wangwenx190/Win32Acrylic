@@ -120,10 +120,6 @@ static winrt::Windows::UI::Xaml::Controls::Button g_windowIconButton = nullptr;
 static winrt::Windows::UI::Xaml::Controls::Button g_minimizeButton = nullptr;
 static winrt::Windows::UI::Xaml::Controls::Button g_maximizeButton = nullptr;
 static winrt::Windows::UI::Xaml::Controls::Button g_closeButton = nullptr;
-static winrt::Windows::UI::Xaml::Controls::Button::Click_revoker g_windowIconButtonClickRevoker;
-static winrt::Windows::UI::Xaml::Controls::Button::Click_revoker g_minimizeButtonClickRevoker;
-static winrt::Windows::UI::Xaml::Controls::Button::Click_revoker g_maximizeButtonClickRevoker;
-static winrt::Windows::UI::Xaml::Controls::Button::Click_revoker g_closeButtonClickRevoker;
 
 [[nodiscard]] static inline bool RefreshBackgroundBrush() noexcept
 {
@@ -472,9 +468,7 @@ static winrt::Windows::UI::Xaml::Controls::Button::Click_revoker g_closeButtonCl
     } break;
     case WM_CREATE: {
         g_mainWindowDPI = Utils::GetWindowMetrics(hWnd, WindowMetrics::DotsPerInch);
-        wchar_t dpiBuf[4] = { L'\0' };
-        _itow(g_mainWindowDPI, dpiBuf, 10);
-        const std::wstring dpiMsg = L"Main window dots-per-inch (DPI): " + std::wstring(dpiBuf);
+        const std::wstring dpiMsg = L"Main window dots-per-inch (DPI): " + Utils::IntegerToString(g_mainWindowDPI, 10);
         OutputDebugStringW(dpiMsg.c_str());
         if (!Utils::UpdateFrameMargins(hWnd)) {
             OutputDebugStringW(L"Failed to update the frame margins for the main window.");
@@ -534,11 +528,7 @@ static winrt::Windows::UI::Xaml::Controls::Button::Click_revoker g_closeButtonCl
         const UINT dpiX = LOWORD(wParam);
         const UINT dpiY = HIWORD(wParam);
         g_mainWindowDPI = static_cast<UINT>(std::round(static_cast<double>(dpiX + dpiY) / 2.0));
-        wchar_t oldDPIBuf[4] = { L'\0' };
-        wchar_t newDPIBuf[4] = { L'\0' };
-        _itow(oldMainWindowDPI, oldDPIBuf, 10);
-        _itow(g_mainWindowDPI, newDPIBuf, 10);
-        const std::wstring dpiMsg = L"The dots-per-inch (DPI) of main window has changed. " + std::wstring(oldDPIBuf) + L" --> " + std::wstring(newDPIBuf) + L".";
+        const std::wstring dpiMsg = L"The dots-per-inch (DPI) of main window has changed. " + Utils::IntegerToString(oldMainWindowDPI, 10) + L" --> " + Utils::IntegerToString(g_mainWindowDPI, 10) + L".";
         OutputDebugStringW(dpiMsg.c_str());
         USER32_API(SetWindowPos);
         if (SetWindowPosFunc) {

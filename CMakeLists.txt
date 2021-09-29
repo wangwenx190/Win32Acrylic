@@ -21,11 +21,13 @@ include("${PROJECT_SOURCE_DIR}/VC-LTL.cmake")
 set(SOURCES
     Win32AcrylicHelper.rc Win32AcrylicHelper.manifest
     Resource.h
+    Global.h
     VersionNumber.hpp
     RuntimeObject.cpp
     Utils.h Utils.cpp
     SystemLibrary.h SystemLibrary.cpp
     SystemLibraryManager.h SystemLibraryManager.cpp
+    CustomFrame.h CustomFrame.cpp
     AcrylicApplication.h AcrylicApplication.cpp
     main.cpp
 )

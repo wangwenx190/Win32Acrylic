@@ -5,3 +5,6 @@
 - 用XAML控件自制一个标题栏，并在WM_NCHITTEST里正确的返回三个系统按钮的位置
 - 将AcrylicApplication整合为一个类
 - 点击窗口左上角窗口图标位置，弹出系统菜单
+- 缓存窗口状态、系统主题等，不要每次都全新查询
+- 参照QOperatingSystemVersion改进
+- 看能否将SystemLibraryManager的宏改进为类或函数

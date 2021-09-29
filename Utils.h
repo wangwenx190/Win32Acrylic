@@ -27,6 +27,7 @@
 #include <SDKDDKVer.h>
 #include <Windows.h>
 #include "VersionNumber.hpp"
+#include "Global.h"
 
 [[maybe_unused]] constexpr VersionNumber Windows_2000               = VersionNumber( 5, 0,  2195);
 [[maybe_unused]] constexpr VersionNumber Windows_XP                 = VersionNumber( 5, 1,  2600);
@@ -52,58 +53,6 @@
 [[maybe_unused]] constexpr VersionNumber Windows10_20Half2          = VersionNumber(10, 0, 19042);
 [[maybe_unused]] constexpr VersionNumber Windows10_21Half1          = VersionNumber(10, 0, 19043);
 
-enum class WindowTheme : int
-{
-    Light = 0,
-    Dark,
-    HighContrast
-};
-
-enum class WindowState : int
-{
-    Normal = 0,
-    Minimized,
-    Maximized,
-    FullScreen,
-    Shown,
-    Hidden
-};
-
-enum class DPIAwareness : int
-{
-    PerMonitorV2 = 0,
-    PerMonitor,
-    System,
-    GdiScaled,
-    Unaware
-};
-
-enum class WindowMetrics : int
-{
-    X = 0,
-    Y,
-    Width,
-    Height,
-    FrameWidth,
-    FrameHeight,
-    DotsPerInch,
-    ResizeBorderThicknessX,
-    ResizeBorderThicknessY,
-    CaptionHeight,
-    TitleBarHeight,
-    FrameBorderThickness,
-    DPI = DotsPerInch,
-    ResizeBorderThickness = ResizeBorderThicknessX
-};
-
-enum class ColorizationArea : int
-{
-    None = 0,
-    StartMenu_TaskBar_ActionCenter,
-    TitleBar_WindowBorder,
-    All
-};
-
 namespace Utils
 {
     void DisplayErrorDialog(const std::wstring &text) noexcept;
@@ -127,6 +76,7 @@ namespace Utils
     [[nodiscard]] RECT GetScreenGeometry(const HWND hWnd) noexcept;
     [[nodiscard]] ColorizationArea GetColorizationArea() noexcept;
     [[nodiscard]] DWORD GetColorizationColor() noexcept;
+    [[nodiscard]] std::wstring IntegerToString(const int num, const int radix) noexcept;
 } // namespace Utils
 
 [[nodiscard]] inline bool IsWindows1019H1OrGreater() noexcept

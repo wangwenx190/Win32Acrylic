@@ -162,7 +162,7 @@ static RECT g_savedWindowGeometry = {0, 0, 0, 0};
     return {geometry.left, geometry.top};
 }
 
-[[nodiscard]] static inline bool IsWindowNoState(const HWND hWnd) noexcept
+[[nodiscard]] static inline bool IsWindowNormal(const HWND hWnd) noexcept
 {
     USER32_API(GetWindowPlacement);
     if (GetWindowPlacementFunc) {
@@ -821,7 +821,7 @@ WindowState Utils::GetWindowState(const HWND hWnd) noexcept
     }
     if (IsWindowMinimized(hWnd)) {
         return WindowState::Minimized;
-    } else if (IsWindowNoState(hWnd)) {
+    } else if (IsWindowNormal(hWnd)) {
         return WindowState::Normal;
     } else if (IsWindowMaximized(hWnd)) {
         return WindowState::Maximized;
@@ -837,8 +837,7 @@ WindowState Utils::GetWindowState(const HWND hWnd) noexcept
 bool Utils::SetWindowState(const HWND hWnd, const WindowState state) noexcept
 {
     USER32_API(ShowWindow);
-    USER32_API(UpdateWindow);
-    if (ShowWindowFunc && UpdateWindowFunc) {
+    if (ShowWindowFunc) {
         if (!hWnd) {
             return false;
         }
@@ -874,15 +873,9 @@ bool Utils::SetWindowState(const HWND hWnd, const WindowState state) noexcept
         // Don't check ShowWindow()'s result because it returns the previous window state rather than
         // the operation result of itself.
         ShowWindowFunc(hWnd, nCmdShow);
-        if ((nCmdShow != SW_HIDE) && (nCmdShow != SW_MINIMIZE)) {
-            if (UpdateWindowFunc(hWnd) == FALSE) {
-                PRINT_WIN32_ERROR_MESSAGE(UpdateWindow, L"Failed to update the window.")
-                return false;
-            }
-        }
         return true;
     } else {
-        OutputDebugStringW(L"ShowWindow() and UpdateWindow() are not available.");
+        OutputDebugStringW(L"ShowWindow() is not available.");
         return false;
     }
 }

@@ -83,12 +83,9 @@ public:
     }
 
     [[nodiscard]] inline std::wstring ToString() const noexcept {
-        auto buf = new wchar_t[100];
+        wchar_t buf[100] = { L'\0' };
         swprintf(buf, L"%d.%d.%d.%d", m_major, m_minor, m_patch, m_tweak);
-        const std::wstring result = buf;
-        delete [] buf;
-        buf = nullptr;
-        return result;
+        return buf;
     }
 
     inline friend bool operator==(const VersionNumber &lhs, const VersionNumber &rhs) noexcept {

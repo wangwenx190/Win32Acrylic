@@ -510,34 +510,6 @@ std::wstring Utils::GenerateGUID() noexcept
     }
 }
 
-bool Utils::CloseWindow(const HWND hWnd, const std::wstring &className) noexcept
-{
-    USER32_API(DestroyWindow);
-    USER32_API(UnregisterClassW);
-    if (DestroyWindowFunc && UnregisterClassWFunc) {
-        if (!hWnd) {
-            OutputDebugStringW(L"Failed to close the window due to the given window handle is null.");
-            return false;
-        }
-        if (className.empty()) {
-            OutputDebugStringW(L"Failed to close the window due to the given class name is empty.");
-            return false;
-        }
-        if (DestroyWindowFunc(hWnd) == FALSE) {
-            PRINT_WIN32_ERROR_MESSAGE(DestroyWindow, L"Failed to destroy the window.")
-            return false;
-        }
-        if (UnregisterClassWFunc(className.c_str(), GetWindowInstance(hWnd)) == FALSE) {
-            PRINT_WIN32_ERROR_MESSAGE(UnregisterClassW, L"Failed to unregister the window class.")
-            return false;
-        }
-        return true;
-    } else {
-        OutputDebugStringW(L"DestroyWindow() and UnregisterClassW() are not available.");
-        return false;
-    }
-}
-
 bool Utils::OpenSystemMenu(const HWND hWnd, const POINT pos) noexcept
 {
     USER32_API(GetSystemMenu);

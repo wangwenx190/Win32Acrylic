@@ -25,6 +25,7 @@
 #include "Window.h"
 #include "SystemLibraryManager.h"
 #include "Utils.h"
+#include "Resource.h"
 #include <ShellApi.h>
 #include <cmath>
 
@@ -56,32 +57,112 @@
 #define RECT_HEIGHT(rect) (std::abs((rect).bottom - (rect).top))
 #endif
 
+#ifndef ATOM_TO_STRING
+#define ATOM_TO_STRING(atom) (reinterpret_cast<LPCWSTR>(static_cast<WORD>(MAKELONG(atom, 0))))
+#endif
+
 // The thickness of an auto-hide taskbar in pixels.
 static constexpr UINT g_autoHideTaskbarThickness = 2;
 
-[[nodiscard]] static inline ATOM __RegisterWindowClass() noexcept
+[[nodiscard]] static inline ATOM __RegisterWindowClass(const WNDPROC WndProc) noexcept
 {
-    //
+    USER32_API(LoadCursorW);
+    USER32_API(LoadIconW);
+    USER32_API(RegisterClassExW);
+    if (LoadCursorWFunc && LoadIconWFunc && RegisterClassExWFunc) {
+        if (!WndProc) {
+            Utils::DisplayErrorDialog(L"Failed to register a window class due to the WindowProc function pointer is null.");
+            return INVALID_ATOM;
+        }
+        const std::wstring guid = Utils::GenerateGUID();
+        if (guid.empty()) {
+            Utils::DisplayErrorDialog(L"Failed to generate a new GUID.");
+            return INVALID_ATOM;
+        }
+        const HINSTANCE instance = Utils::GetCurrentModuleInstance();
+        if (!instance) {
+            Utils::DisplayErrorDialog(L"Failed to retrieve the current module instance.");
+            return INVALID_ATOM;
+        }
+        WNDCLASSEXW wcex;
+        SecureZeroMemory(&wcex, sizeof(wcex));
+        wcex.cbSize = sizeof(wcex);
+        wcex.style = CS_HREDRAW | CS_VREDRAW;
+        wcex.lpfnWndProc = WndProc;
+        wcex.hInstance = instance;
+        wcex.lpszClassName = guid.c_str();
+        wcex.hCursor = LoadCursorWFunc(nullptr, IDC_ARROW);
+        wcex.hIcon = LoadIconWFunc(instance, MAKEINTRESOURCEW(IDI_APPICON));
+        wcex.hIconSm = LoadIconWFunc(instance, MAKEINTRESOURCEW(IDI_APPICON_SMALL));
+        const ATOM atom = RegisterClassExWFunc(&wcex);
+        if (atom == INVALID_ATOM) {
+            PRINT_WIN32_ERROR_MESSAGE(RegisterClassExW, L"Failed to register a window class.")
+        }
+        return atom;
+    } else {
+        Utils::DisplayErrorDialog(L"Failed to register a window class due to LoadCursorW(), LoadIconW() and RegisterClassExW() are not available.");
+        return INVALID_ATOM;
+    }
 }
 
-[[nodiscard]] static inline HWND __CreateWindow() noexcept
+[[nodiscard]] static inline HWND __CreateWindow(const std::wstring &className, Window * const extraData, const DWORD style, const DWORD extendedStyle, const HWND parentWindow) noexcept
 {
-    //
+    USER32_API(CreateWindowExW);
+    if (CreateWindowExWFunc) {
+        if (className.empty()) {
+            Utils::DisplayErrorDialog(L"Failed to create a window due to the class name is empty.");
+            return nullptr;
+        }
+        if (!extraData) {
+            Utils::DisplayErrorDialog(L"Failed to create a window due to the extra data is null.");
+            return nullptr;
+        }
+        const HINSTANCE instance = Utils::GetCurrentModuleInstance();
+        if (!instance) {
+            Utils::DisplayErrorDialog(L"Failed to retrieve the current module instance.");
+            return nullptr;
+        }
+        const HWND hWnd = CreateWindowExWFunc(
+            extendedStyle,     // _In_     DWORD     dwExStyle
+            className.c_str(), // _In_opt_ LPCWSTR   lpClassName
+            nullptr,           // _In_opt_ LPCWSTR   lpWindowName
+            style,             // _In_     DWORD     dwStyle
+            CW_USEDEFAULT,     // _In_     int       X
+            CW_USEDEFAULT,     // _In_     int       Y
+            CW_USEDEFAULT,     // _In_     int       nWidth
+            CW_USEDEFAULT,     // _In_     int       nHeight
+            parentWindow,      // _In_opt_ HWND      hWndParent
+            nullptr,           // _In_opt_ HMENU     hMenu
+            instance,          // _In_opt_ HINSTANCE hInstance
+            extraData          // _In_opt_ LPVOID    lpParam
+        );
+        if (!hWnd) {
+            PRINT_WIN32_ERROR_MESSAGE(CreateWindowExW, L"Failed to create a window.")
+        }
+        return hWnd;
+    } else {
+        Utils::DisplayErrorDialog(L"Failed to create a window due to CreateWindowExW() is not available.");
+        return nullptr;
+    }
 }
 
 Window::Window() noexcept
 {
-
+    if (!Create()) {
+        Utils::DisplayErrorDialog(L"Failed to create this window.");
+    }
 }
 
 Window::~Window() noexcept
 {
-
+    if (!Destroy()) {
+        Utils::DisplayErrorDialog(L"Failed to destroy this window.");
+    }
 }
 
 std::wstring Window::Title() const noexcept
 {
-
+    return m_title;
 }
 
 void Window::Title(const std::wstring &value) noexcept
@@ -96,7 +177,7 @@ void Window::OnTitleChanged(const std::wstring &arg) noexcept
 
 int Window::Icon() const noexcept
 {
-
+    return m_icon;
 }
 
 void Window::Icon(const int value) noexcept
@@ -221,7 +302,22 @@ HWND Window::WindowHandle() const noexcept
 
 int Window::MessageLoop() const noexcept
 {
-
+    USER32_API(GetMessageW);
+    USER32_API(TranslateMessage);
+    USER32_API(DispatchMessageW);
+    if (GetMessageWFunc && TranslateMessageFunc && DispatchMessageWFunc) {
+        MSG msg = {};
+        while (GetMessageWFunc(&msg, nullptr, 0, 0) != FALSE) {
+            if (!FilterMessage(&msg)) {
+                TranslateMessageFunc(&msg);
+                DispatchMessageWFunc(&msg);
+            }
+        }
+        return static_cast<int>(msg.wParam);
+    } else {
+        Utils::DisplayErrorDialog(L"Failed to execute the message loop due to GetMessageW(), TranslateMessage() and DispatchMessageW() are not available.");
+        return -1;
+    }
 }
 
 bool Window::Move(const int x, const int y) noexcept
@@ -247,6 +343,82 @@ bool Window::SetGeometry(const int x, const int y, const UINT w, const UINT h) n
     } else {
         Utils::DisplayErrorDialog(L"SetWindowPos() is not available.");
         return false;
+    }
+}
+
+bool Window::Create() noexcept
+{
+    m_atom = __RegisterWindowClass(WindowProc);
+    if (m_atom == INVALID_ATOM) {
+        Utils::DisplayErrorDialog(L"Failed to register the window class for this window.");
+        return false;
+    }
+    m_window = __CreateWindow(ATOM_TO_STRING(m_atom), this, (WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN | WS_CLIPSIBLINGS), WS_EX_NOREDIRECTIONBITMAP, nullptr);
+    if (!m_window) {
+        Utils::DisplayErrorDialog(L"Failed to create this window.");
+        return false;
+    }
+    return true;
+}
+
+bool Window::Destroy() noexcept
+{
+    USER32_API(DestroyWindow);
+    USER32_API(UnregisterClassW);
+    if (DestroyWindowFunc && UnregisterClassWFunc) {
+        if (!m_window || (m_atom == INVALID_ATOM)) {
+            Utils::DisplayErrorDialog(L"Failed to destroy this window due to the window handle is null or the window class is invalid.");
+            return false;
+        }
+        const HINSTANCE instance = Utils::GetCurrentModuleInstance();
+        if (!instance) {
+            Utils::DisplayErrorDialog(L"Failed to retrieve the current module instance.");
+            return false;
+        }
+        if (DestroyWindowFunc(m_window) == FALSE) {
+            PRINT_WIN32_ERROR_MESSAGE(DestroyWindow, L"Failed to destroy this window.")
+            return false;
+        }
+        m_window = nullptr;
+        if (UnregisterClassWFunc(ATOM_TO_STRING(m_atom), instance) == FALSE) {
+            PRINT_WIN32_ERROR_MESSAGE(UnregisterClassW, L"Failed to unregister the window class of this window.")
+            return false;
+        }
+        m_atom = INVALID_ATOM;
+        return true;
+    } else {
+        Utils::DisplayErrorDialog(L"Failed to destroy this window due to DestroyWindow() and UnregisterClassW() are not available.");
+        return false;
+    }
+}
+
+LRESULT CALLBACK Window::WindowProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) noexcept
+{
+    USER32_API(SetWindowLongPtrW);
+    USER32_API(GetWindowLongPtrW);
+    USER32_API(DefWindowProcW);
+    if (SetWindowLongPtrWFunc && GetWindowLongPtrWFunc && DefWindowProcWFunc) {
+        if (message == WM_NCCREATE) {
+            const auto cs = reinterpret_cast<LPCREATESTRUCT>(lParam);
+            const auto that = static_cast<Window *>(cs->lpCreateParams);
+            if (SetWindowLongPtrWFunc(hWnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(that)) == 0) {
+                PRINT_WIN32_ERROR_MESSAGE(SetWindowLongPtrW, L"Failed to set the window extra data.")
+            }
+        } else if (message == WM_NCDESTROY) {
+            if (SetWindowLongPtrWFunc(hWnd, GWLP_USERDATA, 0) == 0) {
+                PRINT_WIN32_ERROR_MESSAGE(SetWindowLongPtrW, L"Failed to clear the window extra data.")
+            }
+        }
+        const auto that = reinterpret_cast<Window *>(GetWindowLongPtrWFunc(hWnd, GWLP_USERDATA));
+        if (that) {
+            const LRESULT result = that->DefaultMessageHandler(message, wParam, lParam);
+            return ((result == 0) ? that->MessageHandler(message, wParam, lParam) : result);
+        } else {
+            return DefWindowProcWFunc(hWnd, message, wParam, lParam);
+        }
+    } else {
+        Utils::DisplayErrorDialog(L"SetWindowLongPtrW(), GetWindowLongPtrW() and DefWindowProcW() are not available.");
+        return 0;
     }
 }
 
@@ -523,34 +695,4 @@ LRESULT Window::DefaultMessageHandler(UINT message, WPARAM wParam, LPARAM lParam
         break;
     }
     return 0;
-}
-
-LRESULT Window::WindowProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) noexcept
-{
-    USER32_API(SetWindowLongPtrW);
-    USER32_API(GetWindowLongPtrW);
-    USER32_API(DefWindowProcW);
-    if (SetWindowLongPtrWFunc && GetWindowLongPtrWFunc && DefWindowProcWFunc) {
-        if (message == WM_NCCREATE) {
-            const auto cs = reinterpret_cast<LPCREATESTRUCT>(lParam);
-            const auto that = static_cast<Window *>(cs->lpCreateParams);
-            if (SetWindowLongPtrWFunc(hWnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(that)) == 0) {
-                PRINT_WIN32_ERROR_MESSAGE(SetWindowLongPtrW, L"Failed to set the window extra data.")
-            }
-        } else if (message == WM_NCDESTROY) {
-            if (SetWindowLongPtrWFunc(hWnd, GWLP_USERDATA, 0) == 0) {
-                PRINT_WIN32_ERROR_MESSAGE(SetWindowLongPtrW, L"Failed to clear the window extra data.")
-            }
-        }
-        const auto that = reinterpret_cast<Window *>(GetWindowLongPtrWFunc(hWnd, GWLP_USERDATA));
-        if (that) {
-            const LRESULT result = that->DefaultMessageHandler(message, wParam, lParam);
-            return ((result == 0) ? that->MessageHandler(message, wParam, lParam) : result);
-        } else {
-            return DefWindowProcWFunc(hWnd, message, wParam, lParam);
-        }
-    } else {
-        Utils::DisplayErrorDialog(L"SetWindowLongPtrW(), GetWindowLongPtrW() and DefWindowProcW() are not available.");
-        return 0;
-    }
 }

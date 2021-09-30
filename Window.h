@@ -89,18 +89,22 @@ protected:
     [[nodiscard]] virtual bool FilterMessage(const MSG *msg) const noexcept = 0;
 
 private:
-    [[nodiscard]] static LRESULT CALLBACK WindowProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) noexcept;
-    [[nodiscard]] LRESULT DefaultMessageHandler(UINT message, WPARAM wParam, LPARAM lParam) noexcept;
-
-private:
     Window(const Window &) = delete;
     Window &operator=(const Window &) = delete;
     Window(Window &&) = delete;
     Window &operator=(Window &&) = delete;
 
 private:
+    [[nodiscard]] bool Create() noexcept;
+    [[nodiscard]] bool Destroy() noexcept;
+    [[nodiscard]] static LRESULT CALLBACK WindowProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) noexcept;
+    [[nodiscard]] LRESULT DefaultMessageHandler(UINT message, WPARAM wParam, LPARAM lParam) noexcept;
+
+private:
     HWND m_window = nullptr;
     ATOM m_atom = INVALID_ATOM;
+    int m_icon = 0;
+    std::wstring m_title = {};
     int m_x = 0;
     int m_y = 0;
     UINT m_width = 0;

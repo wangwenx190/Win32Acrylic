@@ -51,8 +51,15 @@ namespace WindowsVersion
     [[maybe_unused]] constexpr VersionNumber Windows10_20Half1          = VersionNumber(10, 0, 19041);
     [[maybe_unused]] constexpr VersionNumber Windows10_20Half2          = VersionNumber(10, 0, 19042);
     [[maybe_unused]] constexpr VersionNumber Windows10_21Half1          = VersionNumber(10, 0, 19043);
+    [[maybe_unused]] constexpr VersionNumber Windows11                  = VersionNumber(10, 0, 22000);
 
     [[nodiscard]] const VersionNumber &CurrentWindowsVersion() noexcept;
 
     [[nodiscard]] bool IsWindowsVersionOrGreater(const VersionNumber &version) noexcept;
 } // namespace WindowsVersion
+
+[[nodiscard]] inline bool IsWindows1019H1OrGreater() noexcept
+{
+    static const bool result = (WindowsVersion::CurrentWindowsVersion() >= WindowsVersion::Windows10_19Half1);
+    return result;
+}

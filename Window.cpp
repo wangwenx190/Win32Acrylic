@@ -69,27 +69,32 @@ Window::~Window() noexcept
 
 }
 
-bool Window::Create(const std::wstring &title, const std::wstring &className) noexcept
+std::wstring Window::Title() const noexcept
 {
 
 }
 
-bool Window::CreateChild(const WNDPROC WndProc) noexcept
+void Window::Title(const std::wstring &value) noexcept
 {
 
 }
 
-bool Window::Destroy() noexcept
+void Window::OnTitleChanged(const std::wstring &arg) noexcept
 {
 
 }
 
-HWND Window::WindowHandle() const noexcept
+int Window::Icon() const noexcept
 {
-    return m_window;
+
 }
 
-int Window::MessageLoop() const noexcept
+void Window::Icon(const int value) noexcept
+{
+
+}
+
+void Window::OnIconChanged(const int arg) noexcept
 {
 
 }
@@ -104,12 +109,22 @@ void Window::X(const int value) noexcept
 
 }
 
+void Window::OnXChanged(const int arg) noexcept
+{
+
+}
+
 int Window::Y() const noexcept
 {
     return m_y;
 }
 
 void Window::Y(const int value) noexcept
+{
+
+}
+
+void Window::OnYChanged(const int arg) noexcept
 {
 
 }
@@ -124,12 +139,22 @@ void Window::Width(const UINT value) noexcept
 
 }
 
+void Window::OnWidthChanged(const UINT arg) noexcept
+{
+
+}
+
 UINT Window::Height() const noexcept
 {
     return m_height;
 }
 
 void Window::Height(const UINT value) noexcept
+{
+
+}
+
+void Window::OnHeightChanged(const UINT arg) noexcept
 {
 
 }
@@ -144,6 +169,11 @@ void Window::Visibility(const WindowState value) noexcept
 
 }
 
+void Window::OnVisibilityChanged(const WindowState arg) noexcept
+{
+
+}
+
 WindowTheme Window::Theme() const noexcept
 {
     return m_theme;
@@ -154,9 +184,34 @@ void Window::Theme(const WindowTheme value) noexcept
 
 }
 
+void Window::OnThemeChanged(const WindowTheme arg) noexcept
+{
+
+}
+
 UINT Window::DotsPerInch() const noexcept
 {
     return m_dpi;
+}
+
+void Window::OnDPIChanged(const UINT arg) noexcept
+{
+
+}
+
+bool Window::CreateChild(const WNDPROC WndProc) const noexcept
+{
+
+}
+
+HWND Window::WindowHandle() const noexcept
+{
+    return m_window;
+}
+
+int Window::MessageLoop() const noexcept
+{
+
 }
 
 bool Window::Move(const int x, const int y) noexcept
@@ -173,7 +228,7 @@ bool Window::SetGeometry(const int x, const int y, const UINT w, const UINT h) n
 {
     USER32_API(SetWindowPos);
     if (SetWindowPosFunc) {
-        static constexpr UINT flags = (SWP_SHOWWINDOW | SWP_NOZORDER | SWP_NOOWNERZORDER);
+        constexpr UINT flags = (SWP_SHOWWINDOW | SWP_NOZORDER | SWP_NOOWNERZORDER);
         if (SetWindowPosFunc(m_window, nullptr, x, y, w, h, flags) == FALSE) {
             PRINT_WIN32_ERROR_MESSAGE(SetWindowPos, L"Failed to change the window geometry.")
             return false;
@@ -190,6 +245,7 @@ LRESULT Window::DefaultMessageHandler(UINT message, WPARAM wParam, LPARAM lParam
     switch (message) {
     case WM_CREATE: {
         m_dpi = Utils::GetWindowMetrics(m_window, WindowMetrics::DotsPerInch);
+        OnDPIChanged(m_dpi);
         const std::wstring dpiMsg = L"Current window's dots-per-inch (DPI): " + Utils::IntegerToString(m_dpi, 10);
         OutputDebugStringW(dpiMsg.c_str());
         if (!Utils::UpdateFrameMargins(m_window)) {
@@ -205,16 +261,17 @@ LRESULT Window::DefaultMessageHandler(UINT message, WPARAM wParam, LPARAM lParam
             Utils::DisplayErrorDialog(L"SetWindowPos() is not available.");
         }
         m_theme = Utils::GetSystemTheme();
+        OnThemeChanged(m_theme);
         std::wstring themeName = L"Unknown";
         switch (m_theme) {
         case WindowTheme::Light: {
-            themeName = L"Light theme";
+            themeName = L"Light";
         } break;
         case WindowTheme::Dark: {
-            themeName = L"Dark theme";
+            themeName = L"Dark";
         } break;
         case WindowTheme::HighContrast: {
-            themeName = L"High Contrast theme";
+            themeName = L"High Contrast";
         } break;
         }
         const std::wstring themeMsg = L"Current window's theme: " + themeName;
@@ -224,17 +281,25 @@ LRESULT Window::DefaultMessageHandler(UINT message, WPARAM wParam, LPARAM lParam
         }
         const auto cs = reinterpret_cast<LPCREATESTRUCTW>(lParam);
         m_x = cs->x;
+        OnXChanged(m_x);
         m_y = cs->y;
+        OnYChanged(m_y);
         m_width = cs->cx;
+        OnWidthChanged(m_width);
         m_height = cs->cy;
+        OnHeightChanged(m_height);
     } break;
     case WM_MOVE: {
         m_x = GET_X_LPARAM(lParam);
+        OnXChanged(m_x);
         m_y = GET_Y_LPARAM(lParam);
+        OnYChanged(m_y);
     } break;
     case WM_SIZE: {
         m_width = LOWORD(lParam);
+        OnWidthChanged(m_width);
         m_height = HIWORD(lParam);
+        OnHeightChanged(m_height);
     } break;
     case WM_SETTINGCHANGE: {} break;
     case WM_DPICHANGED: {
@@ -242,6 +307,7 @@ LRESULT Window::DefaultMessageHandler(UINT message, WPARAM wParam, LPARAM lParam
         const UINT dpiX = LOWORD(wParam);
         const UINT dpiY = HIWORD(wParam);
         m_dpi = static_cast<UINT>(std::round(static_cast<double>(dpiX + dpiY) / 2.0));
+        OnDPIChanged(m_dpi);
         const std::wstring dpiMsg = L"Current window's dots-per-inch (DPI) has changed from " + Utils::IntegerToString(oldDPI, 10) + L" to " + Utils::IntegerToString(m_dpi, 10) + L".";
         OutputDebugStringW(dpiMsg.c_str());
         USER32_API(SetWindowPos);
@@ -424,7 +490,7 @@ LRESULT Window::DefaultMessageHandler(UINT message, WPARAM wParam, LPARAM lParam
     default:
         break;
     }
-    return MessageHandler(message, wParam, lParam);
+    return 0;
 }
 
 LRESULT Window::WindowProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) noexcept
@@ -436,7 +502,6 @@ LRESULT Window::WindowProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam
         if (message == WM_NCCREATE) {
             const auto cs = reinterpret_cast<LPCREATESTRUCT>(lParam);
             const auto that = static_cast<Window *>(cs->lpCreateParams);
-            //that->m_window.reset(window); // take ownership of the window
             if (SetWindowLongPtrWFunc(hWnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(that)) == 0) {
                 PRINT_WIN32_ERROR_MESSAGE(SetWindowLongPtrW, L"Failed to set the window extra data.")
             }
@@ -444,10 +509,14 @@ LRESULT Window::WindowProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam
             if (SetWindowLongPtrWFunc(hWnd, GWLP_USERDATA, 0) == 0) {
                 PRINT_WIN32_ERROR_MESSAGE(SetWindowLongPtrW, L"Failed to clear the window extra data.")
             }
-        } else if (const auto that = reinterpret_cast<Window *>(GetWindowLongPtrWFunc(hWnd, GWLP_USERDATA))) {
-            return that->DefaultMessageHandler(message, wParam, lParam);
         }
-        return DefWindowProcWFunc(hWnd, message, wParam, lParam);
+        const auto that = reinterpret_cast<Window *>(GetWindowLongPtrWFunc(hWnd, GWLP_USERDATA));
+        if (that) {
+            const LRESULT result = that->DefaultMessageHandler(message, wParam, lParam);
+            return ((result == 0) ? that->MessageHandler(message, wParam, lParam) : result);
+        } else {
+            return DefWindowProcWFunc(hWnd, message, wParam, lParam);
+        }
     } else {
         Utils::DisplayErrorDialog(L"SetWindowLongPtrW(), GetWindowLongPtrW() and DefWindowProcW() are not available.");
         return 0;

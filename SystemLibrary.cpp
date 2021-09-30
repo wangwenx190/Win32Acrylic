@@ -55,6 +55,8 @@ public:
 
     [[nodiscard]] FARPROC GetSymbol(const std::wstring &function) noexcept;
 
+    [[nodiscard]] static FARPROC GetSymbol(const std::wstring &fileName, const std::wstring &function) noexcept;
+
 private:
     SystemLibraryPrivate(const SystemLibraryPrivate &) = delete;
     SystemLibraryPrivate &operator=(const SystemLibraryPrivate &) = delete;
@@ -237,6 +239,33 @@ FARPROC SystemLibraryPrivate::GetSymbol(const std::wstring &function) noexcept
     }
 }
 
+FARPROC SystemLibraryPrivate::GetSymbol(const std::wstring &fileName, const std::wstring &function) noexcept
+{
+    if (fileName.empty() || function.empty()) {
+        Utils::DisplayErrorDialog(L"Failed to resolve the given symbol due to the file name or symbol name is empty.");
+        return nullptr;
+    }
+    const HMODULE module = GetModuleHandleW(fileName.c_str());
+    if (module) {
+        const std::string functionA = WideToMulti(function);
+        if (functionA.empty()) {
+            Utils::DisplayErrorDialog(L"Failed to convert a wide char array to multi-byte char array.");
+            return nullptr;
+        } else {
+            const FARPROC addr = GetProcAddress(module, functionA.c_str());
+            if (addr) {
+                return addr;
+            } else {
+                PRINT_WIN32_ERROR_MESSAGE(GetProcAddress, L"Failed to resolve the given symbol.")
+                return nullptr;
+            }
+        }
+    } else {
+        PRINT_WIN32_ERROR_MESSAGE(GetModuleHandleW, L"Failed to load the given module.")
+        return nullptr;
+    }
+}
+
 SystemLibrary::SystemLibrary() noexcept
 {
     d_ptr = std::make_unique<SystemLibraryPrivate>(this);
@@ -277,4 +306,9 @@ void SystemLibrary::Unload() noexcept
 FARPROC SystemLibrary::GetSymbol(const std::wstring &function) noexcept
 {
     return d_ptr->GetSymbol(function);
+}
+
+FARPROC SystemLibrary::GetSymbol(const std::wstring &fileName, const std::wstring &function) noexcept
+{
+    return SystemLibraryPrivate::GetSymbol(fileName, function);
 }

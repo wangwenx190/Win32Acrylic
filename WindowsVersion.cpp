@@ -24,34 +24,41 @@
 
 #include <SDKDDKVer.h>
 #include <Windows.h>
-#include <..\km\wdm.h>
 #include "WindowsVersion.h"
-#include "SystemLibraryManager.h"
+#include "SystemLibrary.h"
 #include "Utils.h"
 
-#ifndef NTDLL_API
-#define NTDLL_API(symbol) __RESOLVE_API(NTDll.dll, symbol)
+#ifndef STATUS_SUCCESS
+#define STATUS_SUCCESS (static_cast<NTSTATUS>(0x00000000L)) // ntsubauth
 #endif
 
-static VersionNumber g_currentWindowsVersion = VersionNumber();
+using NTSTATUS = LONG;
 
 const VersionNumber &WindowsVersion::CurrentWindowsVersion() noexcept
 {
-    if (g_currentWindowsVersion.Empty()) {
-        NTDLL_API(RtlGetVersion);
-        if (RtlGetVersionFunc) {
-            RTL_OSVERSIONINFOW osvi;
-            SecureZeroMemory(&osvi, sizeof(osvi));
-            osvi.dwOSVersionInfoSize = sizeof(osvi);
-            RtlGetVersionFunc(&osvi); // It always returns STATUS_SUCCESS.
-            g_currentWindowsVersion.Major(osvi.dwMajorVersion);
-            g_currentWindowsVersion.Minor(osvi.dwMinorVersion);
-            g_currentWindowsVersion.Patch(osvi.dwBuildNumber);
-        } else {
-            Utils::DisplayErrorDialog(L"RtlGetVersion() is not available.");
+    static bool tried = false;
+    static VersionNumber version = VersionNumber();
+    if (version.Empty()) {
+        if (!tried) {
+            tried = true;
+            static const auto RtlGetVersionFunc = reinterpret_cast<NTSTATUS(WINAPI *)(PRTL_OSVERSIONINFOW)>(SystemLibrary::GetSymbol(L"NTDll.dll", L"RtlGetVersion"));
+            if (RtlGetVersionFunc) {
+                RTL_OSVERSIONINFOW osvi;
+                SecureZeroMemory(&osvi, sizeof(osvi));
+                osvi.dwOSVersionInfoSize = sizeof(osvi);
+                if (RtlGetVersionFunc(&osvi) == STATUS_SUCCESS) {
+                    version.Major(osvi.dwMajorVersion);
+                    version.Minor(osvi.dwMinorVersion);
+                    version.Patch(osvi.dwBuildNumber);
+                } else {
+                    PRINT_WIN32_ERROR_MESSAGE(RtlGetVersion, L"Failed to retrieve the current system version.")
+                }
+            } else {
+                Utils::DisplayErrorDialog(L"Failed to resolve symbol \"RtlGetVersion()\" from dynamic link library \"NTDll.dll\".");
+            }
         }
     }
-    return g_currentWindowsVersion;
+    return version;
 }
 
 bool WindowsVersion::IsWindowsVersionOrGreater(const VersionNumber &version) noexcept

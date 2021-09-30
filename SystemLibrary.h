@@ -47,10 +47,12 @@ public:
 
     [[nodiscard]] FARPROC GetSymbol(const std::wstring &function) noexcept;
 
-    inline friend bool operator==(const SystemLibrary &lhs, const SystemLibrary &rhs) noexcept {
+    [[nodiscard]] static FARPROC GetSymbol(const std::wstring &fileName, const std::wstring &function) noexcept;
+
+    [[nodiscard]] inline friend bool operator==(const SystemLibrary &lhs, const SystemLibrary &rhs) noexcept {
         return (lhs.FileName() == rhs.FileName());
     }
-    inline friend bool operator!=(const SystemLibrary &lhs, const SystemLibrary &rhs) noexcept {
+    [[nodiscard]] inline friend bool operator!=(const SystemLibrary &lhs, const SystemLibrary &rhs) noexcept {
         return (!(lhs == rhs));
     }
 

@@ -31,42 +31,58 @@
 
 class Window
 {
-    // dis co
 public:
     explicit Window() noexcept;
     ~Window() noexcept;
 
-    [[nodiscard]] bool Create(const std::wstring &title, const std::wstring &className) noexcept;
-    [[nodiscard]] bool CreateChild(const WNDPROC WndProc) noexcept;
-    [[nodiscard]] bool Destroy() noexcept;
+    [[nodiscard]] std::wstring Title() const noexcept;
+    void Title(const std::wstring &value) noexcept;
+    virtual void OnTitleChanged(const std::wstring &arg) noexcept;
 
-    [[nodiscard]] HWND WindowHandle() const noexcept;
-
-    [[nodiscard]] UINT DotsPerInch() const noexcept;
-
-    [[nodiscard]] int MessageLoop() const noexcept;
+    [[nodiscard]] int Icon() const noexcept;
+    void Icon(const int value) noexcept;
+    virtual void OnIconChanged(const int arg) noexcept;
 
     [[nodiscard]] int X() const noexcept;
     void X(const int value) noexcept;
+    virtual void OnXChanged(const int arg) noexcept;
 
     [[nodiscard]] int Y() const noexcept;
     void Y(const int value) noexcept;
+    virtual void OnYChanged(const int arg) noexcept;
 
     [[nodiscard]] UINT Width() const noexcept;
     void Width(const UINT value) noexcept;
+    virtual void OnWidthChanged(const UINT arg) noexcept;
 
     [[nodiscard]] UINT Height() const noexcept;
     void Height(const UINT value) noexcept;
+    virtual void OnHeightChanged(const UINT arg) noexcept;
 
     [[nodiscard]] WindowState Visibility() const noexcept;
     void Visibility(const WindowState value) noexcept;
+    virtual void OnVisibilityChanged(const WindowState arg) noexcept;
 
     [[nodiscard]] WindowTheme Theme() const noexcept;
     void Theme(const WindowTheme value) noexcept;
+    virtual void OnThemeChanged(const WindowTheme arg) noexcept;
 
+    [[nodiscard]] UINT DotsPerInch() const noexcept;
+    virtual void OnDPIChanged(const UINT arg) noexcept;
+
+    [[nodiscard]] bool CreateChild(const WNDPROC WndProc) const noexcept;
+    [[nodiscard]] HWND WindowHandle() const noexcept;
+    [[nodiscard]] int MessageLoop() const noexcept;
     [[nodiscard]] bool Move(const int x, const int y) noexcept;
     [[nodiscard]] bool Resize(const UINT w, const UINT h) noexcept;
     [[nodiscard]] bool SetGeometry(const int x, const int y, const UINT w, const UINT h) noexcept;
+
+    [[nodiscard]] inline friend bool operator==(const Window &lhs, const Window &rhs) noexcept {
+        return (lhs.m_window == rhs.m_window);
+    }
+    [[nodiscard]] inline friend bool operator!=(const Window &lhs, const Window &rhs) noexcept {
+        return (!(lhs == rhs));
+    }
 
 protected:
     [[nodiscard]] virtual LRESULT MessageHandler(UINT message, WPARAM wParam, LPARAM lParam) noexcept = 0;
@@ -75,11 +91,16 @@ protected:
 private:
     [[nodiscard]] static LRESULT CALLBACK WindowProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) noexcept;
     [[nodiscard]] LRESULT DefaultMessageHandler(UINT message, WPARAM wParam, LPARAM lParam) noexcept;
-    [[nodiscard]] bool CreateWindow2() noexcept;
-    [[nodiscard]] bool CloseWindow() noexcept;
+
+private:
+    Window(const Window &) = delete;
+    Window &operator=(const Window &) = delete;
+    Window(Window &&) = delete;
+    Window &operator=(Window &&) = delete;
 
 private:
     HWND m_window = nullptr;
+    ATOM m_atom = INVALID_ATOM;
     int m_x = 0;
     int m_y = 0;
     UINT m_width = 0;

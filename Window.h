@@ -108,7 +108,4 @@ private:
     WindowState m_visibility = WindowState::Normal;
     WindowTheme m_theme = WindowTheme::Light;
     UINT m_dpi = 0;
-    DWORD m_savedWindowStyles = 0;
-    DWORD m_savedExtendedWindowStyles = 0;
-    RECT m_savedWindowGeometry = {};
 };

@@ -56,10 +56,6 @@ namespace WindowsVersion
     [[nodiscard]] const VersionNumber &CurrentWindowsVersion() noexcept;
 
     [[nodiscard]] bool IsWindowsVersionOrGreater(const VersionNumber &version) noexcept;
-} // namespace WindowsVersion
 
-[[nodiscard]] inline bool IsWindows1019H1OrGreater() noexcept
-{
-    static const bool result = (WindowsVersion::CurrentWindowsVersion() >= WindowsVersion::Windows10_19Half1);
-    return result;
-}
+    [[nodiscard]] std::wstring GetHumanReadableString(const VersionNumber &version) noexcept;
+} // namespace WindowsVersion

@@ -60,13 +60,6 @@ static constexpr UINT g_defaultTitleBarHeight = 31;
 static constexpr UINT g_defaultFrameBorderThickness = 1;
 static constexpr UINT g_defaultWindowDPI = USER_DEFAULT_SCREEN_DPI;
 
-static constexpr DWORD g_defaultWindowStylesDiff = (WS_CAPTION | WS_MINIMIZEBOX | WS_MAXIMIZEBOX | WS_THICKFRAME);
-static constexpr DWORD g_defaultExtendedWindowStylesDiff = (WS_EX_DLGMODALFRAME | WS_EX_WINDOWEDGE | WS_EX_CLIENTEDGE | WS_EX_STATICEDGE);
-
-static DWORD g_savedWindowStyles = 0;
-static DWORD g_savedExtendedWindowStyles = 0;
-static RECT g_savedWindowGeometry = {0, 0, 0, 0};
-
 [[nodiscard]] static inline HMONITOR GetWindowScreen(const HWND hWnd, const bool defaultToNearest) noexcept
 {
     USER32_API(MonitorFromWindow);
@@ -207,115 +200,6 @@ static RECT g_savedWindowGeometry = {0, 0, 0, 0};
         return (IsZoomedFunc(hWnd) != FALSE);
     } else {
         OutputDebugStringW(L"IsZoomed() is not available.");
-        return false;
-    }
-}
-
-[[nodiscard]] static inline bool IsWindowFullScreen(const HWND hWnd) noexcept
-{
-    if (!hWnd) {
-        return false;
-    }
-    const RECT windowRect = GetWindowGeometry(hWnd);
-    const RECT screenRect = GetScreenGeometry(hWnd, false, false);
-    return ((windowRect.top == screenRect.top)
-            && (windowRect.bottom == screenRect.bottom)
-            && (windowRect.left == screenRect.left)
-            && (windowRect.right == screenRect.right));
-}
-
-[[nodiscard]] static inline bool IsWindowShown(const HWND hWnd) noexcept
-{
-    USER32_API(IsWindowVisible);
-    if (IsWindowVisibleFunc) {
-        if (!hWnd) {
-            return false;
-        }
-        return (IsWindowVisibleFunc(hWnd) != FALSE);
-    } else {
-        OutputDebugStringW(L"IsWindowVisible() is not available.");
-        return false;
-    }
-}
-
-[[nodiscard]] static inline bool WindowEnterFullScreen(const HWND hWnd) noexcept
-{
-    USER32_API(GetWindowRect);
-    USER32_API(GetWindowLongPtrW);
-    USER32_API(SetWindowLongPtrW);
-    USER32_API(SetWindowPos);
-    if (GetWindowRectFunc && GetWindowLongPtrWFunc && SetWindowLongPtrWFunc && SetWindowPosFunc) {
-        if (!hWnd) {
-            return false;
-        }
-        if (GetWindowRectFunc(hWnd, &g_savedWindowGeometry) == FALSE) {
-            PRINT_WIN32_ERROR_MESSAGE(GetWindowRect, L"Failed to retrieve the window geometry.")
-            return false;
-        }
-        g_savedWindowStyles = static_cast<DWORD>(GetWindowLongPtrWFunc(hWnd, GWL_STYLE));
-        if (g_savedWindowStyles == 0) {
-            PRINT_WIN32_ERROR_MESSAGE(GetWindowLongPtrW, L"Failed to retrieve the window styles.")
-            return false;
-        }
-        g_savedExtendedWindowStyles = static_cast<DWORD>(GetWindowLongPtrWFunc(hWnd, GWL_EXSTYLE));
-        if (g_savedExtendedWindowStyles == 0) {
-            PRINT_WIN32_ERROR_MESSAGE(GetWindowLongPtrW, L"Failed to retrieve the extended window styles.")
-            return false;
-        }
-        const DWORD newWindowStyles = ((g_savedWindowStyles & ~g_defaultWindowStylesDiff) | WS_POPUP);
-        if (SetWindowLongPtrWFunc(hWnd, GWL_STYLE, static_cast<LONG_PTR>(newWindowStyles)) == 0) {
-            PRINT_WIN32_ERROR_MESSAGE(SetWindowLongPtrW, L"Failed to change the window styles.")
-            return false;
-        }
-        const DWORD newExtendedWindowStyles = (g_savedExtendedWindowStyles & ~g_defaultExtendedWindowStylesDiff);
-        if (SetWindowLongPtrWFunc(hWnd, GWL_EXSTYLE, static_cast<LONG_PTR>(newExtendedWindowStyles)) == 0) {
-            PRINT_WIN32_ERROR_MESSAGE(SetWindowLongPtrW, L"Failed to change the extended window styles.")
-            return false;
-        }
-        const RECT screenRect = GetScreenGeometry(hWnd, true, false);
-        if (SetWindowPosFunc(hWnd, nullptr, screenRect.left, screenRect.top,
-                             std::abs(screenRect.right - screenRect.left),
-                             std::abs(screenRect.bottom - screenRect.top),
-                             SWP_FRAMECHANGED | SWP_SHOWWINDOW | SWP_NOZORDER | SWP_NOOWNERZORDER) == FALSE) {
-            PRINT_WIN32_ERROR_MESSAGE(SetWindowPos, L"Failed to change the window geometry.")
-            return false;
-        }
-        return true;
-    } else {
-        OutputDebugStringW(L"GetWindowRect(), GetWindowLongPtrW(), SetWindowLongPtrW() and SetWindowPos() are not available.");
-        return false;
-    }
-}
-
-[[nodiscard]] static inline bool WindowExitFullScreen(const HWND hWnd) noexcept
-{
-    USER32_API(SetWindowLongPtrW);
-    USER32_API(SetWindowPos);
-    if (SetWindowLongPtrWFunc && SetWindowPosFunc) {
-        if (!hWnd) {
-            return false;
-        }
-        if (SetWindowLongPtrWFunc(hWnd, GWL_STYLE, static_cast<LONG_PTR>(g_savedWindowStyles)) == 0) {
-            PRINT_WIN32_ERROR_MESSAGE(SetWindowLongPtrW, L"Failed to change the window styles.")
-            return false;
-        }
-        g_savedWindowStyles = 0;
-        if (SetWindowLongPtrWFunc(hWnd, GWL_EXSTYLE, static_cast<LONG_PTR>(g_savedExtendedWindowStyles)) == 0) {
-            PRINT_WIN32_ERROR_MESSAGE(SetWindowLongPtrW, L"Failed to change the extended window styles.")
-            return false;
-        }
-        g_savedExtendedWindowStyles = 0;
-        if (SetWindowPosFunc(hWnd, nullptr, g_savedWindowGeometry.left, g_savedWindowGeometry.top,
-                             std::abs(g_savedWindowGeometry.right - g_savedWindowGeometry.left),
-                             std::abs(g_savedWindowGeometry.bottom - g_savedWindowGeometry.top),
-                             SWP_FRAMECHANGED | SWP_SHOWWINDOW | SWP_NOZORDER | SWP_NOOWNERZORDER) == FALSE) {
-            PRINT_WIN32_ERROR_MESSAGE(SetWindowPos, L"Failed to change the window geometry.")
-            return false;
-        }
-        g_savedWindowGeometry = {0, 0, 0, 0};
-        return true;
-    } else {
-        OutputDebugStringW(L"SetWindowLongPtrW() and SetWindowPos() are not available.");
         return false;
     }
 }
@@ -482,7 +366,7 @@ static RECT g_savedWindowGeometry = {0, 0, 0, 0};
         return g_defaultTitleBarHeight;
     }
     const UINT captionHeight = GetCaptionHeight(hWnd);
-    if (IsWindowMaximized(hWnd) || IsWindowFullScreen(hWnd)) {
+    if (IsWindowMaximized(hWnd) || Utils::IsWindowFullScreen(hWnd)) {
         return captionHeight;
     } else {
         return (captionHeight + GetResizeBorderThickness(hWnd, false));
@@ -496,7 +380,7 @@ static RECT g_savedWindowGeometry = {0, 0, 0, 0};
         if (!hWnd) {
             return 0;
         }
-        if (IsWindowMaximized(hWnd) || IsWindowFullScreen(hWnd)) {
+        if (IsWindowMaximized(hWnd) || Utils::IsWindowFullScreen(hWnd)) {
             return 0;
         }
         const auto dpr = (static_cast<double>(GetWindowDPI(hWnd)) / static_cast<double>(g_defaultWindowDPI));
@@ -799,7 +683,7 @@ bool Utils::SetWindowTheme(const HWND hWnd, const WindowTheme theme) noexcept
 WindowState Utils::GetWindowState(const HWND hWnd) noexcept
 {
     if (!hWnd) {
-        return WindowState::Shown;
+        return WindowState::Normal;
     }
     if (IsWindowMinimized(hWnd)) {
         return WindowState::Minimized;
@@ -807,12 +691,8 @@ WindowState Utils::GetWindowState(const HWND hWnd) noexcept
         return WindowState::Normal;
     } else if (IsWindowMaximized(hWnd)) {
         return WindowState::Maximized;
-    } else if (IsWindowFullScreen(hWnd)) {
-        return WindowState::FullScreen;
-    } else if (IsWindowShown(hWnd)) {
-        return WindowState::Shown;
     } else {
-        return WindowState::Hidden;
+        return WindowState::Normal;
     }
 }
 
@@ -822,14 +702,6 @@ bool Utils::SetWindowState(const HWND hWnd, const WindowState state) noexcept
     if (ShowWindowFunc) {
         if (!hWnd) {
             return false;
-        }
-        const WindowState currentState = GetWindowState(hWnd);
-        if (currentState == state) {
-            OutputDebugStringW(L"Can't set a same window state.");
-            return false;
-        }
-        if ((currentState == WindowState::FullScreen) && (state != WindowState::FullScreen)) {
-            return WindowExitFullScreen(hWnd);
         }
         int nCmdShow = SW_SHOW; // Activates the window and displays it in its current size and position.
         switch (state) {
@@ -841,15 +713,6 @@ bool Utils::SetWindowState(const HWND hWnd, const WindowState state) noexcept
         } break;
         case WindowState::Maximized: {
             nCmdShow = SW_MAXIMIZE;
-        } break;
-        case WindowState::FullScreen: {
-            return WindowEnterFullScreen(hWnd);
-        } break;
-        case WindowState::Shown: {
-            nCmdShow = SW_NORMAL; // An application should specify this flag when displaying the window for the first time.
-        } break;
-        case WindowState::Hidden: {
-            nCmdShow = SW_HIDE;
         } break;
         }
         // Don't check ShowWindow()'s result because it returns the previous window state rather than
@@ -1122,4 +985,17 @@ std::wstring Utils::IntegerToString(const int num, const int radix) noexcept
     wchar_t buf[MAX_PATH] = { L'\0' };
     _itow(num, buf, radix);
     return buf;
+}
+
+bool Utils::IsWindowFullScreen(const HWND hWnd) noexcept
+{
+    if (!hWnd) {
+        return false;
+    }
+    const RECT windowRect = GetWindowGeometry(hWnd);
+    const RECT screenRect = GetScreenGeometry(hWnd, false, false);
+    return ((windowRect.top == screenRect.top)
+            && (windowRect.bottom == screenRect.bottom)
+            && (windowRect.left == screenRect.left)
+            && (windowRect.right == screenRect.right));
 }

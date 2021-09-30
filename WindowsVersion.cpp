@@ -29,7 +29,7 @@
 #include "Utils.h"
 
 #ifndef STATUS_SUCCESS
-#define STATUS_SUCCESS (static_cast<NTSTATUS>(0x00000000L)) // ntsubauth
+#define STATUS_SUCCESS (static_cast<NTSTATUS>(0x00000000L))
 #endif
 
 using NTSTATUS = LONG;
@@ -75,4 +75,64 @@ bool WindowsVersion::IsWindowsVersionOrGreater(const VersionNumber &version) noe
     VER_SET_CONDITION(dwlConditionMask, VER_MINORVERSION, op);
     VER_SET_CONDITION(dwlConditionMask, VER_BUILDNUMBER, op);
     return (VerifyVersionInfoW(&osvi, VER_MAJORVERSION | VER_MINORVERSION | VER_BUILDNUMBER, dwlConditionMask) != FALSE);
+}
+
+std::wstring WindowsVersion::GetHumanReadableString(const VersionNumber &version) noexcept
+{
+    std::wstring humanReadableString = {};
+    if (version >= Windows11) {
+        humanReadableString = L"Windows 11"; // ### TODO
+    } else if (version >= Windows10_21Half1) {
+        humanReadableString = L"Windows 10 Version 21H1 (May 2021 Update)";
+    } else if (version >= Windows10_20Half2) {
+        humanReadableString = L"Windows 10 Version 20H2 (October 2020 Update)";
+    } else if (version >= Windows10_20Half1) {
+        humanReadableString = L"Windows 10 Version 2004 (May 2020 Update)";
+    } else if (version >= Windows10_19Half2) {
+        humanReadableString = L"Windows 10 Version 1909 (November 2019 Update)";
+    } else if (version >= Windows10_19Half1) {
+        humanReadableString = L"Windows 10 Version 1903 (May 2019 Update)";
+    } else if (version >= Windows10_RedStone5) {
+        humanReadableString = L"Windows 10 Version 1809 (October 2018 Update)";
+    } else if (version >= Windows10_RedStone4) {
+        humanReadableString = L"Windows 10 Version 1803 (April 2018 Update)";
+    } else if (version >= Windows10_RedStone3) {
+        humanReadableString = L"Windows 10 Version 1709 (Fall Creators Update)";
+    } else if (version >= Windows10_RedStone2) {
+        humanReadableString = L"Windows 10 Version 1703 (Creators Update)";
+    } else if (version >= Windows10_RedStone1) {
+        humanReadableString = L"Windows 10 Version 1607 (Anniversary Update)";
+    } else if (version >= Windows10_ThresHold2) {
+        humanReadableString = L"Windows 10 Version 1511 (November Update)";
+    } else if (version >= Windows10_ThresHold1) {
+        humanReadableString = L"Windows 10 Version 1507";
+    } else if (version >= Windows_8_1_Update1) {
+        humanReadableString = L"Windows 8.1 with Update 1";
+    } else if (version >= Windows_8_1) {
+        humanReadableString = L"Windows 8.1";
+    } else if (version >= Windows_8) {
+        humanReadableString = L"Windows 8";
+    } else if (version >= Windows_7_ServicePack1) {
+        humanReadableString = L"Windows 7 with Service Pack 1";
+    } else if (version >= Windows_7) {
+        humanReadableString = L"Windows 7";
+    } else if (version >= Windows_Vista_ServicePack2) {
+        humanReadableString = L"Windows Vista with Service Pack 2";
+    } else if (version >= Windows_Vista_ServicePack1) {
+        humanReadableString = L"Windows Vista with Service Pack 1";
+    } else if (version >= Windows_Vista) {
+        humanReadableString = L"Windows Vista";
+    } else if (version >= Windows_XP_64) {
+        humanReadableString = L"Windows XP x64 Edition";
+    } else if (version >= Windows_XP) {
+        humanReadableString = L"Windows XP";
+    } else if (version >= Windows_2000) {
+        humanReadableString = L"Windows 2000";
+    }
+    const std::wstring versionString = version.ToString();
+    if (humanReadableString.empty()) {
+        return versionString;
+    } else {
+        return (humanReadableString + L" (" + versionString + L")");
+    }
 }

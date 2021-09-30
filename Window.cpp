@@ -41,11 +41,11 @@
 #endif
 
 #ifndef GET_X_LPARAM
-#define GET_X_LPARAM(lp) ((int)(short)LOWORD(lp))
+#define GET_X_LPARAM(lParam) (static_cast<int>(static_cast<short>(LOWORD(lParam))))
 #endif
 
 #ifndef GET_Y_LPARAM
-#define GET_Y_LPARAM(lp) ((int)(short)HIWORD(lp))
+#define GET_Y_LPARAM(lParam) (static_cast<int>(static_cast<short>(HIWORD(lParam))))
 #endif
 
 #ifndef RECT_WIDTH
@@ -58,6 +58,16 @@
 
 // The thickness of an auto-hide taskbar in pixels.
 static constexpr UINT g_autoHideTaskbarThickness = 2;
+
+[[nodiscard]] static inline ATOM __RegisterWindowClass() noexcept
+{
+    //
+}
+
+[[nodiscard]] static inline HWND __CreateWindow() noexcept
+{
+    //
+}
 
 Window::Window() noexcept
 {
@@ -296,12 +306,34 @@ LRESULT Window::DefaultMessageHandler(UINT message, WPARAM wParam, LPARAM lParam
         OnYChanged(m_y);
     } break;
     case WM_SIZE: {
+        if (wParam == SIZE_RESTORED) {
+            // ### FIXME: check
+            m_visibility = WindowState::Normal;
+            OnVisibilityChanged(m_visibility);
+        } else if (wParam == SIZE_MINIMIZED) {
+            m_visibility = WindowState::Minimized;
+            OnVisibilityChanged(m_visibility);
+        } else if (wParam == SIZE_MAXIMIZED) {
+            m_visibility = WindowState::Maximized;
+            OnVisibilityChanged(m_visibility);
+        }
         m_width = LOWORD(lParam);
         OnWidthChanged(m_width);
         m_height = HIWORD(lParam);
         OnHeightChanged(m_height);
     } break;
-    case WM_SETTINGCHANGE: {} break;
+    case WM_SETTINGCHANGE: {
+        // wParam == 0: User-wide setting change
+        // wParam == 1: System-wide setting change
+        // ### TODO: how to detect high contrast theme here
+        if (((wParam == 0) || (wParam == 1)) && (_wcsicmp(reinterpret_cast<LPCWSTR>(lParam), L"ImmersiveColorSet") == 0)) {
+            m_theme = Utils::GetSystemTheme();
+            OnThemeChanged(m_theme);
+            if (!Utils::SetWindowTheme(m_window, m_theme)) {
+                Utils::DisplayErrorDialog(L"Failed to set the window theme.");
+            }
+        }
+    } break;
     case WM_DPICHANGED: {
         const UINT oldDPI = m_dpi;
         const UINT dpiX = LOWORD(wParam);
@@ -353,7 +385,7 @@ LRESULT Window::DefaultMessageHandler(UINT message, WPARAM wParam, LPARAM lParam
         }
         bool nonClientAreaExists = false;
         const bool max = (m_visibility == WindowState::Maximized);
-        const bool full = (m_visibility == WindowState::FullScreen);
+        const bool full = Utils::IsWindowFullScreen(m_window);
         // We don't need this correction when we're fullscreen. We will
         // have the WS_POPUP size, so we don't have to worry about
         // borders, and the default frame will be fine.

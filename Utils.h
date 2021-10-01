@@ -52,6 +52,8 @@ namespace Utils
     [[nodiscard]] DWORD GetColorizationColor() noexcept;
     [[nodiscard]] std::wstring IntegerToString(const int num, const int radix) noexcept;
     [[nodiscard]] bool IsWindowFullScreen(const HWND hWnd) noexcept;
+    [[nodiscard]] std::wstring DPIAwarenessToString(const DPIAwareness value) noexcept;
+    [[nodiscard]] std::wstring ThemeToString(const WindowTheme value) noexcept;
 } // namespace Utils
 
 #ifndef PRINT_WIN32_ERROR_MESSAGE

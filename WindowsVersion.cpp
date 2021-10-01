@@ -77,7 +77,7 @@ bool WindowsVersion::IsWindowsVersionOrGreater(const VersionNumber &version) noe
     return (VerifyVersionInfoW(&osvi, VER_MAJORVERSION | VER_MINORVERSION | VER_BUILDNUMBER, dwlConditionMask) != FALSE);
 }
 
-std::wstring WindowsVersion::GetHumanReadableString(const VersionNumber &version) noexcept
+std::wstring WindowsVersion::WindowsVersionToHumanReadableString(const VersionNumber &version) noexcept
 {
     std::wstring humanReadableString = {};
     if (version >= Windows11) {

@@ -971,3 +971,39 @@ bool Utils::IsWindowFullScreen(const HWND hWnd) noexcept
             && (windowRect.left == screenRect.left)
             && (windowRect.right == screenRect.right));
 }
+
+std::wstring Utils::DPIAwarenessToString(const DPIAwareness value) noexcept
+{
+    switch (value) {
+    case DPIAwareness::PerMonitorV2: {
+        return L"Per Monitor V2";
+    } break;
+    case DPIAwareness::PerMonitor: {
+        return L"Per Monitor";
+    } break;
+    case DPIAwareness::System: {
+        return L"System";
+    } break;
+    case DPIAwareness::GdiScaled: {
+        return L"Unaware (GDI Scaled)";
+    } break;
+    case DPIAwareness::Unaware: {
+        return L"Unaware";
+    } break;
+    }
+}
+
+std::wstring Utils::ThemeToString(const WindowTheme value) noexcept
+{
+    switch (value) {
+    case WindowTheme::Light: {
+        return L"Light";
+    } break;
+    case WindowTheme::Dark: {
+        return L"Dark";
+    } break;
+    case WindowTheme::HighContrast: {
+        return L"High Contrast";
+    } break;
+    }
+}

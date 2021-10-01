@@ -57,5 +57,5 @@ namespace WindowsVersion
 
     [[nodiscard]] bool IsWindowsVersionOrGreater(const VersionNumber &version) noexcept;
 
-    [[nodiscard]] std::wstring GetHumanReadableString(const VersionNumber &version) noexcept;
+    [[nodiscard]] std::wstring WindowsVersionToHumanReadableString(const VersionNumber &version) noexcept;
 } // namespace WindowsVersion

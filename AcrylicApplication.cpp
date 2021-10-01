@@ -36,9 +36,8 @@
 
 #include <WinRT\Base.h>
 
-// This hack is needed to resolve circular dependencies in
-// Windows.Foundation.h. We just forward-declare the method that
-// causes the problems.
+// Workaround for Windows SDK bug.
+// See https://github.com/microsoft/Windows.UI.Composition-Win32-Samples/issues/47
 namespace winrt::impl
 {
     template <typename Async>

@@ -27,7 +27,10 @@
 #include <SDKDDKVer.h>
 #include <Windows.h>
 #include <string>
+#include <memory>
 #include "Definitions.h"
+
+class WindowPrivate;
 
 class Window
 {
@@ -68,9 +71,9 @@ public:
     virtual void OnThemeChanged(const WindowTheme arg) noexcept;
 
     [[nodiscard]] UINT DotsPerInch() const noexcept;
-    virtual void OnDPIChanged(const UINT arg) noexcept;
+    virtual void OnDotsPerInchChanged(const UINT arg) noexcept;
 
-    [[nodiscard]] bool CreateChild(const WNDPROC WndProc) const noexcept;
+    [[nodiscard]] HWND CreateChildWindow(const DWORD style, const DWORD extendedStyle, const WNDPROC WndProc, void *extraData) const noexcept;
     [[nodiscard]] HWND WindowHandle() const noexcept;
     [[nodiscard]] int MessageLoop() const noexcept;
     [[nodiscard]] bool Move(const int x, const int y) noexcept;
@@ -78,7 +81,7 @@ public:
     [[nodiscard]] bool SetGeometry(const int x, const int y, const UINT w, const UINT h) noexcept;
 
     [[nodiscard]] inline friend bool operator==(const Window &lhs, const Window &rhs) noexcept {
-        return (lhs.m_window == rhs.m_window);
+        return (lhs.WindowHandle() == rhs.WindowHandle());
     }
     [[nodiscard]] inline friend bool operator!=(const Window &lhs, const Window &rhs) noexcept {
         return (!(lhs == rhs));
@@ -95,21 +98,5 @@ private:
     Window &operator=(Window &&) = delete;
 
 private:
-    [[nodiscard]] bool Create() noexcept;
-    [[nodiscard]] bool Destroy() noexcept;
-    [[nodiscard]] static LRESULT CALLBACK WindowProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) noexcept;
-    [[nodiscard]] LRESULT DefaultMessageHandler(UINT message, WPARAM wParam, LPARAM lParam) noexcept;
-
-private:
-    HWND m_window = nullptr;
-    ATOM m_atom = INVALID_ATOM;
-    int m_icon = 0;
-    std::wstring m_title = {};
-    int m_x = 0;
-    int m_y = 0;
-    UINT m_width = 0;
-    UINT m_height = 0;
-    WindowState m_visibility = WindowState::Normal;
-    WindowTheme m_theme = WindowTheme::Light;
-    UINT m_dpi = 0;
+    std::unique_ptr<WindowPrivate> d_ptr;
 };

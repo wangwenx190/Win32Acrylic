@@ -105,16 +105,12 @@ static constexpr UINT g_autoHideTaskbarThickness = 2;
     }
 }
 
-[[nodiscard]] static inline HWND __CreateWindow(const std::wstring &className, Window * const extraData, const DWORD style, const DWORD extendedStyle, const HWND parentWindow) noexcept
+[[nodiscard]] static inline HWND __CreateWindow(const std::wstring &className, void *extraData, const DWORD style, const DWORD extendedStyle, const HWND parentWindow) noexcept
 {
     USER32_API(CreateWindowExW);
     if (CreateWindowExWFunc) {
         if (className.empty()) {
             Utils::DisplayErrorDialog(L"Failed to create a window due to the class name is empty.");
-            return nullptr;
-        }
-        if (!extraData) {
-            Utils::DisplayErrorDialog(L"Failed to create a window due to the extra data is null.");
             return nullptr;
         }
         const HINSTANCE instance = Utils::GetCurrentModuleInstance();
@@ -146,161 +142,222 @@ static constexpr UINT g_autoHideTaskbarThickness = 2;
     }
 }
 
-Window::Window() noexcept
+[[nodiscard]] static inline bool __CloseWindow(const HWND hWnd, const std::wstring &className) noexcept
 {
-    if (!Create()) {
+    USER32_API(DestroyWindow);
+    USER32_API(UnregisterClassW);
+    if (DestroyWindowFunc && UnregisterClassWFunc) {
+        if (!hWnd) {
+            Utils::DisplayErrorDialog(L"Failed to destroy the window due to the window handle is null.");
+            return false;
+        }
+        if (className.empty()) {
+            Utils::DisplayErrorDialog(L"Failed to destroy the window due to the class name is empty.");
+            return false;
+        }
+        const HINSTANCE instance = Utils::GetCurrentModuleInstance();
+        if (!instance) {
+            Utils::DisplayErrorDialog(L"Failed to retrieve the current module instance.");
+            return false;
+        }
+        if (DestroyWindowFunc(hWnd) == FALSE) {
+            PRINT_WIN32_ERROR_MESSAGE(DestroyWindow, L"Failed to destroy the window.")
+            return false;
+        }
+        if (UnregisterClassWFunc(className.c_str(), instance) == FALSE) {
+            PRINT_WIN32_ERROR_MESSAGE(UnregisterClassW, L"Failed to unregister the window class.")
+            return false;
+        }
+        return true;
+    } else {
+        Utils::DisplayErrorDialog(L"Failed to destroy the window due to DestroyWindow() and UnregisterClassW() are not available.");
+        return false;
+    }
+}
+
+class WindowPrivate
+{
+public:
+    explicit WindowPrivate(Window *q) noexcept;
+    ~WindowPrivate() noexcept;
+
+    [[nodiscard]] std::wstring Title() const noexcept;
+    void Title(const std::wstring &value) noexcept;
+
+    [[nodiscard]] int Icon() const noexcept;
+    void Icon(const int value) noexcept;
+
+    [[nodiscard]] int X() const noexcept;
+    void X(const int value) noexcept;
+
+    [[nodiscard]] int Y() const noexcept;
+    void Y(const int value) noexcept;
+
+    [[nodiscard]] UINT Width() const noexcept;
+    void Width(const UINT value) noexcept;
+
+    [[nodiscard]] UINT Height() const noexcept;
+    void Height(const UINT value) noexcept;
+
+    [[nodiscard]] WindowState Visibility() const noexcept;
+    void Visibility(const WindowState value) noexcept;
+
+    [[nodiscard]] WindowTheme Theme() const noexcept;
+    void Theme(const WindowTheme value) noexcept;
+
+    [[nodiscard]] UINT DotsPerInch() const noexcept;
+
+    [[nodiscard]] HWND CreateChildWindow(const DWORD style, const DWORD extendedStyle, const WNDPROC WndProc, void *extraData) const noexcept;
+    [[nodiscard]] HWND WindowHandle() const noexcept;
+    [[nodiscard]] int MessageLoop() const noexcept;
+    [[nodiscard]] bool Move(const int x, const int y) noexcept;
+    [[nodiscard]] bool Resize(const UINT w, const UINT h) noexcept;
+    [[nodiscard]] bool SetGeometry(const int x, const int y, const UINT w, const UINT h) noexcept;
+
+private:
+    WindowPrivate(const WindowPrivate &) = delete;
+    WindowPrivate &operator=(const WindowPrivate &) = delete;
+    WindowPrivate(WindowPrivate &&) = delete;
+    WindowPrivate &operator=(WindowPrivate &&) = delete;
+
+private:
+    [[nodiscard]] static LRESULT CALLBACK WindowProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) noexcept;
+    [[nodiscard]] LRESULT DefaultMessageHandler(UINT message, WPARAM wParam, LPARAM lParam) noexcept;
+
+private:
+    Window *q_ptr = nullptr;
+    HWND m_window = nullptr;
+    ATOM m_atom = INVALID_ATOM;
+    int m_icon = 0;
+    std::wstring m_title = {};
+    int m_x = 0;
+    int m_y = 0;
+    UINT m_width = 0;
+    UINT m_height = 0;
+    WindowState m_visibility = WindowState::Normal;
+    WindowTheme m_theme = WindowTheme::Light;
+    UINT m_dpi = 0;
+};
+
+WindowPrivate::WindowPrivate(Window *q) noexcept
+{
+    q_ptr = q;
+    m_atom = __RegisterWindowClass(WindowProc);
+    if (m_atom == INVALID_ATOM) {
+        Utils::DisplayErrorDialog(L"Failed to register the window class for this window.");
+        return false;
+    }
+    m_window = __CreateWindow(ATOM_TO_STRING(m_atom), this, (WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN | WS_CLIPSIBLINGS), WS_EX_NOREDIRECTIONBITMAP, nullptr);
+    if (!m_window) {
         Utils::DisplayErrorDialog(L"Failed to create this window.");
+        return false;
     }
+    return true;
 }
 
-Window::~Window() noexcept
+WindowPrivate::~WindowPrivate() noexcept
 {
-    if (!Destroy()) {
-        Utils::DisplayErrorDialog(L"Failed to destroy this window.");
+    if (m_window && (m_atom != INVALID_ATOM)) {
+        if (__CloseWindow(m_window, ATOM_TO_STRING(m_atom))) {
+            m_window = nullptr;
+            m_atom = INVALID_ATOM;
+        } else {
+            Utils::DisplayErrorDialog(L"Failed to destroy this window.");
+        }
     }
 }
 
-std::wstring Window::Title() const noexcept
+std::wstring WindowPrivate::Title() const noexcept
 {
     return m_title;
 }
 
-void Window::Title(const std::wstring &value) noexcept
+void WindowPrivate::Title(const std::wstring &value) noexcept
 {
 
 }
 
-void Window::OnTitleChanged(const std::wstring &arg) noexcept
-{
-
-}
-
-int Window::Icon() const noexcept
+int WindowPrivate::Icon() const noexcept
 {
     return m_icon;
 }
 
-void Window::Icon(const int value) noexcept
+void WindowPrivate::Icon(const int value) noexcept
 {
 
 }
 
-void Window::OnIconChanged(const int arg) noexcept
-{
-
-}
-
-int Window::X() const noexcept
+int WindowPrivate::X() const noexcept
 {
     return m_x;
 }
 
-void Window::X(const int value) noexcept
+void WindowPrivate::X(const int value) noexcept
 {
 
 }
 
-void Window::OnXChanged(const int arg) noexcept
-{
-
-}
-
-int Window::Y() const noexcept
+int WindowPrivate::Y() const noexcept
 {
     return m_y;
 }
 
-void Window::Y(const int value) noexcept
+void WindowPrivate::Y(const int value) noexcept
 {
 
 }
 
-void Window::OnYChanged(const int arg) noexcept
-{
-
-}
-
-UINT Window::Width() const noexcept
+UINT WindowPrivate::Width() const noexcept
 {
     return m_width;
 }
 
-void Window::Width(const UINT value) noexcept
+void WindowPrivate::Width(const UINT value) noexcept
 {
 
 }
 
-void Window::OnWidthChanged(const UINT arg) noexcept
-{
-
-}
-
-UINT Window::Height() const noexcept
+UINT WindowPrivate::Height() const noexcept
 {
     return m_height;
 }
 
-void Window::Height(const UINT value) noexcept
+void WindowPrivate::Height(const UINT value) noexcept
 {
 
 }
 
-void Window::OnHeightChanged(const UINT arg) noexcept
-{
-
-}
-
-WindowState Window::Visibility() const noexcept
+WindowState WindowPrivate::Visibility() const noexcept
 {
     return m_visibility;
 }
 
-void Window::Visibility(const WindowState value) noexcept
+void WindowPrivate::Visibility(const WindowState value) noexcept
 {
 
 }
 
-void Window::OnVisibilityChanged(const WindowState arg) noexcept
-{
-
-}
-
-WindowTheme Window::Theme() const noexcept
+WindowTheme WindowPrivate::Theme() const noexcept
 {
     return m_theme;
 }
 
-void Window::Theme(const WindowTheme value) noexcept
+void WindowPrivate::Theme(const WindowTheme value) noexcept
 {
 
 }
 
-void Window::OnThemeChanged(const WindowTheme arg) noexcept
-{
-
-}
-
-UINT Window::DotsPerInch() const noexcept
+UINT WindowPrivate::DotsPerInch() const noexcept
 {
     return m_dpi;
 }
 
-void Window::OnDPIChanged(const UINT arg) noexcept
-{
-
-}
-
-bool Window::CreateChild(const WNDPROC WndProc) const noexcept
-{
-
-}
-
-HWND Window::WindowHandle() const noexcept
+HWND WindowPrivate::WindowHandle() const noexcept
 {
     return m_window;
 }
 
-int Window::MessageLoop() const noexcept
+int WindowPrivate::MessageLoop() const noexcept
 {
     USER32_API(GetMessageW);
     USER32_API(TranslateMessage);
@@ -320,17 +377,17 @@ int Window::MessageLoop() const noexcept
     }
 }
 
-bool Window::Move(const int x, const int y) noexcept
+bool WindowPrivate::Move(const int x, const int y) noexcept
 {
     return SetGeometry(x, y, m_width, m_height);
 }
 
-bool Window::Resize(const UINT w, const UINT h) noexcept
+bool WindowPrivate::Resize(const UINT w, const UINT h) noexcept
 {
     return SetGeometry(m_x, m_y, w, h);
 }
 
-bool Window::SetGeometry(const int x, const int y, const UINT w, const UINT h) noexcept
+bool WindowPrivate::SetGeometry(const int x, const int y, const UINT w, const UINT h) noexcept
 {
     USER32_API(SetWindowPos);
     if (SetWindowPosFunc) {
@@ -346,53 +403,7 @@ bool Window::SetGeometry(const int x, const int y, const UINT w, const UINT h) n
     }
 }
 
-bool Window::Create() noexcept
-{
-    m_atom = __RegisterWindowClass(WindowProc);
-    if (m_atom == INVALID_ATOM) {
-        Utils::DisplayErrorDialog(L"Failed to register the window class for this window.");
-        return false;
-    }
-    m_window = __CreateWindow(ATOM_TO_STRING(m_atom), this, (WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN | WS_CLIPSIBLINGS), WS_EX_NOREDIRECTIONBITMAP, nullptr);
-    if (!m_window) {
-        Utils::DisplayErrorDialog(L"Failed to create this window.");
-        return false;
-    }
-    return true;
-}
-
-bool Window::Destroy() noexcept
-{
-    USER32_API(DestroyWindow);
-    USER32_API(UnregisterClassW);
-    if (DestroyWindowFunc && UnregisterClassWFunc) {
-        if (!m_window || (m_atom == INVALID_ATOM)) {
-            Utils::DisplayErrorDialog(L"Failed to destroy this window due to the window handle is null or the window class is invalid.");
-            return false;
-        }
-        const HINSTANCE instance = Utils::GetCurrentModuleInstance();
-        if (!instance) {
-            Utils::DisplayErrorDialog(L"Failed to retrieve the current module instance.");
-            return false;
-        }
-        if (DestroyWindowFunc(m_window) == FALSE) {
-            PRINT_WIN32_ERROR_MESSAGE(DestroyWindow, L"Failed to destroy this window.")
-            return false;
-        }
-        m_window = nullptr;
-        if (UnregisterClassWFunc(ATOM_TO_STRING(m_atom), instance) == FALSE) {
-            PRINT_WIN32_ERROR_MESSAGE(UnregisterClassW, L"Failed to unregister the window class of this window.")
-            return false;
-        }
-        m_atom = INVALID_ATOM;
-        return true;
-    } else {
-        Utils::DisplayErrorDialog(L"Failed to destroy this window due to DestroyWindow() and UnregisterClassW() are not available.");
-        return false;
-    }
-}
-
-LRESULT CALLBACK Window::WindowProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) noexcept
+LRESULT CALLBACK WindowPrivate::WindowProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) noexcept
 {
     USER32_API(SetWindowLongPtrW);
     USER32_API(GetWindowLongPtrW);
@@ -422,7 +433,7 @@ LRESULT CALLBACK Window::WindowProc(HWND hWnd, UINT message, WPARAM wParam, LPAR
     }
 }
 
-LRESULT Window::DefaultMessageHandler(UINT message, WPARAM wParam, LPARAM lParam) noexcept
+LRESULT WindowPrivate::DefaultMessageHandler(UINT message, WPARAM wParam, LPARAM lParam) noexcept
 {
     switch (message) {
     case WM_CREATE: {
@@ -479,9 +490,10 @@ LRESULT Window::DefaultMessageHandler(UINT message, WPARAM wParam, LPARAM lParam
     } break;
     case WM_SIZE: {
         if (wParam == SIZE_RESTORED) {
-            // ### FIXME: check
-            m_visibility = WindowState::Normal;
-            OnVisibilityChanged(m_visibility);
+            if ((m_visibility == WindowState::Minimized) || (m_visibility == WindowState::Maximized)) {
+                m_visibility = WindowState::Normal;
+                OnVisibilityChanged(m_visibility);
+            }
         } else if (wParam == SIZE_MINIMIZED) {
             m_visibility = WindowState::Minimized;
             OnVisibilityChanged(m_visibility);
@@ -511,7 +523,7 @@ LRESULT Window::DefaultMessageHandler(UINT message, WPARAM wParam, LPARAM lParam
         const UINT dpiX = LOWORD(wParam);
         const UINT dpiY = HIWORD(wParam);
         m_dpi = static_cast<UINT>(std::round(static_cast<double>(dpiX + dpiY) / 2.0));
-        OnDPIChanged(m_dpi);
+        OnDotsPerInchChanged(m_dpi);
         const std::wstring dpiMsg = L"Current window's dots-per-inch (DPI) has changed from " + Utils::IntegerToString(oldDPI, 10) + L" to " + Utils::IntegerToString(m_dpi, 10) + L".";
         OutputDebugStringW(dpiMsg.c_str());
         USER32_API(SetWindowPos);
@@ -535,6 +547,16 @@ LRESULT Window::DefaultMessageHandler(UINT message, WPARAM wParam, LPARAM lParam
     } break;
     case WM_CLOSE: {} break;
     case WM_DESTROY: {} break;
+    case WM_NCCREATE: {
+        USER32_API(EnableNonClientDpiScaling);
+        if (EnableNonClientDpiScalingFunc) {
+            if (EnableNonClientDpiScalingFunc(m_window) == FALSE) {
+                PRINT_WIN32_ERROR_MESSAGE(EnableNonClientDpiScaling, L"Failed to enable non-client area DPI auto scaling.")
+            }
+        } else {
+            Utils::DisplayErrorDialog(L"Failed to enable non-client area DPI auto scaling due to EnableNonClientDpiScaling() is not available.");
+        }
+    } break;
     case WM_NCCALCSIZE: {
         if (static_cast<BOOL>(wParam) == FALSE) {
             return 0;

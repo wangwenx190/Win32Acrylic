@@ -67,13 +67,15 @@ public:
     virtual void OnVisibilityChanged(const WindowState arg) noexcept;
 
     [[nodiscard]] WindowTheme Theme() const noexcept;
-    void Theme(const WindowTheme value) noexcept;
     virtual void OnThemeChanged(const WindowTheme arg) noexcept;
 
     [[nodiscard]] UINT DotsPerInch() const noexcept;
     virtual void OnDotsPerInchChanged(const UINT arg) noexcept;
 
-    [[nodiscard]] HWND CreateChildWindow(const DWORD style, const DWORD extendedStyle, const WNDPROC WndProc, void *extraData) const noexcept;
+    [[nodiscard]] COLORREF ColorizationColor() const noexcept;
+    virtual void OnColorizationColorChanged(const COLORREF arg) noexcept;
+
+    [[nodiscard]] HWND CreateChildWindow(const DWORD style, const DWORD extendedStyle, const WNDPROC wndProc, void *extraData) const noexcept;
     [[nodiscard]] HWND WindowHandle() const noexcept;
     [[nodiscard]] int MessageLoop() const noexcept;
     [[nodiscard]] bool Move(const int x, const int y) noexcept;

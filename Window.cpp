@@ -64,31 +64,33 @@
 // The thickness of an auto-hide taskbar in pixels.
 static constexpr UINT g_autoHideTaskbarThickness = 2;
 
-[[nodiscard]] static inline ATOM __RegisterWindowClass(const WNDPROC WndProc) noexcept
+[[nodiscard]] static inline std::tuple<HWND, ATOM> __CreateWindow(const DWORD style, const DWORD extendedStyle, const HWND parentWindow, void *extraData, const WNDPROC wndProc) noexcept
 {
+    constexpr std::tuple<HWND, ATOM> INVALID_RESULT = std::make_tuple(nullptr, INVALID_ATOM);
     USER32_API(LoadCursorW);
     USER32_API(LoadIconW);
     USER32_API(RegisterClassExW);
-    if (LoadCursorWFunc && LoadIconWFunc && RegisterClassExWFunc) {
-        if (!WndProc) {
+    USER32_API(CreateWindowExW);
+    if (LoadCursorWFunc && LoadIconWFunc && RegisterClassExWFunc && CreateWindowExWFunc) {
+        if (!wndProc) {
             Utils::DisplayErrorDialog(L"Failed to register a window class due to the WindowProc function pointer is null.");
-            return INVALID_ATOM;
-        }
-        const std::wstring guid = Utils::GenerateGUID();
-        if (guid.empty()) {
-            Utils::DisplayErrorDialog(L"Failed to generate a new GUID.");
-            return INVALID_ATOM;
+            return INVALID_RESULT;
         }
         const HINSTANCE instance = Utils::GetCurrentModuleInstance();
         if (!instance) {
             Utils::DisplayErrorDialog(L"Failed to retrieve the current module instance.");
-            return INVALID_ATOM;
+            return INVALID_RESULT;
+        }
+        const std::wstring guid = Utils::GenerateGUID();
+        if (guid.empty()) {
+            Utils::DisplayErrorDialog(L"Failed to generate a new GUID.");
+            return INVALID_RESULT;
         }
         WNDCLASSEXW wcex;
         SecureZeroMemory(&wcex, sizeof(wcex));
         wcex.cbSize = sizeof(wcex);
         wcex.style = CS_HREDRAW | CS_VREDRAW;
-        wcex.lpfnWndProc = WndProc;
+        wcex.lpfnWndProc = wndProc;
         wcex.hInstance = instance;
         wcex.lpszClassName = guid.c_str();
         wcex.hCursor = LoadCursorWFunc(nullptr, IDC_ARROW);
@@ -97,48 +99,30 @@ static constexpr UINT g_autoHideTaskbarThickness = 2;
         const ATOM atom = RegisterClassExWFunc(&wcex);
         if (atom == INVALID_ATOM) {
             PRINT_WIN32_ERROR_MESSAGE(RegisterClassExW, L"Failed to register a window class.")
-        }
-        return atom;
-    } else {
-        Utils::DisplayErrorDialog(L"Failed to register a window class due to LoadCursorW(), LoadIconW() and RegisterClassExW() are not available.");
-        return INVALID_ATOM;
-    }
-}
-
-[[nodiscard]] static inline HWND __CreateWindow(const std::wstring &className, void *extraData, const DWORD style, const DWORD extendedStyle, const HWND parentWindow) noexcept
-{
-    USER32_API(CreateWindowExW);
-    if (CreateWindowExWFunc) {
-        if (className.empty()) {
-            Utils::DisplayErrorDialog(L"Failed to create a window due to the class name is empty.");
-            return nullptr;
-        }
-        const HINSTANCE instance = Utils::GetCurrentModuleInstance();
-        if (!instance) {
-            Utils::DisplayErrorDialog(L"Failed to retrieve the current module instance.");
-            return nullptr;
+            return INVALID_RESULT;
         }
         const HWND hWnd = CreateWindowExWFunc(
-            extendedStyle,     // _In_     DWORD     dwExStyle
-            className.c_str(), // _In_opt_ LPCWSTR   lpClassName
-            nullptr,           // _In_opt_ LPCWSTR   lpWindowName
-            style,             // _In_     DWORD     dwStyle
-            CW_USEDEFAULT,     // _In_     int       X
-            CW_USEDEFAULT,     // _In_     int       Y
-            CW_USEDEFAULT,     // _In_     int       nWidth
-            CW_USEDEFAULT,     // _In_     int       nHeight
-            parentWindow,      // _In_opt_ HWND      hWndParent
-            nullptr,           // _In_opt_ HMENU     hMenu
-            instance,          // _In_opt_ HINSTANCE hInstance
-            extraData          // _In_opt_ LPVOID    lpParam
+            extendedStyle,        // _In_     DWORD     dwExStyle
+            ATOM_TO_STRING(atom), // _In_opt_ LPCWSTR   lpClassName
+            nullptr,              // _In_opt_ LPCWSTR   lpWindowName
+            style,                // _In_     DWORD     dwStyle
+            CW_USEDEFAULT,        // _In_     int       X
+            CW_USEDEFAULT,        // _In_     int       Y
+            CW_USEDEFAULT,        // _In_     int       nWidth
+            CW_USEDEFAULT,        // _In_     int       nHeight
+            parentWindow,         // _In_opt_ HWND      hWndParent
+            nullptr,              // _In_opt_ HMENU     hMenu
+            instance,             // _In_opt_ HINSTANCE hInstance
+            extraData             // _In_opt_ LPVOID    lpParam
         );
         if (!hWnd) {
             PRINT_WIN32_ERROR_MESSAGE(CreateWindowExW, L"Failed to create a window.")
+            return INVALID_RESULT;
         }
-        return hWnd;
+        return std::make_tuple(hWnd, atom);
     } else {
-        Utils::DisplayErrorDialog(L"Failed to create a window due to CreateWindowExW() is not available.");
-        return nullptr;
+        Utils::DisplayErrorDialog(L"Failed to create a window due to LoadCursorW(), LoadIconW(), RegisterClassExW() and CreateWindowExW() are not available.");
+        return INVALID_RESULT;
     }
 }
 
@@ -203,11 +187,12 @@ public:
     void Visibility(const WindowState value) noexcept;
 
     [[nodiscard]] WindowTheme Theme() const noexcept;
-    void Theme(const WindowTheme value) noexcept;
 
     [[nodiscard]] UINT DotsPerInch() const noexcept;
 
-    [[nodiscard]] HWND CreateChildWindow(const DWORD style, const DWORD extendedStyle, const WNDPROC WndProc, void *extraData) const noexcept;
+    [[nodiscard]] COLORREF ColorizationColor() const noexcept;
+
+    [[nodiscard]] HWND CreateChildWindow(const DWORD style, const DWORD extendedStyle, const WNDPROC wndProc, void *extraData) const noexcept;
     [[nodiscard]] HWND WindowHandle() const noexcept;
     [[nodiscard]] int MessageLoop() const noexcept;
     [[nodiscard]] bool Move(const int x, const int y) noexcept;
@@ -236,20 +221,18 @@ private:
     UINT m_height = 0;
     WindowState m_visibility = WindowState::Normal;
     WindowTheme m_theme = WindowTheme::Light;
+    COLORREF m_colorizationColor = 0;
     UINT m_dpi = 0;
 };
 
 WindowPrivate::WindowPrivate(Window *q) noexcept
 {
     q_ptr = q;
-    m_atom = __RegisterWindowClass(WindowProc);
-    if (m_atom == INVALID_ATOM) {
-        Utils::DisplayErrorDialog(L"Failed to register the window class for this window.");
-    } else {
-        m_window = __CreateWindow(ATOM_TO_STRING(m_atom), this, (WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN | WS_CLIPSIBLINGS), WS_EX_NOREDIRECTIONBITMAP, nullptr);
-        if (!m_window) {
-            Utils::DisplayErrorDialog(L"Failed to create this window.");
-        }
+    const auto result = __CreateWindow((WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN | WS_CLIPSIBLINGS), WS_EX_NOREDIRECTIONBITMAP, nullptr, this, WindowProc);
+    m_window = std::get<0>(result);
+    m_atom = std::get<1>(result);
+    if (!m_window || (m_atom == INVALID_ATOM)) {
+        Utils::DisplayErrorDialog(L"Failed to create this window.");
     }
 }
 
@@ -272,8 +255,14 @@ std::wstring WindowPrivate::Title() const noexcept
 
 void WindowPrivate::Title(const std::wstring &value) noexcept
 {
-    // ### TODO
-    UNREFERENCED_PARAMETER(value);
+    USER32_API(SetWindowTextW);
+    if (SetWindowTextWFunc) {
+        if (SetWindowTextWFunc(m_window, value.c_str()) == FALSE) {
+            PRINT_WIN32_ERROR_MESSAGE(SetWindowTextW, L"Failed to change the window title.")
+        }
+    } else {
+        Utils::DisplayErrorDialog(L"Failed to change the window title due to SetWindowTextW() is not available.");
+    }
 }
 
 int WindowPrivate::Icon() const noexcept
@@ -362,23 +351,25 @@ WindowTheme WindowPrivate::Theme() const noexcept
     return m_theme;
 }
 
-void WindowPrivate::Theme(const WindowTheme value) noexcept
-{
-    if (m_theme != value) {
-        if (!Utils::SetWindowTheme(m_window, value)) {
-            Utils::DisplayErrorDialog(L"Failed to update the Theme property of this window.");
-        }
-    }
-}
-
 UINT WindowPrivate::DotsPerInch() const noexcept
 {
     return m_dpi;
 }
 
-HWND WindowPrivate::CreateChildWindow(const DWORD style, const DWORD extendedStyle, const WNDPROC WndProc, void *extraData) const noexcept
+COLORREF WindowPrivate::ColorizationColor() const noexcept
 {
-    // ### TODO
+    return m_colorizationColor;
+}
+
+HWND WindowPrivate::CreateChildWindow(const DWORD style, const DWORD extendedStyle, const WNDPROC wndProc, void *extraData) const noexcept
+{
+    const auto result = __CreateWindow(style, (extendedStyle | WS_CHILD), m_window, extraData, wndProc);
+    const HWND hWnd = std::get<0>(result);
+    if (!hWnd) {
+        Utils::DisplayErrorDialog(L"Failed to create child window.");
+        return nullptr;
+    }
+    return hWnd;
 }
 
 HWND WindowPrivate::WindowHandle() const noexcept
@@ -480,15 +471,18 @@ bool WindowPrivate::DefaultMessageHandler(UINT message, WPARAM wParam, LPARAM lP
         OutputDebugStringW(dpiMsg.c_str());
         if (!Utils::UpdateFrameMargins(m_window)) {
             Utils::DisplayErrorDialog(L"Failed to update the window frame margins.");
+            return false;
         }
         USER32_API(SetWindowPos);
         if (SetWindowPosFunc) {
             constexpr UINT flags = (SWP_FRAMECHANGED | SWP_NOACTIVATE | SWP_NOSIZE | SWP_NOMOVE | SWP_NOZORDER | SWP_NOOWNERZORDER);
             if (SetWindowPosFunc(m_window, nullptr, 0, 0, 0, 0, flags) == FALSE) {
                 PRINT_WIN32_ERROR_MESSAGE(SetWindowPos, L"Failed to trigger a frame change event for the window.")
+                return false;
             }
         } else {
             Utils::DisplayErrorDialog(L"SetWindowPos() is not available.");
+            return false;
         }
         m_theme = Utils::GetSystemTheme();
         q_ptr->OnThemeChanged(m_theme);
@@ -496,16 +490,47 @@ bool WindowPrivate::DefaultMessageHandler(UINT message, WPARAM wParam, LPARAM lP
         OutputDebugStringW(themeMsg.c_str());
         if (!Utils::SetWindowTheme(m_window, m_theme)) {
             Utils::DisplayErrorDialog(L"Failed to set the window theme.");
+            return false;
         }
+        m_colorizationColor = L"";
+        q_ptr->OnColorizationColorChanged(m_colorizationColor);
+        m_visibility = WindowState::Hidden;
+        q_ptr->OnVisibilityChanged(m_visibility);
         const auto cs = reinterpret_cast<LPCREATESTRUCTW>(lParam);
-        m_x = cs->x;
+        if ((cs->x == CW_USEDEFAULT) || (cs->y == CW_USEDEFAULT) || (cs->cx == CW_USEDEFAULT) || (cs->cy == CW_USEDEFAULT)) {
+            USER32_API(GetWindowRect);
+            if (GetWindowRectFunc) {
+                RECT rect = {0, 0, 0, 0};
+                if (GetWindowRectFunc(m_window, &rect) == FALSE) {
+                    PRINT_WIN32_ERROR_MESSAGE(GetWindowRect, L"Failed to retrieve the window geometry.")
+                    return false;
+                } else {
+                    m_x = rect.left;
+                    m_y = rect.top;
+                    m_width = RECT_WIDTH(rect);
+                    m_height = RECT_HEIGHT(rect);
+                }
+            } else {
+                Utils::DisplayErrorDialog(L"GetWindowRect() is not available.");
+                return false;
+            }
+        } else {
+            m_x = cs->x;
+            m_y = cs->y;
+            m_width = cs->cx;
+            m_height = cs->cy;
+        }
         q_ptr->OnXChanged(m_x);
-        m_y = cs->y;
         q_ptr->OnYChanged(m_y);
-        m_width = cs->cx;
         q_ptr->OnWidthChanged(m_width);
-        m_height = cs->cy;
         q_ptr->OnHeightChanged(m_height);
+        LPCWSTR title = cs->lpszName;
+        if (title) {
+            m_title = title;
+        } else {
+            m_title = {};
+        }
+        q_ptr->OnTitleChanged(m_title);
     } break;
     case WM_MOVE: {
         m_x = GET_X_LPARAM(lParam);
@@ -514,16 +539,20 @@ bool WindowPrivate::DefaultMessageHandler(UINT message, WPARAM wParam, LPARAM lP
         q_ptr->OnYChanged(m_y);
     } break;
     case WM_SIZE: {
+        bool needNotify = false;
         if (wParam == SIZE_RESTORED) {
             if ((m_visibility == WindowState::Minimized) || (m_visibility == WindowState::Maximized)) {
                 m_visibility = WindowState::Normal;
-                q_ptr->OnVisibilityChanged(m_visibility);
+                needNotify = true;
             }
         } else if (wParam == SIZE_MINIMIZED) {
             m_visibility = WindowState::Minimized;
-            q_ptr->OnVisibilityChanged(m_visibility);
+            needNotify = true;
         } else if (wParam == SIZE_MAXIMIZED) {
             m_visibility = WindowState::Maximized;
+            needNotify = true;
+        }
+        if (needNotify) {
             q_ptr->OnVisibilityChanged(m_visibility);
         }
         m_width = LOWORD(lParam);
@@ -540,6 +569,7 @@ bool WindowPrivate::DefaultMessageHandler(UINT message, WPARAM wParam, LPARAM lP
             q_ptr->OnThemeChanged(m_theme);
             if (!Utils::SetWindowTheme(m_window, m_theme)) {
                 Utils::DisplayErrorDialog(L"Failed to set the window theme.");
+                return false;
             }
         }
     } break;
@@ -557,12 +587,14 @@ bool WindowPrivate::DefaultMessageHandler(UINT message, WPARAM wParam, LPARAM lP
             constexpr UINT flags = (SWP_SHOWWINDOW | SWP_NOZORDER | SWP_NOOWNERZORDER);
             if (SetWindowPosFunc(m_window, nullptr, prcNewWindow->left, prcNewWindow->top, RECT_WIDTH(*prcNewWindow), RECT_HEIGHT(*prcNewWindow), flags) == FALSE) {
                 PRINT_WIN32_ERROR_MESSAGE(SetWindowPos, L"Failed to update the geometry of the main window.")
+                return false;
             } else {
                 *result = 0;
                 return true;
             }
         } else {
             Utils::DisplayErrorDialog(L"SetWindowPos() is not available.");
+            return false;
         }
     } break;
     case WM_PAINT: {
@@ -573,6 +605,16 @@ bool WindowPrivate::DefaultMessageHandler(UINT message, WPARAM wParam, LPARAM lP
         *result = 1;
         return true;
     } break;
+    case WM_SETTEXT: {
+        const auto title = reinterpret_cast<LPCWSTR>(lParam);
+        if (title) {
+            m_title = title;
+        } else {
+            m_title = {};
+        }
+        q_ptr->OnTitleChanged(m_title);
+    } break;
+    case WM_SETICON: {} break;
     case WM_CLOSE: {
         if (__CloseWindow(m_window, ATOM_TO_STRING(m_atom))) {
             m_window = nullptr;
@@ -581,6 +623,7 @@ bool WindowPrivate::DefaultMessageHandler(UINT message, WPARAM wParam, LPARAM lP
             return true;
         } else {
             Utils::DisplayErrorDialog(L"Failed to close this window.");
+            return false;
         }
     } break;
     case WM_DESTROY: {
@@ -591,6 +634,7 @@ bool WindowPrivate::DefaultMessageHandler(UINT message, WPARAM wParam, LPARAM lP
             return true;
         } else {
             Utils::DisplayErrorDialog(L"Failed to destroy this window due to PostQuitMessage() is not available.");
+            return false;
         }
     } break;
     case WM_NCCREATE: {
@@ -598,9 +642,11 @@ bool WindowPrivate::DefaultMessageHandler(UINT message, WPARAM wParam, LPARAM lP
         if (EnableNonClientDpiScalingFunc) {
             if (EnableNonClientDpiScalingFunc(m_window) == FALSE) {
                 PRINT_WIN32_ERROR_MESSAGE(EnableNonClientDpiScaling, L"Failed to enable non-client area DPI auto scaling.")
+                return false;
             }
         } else {
             Utils::DisplayErrorDialog(L"Failed to enable non-client area DPI auto scaling due to EnableNonClientDpiScaling() is not available.");
+            return false;
         }
     } break;
     case WM_NCCALCSIZE: {
@@ -623,8 +669,7 @@ bool WindowPrivate::DefaultMessageHandler(UINT message, WPARAM wParam, LPARAM lP
             clientRect->top = originalTop;
         } else {
             Utils::DisplayErrorDialog(L"DefWindowProcW() is not available.");
-            *result = WVR_REDRAW;
-            return true;
+            return false;
         }
         bool nonClientAreaExists = false;
         const bool max = (m_visibility == WindowState::Maximized);
@@ -697,8 +742,7 @@ bool WindowPrivate::DefaultMessageHandler(UINT message, WPARAM wParam, LPARAM lP
             }
         } else {
             Utils::DisplayErrorDialog(L"SHAppBarMessage() is not available.");
-            *result = WVR_REDRAW;
-            return true;
+            return false;
         }
         // If the window bounds change, we're going to relayout and repaint
         // anyway. Returning WVR_REDRAW avoids an extra paint before that of
@@ -721,11 +765,11 @@ bool WindowPrivate::DefaultMessageHandler(UINT message, WPARAM wParam, LPARAM lP
         if (ScreenToClientFunc) {
             if (ScreenToClientFunc(m_window, &localPos) == FALSE) {
                 PRINT_WIN32_ERROR_MESSAGE(ScreenToClient, L"Failed to translate from screen coordinate to window coordinate.")
+                return false;
             }
         } else {
             Utils::DisplayErrorDialog(L"ScreenToClient() is not available.");
-            *result = HTCLIENT;
-            return true;
+            return false;
         }
         const auto resizeBorderThicknessY = static_cast<LONG>(Utils::GetWindowMetrics(m_window, WindowMetrics::ResizeBorderThicknessY));
         const auto titleBarHeight = static_cast<LONG>(Utils::GetWindowMetrics(m_window, WindowMetrics::TitleBarHeight));
@@ -757,8 +801,7 @@ bool WindowPrivate::DefaultMessageHandler(UINT message, WPARAM wParam, LPARAM lP
             return true;
         } else {
             Utils::DisplayErrorDialog(L"DefWindowProcW() is not available.");
-            *result = HTCLIENT;
-            return true;
+            return false;
         }
     } break;
     case WM_NCRBUTTONUP: {
@@ -769,6 +812,7 @@ bool WindowPrivate::DefaultMessageHandler(UINT message, WPARAM wParam, LPARAM lP
                 return true;
             } else {
                 Utils::DisplayErrorDialog(L"Failed to open the system menu for the main window.");
+                return false;
             }
         }
     } break;
@@ -895,11 +939,6 @@ WindowTheme Window::Theme() const noexcept
     return d_ptr->Theme();
 }
 
-void Window::Theme(const WindowTheme value) noexcept
-{
-    d_ptr->Theme(value);
-}
-
 void Window::OnThemeChanged(const WindowTheme arg) noexcept
 {
     UNREFERENCED_PARAMETER(arg);
@@ -915,9 +954,19 @@ void Window::OnDotsPerInchChanged(const UINT arg) noexcept
     UNREFERENCED_PARAMETER(arg);
 }
 
-HWND Window::CreateChildWindow(const DWORD style, const DWORD extendedStyle, const WNDPROC WndProc, void *extraData) const noexcept
+COLORREF Window::ColorizationColor() const noexcept
 {
-    return d_ptr->CreateChildWindow(style, extendedStyle, WndProc, extraData);
+    return d_ptr->ColorizationColor();
+}
+
+void Window::OnColorizationColorChanged(const COLORREF arg) noexcept
+{
+    UNREFERENCED_PARAMETER(arg);
+}
+
+HWND Window::CreateChildWindow(const DWORD style, const DWORD extendedStyle, const WNDPROC wndProc, void *extraData) const noexcept
+{
+    return d_ptr->CreateChildWindow(style, extendedStyle, wndProc, extraData);
 }
 
 HWND Window::WindowHandle() const noexcept

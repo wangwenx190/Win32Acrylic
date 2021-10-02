@@ -36,7 +36,6 @@ enum class WindowState : int
     Normal = 0,
     Minimized,
     Maximized,
-    Visible,
     Hidden
 };
 

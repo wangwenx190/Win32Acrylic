@@ -38,22 +38,13 @@ namespace Utils
     [[nodiscard]] std::wstring GetSystemErrorMessage(const std::wstring &function, const HRESULT hr) noexcept;
     [[nodiscard]] std::wstring GetSystemErrorMessage(const std::wstring &function) noexcept;
     [[nodiscard]] std::wstring GenerateGUID() noexcept;
-    [[nodiscard]] bool OpenSystemMenu(const HWND hWnd, const POINT pos) noexcept;
-    [[nodiscard]] bool UpdateFrameMargins(const HWND hWnd) noexcept;
-    [[nodiscard]] WindowTheme GetSystemTheme() noexcept;
-    [[nodiscard]] bool SetWindowTheme(const HWND hWnd, const WindowTheme theme) noexcept;
-    [[nodiscard]] WindowState GetWindowState(const HWND hWnd) noexcept;
-    [[nodiscard]] bool SetWindowState(const HWND hWnd, const WindowState state) noexcept;
-    [[nodiscard]] DPIAwareness GetProcessDPIAwareness() noexcept;
-    [[nodiscard]] bool SetProcessDPIAwareness(const DPIAwareness dpiAwareness) noexcept;
-    [[nodiscard]] UINT GetWindowMetrics(const HWND hWnd, const WindowMetrics metrics) noexcept;
-    [[nodiscard]] RECT GetScreenGeometry(const HWND hWnd) noexcept;
-    [[nodiscard]] ColorizationArea GetColorizationArea() noexcept;
-    [[nodiscard]] DWORD GetColorizationColor() noexcept;
+    [[nodiscard]] ProcessDPIAwareness GetProcessDPIAwareness() noexcept;
+    [[nodiscard]] bool SetProcessDPIAwareness(const ProcessDPIAwareness dpiAwareness) noexcept;
     [[nodiscard]] std::wstring IntegerToString(const int num, const int radix) noexcept;
-    [[nodiscard]] bool IsWindowFullScreen(const HWND hWnd) noexcept;
-    [[nodiscard]] std::wstring DPIAwarenessToString(const DPIAwareness value) noexcept;
+    [[nodiscard]] std::wstring DPIAwarenessToString(const ProcessDPIAwareness value) noexcept;
     [[nodiscard]] std::wstring ThemeToString(const WindowTheme value) noexcept;
+    [[nodiscard]] bool IsHighContrastModeEnabled() noexcept;
+    [[nodiscard]] DWORD GetDWORDFromRegistry(const HKEY rootKey, const std::wstring &subKey, const std::wstring &keyName) noexcept;
 } // namespace Utils
 
 #ifndef PRINT_WIN32_ERROR_MESSAGE

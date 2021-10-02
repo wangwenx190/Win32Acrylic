@@ -75,6 +75,9 @@ public:
     [[nodiscard]] COLORREF ColorizationColor() const noexcept;
     virtual void OnColorizationColorChanged(const COLORREF arg) noexcept;
 
+    [[nodiscard]] WindowColorizationArea ColorizationArea() const noexcept;
+    virtual void OnColorizationAreaChanged(const WindowColorizationArea arg) noexcept;
+
     [[nodiscard]] HWND CreateChildWindow(const DWORD style, const DWORD extendedStyle, const WNDPROC wndProc, void *extraData) const noexcept;
     [[nodiscard]] HWND WindowHandle() const noexcept;
     [[nodiscard]] int MessageLoop() const noexcept;

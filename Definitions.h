@@ -40,7 +40,7 @@ enum class WindowState : int
     Hidden
 };
 
-enum class DPIAwareness : int
+enum class ProcessDPIAwareness : int
 {
     PerMonitorV2 = 0,
     PerMonitor,
@@ -49,25 +49,7 @@ enum class DPIAwareness : int
     Unaware
 };
 
-enum class WindowMetrics : int
-{
-    X = 0,
-    Y,
-    Width,
-    Height,
-    FrameWidth,
-    FrameHeight,
-    DotsPerInch,
-    ResizeBorderThicknessX,
-    ResizeBorderThicknessY,
-    CaptionHeight,
-    TitleBarHeight,
-    FrameBorderThickness,
-    DPI = DotsPerInch,
-    ResizeBorderThickness = ResizeBorderThicknessX
-};
-
-enum class ColorizationArea : int
+enum class WindowColorizationArea : int
 {
     None = 0,
     StartMenu_TaskBar_ActionCenter,

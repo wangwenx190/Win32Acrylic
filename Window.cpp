@@ -523,7 +523,7 @@ bool WindowPrivate::OpenSystemMenu2(const POINT pos) noexcept
         }
         return true;
     } else {
-        OutputDebugStringW(L"GetSystemMenu(), SetMenuItemInfoW(), SetMenuDefaultItem(), TrackPopupMenu() and PostMessageW() are not available.");
+        Utils::DisplayErrorDialog(L"Failed to open the system menu due to GetSystemMenu(), SetMenuItemInfoW(), SetMenuDefaultItem(), TrackPopupMenu() and PostMessageW() are not available.");
         return false;
     }
 }
@@ -644,7 +644,7 @@ UINT WindowPrivate::GetResizeBorderThickness2(const bool x) noexcept
         const int sizeFrameThickness = GetSystemMetricsForDpiFunc((x ? SM_CXSIZEFRAME : SM_CYSIZEFRAME), m_dpi);
         return static_cast<UINT>(paddedBorderThickness + sizeFrameThickness);
     } else {
-        OutputDebugStringW(L"GetSystemMetricsForDpi() is not available.");
+        Utils::DisplayErrorDialog(L"Failed to retrieve the resize border thickness due to GetSystemMetricsForDpi() is not available.");
         return g_defaultResizeBorderThickness;
     }
 }
@@ -658,7 +658,7 @@ UINT WindowPrivate::GetCaptionHeight2() noexcept
         }
         return static_cast<UINT>(GetSystemMetricsForDpiFunc(SM_CYCAPTION, m_dpi));
     } else {
-        OutputDebugStringW(L"GetSystemMetricsForDpi() is not available.");
+        Utils::DisplayErrorDialog(L"Failed to retrieve the caption height due to GetSystemMetricsForDpi() is not available.");
         return g_defaultCaptionHeight;
     }
 }
@@ -682,7 +682,7 @@ UINT WindowPrivate::GetFrameBorderThickness2() noexcept
             return static_cast<UINT>(std::round(static_cast<double>(g_defaultFrameBorderThickness) * dpr));
         }
     } else {
-        OutputDebugStringW(L"DwmGetWindowAttribute() is not available.");
+        Utils::DisplayErrorDialog(L"Failed to retrieve the frame border thickness due to DwmGetWindowAttribute() is not available.");
         return g_defaultFrameBorderThickness;
     }
 }

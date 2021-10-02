@@ -22,11 +22,29 @@
  * SOFTWARE.
  */
 
+#include <SDKDDKVer.h>
 #include <Windows.h>
 #include "Resource.h"
 
-IDI_APPICON ICON "Assets\\Icon.ico"
-IDI_APPICON_SMALL ICON "Assets\\SmallIcon.ico"
+// Icons
+IDI_APPLICATION       ICON "Assets\\Icon\\ApplicationIcon.ico"
+IDI_APPLICATION_SMALL ICON "Assets\\Icon\\ApplicationSmallIcon.ico"
+
+// Bitmaps
+IDB_MINIMIZEBUTTONICON_LIGHT BITMAP "Assets\\Bitmap\\MinimizeButtonIconLight.svg"
+IDB_MAXIMIZEBUTTONICON_LIGHT BITMAP "Assets\\Bitmap\\MaximizeButtonIconLight.svg"
+IDB_CLOSEBUTTONICON_LIGHT    BITMAP "Assets\\Bitmap\\CloseButtonIconLight.svg"
+IDB_RESTOREBUTTONICON_LIGHT  BITMAP "Assets\\Bitmap\\RestoreButtonIconLight.svg"
+
+IDB_MINIMIZEBUTTONICON_DARK BITMAP "Assets\\Bitmap\\MinimizeButtonIconDark.svg"
+IDB_MAXIMIZEBUTTONICON_DARK BITMAP "Assets\\Bitmap\\MaximizeButtonIconDark.svg"
+IDB_CLOSEBUTTONICON_DARK    BITMAP "Assets\\Bitmap\\CloseButtonIconDark.svg"
+IDB_RESTOREBUTTONICON_DARK  BITMAP "Assets\\Bitmap\\RestoreButtonIconDark.svg"
+
+//IDB_MINIMIZEBUTTONICON_HIGHCONTRAST BITMAP "Assets\\Bitmap\\MinimizeButtonIconHighContrast.svg"
+//IDB_MAXIMIZEBUTTONICON_HIGHCONTRAST BITMAP "Assets\\Bitmap\\MaximizeButtonIconHighContrast.svg"
+//IDB_CLOSEBUTTONICON_HIGHCONTRAST    BITMAP "Assets\\Bitmap\\CloseButtonIconHighContrast.svg"
+//IDB_RESTOREBUTTONICON_HIGHCONTRAST  BITMAP "Assets\\Bitmap\\RestoreButtonIconHighContrast.svg"
 
 VS_VERSION_INFO VERSIONINFO
 FILEVERSION     1,0,0,0

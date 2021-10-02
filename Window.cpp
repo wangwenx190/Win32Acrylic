@@ -250,8 +250,8 @@ std::tuple<HWND, ATOM> WindowPrivate::CreateWindow2(const DWORD style, const DWO
         wcex.hInstance = instance;
         wcex.lpszClassName = guid.c_str();
         wcex.hCursor = LoadCursorWFunc(nullptr, IDC_ARROW);
-        wcex.hIcon = LoadIconWFunc(instance, MAKEINTRESOURCEW(IDI_APPICON));
-        wcex.hIconSm = LoadIconWFunc(instance, MAKEINTRESOURCEW(IDI_APPICON_SMALL));
+        wcex.hIcon = LoadIconWFunc(instance, MAKEINTRESOURCEW(IDI_APPLICATION));
+        wcex.hIconSm = LoadIconWFunc(instance, MAKEINTRESOURCEW(IDI_APPLICATION_SMALL));
         const ATOM atom = RegisterClassExWFunc(&wcex);
         if (atom == INVALID_ATOM) {
             PRINT_WIN32_ERROR_MESSAGE(RegisterClassExW, L"Failed to register a window class.")

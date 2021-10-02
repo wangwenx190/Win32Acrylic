@@ -719,6 +719,9 @@ void WindowPrivate::Title(const std::wstring &value) noexcept
 {
     USER32_API(SetWindowTextW);
     if (SetWindowTextWFunc) {
+        if (!m_window) {
+            return;
+        }
         if (SetWindowTextWFunc(m_window, value.c_str()) == FALSE) {
             PRINT_WIN32_ERROR_MESSAGE(SetWindowTextW, L"Failed to change the window title.")
         }
@@ -834,6 +837,9 @@ HWND WindowPrivate::CreateChildWindow(const DWORD style, const DWORD extendedSty
         Utils::DisplayErrorDialog(L"Failed to create the child window due to the WindowProc function pointer is null.");
         return nullptr;
     }
+    if (!m_window) {
+        return nullptr;
+    }
     const auto result = CreateWindow2((style | WS_CHILD), extendedStyle, m_window, extraData, wndProc);
     const HWND hWnd = std::get<0>(result);
     if (!hWnd) {
@@ -854,6 +860,9 @@ int WindowPrivate::MessageLoop() const noexcept
     USER32_API(TranslateMessage);
     USER32_API(DispatchMessageW);
     if (GetMessageWFunc && TranslateMessageFunc && DispatchMessageWFunc) {
+        if (!m_window) {
+            return -1;
+        }
         MSG msg = {};
         while (GetMessageWFunc(&msg, nullptr, 0, 0) != FALSE) {
             if (!q_ptr || !q_ptr->FilterMessage(&msg)) {
@@ -882,6 +891,9 @@ bool WindowPrivate::SetGeometry(const int x, const int y, const UINT w, const UI
 {
     USER32_API(SetWindowPos);
     if (SetWindowPosFunc) {
+        if (!m_window) {
+            return false;
+        }
         constexpr UINT flags = (SWP_SHOWWINDOW | SWP_NOZORDER | SWP_NOOWNERZORDER);
         if (SetWindowPosFunc(m_window, nullptr, x, y, w, h, flags) == FALSE) {
             PRINT_WIN32_ERROR_MESSAGE(SetWindowPos, L"Failed to change the window geometry.")
@@ -927,6 +939,9 @@ bool WindowPrivate::DefaultMessageHandler(UINT message, WPARAM wParam, LPARAM lP
 {
     if (!result) {
         Utils::DisplayErrorDialog(L"DefaultMessageHandler: the pointer to the result of the WindowProc function is null.");
+        return false;
+    }
+    if (!m_window) {
         return false;
     }
     switch (message) {

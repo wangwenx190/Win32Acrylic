@@ -23,3 +23,21 @@
  */
 
 #pragma once
+
+#include "Window.h"
+
+class XamlWindow : public Window
+{
+public:
+    explicit XamlWindow() noexcept;
+    ~XamlWindow() noexcept;
+
+    [[nodiscard]] LRESULT MessageHandler(UINT message, WPARAM wParam, LPARAM lParam) noexcept override;
+    [[nodiscard]] bool FilterMessage(const MSG *msg) const noexcept override;
+
+private:
+    XamlWindow(const XamlWindow &) = delete;
+    XamlWindow &operator=(const XamlWindow &) = delete;
+    XamlWindow(XamlWindow &&) = delete;
+    XamlWindow &operator=(XamlWindow &&) = delete;
+};

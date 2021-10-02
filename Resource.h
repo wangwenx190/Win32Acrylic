@@ -25,8 +25,8 @@
 #pragma once
 
 // Icons
-#define IDI_APPLICATION       101
-#define IDI_APPLICATION_SMALL 102
+#define IDI_XAMLAPPLICATION       101
+#define IDI_XAMLAPPLICATION_SMALL 102
 
 // Bitmaps
 #define IDB_MINIMIZEBUTTONICON_LIGHT 111

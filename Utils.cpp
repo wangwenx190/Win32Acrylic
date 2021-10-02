@@ -388,6 +388,7 @@ std::wstring Utils::DPIAwarenessToString(const ProcessDPIAwareness value) noexce
         return L"Unaware";
     } break;
     }
+    return L"Unknown";
 }
 
 std::wstring Utils::ThemeToString(const WindowTheme value) noexcept
@@ -403,4 +404,5 @@ std::wstring Utils::ThemeToString(const WindowTheme value) noexcept
         return L"High Contrast";
     } break;
     }
+    return L"Unknown";
 }

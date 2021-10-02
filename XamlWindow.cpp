@@ -23,3 +23,33 @@
  */
 
 #include "XamlWindow.h"
+#include "SystemLibraryManager.h"
+
+XamlWindow::XamlWindow() noexcept
+{
+
+}
+
+XamlWindow::~XamlWindow() noexcept
+{
+
+}
+
+LRESULT XamlWindow::MessageHandler(UINT message, WPARAM wParam, LPARAM lParam) noexcept
+{
+    UNREFERENCED_PARAMETER(message);
+    UNREFERENCED_PARAMETER(wParam);
+    UNREFERENCED_PARAMETER(lParam);
+    USER32_API(DefWindowProcW);
+    if (DefWindowProcWFunc) {
+        return DefWindowProcWFunc(WindowHandle(), message, wParam, lParam);
+    } else {
+        return 0;
+    }
+}
+
+bool XamlWindow::FilterMessage(const MSG *msg) const noexcept
+{
+    UNREFERENCED_PARAMETER(msg);
+    return false;
+}

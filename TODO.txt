@@ -9,3 +9,7 @@
 - 看能否将SystemLibraryManager的宏改进为类或函数
 - 添加将系统版本号转换为人类可读版本信息的函数，并在合适的位置输出（程序启动时？）
 - 添加将DPI感知级别转换为人类可读信息的函数，并在合适的位置输出（程序启动时？）
+- DWMAPI_API -> DWM_API
+- 写一个错误包装类，可以直接从win32 error code以及hresult构造，如果返回值不是success则自动获取错误信息
+- VC-LTL 设置为可选项
+- 添加clang-cl、intel-cl以及mingw-w64的工具链

@@ -85,7 +85,7 @@ static constexpr DWORD g_DWMWA_VISIBLE_FRAME_BORDER_THICKNESS = 37;
 static constexpr wchar_t g_dwmRegistryKey[] = LR"(Software\Microsoft\Windows\DWM)";
 static constexpr wchar_t g_personalizeRegistryKey[] = LR"(Software\Microsoft\Windows\CurrentVersion\Themes\Personalize)";
 
-[[nodiscard]] static inline bool IsMinimized(const HWND hWnd) noexcept
+[[maybe_unused]] [[nodiscard]] static inline bool IsMinimized(const HWND hWnd) noexcept
 {
     USER32_API(IsIconic);
     if (IsIconicFunc) {
@@ -113,7 +113,7 @@ static constexpr wchar_t g_personalizeRegistryKey[] = LR"(Software\Microsoft\Win
     }
 }
 
-[[nodiscard]] static inline bool IsNormal(const HWND hWnd) noexcept
+[[maybe_unused]] [[nodiscard]] static inline bool IsNormal(const HWND hWnd) noexcept
 {
     USER32_API(GetWindowPlacement);
     if (GetWindowPlacementFunc) {
@@ -250,8 +250,8 @@ std::tuple<HWND, ATOM> WindowPrivate::CreateWindow2(const DWORD style, const DWO
         wcex.hInstance = instance;
         wcex.lpszClassName = guid.c_str();
         wcex.hCursor = LoadCursorWFunc(nullptr, IDC_ARROW);
-        wcex.hIcon = LoadIconWFunc(instance, MAKEINTRESOURCEW(IDI_APPLICATION));
-        wcex.hIconSm = LoadIconWFunc(instance, MAKEINTRESOURCEW(IDI_APPLICATION_SMALL));
+        wcex.hIcon = LoadIconWFunc(instance, MAKEINTRESOURCEW(IDI_XAMLAPPLICATION));
+        wcex.hIconSm = LoadIconWFunc(instance, MAKEINTRESOURCEW(IDI_XAMLAPPLICATION_SMALL));
         const ATOM atom = RegisterClassExWFunc(&wcex);
         if (atom == INVALID_ATOM) {
             PRINT_WIN32_ERROR_MESSAGE(RegisterClassExW, L"Failed to register a window class.")
@@ -834,7 +834,7 @@ HWND WindowPrivate::CreateChildWindow(const DWORD style, const DWORD extendedSty
         Utils::DisplayErrorDialog(L"Failed to create the child window due to the WindowProc function pointer is null.");
         return nullptr;
     }
-    const auto result = CreateWindow2(style, (extendedStyle | WS_CHILD), m_window, extraData, wndProc);
+    const auto result = CreateWindow2((style | WS_CHILD), extendedStyle, m_window, extraData, wndProc);
     const HWND hWnd = std::get<0>(result);
     if (!hWnd) {
         Utils::DisplayErrorDialog(L"Failed to create child window.");
@@ -856,7 +856,7 @@ int WindowPrivate::MessageLoop() const noexcept
     if (GetMessageWFunc && TranslateMessageFunc && DispatchMessageWFunc) {
         MSG msg = {};
         while (GetMessageWFunc(&msg, nullptr, 0, 0) != FALSE) {
-            if (!q_ptr->FilterMessage(&msg)) {
+            if (!q_ptr || !q_ptr->FilterMessage(&msg)) {
                 TranslateMessageFunc(&msg);
                 DispatchMessageWFunc(&msg);
             }
@@ -903,25 +903,20 @@ LRESULT CALLBACK WindowPrivate::WindowProc(HWND hWnd, UINT message, WPARAM wPara
         if (message == WM_NCCREATE) {
             const auto cs = reinterpret_cast<LPCREATESTRUCT>(lParam);
             const auto that = static_cast<WindowPrivate *>(cs->lpCreateParams);
-            if (SetWindowLongPtrWFunc(hWnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(that)) == 0) {
-                PRINT_WIN32_ERROR_MESSAGE(SetWindowLongPtrW, L"Failed to set the window extra data.")
-            }
+            SetWindowLongPtrWFunc(hWnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(that));
         } else if (message == WM_NCDESTROY) {
-            if (SetWindowLongPtrWFunc(hWnd, GWLP_USERDATA, 0) == 0) {
-                PRINT_WIN32_ERROR_MESSAGE(SetWindowLongPtrW, L"Failed to clear the window extra data.")
-            }
-        }
-        const auto that = reinterpret_cast<WindowPrivate *>(GetWindowLongPtrWFunc(hWnd, GWLP_USERDATA));
-        if (that) {
+            SetWindowLongPtrWFunc(hWnd, GWLP_USERDATA, 0);
+        } else if (const auto that = reinterpret_cast<WindowPrivate *>(GetWindowLongPtrWFunc(hWnd, GWLP_USERDATA))) {
             LRESULT result = 0;
             if (that->DefaultMessageHandler(message, wParam, lParam, &result)) {
                 return result;
             } else {
-                return that->q_ptr->MessageHandler(message, wParam, lParam);
+                if (that->q_ptr) {
+                    return that->q_ptr->MessageHandler(message, wParam, lParam);
+                }
             }
-        } else {
-            return DefWindowProcWFunc(hWnd, message, wParam, lParam);
         }
+        return DefWindowProcWFunc(hWnd, message, wParam, lParam);
     } else {
         Utils::DisplayErrorDialog(L"SetWindowLongPtrW(), GetWindowLongPtrW() and DefWindowProcW() are not available.");
         return 0;
@@ -937,7 +932,6 @@ bool WindowPrivate::DefaultMessageHandler(UINT message, WPARAM wParam, LPARAM lP
     switch (message) {
     case WM_CREATE: {
         m_dpi = GetWindowDPI2();
-        q_ptr->OnDotsPerInchChanged(m_dpi);
         const std::wstring dpiMsg = L"Current window's dots-per-inch (DPI): " + Utils::IntegerToString(m_dpi, 10);
         OutputDebugStringW(dpiMsg.c_str());
         if (!UpdateFrameMargins2()) {
@@ -949,7 +943,6 @@ bool WindowPrivate::DefaultMessageHandler(UINT message, WPARAM wParam, LPARAM lP
             return false;
         }
         m_theme = GetGlobalApplicationTheme2();
-        q_ptr->OnThemeChanged(m_theme);
         const std::wstring themeMsg = L"Current window's theme: " + Utils::ThemeToString(m_theme);
         OutputDebugStringW(themeMsg.c_str());
         if (!UpdateWindowTheme2()) {
@@ -957,17 +950,14 @@ bool WindowPrivate::DefaultMessageHandler(UINT message, WPARAM wParam, LPARAM lP
             return false;
         }
         m_colorizationColor = GetGlobalColorizationColor2();
-        q_ptr->OnColorizationColorChanged(m_colorizationColor);
         m_colorizationArea = GetGlobalColorizationArea2();
-        q_ptr->OnColorizationAreaChanged(m_colorizationArea);
         m_visibility = WindowState::Hidden;
-        q_ptr->OnVisibilityChanged(m_visibility);
         const auto cs = reinterpret_cast<LPCREATESTRUCTW>(lParam);
         if ((cs->x == CW_USEDEFAULT) || (cs->y == CW_USEDEFAULT) || (cs->cx == CW_USEDEFAULT) || (cs->cy == CW_USEDEFAULT)) {
             const RECT frameGeometry = GetWindowFrameGeometry2();
+            const SIZE windowSize = GetWindowClientSize2();
             m_x = frameGeometry.left;
             m_y = frameGeometry.top;
-            const SIZE windowSize = GetWindowClientSize2();
             m_width = windowSize.cx;
             m_height = windowSize.cy;
         } else {
@@ -976,32 +966,40 @@ bool WindowPrivate::DefaultMessageHandler(UINT message, WPARAM wParam, LPARAM lP
             m_width = cs->cx;
             m_height = cs->cy;
         }
-        q_ptr->OnXChanged(m_x);
-        q_ptr->OnYChanged(m_y);
-        q_ptr->OnWidthChanged(m_width);
-        q_ptr->OnHeightChanged(m_height);
         LPCWSTR title = cs->lpszName;
         if (title) {
             m_title = title;
         } else {
             m_title = {};
         }
-        q_ptr->OnTitleChanged(m_title);
+        if (q_ptr) {
+            q_ptr->OnXChanged(m_x);
+            q_ptr->OnYChanged(m_y);
+            q_ptr->OnWidthChanged(m_width);
+            q_ptr->OnHeightChanged(m_height);
+            q_ptr->OnVisibilityChanged(m_visibility);
+            q_ptr->OnTitleChanged(m_title);
+            q_ptr->OnIconChanged(m_icon);
+            q_ptr->OnDotsPerInchChanged(m_dpi);
+            q_ptr->OnThemeChanged(m_theme);
+            q_ptr->OnColorizationColorChanged(m_colorizationColor);
+            q_ptr->OnColorizationAreaChanged(m_colorizationArea);
+        }
     } break;
     case WM_MOVE: {
         m_x = GET_X_LPARAM(lParam);
-        q_ptr->OnXChanged(m_x);
         m_y = GET_Y_LPARAM(lParam);
-        q_ptr->OnYChanged(m_y);
+        if (q_ptr) {
+            q_ptr->OnXChanged(m_x);
+            q_ptr->OnYChanged(m_y);
+        }
     } break;
     case WM_SIZE: {
         bool needNotify = false;
-        bool needChangeFrameMargins = false;
         if (wParam == SIZE_RESTORED) {
             if ((m_visibility == WindowState::Minimized) || (m_visibility == WindowState::Maximized)) {
                 m_visibility = WindowState::Normal;
                 needNotify = true;
-                needChangeFrameMargins = true;
             }
         } else if (wParam == SIZE_MINIMIZED) {
             m_visibility = WindowState::Minimized;
@@ -1009,20 +1007,15 @@ bool WindowPrivate::DefaultMessageHandler(UINT message, WPARAM wParam, LPARAM lP
         } else if (wParam == SIZE_MAXIMIZED) {
             m_visibility = WindowState::Maximized;
             needNotify = true;
-            needChangeFrameMargins = true;
-        }
-        if (needNotify) {
-            q_ptr->OnVisibilityChanged(m_visibility);
         }
         m_width = LOWORD(lParam);
-        q_ptr->OnWidthChanged(m_width);
         m_height = HIWORD(lParam);
-        q_ptr->OnHeightChanged(m_height);
-        if (needChangeFrameMargins) {
-            if (!UpdateFrameMargins2()) {
-                Utils::DisplayErrorDialog(L"Failed to update the window frame margins.");
-                return false;
+        if (q_ptr) {
+            if (needNotify) {
+                q_ptr->OnVisibilityChanged(m_visibility);
             }
+            q_ptr->OnWidthChanged(m_width);
+            q_ptr->OnHeightChanged(m_height);
         }
     } break;
     case WM_SETTINGCHANGE: {
@@ -1031,10 +1024,12 @@ bool WindowPrivate::DefaultMessageHandler(UINT message, WPARAM wParam, LPARAM lP
         // ### TODO: how to detect high contrast theme here
         if (((wParam == 0) || (wParam == 1)) && (_wcsicmp(reinterpret_cast<LPCWSTR>(lParam), L"ImmersiveColorSet") == 0)) {
             m_theme = GetGlobalApplicationTheme2();
-            q_ptr->OnThemeChanged(m_theme);
             if (!UpdateWindowTheme2()) {
                 Utils::DisplayErrorDialog(L"Failed to change the window theme.");
                 return false;
+            }
+            if (q_ptr) {
+                q_ptr->OnThemeChanged(m_theme);
             }
         }
     } break;
@@ -1043,9 +1038,11 @@ bool WindowPrivate::DefaultMessageHandler(UINT message, WPARAM wParam, LPARAM lP
         const UINT dpiX = LOWORD(wParam);
         const UINT dpiY = HIWORD(wParam);
         m_dpi = static_cast<UINT>(std::round(static_cast<double>(dpiX + dpiY) / 2.0));
-        q_ptr->OnDotsPerInchChanged(m_dpi);
         const std::wstring dpiMsg = L"Current window's dots-per-inch (DPI) has changed from " + Utils::IntegerToString(oldDPI, 10) + L" to " + Utils::IntegerToString(m_dpi, 10) + L".";
         OutputDebugStringW(dpiMsg.c_str());
+        if (q_ptr) {
+            q_ptr->OnDotsPerInchChanged(m_dpi);
+        }
         const auto prcNewWindow = reinterpret_cast<LPRECT>(lParam);
         if (SetGeometry(prcNewWindow->left, prcNewWindow->top, RECT_WIDTH(*prcNewWindow), RECT_HEIGHT(*prcNewWindow))) {
             *result = 0;
@@ -1056,7 +1053,7 @@ bool WindowPrivate::DefaultMessageHandler(UINT message, WPARAM wParam, LPARAM lP
         }
     } break;
     case WM_DWMCOLORIZATIONCOLORCHANGED: {
-        m_colorizationColor = wParam; // The color format is 0xAARRGGBB.
+        m_colorizationColor = static_cast<COLORREF>(wParam); // The color format is 0xAARRGGBB.
     } break;
     case WM_PAINT: {
         *result = 0;
@@ -1073,7 +1070,9 @@ bool WindowPrivate::DefaultMessageHandler(UINT message, WPARAM wParam, LPARAM lP
         } else {
             m_title = {};
         }
-        q_ptr->OnTitleChanged(m_title);
+        if (q_ptr) {
+            q_ptr->OnTitleChanged(m_title);
+        }
     } break;
     case WM_SETICON: {} break;
     case WM_CLOSE: {
@@ -1095,18 +1094,6 @@ bool WindowPrivate::DefaultMessageHandler(UINT message, WPARAM wParam, LPARAM lP
             return true;
         } else {
             Utils::DisplayErrorDialog(L"Failed to destroy this window due to PostQuitMessage() is not available.");
-            return false;
-        }
-    } break;
-    case WM_NCCREATE: {
-        USER32_API(EnableNonClientDpiScaling);
-        if (EnableNonClientDpiScalingFunc) {
-            if (EnableNonClientDpiScalingFunc(m_window) == FALSE) {
-                PRINT_WIN32_ERROR_MESSAGE(EnableNonClientDpiScaling, L"Failed to enable non-client area DPI auto scaling.")
-                return false;
-            }
-        } else {
-            Utils::DisplayErrorDialog(L"Failed to enable non-client area DPI auto scaling due to EnableNonClientDpiScaling() is not available.");
             return false;
         }
     } break;
@@ -1311,8 +1298,7 @@ bool WindowPrivate::UpdateFrameMargins2() noexcept
         if (!m_window) {
             return false;
         }
-        const auto borderThickness = static_cast<int>(GetFrameBorderThickness2());
-        const MARGINS margins = {0, 0, ((m_visibility == WindowState::Maximized) ? 0 : borderThickness), 0};
+        const MARGINS margins = {0, 0, static_cast<int>(GetFrameBorderThickness2()), 0};
         const HRESULT hr = DwmExtendFrameIntoClientAreaFunc(m_window, &margins);
         if (FAILED(hr)) {
             PRINT_HR_ERROR_MESSAGE(DwmExtendFrameIntoClientArea, hr, L"Failed to update the frame margins for the window.")

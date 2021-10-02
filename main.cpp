@@ -22,9 +22,7 @@
  * SOFTWARE.
  */
 
-#include <SDKDDKVer.h>
-#include <Windows.h>
-#include "AcrylicApplication.h"
+#include "XamlWindow.h"
 
 EXTERN_C int APIENTRY
 wWinMain(
@@ -39,5 +37,7 @@ wWinMain(
     UNREFERENCED_PARAMETER(lpCmdLine);
     UNREFERENCED_PARAMETER(nCmdShow);
 
-    return AcrylicApplication::Main();
+    XamlWindow window;
+    window.Visibility(WindowState::Normal);
+    return window.MessageLoop();
 }

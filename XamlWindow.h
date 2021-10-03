@@ -26,15 +26,23 @@
 
 #include "Window.h"
 
-class XamlWindow : public Window
+class XamlWindowPrivate;
+
+class XamlWindow final : public Window
 {
 public:
     explicit XamlWindow() noexcept;
-    ~XamlWindow() noexcept;
+    ~XamlWindow() noexcept override;
+
+    [[nodiscard]] bool MessageHandler(const UINT message, const WPARAM wParam, const LPARAM lParam, LRESULT *result) noexcept override;
+    [[nodiscard]] bool FilterMessage(const MSG *msg) const noexcept override;
 
 private:
     XamlWindow(const XamlWindow &) = delete;
     XamlWindow &operator=(const XamlWindow &) = delete;
     XamlWindow(XamlWindow &&) = delete;
     XamlWindow &operator=(XamlWindow &&) = delete;
+
+private:
+    std::unique_ptr<XamlWindowPrivate> d_ptr;
 };

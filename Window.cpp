@@ -161,6 +161,8 @@ public:
 
     [[nodiscard]] UINT DotsPerInch() const noexcept;
 
+    [[nodiscard]] double DevicePixelRatio() const noexcept;
+
     [[nodiscard]] COLORREF ColorizationColor() const noexcept;
 
     [[nodiscard]] WindowColorizationArea ColorizationArea() const noexcept;
@@ -215,6 +217,7 @@ private:
     COLORREF m_colorizationColor = 0;
     WindowColorizationArea m_colorizationArea = WindowColorizationArea::None;
     UINT m_dpi = 0;
+    double m_dpr = 0.0;
 };
 
 std::tuple<HWND, std::wstring> WindowPrivate::CreateWindow2(const DWORD style, const DWORD extendedStyle, const HWND parentWindow, void *extraData, const WNDPROC wndProc) noexcept
@@ -687,52 +690,57 @@ UINT WindowPrivate::GetFrameBorderThickness2() noexcept
 bool WindowPrivate::Initialize() noexcept
 {
     if (!q_ptr) {
+        Utils::DisplayErrorDialog(L"Failed to initialize WindowPrivate due to q_ptr is null.");
         return false;
     }
     if (!m_window) {
+        Utils::DisplayErrorDialog(L"Failed to initialize WindowPrivate due to this window has not been created.");
         return false;
     }
     m_dpi = GetWindowDPI2();
-        const std::wstring dpiMsg = L"Current window's dots-per-inch (DPI): " + Utils::IntegerToString(m_dpi, 10);
-        OutputDebugStringW(dpiMsg.c_str());
-        if (!UpdateFrameMargins2()) {
-            Utils::DisplayErrorDialog(L"Failed to update the window frame margins.");
-            return;
-        }
-        if (!TriggerFrameChange2()) {
-            Utils::DisplayErrorDialog(L"Failed to trigger a frame change event for this window.");
-            return;
-        }
-        m_theme = GetGlobalApplicationTheme2();
-        const std::wstring themeMsg = L"Current window's theme: " + Utils::ThemeToString(m_theme);
-        OutputDebugStringW(themeMsg.c_str());
-        if (!UpdateWindowTheme2()) {
-            Utils::DisplayErrorDialog(L"Failed to change the window theme.");
-            return;
-        }
-        m_colorizationColor = GetGlobalColorizationColor2();
-        m_colorizationArea = GetGlobalColorizationArea2();
-        m_visibility = WindowState::Hidden;
-        const RECT frameGeometry = GetWindowFrameGeometry2();
-        const SIZE windowSize = GetWindowClientSize2();
-        m_x = frameGeometry.left;
-        m_y = frameGeometry.top;
-        m_width = windowSize.cx;
-        m_height = windowSize.cy;
-        m_title = {};
-        if (q_ptr) {
-            q_ptr->OnXChanged(m_x);
-            q_ptr->OnYChanged(m_y);
-            q_ptr->OnWidthChanged(m_width);
-            q_ptr->OnHeightChanged(m_height);
-            q_ptr->OnVisibilityChanged(m_visibility);
-            q_ptr->OnTitleChanged(m_title);
-            q_ptr->OnIconChanged(m_icon);
-            q_ptr->OnDotsPerInchChanged(m_dpi);
-            q_ptr->OnThemeChanged(m_theme);
-            q_ptr->OnColorizationColorChanged(m_colorizationColor);
-            q_ptr->OnColorizationAreaChanged(m_colorizationArea);
-        }
+    const std::wstring dpiMsg = L"Current window's dots-per-inch (DPI): " + Utils::IntegerToString(m_dpi, 10);
+    OutputDebugStringW(dpiMsg.c_str());
+    m_dpr = (static_cast<double>(m_dpi) / static_cast<double>(g_defaultWindowDPI));
+    if (!UpdateFrameMargins2()) {
+        Utils::DisplayErrorDialog(L"Failed to update the window frame margins.");
+        return false;
+    }
+    if (!TriggerFrameChange2()) {
+        Utils::DisplayErrorDialog(L"Failed to trigger a frame change event for this window.");
+        return false;
+    }
+    m_theme = GetGlobalApplicationTheme2();
+    const std::wstring themeMsg = L"Current window's theme: " + Utils::ThemeToString(m_theme);
+    OutputDebugStringW(themeMsg.c_str());
+    if (!UpdateWindowTheme2()) {
+        Utils::DisplayErrorDialog(L"Failed to change the window theme.");
+        return false;
+    }
+    m_colorizationColor = GetGlobalColorizationColor2();
+    m_colorizationArea = GetGlobalColorizationArea2();
+    m_visibility = WindowState::Hidden;
+    const RECT frameGeometry = GetWindowFrameGeometry2();
+    const SIZE windowSize = GetWindowClientSize2();
+    m_x = frameGeometry.left;
+    m_y = frameGeometry.top;
+    m_width = windowSize.cx;
+    m_height = windowSize.cy;
+    m_title = {};
+    if (q_ptr) {
+        q_ptr->OnXChanged(m_x);
+        q_ptr->OnYChanged(m_y);
+        q_ptr->OnWidthChanged(m_width);
+        q_ptr->OnHeightChanged(m_height);
+        q_ptr->OnVisibilityChanged(m_visibility);
+        q_ptr->OnTitleChanged(m_title);
+        q_ptr->OnIconChanged(m_icon);
+        q_ptr->OnDotsPerInchChanged(m_dpi);
+        q_ptr->OnDevicePixelRatioChanged(m_dpr);
+        q_ptr->OnThemeChanged(m_theme);
+        q_ptr->OnColorizationColorChanged(m_colorizationColor);
+        q_ptr->OnColorizationAreaChanged(m_colorizationArea);
+    }
+    return true;
 }
 
 WindowPrivate::WindowPrivate(Window *q) noexcept
@@ -747,7 +755,7 @@ WindowPrivate::WindowPrivate(Window *q) noexcept
     m_className = std::get<1>(result);
     if (m_window && !m_className.empty()) {
         if (!Initialize()) {
-            //
+            Utils::DisplayErrorDialog(L"Failed to initialize WindowPrivate.");
         }
     } else {
         Utils::DisplayErrorDialog(L"Failed to create this window.");
@@ -877,6 +885,11 @@ UINT WindowPrivate::DotsPerInch() const noexcept
     return m_dpi;
 }
 
+double WindowPrivate::DevicePixelRatio() const noexcept
+{
+    return m_dpr;
+}
+
 COLORREF WindowPrivate::ColorizationColor() const noexcept
 {
     return m_colorizationColor;
@@ -962,7 +975,7 @@ bool WindowPrivate::SetGeometry(const int x, const int y, const UINT w, const UI
     }
 }
 
-LRESULT CALLBACK WindowPrivate::WindowProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) noexcept
+LRESULT CALLBACK WindowPrivate::WindowProc(const HWND hWnd, const UINT message, const WPARAM wParam, const LPARAM lParam) noexcept
 {
     USER32_API(SetWindowLongPtrW);
     USER32_API(GetWindowLongPtrW);
@@ -1001,10 +1014,11 @@ LRESULT CALLBACK WindowPrivate::WindowProc(HWND hWnd, UINT message, WPARAM wPara
 bool WindowPrivate::InternalMessageHandler(const UINT message, const WPARAM wParam, const LPARAM lParam, LRESULT *result) noexcept
 {
     if (!result) {
-        Utils::DisplayErrorDialog(L"DefaultMessageHandler: the pointer to the result of the WindowProc function is null.");
+        Utils::DisplayErrorDialog(L"InternalMessageHandler: the pointer to the result of the WindowProc function is null.");
         return false;
     }
     if (!m_window) {
+        Utils::DisplayErrorDialog(L"InternalMessageHandler: this window has not been created yet.");
         return false;
     }
     switch (message) {
@@ -1062,8 +1076,10 @@ bool WindowPrivate::InternalMessageHandler(const UINT message, const WPARAM wPar
         m_dpi = static_cast<UINT>(std::round(static_cast<double>(dpiX + dpiY) / 2.0));
         const std::wstring dpiMsg = L"Current window's dots-per-inch (DPI) has changed from " + Utils::IntegerToString(oldDPI, 10) + L" to " + Utils::IntegerToString(m_dpi, 10) + L".";
         OutputDebugStringW(dpiMsg.c_str());
+        m_dpr = (static_cast<double>(m_dpi) / static_cast<double>(g_defaultWindowDPI));
         if (q_ptr) {
             q_ptr->OnDotsPerInchChanged(m_dpi);
+            q_ptr->OnDevicePixelRatioChanged(m_dpr);
         }
         const auto prcNewWindow = reinterpret_cast<LPRECT>(lParam);
         if (SetGeometry(prcNewWindow->left, prcNewWindow->top, RECT_WIDTH(*prcNewWindow), RECT_HEIGHT(*prcNewWindow))) {
@@ -1462,6 +1478,16 @@ UINT Window::DotsPerInch() const noexcept
 }
 
 void Window::OnDotsPerInchChanged(const UINT arg) noexcept
+{
+    UNREFERENCED_PARAMETER(arg);
+}
+
+double Window::DevicePixelRatio() const noexcept
+{
+    return d_ptr->DevicePixelRatio();
+}
+
+void Window::OnDevicePixelRatioChanged(const double arg) noexcept
 {
     UNREFERENCED_PARAMETER(arg);
 }

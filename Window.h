@@ -36,7 +36,7 @@ class Window
 {
 public:
     explicit Window() noexcept;
-    ~Window() noexcept;
+    virtual ~Window() noexcept;
 
     [[nodiscard]] std::wstring Title() const noexcept;
     void Title(const std::wstring &value) noexcept;
@@ -71,6 +71,9 @@ public:
 
     [[nodiscard]] UINT DotsPerInch() const noexcept;
     virtual void OnDotsPerInchChanged(const UINT arg) noexcept;
+
+    [[nodiscard]] double DevicePixelRatio() const noexcept;
+    virtual void OnDevicePixelRatioChanged(const double arg) noexcept;
 
     [[nodiscard]] COLORREF ColorizationColor() const noexcept;
     virtual void OnColorizationColorChanged(const COLORREF arg) noexcept;

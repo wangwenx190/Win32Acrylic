@@ -54,6 +54,7 @@ set(SOURCES
     SystemLibraryManager.h SystemLibraryManager.cpp
     Window.h Window.cpp
     XamlWindow.h XamlWindow.cpp
+    XamlApplication.h XamlApplication.cpp
     main.cpp
 )
 

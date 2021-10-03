@@ -85,8 +85,8 @@ public:
     [[nodiscard]] bool Resize(const UINT w, const UINT h) noexcept;
     [[nodiscard]] bool SetGeometry(const int x, const int y, const UINT w, const UINT h) noexcept;
 
-    [[nodiscard]] virtual LRESULT MessageHandler(UINT message, WPARAM wParam, LPARAM lParam) noexcept = 0;
-    [[nodiscard]] virtual bool FilterMessage(const MSG *msg) const noexcept = 0;
+    [[nodiscard]] virtual bool MessageHandler(const UINT message, const WPARAM wParam, const LPARAM lParam, LRESULT *result) noexcept;
+    [[nodiscard]] virtual bool FilterMessage(const MSG *msg) const noexcept;
 
     [[nodiscard]] inline friend bool operator==(const Window &lhs, const Window &rhs) noexcept {
         return (lhs.WindowHandle() == rhs.WindowHandle());

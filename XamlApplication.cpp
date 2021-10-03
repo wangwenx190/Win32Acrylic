@@ -22,15 +22,4 @@
  * SOFTWARE.
  */
 
-#include "XamlWindow.h"
-#include "SystemLibraryManager.h"
-
-XamlWindow::XamlWindow() noexcept
-{
-
-}
-
-XamlWindow::~XamlWindow() noexcept
-{
-
-}
+#include "XamlApplication.h"

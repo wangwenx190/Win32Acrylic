@@ -32,30 +32,10 @@
 namespace Utils
 {
     void DisplayErrorDialog(const std::wstring &text) noexcept;
-    [[nodiscard]] HINSTANCE GetCurrentModuleInstance() noexcept;
-    [[nodiscard]] HINSTANCE GetWindowInstance(const HWND hWnd) noexcept;
-    [[nodiscard]] std::wstring GetSystemErrorMessage(const std::wstring &function, const DWORD code) noexcept;
-    [[nodiscard]] std::wstring GetSystemErrorMessage(const std::wstring &function, const HRESULT hr) noexcept;
-    [[nodiscard]] std::wstring GetSystemErrorMessage(const std::wstring &function) noexcept;
     [[nodiscard]] std::wstring GenerateGUID() noexcept;
     [[nodiscard]] ProcessDPIAwareness GetProcessDPIAwareness() noexcept;
     [[nodiscard]] bool SetProcessDPIAwareness(const ProcessDPIAwareness dpiAwareness) noexcept;
     [[nodiscard]] std::wstring IntegerToString(const int num, const int radix) noexcept;
     [[nodiscard]] std::wstring DPIAwarenessToString(const ProcessDPIAwareness value) noexcept;
     [[nodiscard]] std::wstring ThemeToString(const WindowTheme value) noexcept;
-    [[nodiscard]] bool IsHighContrastModeEnabled() noexcept;
-    [[nodiscard]] DWORD GetDWORDFromRegistry(const HKEY rootKey, const std::wstring &subKey, const std::wstring &keyName) noexcept;
 } // namespace Utils
-
-#ifndef PRINT_WIN32_ERROR_MESSAGE
-#define PRINT_WIN32_ERROR_MESSAGE(function, additionalMessage) \
-    const DWORD __dw_error_code = GetLastError(); \
-    const std::wstring __error_message_from_os = Utils::GetSystemErrorMessage(L#function, __dw_error_code); \
-    Utils::DisplayErrorDialog(__error_message_from_os.empty() ? additionalMessage : __error_message_from_os);
-#endif
-
-#ifndef PRINT_HR_ERROR_MESSAGE
-#define PRINT_HR_ERROR_MESSAGE(function, hresult, additionalMessage) \
-    const std::wstring __error_message_from_os = Utils::GetSystemErrorMessage(L#function, hresult); \
-    Utils::DisplayErrorDialog(__error_message_from_os.empty() ? additionalMessage : __error_message_from_os);
-#endif

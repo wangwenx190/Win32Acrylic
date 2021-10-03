@@ -48,6 +48,7 @@ set(SOURCES
     Definitions.h
     VersionNumber.hpp
     RuntimeObject.cpp
+    OperationResult.h OperationResult.cpp
     WindowsVersion.h WindowsVersion.cpp
     Utils.h Utils.cpp
     SystemLibrary.h SystemLibrary.cpp

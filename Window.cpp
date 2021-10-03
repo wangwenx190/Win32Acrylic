@@ -31,6 +31,11 @@
 #include <DwmApi.h>
 #include <cmath>
 
+#ifndef HINST_THISCOMPONENT
+EXTERN_C IMAGE_DOS_HEADER __ImageBase;
+#define HINST_THISCOMPONENT (reinterpret_cast<HINSTANCE>(&__ImageBase))
+#endif
+
 #ifndef USER_DEFAULT_SCREEN_DPI
 #define USER_DEFAULT_SCREEN_DPI (96)
 #endif
@@ -81,6 +86,40 @@ static constexpr DWORD g_DWMWA_VISIBLE_FRAME_BORDER_THICKNESS = 37;
 static constexpr wchar_t g_dwmRegistryKey[] = LR"(Software\Microsoft\Windows\DWM)";
 static constexpr wchar_t g_personalizeRegistryKey[] = LR"(Software\Microsoft\Windows\CurrentVersion\Themes\Personalize)";
 
+[[nodiscard]] static inline DWORD GetDWORDFromRegistry(const HKEY rootKey, const std::wstring &subKey, const std::wstring &keyName) noexcept
+{
+    ADVAPI32_API(RegOpenKeyExW);
+    ADVAPI32_API(RegQueryValueExW);
+    ADVAPI32_API(RegCloseKey);
+    if (RegOpenKeyExWFunc && RegQueryValueExWFunc && RegCloseKeyFunc) {
+        if (!rootKey || subKey.empty() || keyName.empty()) {
+            OutputDebugStringW(L"Can't query the registry due to invalid parameters are passed.");
+            return 0;
+        }
+        HKEY hKey = nullptr;
+        if (RegOpenKeyExWFunc(rootKey, subKey.c_str(), 0, KEY_READ, &hKey) != ERROR_SUCCESS) {
+            PRINT_WIN32_ERROR_MESSAGE(RegOpenKeyExW, L"Failed to open the registry key to read.")
+            return 0;
+        }
+        DWORD dwValue = 0;
+        DWORD dwType = REG_DWORD;
+        DWORD dwSize = sizeof(dwValue);
+        const bool success = (RegQueryValueExWFunc(hKey, keyName.c_str(), nullptr, &dwType, reinterpret_cast<LPBYTE>(&dwValue), &dwSize) == ERROR_SUCCESS);
+        if (!success) {
+            PRINT_WIN32_ERROR_MESSAGE(RegQueryValueExW, L"Failed to query the registry key value.")
+            // Don't return early here because we have to close the opened registry key later.
+        }
+        if (RegCloseKeyFunc(hKey) != ERROR_SUCCESS) {
+            PRINT_WIN32_ERROR_MESSAGE(RegCloseKey, L"Failed to close the registry key.")
+            return 0;
+        }
+        return dwValue;
+    } else {
+        OutputDebugStringW(L"RegOpenKeyExW(), RegQueryValueExW() and RegCloseKey() are not available.");
+        return 0;
+    }
+}
+
 [[maybe_unused]] [[nodiscard]] static inline bool IsMinimized(const HWND hWnd) noexcept
 {
     USER32_API(IsIconic);
@@ -130,6 +169,161 @@ static constexpr wchar_t g_personalizeRegistryKey[] = LR"(Software\Microsoft\Win
     }
 }
 
+[[nodiscard]] static inline bool IsHighContrastModeEnabled() noexcept
+{
+    USER32_API(SystemParametersInfoW);
+    if (SystemParametersInfoWFunc) {
+        HIGHCONTRASTW hc;
+        SecureZeroMemory(&hc, sizeof(hc));
+        hc.cbSize = sizeof(hc);
+        if (SystemParametersInfoWFunc(SPI_GETHIGHCONTRAST, sizeof(hc), &hc, 0) == FALSE) {
+            PRINT_WIN32_ERROR_MESSAGE(SystemParametersInfoW, L"Failed to retrieve the high contrast mode state.")
+            return false;
+        }
+        return (hc.dwFlags & HCF_HIGHCONTRASTON);
+    } else {
+        OutputDebugStringW(L"SystemParametersInfoW() is not available.");
+        return false;
+    }
+}
+
+[[nodiscard]] static inline bool ShouldAppsUseLightTheme() noexcept
+{
+    return (GetDWORDFromRegistry(HKEY_CURRENT_USER, g_personalizeRegistryKey, L"AppsUseLightTheme") != 0);
+}
+
+[[nodiscard]] static inline COLORREF GetGlobalColorizationColor2() noexcept
+{
+    DWMAPI_API(DwmGetColorizationColor);
+    if (DwmGetColorizationColorFunc) {
+        DWORD color = 0; // The color format of the value is 0xAARRGGBB.
+        BOOL opaque = FALSE;
+        const HRESULT hr = DwmGetColorizationColorFunc(&color, &opaque);
+        if (FAILED(hr)) {
+            PRINT_HR_ERROR_MESSAGE(DwmGetColorizationColor, hr, L"Failed to retrieve the colorization color.")
+            return 0;
+        }
+        return color;
+    } else {
+        Utils::DisplayErrorDialog(L"DwmGetColorizationColor() is not available.");
+        return 0;
+    }
+}
+
+[[nodiscard]] static inline WindowColorizationArea GetGlobalColorizationArea2() noexcept
+{
+    const HKEY rootKey = HKEY_CURRENT_USER;
+    const std::wstring keyName = L"ColorPrevalence";
+    const DWORD dwmValue = GetDWORDFromRegistry(rootKey, g_dwmRegistryKey, keyName);
+    const DWORD themeValue = GetDWORDFromRegistry(rootKey, g_personalizeRegistryKey, keyName);
+    const bool dwm = (dwmValue != 0);
+    const bool theme = (themeValue != 0);
+    if (dwm && theme) {
+        return WindowColorizationArea::All;
+    } else if (dwm) {
+        return WindowColorizationArea::TitleBar_WindowBorder;
+    } else if (theme) {
+        return WindowColorizationArea::StartMenu_TaskBar_ActionCenter;
+    }
+    return WindowColorizationArea::None;
+}
+
+[[nodiscard]] static inline WindowTheme GetGlobalApplicationTheme2() noexcept
+{
+    if (IsHighContrastModeEnabled()) {
+        return WindowTheme::HighContrast;
+    } else if (ShouldAppsUseLightTheme()) {
+        return WindowTheme::Light;
+    } else {
+        return WindowTheme::Dark;
+    }
+}
+
+[[nodiscard]] static inline std::tuple<HWND, std::wstring> CreateWindow2(const DWORD style, const DWORD extendedStyle, const HWND parentWindow, void *extraData, const WNDPROC wndProc) noexcept
+{
+    const std::tuple<HWND, std::wstring> INVALID_RESULT = std::make_tuple(nullptr, std::wstring{});
+    USER32_API(LoadCursorW);
+    USER32_API(LoadIconW);
+    USER32_API(RegisterClassExW);
+    USER32_API(CreateWindowExW);
+    if (LoadCursorWFunc && LoadIconWFunc && RegisterClassExWFunc && CreateWindowExWFunc) {
+        if (!wndProc) {
+            Utils::DisplayErrorDialog(L"Failed to register a window class due to the WindowProc function pointer is null.");
+            return INVALID_RESULT;
+        }
+        const std::wstring guid = Utils::GenerateGUID();
+        if (guid.empty()) {
+            Utils::DisplayErrorDialog(L"Failed to generate a new GUID.");
+            return INVALID_RESULT;
+        }
+        WNDCLASSEXW wcex;
+        SecureZeroMemory(&wcex, sizeof(wcex));
+        wcex.cbSize = sizeof(wcex);
+        wcex.style = CS_HREDRAW | CS_VREDRAW;
+        wcex.lpfnWndProc = wndProc;
+        wcex.hInstance = HINST_THISCOMPONENT;
+        wcex.lpszClassName = guid.c_str();
+        wcex.hCursor = LoadCursorWFunc(nullptr, IDC_ARROW);
+        wcex.hIcon = LoadIconWFunc(HINST_THISCOMPONENT, MAKEINTRESOURCEW(IDI_XAMLAPPLICATION));
+        wcex.hIconSm = LoadIconWFunc(HINST_THISCOMPONENT, MAKEINTRESOURCEW(IDI_XAMLAPPLICATION_SMALL));
+        const ATOM atom = RegisterClassExWFunc(&wcex);
+        if (atom == INVALID_ATOM) {
+            PRINT_WIN32_ERROR_MESSAGE(RegisterClassExW, L"Failed to register a window class.")
+            return INVALID_RESULT;
+        }
+        const HWND hWnd = CreateWindowExWFunc(
+            extendedStyle,       // _In_     DWORD     dwExStyle
+            guid.c_str(),        // _In_opt_ LPCWSTR   lpClassName
+            nullptr,             // _In_opt_ LPCWSTR   lpWindowName
+            style,               // _In_     DWORD     dwStyle
+            CW_USEDEFAULT,       // _In_     int       X
+            CW_USEDEFAULT,       // _In_     int       Y
+            CW_USEDEFAULT,       // _In_     int       nWidth
+            CW_USEDEFAULT,       // _In_     int       nHeight
+            parentWindow,        // _In_opt_ HWND      hWndParent
+            nullptr,             // _In_opt_ HMENU     hMenu
+            HINST_THISCOMPONENT, // _In_opt_ HINSTANCE hInstance
+            extraData            // _In_opt_ LPVOID    lpParam
+            );
+        if (!hWnd) {
+            PRINT_WIN32_ERROR_MESSAGE(CreateWindowExW, L"Failed to create a window.")
+            return INVALID_RESULT;
+        }
+        return std::make_tuple(hWnd, guid);
+    } else {
+        Utils::DisplayErrorDialog(L"Failed to create a window due to LoadCursorW(), LoadIconW(), RegisterClassExW() and CreateWindowExW() are not available.");
+        return INVALID_RESULT;
+    }
+}
+
+[[nodiscard]] static inline bool CloseWindow2(const HWND hWnd, const std::wstring &className) noexcept
+{
+    USER32_API(DestroyWindow);
+    USER32_API(UnregisterClassW);
+    if (DestroyWindowFunc && UnregisterClassWFunc) {
+        if (!hWnd) {
+            Utils::DisplayErrorDialog(L"Failed to close the window due to the window handle is null.");
+            return false;
+        }
+        if (className.empty()) {
+            Utils::DisplayErrorDialog(L"Failed to close the window due to the class name is empty.");
+            return false;
+        }
+        if (DestroyWindowFunc(hWnd) == FALSE) {
+            PRINT_WIN32_ERROR_MESSAGE(DestroyWindow, L"Failed to destroy the window.")
+            return false;
+        }
+        if (UnregisterClassWFunc(className.c_str(), HINST_THISCOMPONENT) == FALSE) {
+            PRINT_WIN32_ERROR_MESSAGE(UnregisterClassW, L"Failed to unregister the window class.")
+            return false;
+        }
+        return true;
+    } else {
+        Utils::DisplayErrorDialog(L"Failed to close the window due to DestroyWindow() and UnregisterClassW() are not available.");
+        return false;
+    }
+}
+
 class WindowPrivate
 {
 public:
@@ -174,12 +368,6 @@ public:
     [[nodiscard]] bool Resize(const UINT w, const UINT h) noexcept;
     [[nodiscard]] bool SetGeometry(const int x, const int y, const UINT w, const UINT h) noexcept;
 
-    [[nodiscard]] static std::tuple<HWND, std::wstring> CreateWindow2(const DWORD style, const DWORD extendedStyle, const HWND parentWindow, void *extraData, const WNDPROC wndProc) noexcept;
-    [[nodiscard]] static bool CloseWindow2(const HWND hWnd, const std::wstring &className) noexcept;
-    [[nodiscard]] static COLORREF GetGlobalColorizationColor2() noexcept;
-    [[nodiscard]] static WindowColorizationArea GetGlobalColorizationArea2() noexcept;
-    [[nodiscard]] static WindowTheme GetGlobalApplicationTheme2() noexcept;
-
 private:
     WindowPrivate(const WindowPrivate &) = delete;
     WindowPrivate &operator=(const WindowPrivate &) = delete;
@@ -220,101 +408,6 @@ private:
     double m_dpr = 0.0;
 };
 
-std::tuple<HWND, std::wstring> WindowPrivate::CreateWindow2(const DWORD style, const DWORD extendedStyle, const HWND parentWindow, void *extraData, const WNDPROC wndProc) noexcept
-{
-    const std::tuple<HWND, std::wstring> INVALID_RESULT = std::make_tuple(nullptr, std::wstring{});
-    USER32_API(LoadCursorW);
-    USER32_API(LoadIconW);
-    USER32_API(RegisterClassExW);
-    USER32_API(CreateWindowExW);
-    if (LoadCursorWFunc && LoadIconWFunc && RegisterClassExWFunc && CreateWindowExWFunc) {
-        if (!wndProc) {
-            Utils::DisplayErrorDialog(L"Failed to register a window class due to the WindowProc function pointer is null.");
-            return INVALID_RESULT;
-        }
-        const HINSTANCE instance = Utils::GetCurrentModuleInstance();
-        if (!instance) {
-            Utils::DisplayErrorDialog(L"Failed to retrieve the current module instance.");
-            return INVALID_RESULT;
-        }
-        const std::wstring guid = Utils::GenerateGUID();
-        if (guid.empty()) {
-            Utils::DisplayErrorDialog(L"Failed to generate a new GUID.");
-            return INVALID_RESULT;
-        }
-        WNDCLASSEXW wcex;
-        SecureZeroMemory(&wcex, sizeof(wcex));
-        wcex.cbSize = sizeof(wcex);
-        wcex.style = CS_HREDRAW | CS_VREDRAW;
-        wcex.lpfnWndProc = wndProc;
-        wcex.hInstance = instance;
-        wcex.lpszClassName = guid.c_str();
-        wcex.hCursor = LoadCursorWFunc(nullptr, IDC_ARROW);
-        wcex.hIcon = LoadIconWFunc(instance, MAKEINTRESOURCEW(IDI_XAMLAPPLICATION));
-        wcex.hIconSm = LoadIconWFunc(instance, MAKEINTRESOURCEW(IDI_XAMLAPPLICATION_SMALL));
-        const ATOM atom = RegisterClassExWFunc(&wcex);
-        if (atom == INVALID_ATOM) {
-            PRINT_WIN32_ERROR_MESSAGE(RegisterClassExW, L"Failed to register a window class.")
-            return INVALID_RESULT;
-        }
-        const HWND hWnd = CreateWindowExWFunc(
-            extendedStyle, // _In_     DWORD     dwExStyle
-            guid.c_str(),  // _In_opt_ LPCWSTR   lpClassName
-            nullptr,       // _In_opt_ LPCWSTR   lpWindowName
-            style,         // _In_     DWORD     dwStyle
-            CW_USEDEFAULT, // _In_     int       X
-            CW_USEDEFAULT, // _In_     int       Y
-            CW_USEDEFAULT, // _In_     int       nWidth
-            CW_USEDEFAULT, // _In_     int       nHeight
-            parentWindow,  // _In_opt_ HWND      hWndParent
-            nullptr,       // _In_opt_ HMENU     hMenu
-            instance,      // _In_opt_ HINSTANCE hInstance
-            extraData      // _In_opt_ LPVOID    lpParam
-            );
-        if (!hWnd) {
-            PRINT_WIN32_ERROR_MESSAGE(CreateWindowExW, L"Failed to create a window.")
-            return INVALID_RESULT;
-        }
-        return std::make_tuple(hWnd, guid);
-    } else {
-        Utils::DisplayErrorDialog(L"Failed to create a window due to LoadCursorW(), LoadIconW(), RegisterClassExW() and CreateWindowExW() are not available.");
-        return INVALID_RESULT;
-    }
-}
-
-bool WindowPrivate::CloseWindow2(const HWND hWnd, const std::wstring &className) noexcept
-{
-    USER32_API(DestroyWindow);
-    USER32_API(UnregisterClassW);
-    if (DestroyWindowFunc && UnregisterClassWFunc) {
-        if (!hWnd) {
-            Utils::DisplayErrorDialog(L"Failed to close the window due to the window handle is null.");
-            return false;
-        }
-        if (className.empty()) {
-            Utils::DisplayErrorDialog(L"Failed to close the window due to the class name is empty.");
-            return false;
-        }
-        const HINSTANCE instance = Utils::GetCurrentModuleInstance();
-        if (!instance) {
-            Utils::DisplayErrorDialog(L"Failed to retrieve the current module instance.");
-            return false;
-        }
-        if (DestroyWindowFunc(hWnd) == FALSE) {
-            PRINT_WIN32_ERROR_MESSAGE(DestroyWindow, L"Failed to destroy the window.")
-            return false;
-        }
-        if (UnregisterClassWFunc(className.c_str(), instance) == FALSE) {
-            PRINT_WIN32_ERROR_MESSAGE(UnregisterClassW, L"Failed to unregister the window class.")
-            return false;
-        }
-        return true;
-    } else {
-        Utils::DisplayErrorDialog(L"Failed to close the window due to DestroyWindow() and UnregisterClassW() are not available.");
-        return false;
-    }
-}
-
 RECT WindowPrivate::GetWindowFrameGeometry2() noexcept
 {
     USER32_API(GetWindowRect);
@@ -350,53 +443,6 @@ SIZE WindowPrivate::GetWindowClientSize2() noexcept
     } else {
         Utils::DisplayErrorDialog(L"Failed to retrieve the window client area size due to GetClientRect() is not available.");
         return {};
-    }
-}
-
-COLORREF WindowPrivate::GetGlobalColorizationColor2() noexcept
-{
-    DWMAPI_API(DwmGetColorizationColor);
-    if (DwmGetColorizationColorFunc) {
-        DWORD color = 0; // The color format of the value is 0xAARRGGBB.
-        BOOL opaque = FALSE;
-        const HRESULT hr = DwmGetColorizationColorFunc(&color, &opaque);
-        if (FAILED(hr)) {
-            PRINT_HR_ERROR_MESSAGE(DwmGetColorizationColor, hr, L"Failed to retrieve the colorization color.")
-            return 0;
-        }
-        return color;
-    } else {
-        Utils::DisplayErrorDialog(L"DwmGetColorizationColor() is not available.");
-        return 0;
-    }
-}
-
-WindowColorizationArea WindowPrivate::GetGlobalColorizationArea2() noexcept
-{
-    const HKEY rootKey = HKEY_CURRENT_USER;
-    const std::wstring keyName = L"ColorPrevalence";
-    const DWORD dwmValue = Utils::GetDWORDFromRegistry(rootKey, g_dwmRegistryKey, keyName);
-    const DWORD themeValue = Utils::GetDWORDFromRegistry(rootKey, g_personalizeRegistryKey, keyName);
-    const bool dwm = (dwmValue != 0);
-    const bool theme = (themeValue != 0);
-    if (dwm && theme) {
-        return WindowColorizationArea::All;
-    } else if (dwm) {
-        return WindowColorizationArea::TitleBar_WindowBorder;
-    } else if (theme) {
-        return WindowColorizationArea::StartMenu_TaskBar_ActionCenter;
-    }
-    return WindowColorizationArea::None;
-}
-
-WindowTheme WindowPrivate::GetGlobalApplicationTheme2() noexcept
-{
-    if (Utils::IsHighContrastModeEnabled()) {
-        return WindowTheme::HighContrast;
-    } else if (Utils::GetDWORDFromRegistry(HKEY_CURRENT_USER, g_personalizeRegistryKey, L"AppsUseLightTheme") != 0) {
-        return WindowTheme::Light;
-    } else {
-        return WindowTheme::Dark;
     }
 }
 

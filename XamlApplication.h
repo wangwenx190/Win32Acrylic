@@ -24,6 +24,8 @@
 
 #pragma once
 
+#include <memory>
+
 class XamlApplicationPrivate;
 
 class XamlApplication

@@ -22,7 +22,7 @@
  * SOFTWARE.
  */
 
-#include "XamlWindow.h"
+#include "XamlApplication.h"
 
 EXTERN_C int APIENTRY
 wWinMain(
@@ -37,7 +37,6 @@ wWinMain(
     UNREFERENCED_PARAMETER(lpCmdLine);
     UNREFERENCED_PARAMETER(nCmdShow);
 
-    XamlWindow window;
-    window.Visibility(WindowState::Normal);
-    return window.MessageLoop();
+    XamlApplication application;
+    return application.Exec();
 }

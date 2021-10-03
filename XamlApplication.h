@@ -23,3 +23,23 @@
  */
 
 #pragma once
+
+class XamlApplicationPrivate;
+
+class XamlApplication
+{
+public:
+    explicit XamlApplication() noexcept;
+    ~XamlApplication() noexcept;
+
+    [[nodiscard]] int Exec() const noexcept;
+
+private:
+    XamlApplication(const XamlApplication &) = delete;
+    XamlApplication &operator=(const XamlApplication &) = delete;
+    XamlApplication(XamlApplication &&) = delete;
+    XamlApplication &operator=(XamlApplication &&) = delete;
+
+private:
+    std::unique_ptr<XamlApplicationPrivate> d_ptr;
+};

@@ -34,6 +34,10 @@ public:
     explicit XamlWindow() noexcept;
     ~XamlWindow() noexcept override;
 
+    void OnWidthChanged(const UINT arg) noexcept override;
+    void OnHeightChanged(const UINT arg) noexcept override;
+    void OnVisibilityChanged(const WindowState arg) noexcept override;
+
     [[nodiscard]] bool MessageHandler(const UINT message, const WPARAM wParam, const LPARAM lParam, LRESULT *result) noexcept override;
     [[nodiscard]] bool FilterMessage(const MSG *msg) const noexcept override;
 

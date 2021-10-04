@@ -45,7 +45,7 @@ public:
     [[nodiscard]] std::wstring Message() const noexcept;
 
 private:
-    void QueryErrorMessageFromSystem() noexcept;
+    void TryQueryErrorMessageFromSystem() noexcept;
 
 private:
     OperationResultPrivate(const OperationResultPrivate &) = delete;
@@ -68,12 +68,12 @@ OperationResultPrivate::~OperationResultPrivate() noexcept = default;
 
 bool OperationResultPrivate::Succeeded() const noexcept
 {
-    return (m_code >= 0);
+    return (m_code == ERROR_SUCCESS);
 }
 
 bool OperationResultPrivate::Failed() const noexcept
 {
-    return (m_code < 0);
+    return (m_code != ERROR_SUCCESS);
 }
 
 DWORD OperationResultPrivate::Code() const noexcept
@@ -84,7 +84,7 @@ DWORD OperationResultPrivate::Code() const noexcept
 void OperationResultPrivate::Code(const DWORD code) noexcept
 {
     m_code = code;
-    QueryErrorMessageFromSystem();
+    TryQueryErrorMessageFromSystem();
 }
 
 std::wstring OperationResultPrivate::Message() const noexcept
@@ -92,17 +92,15 @@ std::wstring OperationResultPrivate::Message() const noexcept
     return m_message;
 }
 
-void OperationResultPrivate::QueryErrorMessageFromSystem() noexcept
+void OperationResultPrivate::TryQueryErrorMessageFromSystem() noexcept
 {
-    if (m_code < 0) {
-        LPWSTR buf = nullptr;
-        if (FormatMessageW(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
-                           nullptr, m_code, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), buf, 0, nullptr) == 0) {
-            Utils::DisplayErrorDialog(L"Failed to retrieve error message from system.");
-        } else {
-            m_message = buf;
-            LocalFree(buf);
-        }
+    LPWSTR buf = nullptr;
+    if (FormatMessageW(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
+                       nullptr, m_code, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), buf, 0, nullptr) == 0) {
+        Utils::DisplayErrorDialog(L"Failed to retrieve error message from system.");
+    } else {
+        m_message = buf;
+        LocalFree(buf);
     }
 }
 
@@ -149,5 +147,5 @@ OperationResult OperationResult::FromWin32(const DWORD code) noexcept
 
 OperationResult OperationResult::FromHResult(const HRESULT hr) noexcept
 {
-    return FromWin32(CODE_FROM_HRESULT(hr));
+    return OperationResult(hr);
 }

@@ -24,6 +24,7 @@
 
 #include "Window.h"
 #include "SystemLibraryManager.h"
+#include "OperationResult.h"
 #include "Utils.h"
 #include "Resource.h"
 #include <ShellApi.h>
@@ -93,7 +94,7 @@ static constexpr wchar_t g_personalizeRegistryKey[] = LR"(Software\Microsoft\Win
     ADVAPI32_API(RegCloseKey);
     if (RegOpenKeyExWFunc && RegQueryValueExWFunc && RegCloseKeyFunc) {
         if (!rootKey || subKey.empty() || keyName.empty()) {
-            OutputDebugStringW(L"Can't query the registry due to invalid parameters are passed.");
+            Utils::DisplayErrorDialog(L"Can't query the registry due to invalid parameters are passed.");
             return 0;
         }
         HKEY hKey = nullptr;
@@ -115,7 +116,7 @@ static constexpr wchar_t g_personalizeRegistryKey[] = LR"(Software\Microsoft\Win
         }
         return dwValue;
     } else {
-        OutputDebugStringW(L"RegOpenKeyExW(), RegQueryValueExW() and RegCloseKey() are not available.");
+        Utils::DisplayErrorDialog(L"Failed to read DWORD from registry due to RegOpenKeyExW(), RegQueryValueExW() and RegCloseKey() are not available.");
         return 0;
     }
 }
@@ -182,7 +183,7 @@ static constexpr wchar_t g_personalizeRegistryKey[] = LR"(Software\Microsoft\Win
         }
         return (hc.dwFlags & HCF_HIGHCONTRASTON);
     } else {
-        OutputDebugStringW(L"SystemParametersInfoW() is not available.");
+        Utils::DisplayErrorDialog(L"Failed to query the high contrast mode state due to SystemParametersInfoW() is not available.");
         return false;
     }
 }
@@ -205,7 +206,7 @@ static constexpr wchar_t g_personalizeRegistryKey[] = LR"(Software\Microsoft\Win
         }
         return color;
     } else {
-        Utils::DisplayErrorDialog(L"DwmGetColorizationColor() is not available.");
+        Utils::DisplayErrorDialog(L"Failed to retrieve the colorization color due to DwmGetColorizationColor() is not available.");
         return 0;
     }
 }
@@ -355,8 +356,6 @@ public:
 
     [[nodiscard]] UINT DotsPerInch() const noexcept;
 
-    [[nodiscard]] double DevicePixelRatio() const noexcept;
-
     [[nodiscard]] COLORREF ColorizationColor() const noexcept;
 
     [[nodiscard]] WindowColorizationArea ColorizationArea() const noexcept;
@@ -364,9 +363,11 @@ public:
     [[nodiscard]] HWND CreateChildWindow(const DWORD style, const DWORD extendedStyle, const WNDPROC wndProc, void *extraData) const noexcept;
     [[nodiscard]] HWND WindowHandle() const noexcept;
     [[nodiscard]] int MessageLoop() const noexcept;
-    [[nodiscard]] bool Move(const int x, const int y) noexcept;
-    [[nodiscard]] bool Resize(const UINT w, const UINT h) noexcept;
-    [[nodiscard]] bool SetGeometry(const int x, const int y, const UINT w, const UINT h) noexcept;
+    [[nodiscard]] bool Move(const int x, const int y) const noexcept;
+    [[nodiscard]] bool Resize(const UINT w, const UINT h) const noexcept;
+    [[nodiscard]] bool SetGeometry(const int x, const int y, const UINT w, const UINT h) const noexcept;
+
+    [[nodiscard]] UINT GetInternalMetrics(const std::wstring &name) const noexcept;
 
 private:
     WindowPrivate(const WindowPrivate &) = delete;
@@ -378,17 +379,17 @@ private:
     [[nodiscard]] bool Initialize() noexcept;
     [[nodiscard]] static LRESULT CALLBACK WindowProc(const HWND hWnd, const UINT message, const WPARAM wParam, const LPARAM lParam) noexcept;
     [[nodiscard]] bool InternalMessageHandler(const UINT message, const WPARAM wParam, const LPARAM lParam, LRESULT *result) noexcept;
-    [[nodiscard]] RECT GetWindowFrameGeometry2() noexcept;
-    [[nodiscard]] SIZE GetWindowClientSize2() noexcept;
-    [[nodiscard]] bool TriggerFrameChange2() noexcept;
-    [[nodiscard]] bool UpdateWindowTheme2() noexcept;
-    [[nodiscard]] bool OpenSystemMenu2(const POINT pos) noexcept;
-    [[nodiscard]] bool SetWindowState2(const WindowState state) noexcept;
-    [[nodiscard]] UINT GetWindowDPI2() noexcept;
-    [[nodiscard]] UINT GetResizeBorderThickness2(const bool x) noexcept;
-    [[nodiscard]] UINT GetCaptionHeight2() noexcept;
-    [[nodiscard]] UINT GetFrameBorderThickness2() noexcept;
-    [[nodiscard]] bool UpdateFrameMargins2() noexcept;
+    [[nodiscard]] RECT GetWindowFrameGeometry2() const noexcept;
+    [[nodiscard]] SIZE GetWindowClientSize2() const noexcept;
+    [[nodiscard]] bool TriggerFrameChange2() const noexcept;
+    [[nodiscard]] bool RefreshWindowTheme2() const noexcept;
+    [[nodiscard]] bool OpenSystemMenu2(const POINT pos) const noexcept;
+    [[nodiscard]] bool SetWindowState2(const WindowState state) const noexcept;
+    [[nodiscard]] UINT GetWindowDPI2() const noexcept;
+    [[nodiscard]] UINT GetResizeBorderThickness2(const bool x) const noexcept;
+    [[nodiscard]] UINT GetCaptionHeight2() const noexcept;
+    [[nodiscard]] UINT GetFrameBorderThickness2() const noexcept;
+    [[nodiscard]] bool UpdateFrameMargins2() const noexcept;
 
 private:
     Window *q_ptr = nullptr;
@@ -405,14 +406,14 @@ private:
     COLORREF m_colorizationColor = 0;
     WindowColorizationArea m_colorizationArea = WindowColorizationArea::None;
     UINT m_dpi = 0;
-    double m_dpr = 0.0;
 };
 
-RECT WindowPrivate::GetWindowFrameGeometry2() noexcept
+RECT WindowPrivate::GetWindowFrameGeometry2() const noexcept
 {
     USER32_API(GetWindowRect);
     if (GetWindowRectFunc) {
         if (!m_window) {
+            Utils::DisplayErrorDialog(L"Failed to retrieve the window frame geometry due to the window has not been created yet.");
             return {};
         }
         RECT rect = {0, 0, 0, 0};
@@ -427,11 +428,12 @@ RECT WindowPrivate::GetWindowFrameGeometry2() noexcept
     }
 }
 
-SIZE WindowPrivate::GetWindowClientSize2() noexcept
+SIZE WindowPrivate::GetWindowClientSize2() const noexcept
 {
     USER32_API(GetClientRect);
     if (GetClientRectFunc) {
         if (!m_window) {
+            Utils::DisplayErrorDialog(L"Failed to retrieve the window client area size due to the window has not been created yet.");
             return {};
         }
         RECT rect = {0, 0, 0, 0};
@@ -446,11 +448,12 @@ SIZE WindowPrivate::GetWindowClientSize2() noexcept
     }
 }
 
-bool WindowPrivate::TriggerFrameChange2() noexcept
+bool WindowPrivate::TriggerFrameChange2() const noexcept
 {
     USER32_API(SetWindowPos);
     if (SetWindowPosFunc) {
         if (!m_window) {
+            Utils::DisplayErrorDialog(L"Failed to trigger a frame change event due to the window has not been created yet.");
             return false;
         }
         constexpr UINT flags = (SWP_FRAMECHANGED | SWP_NOACTIVATE | SWP_NOSIZE | SWP_NOMOVE | SWP_NOZORDER | SWP_NOOWNERZORDER);
@@ -465,12 +468,13 @@ bool WindowPrivate::TriggerFrameChange2() noexcept
     }
 }
 
-bool WindowPrivate::UpdateWindowTheme2() noexcept
+bool WindowPrivate::RefreshWindowTheme2() const noexcept
 {
     DWMAPI_API(DwmSetWindowAttribute);
     UXTHEME_API(SetWindowTheme);
     if (DwmSetWindowAttributeFunc && SetWindowThemeFunc) {
         if (!m_window) {
+            Utils::DisplayErrorDialog(L"Failed to refresh the window theme due to the window has not been created yet.");
             return false;
         }
         BOOL enableDarkFrame = FALSE;
@@ -501,12 +505,12 @@ bool WindowPrivate::UpdateWindowTheme2() noexcept
         }
         return true;
     } else {
-        Utils::DisplayErrorDialog(L"DwmSetWindowAttribute() and SetWindowTheme() are not available.");
+        Utils::DisplayErrorDialog(L"Failed to refresh the window theme due to DwmSetWindowAttribute() and SetWindowTheme() are not available.");
         return false;
     }
 }
 
-bool WindowPrivate::OpenSystemMenu2(const POINT pos) noexcept
+bool WindowPrivate::OpenSystemMenu2(const POINT pos) const noexcept
 {
     USER32_API(GetSystemMenu);
     USER32_API(SetMenuItemInfoW);
@@ -515,6 +519,7 @@ bool WindowPrivate::OpenSystemMenu2(const POINT pos) noexcept
     USER32_API(PostMessageW);
     if (GetSystemMenuFunc && SetMenuItemInfoWFunc && SetMenuDefaultItemFunc && TrackPopupMenuFunc && PostMessageWFunc) {
         if (!m_window) {
+            Utils::DisplayErrorDialog(L"Failed to open the system menu due to the window has not been created yet.");
             return false;
         }
         const HMENU menu = GetSystemMenuFunc(m_window, FALSE);
@@ -574,11 +579,12 @@ bool WindowPrivate::OpenSystemMenu2(const POINT pos) noexcept
     }
 }
 
-bool WindowPrivate::SetWindowState2(const WindowState state) noexcept
+bool WindowPrivate::SetWindowState2(const WindowState state) const noexcept
 {
     USER32_API(ShowWindow);
     if (ShowWindowFunc) {
         if (!m_window) {
+            Utils::DisplayErrorDialog(L"Failed to change the window state due to the window has not been created yet.");
             return false;
         }
         int nCmdShow = SW_SHOW;
@@ -601,12 +607,12 @@ bool WindowPrivate::SetWindowState2(const WindowState state) noexcept
         ShowWindowFunc(m_window, nCmdShow);
         return true;
     } else {
-        Utils::DisplayErrorDialog(L"ShowWindow() is not available.");
+        Utils::DisplayErrorDialog(L"Failed to change the window state due to ShowWindow() is not available.");
         return false;
     }
 }
 
-UINT WindowPrivate::GetWindowDPI2() noexcept
+UINT WindowPrivate::GetWindowDPI2() const noexcept
 {
     if (!m_window) {
         return g_defaultWindowDPI;
@@ -645,7 +651,7 @@ UINT WindowPrivate::GetWindowDPI2() noexcept
                             return g_defaultWindowDPI;
                         }
                     } else {
-                        Utils::DisplayErrorDialog(L"MonitorFromWindow() is not available.");
+                        Utils::DisplayErrorDialog(L"Failed to retrieve the screen's DPI due to MonitorFromWindow() is not available.");
                         return g_defaultWindowDPI;
                     }
                 } else {
@@ -669,7 +675,7 @@ UINT WindowPrivate::GetWindowDPI2() noexcept
                             return g_defaultWindowDPI;
                         }
                     } else {
-                        OutputDebugStringW(L"GetDC(), ReleaseDC() and GetDeviceCaps() are not available.");
+                        OutputDebugStringW(L"Failed to retrieve the DPI of this window due to GetDC(), ReleaseDC() and GetDeviceCaps() are not available.");
                         return g_defaultWindowDPI;
                     }
                 }
@@ -678,11 +684,12 @@ UINT WindowPrivate::GetWindowDPI2() noexcept
     }
 }
 
-UINT WindowPrivate::GetResizeBorderThickness2(const bool x) noexcept
+UINT WindowPrivate::GetResizeBorderThickness2(const bool x) const noexcept
 {
     USER32_API(GetSystemMetricsForDpi);
     if (GetSystemMetricsForDpiFunc) {
         if (!m_window) {
+            Utils::DisplayErrorDialog(L"Failed to retrieve the resize border thickness due to the window has not been created yet.");
             return g_defaultResizeBorderThickness;
         }
         // There is no "SM_CYPADDEDBORDER".
@@ -695,11 +702,12 @@ UINT WindowPrivate::GetResizeBorderThickness2(const bool x) noexcept
     }
 }
 
-UINT WindowPrivate::GetCaptionHeight2() noexcept
+UINT WindowPrivate::GetCaptionHeight2() const noexcept
 {
     USER32_API(GetSystemMetricsForDpi);
     if (GetSystemMetricsForDpiFunc) {
         if (!m_window) {
+            Utils::DisplayErrorDialog(L"Failed to retrieve the caption height due to the window has not been created yet.");
             return g_defaultCaptionHeight;
         }
         return static_cast<UINT>(GetSystemMetricsForDpiFunc(SM_CYCAPTION, m_dpi));
@@ -709,12 +717,13 @@ UINT WindowPrivate::GetCaptionHeight2() noexcept
     }
 }
 
-UINT WindowPrivate::GetFrameBorderThickness2() noexcept
+UINT WindowPrivate::GetFrameBorderThickness2() const noexcept
 {
     DWMAPI_API(DwmGetWindowAttribute);
     if (DwmGetWindowAttributeFunc) {
         if (!m_window) {
-            return 0;
+            Utils::DisplayErrorDialog(L"Failed to retrieve the frame border thickness due to the window has not been created yet.");
+            return g_defaultFrameBorderThickness;
         }
         const auto dpr = (static_cast<double>(m_dpi) / static_cast<double>(g_defaultWindowDPI));
         UINT value = 0;
@@ -746,7 +755,6 @@ bool WindowPrivate::Initialize() noexcept
     m_dpi = GetWindowDPI2();
     const std::wstring dpiMsg = L"Current window's dots-per-inch (DPI): " + Utils::IntegerToString(m_dpi, 10);
     OutputDebugStringW(dpiMsg.c_str());
-    m_dpr = (static_cast<double>(m_dpi) / static_cast<double>(g_defaultWindowDPI));
     if (!UpdateFrameMargins2()) {
         Utils::DisplayErrorDialog(L"Failed to update the window frame margins.");
         return false;
@@ -758,7 +766,7 @@ bool WindowPrivate::Initialize() noexcept
     m_theme = GetGlobalApplicationTheme2();
     const std::wstring themeMsg = L"Current window's theme: " + Utils::ThemeToString(m_theme);
     OutputDebugStringW(themeMsg.c_str());
-    if (!UpdateWindowTheme2()) {
+    if (!RefreshWindowTheme2()) {
         Utils::DisplayErrorDialog(L"Failed to change the window theme.");
         return false;
     }
@@ -781,7 +789,6 @@ bool WindowPrivate::Initialize() noexcept
         q_ptr->OnTitleChanged(m_title);
         q_ptr->OnIconChanged(m_icon);
         q_ptr->OnDotsPerInchChanged(m_dpi);
-        q_ptr->OnDevicePixelRatioChanged(m_dpr);
         q_ptr->OnThemeChanged(m_theme);
         q_ptr->OnColorizationColorChanged(m_colorizationColor);
         q_ptr->OnColorizationAreaChanged(m_colorizationArea);
@@ -830,6 +837,7 @@ void WindowPrivate::Title(const std::wstring &value) noexcept
     USER32_API(SetWindowTextW);
     if (SetWindowTextWFunc) {
         if (!m_window) {
+            Utils::DisplayErrorDialog(L"Failed to change the window title due to the window has not been created yet.");
             return;
         }
         if (SetWindowTextWFunc(m_window, value.c_str()) == FALSE) {
@@ -931,11 +939,6 @@ UINT WindowPrivate::DotsPerInch() const noexcept
     return m_dpi;
 }
 
-double WindowPrivate::DevicePixelRatio() const noexcept
-{
-    return m_dpr;
-}
-
 COLORREF WindowPrivate::ColorizationColor() const noexcept
 {
     return m_colorizationColor;
@@ -953,12 +956,13 @@ HWND WindowPrivate::CreateChildWindow(const DWORD style, const DWORD extendedSty
         return nullptr;
     }
     if (!m_window) {
+        Utils::DisplayErrorDialog(L"Failed to create the child window due to the parent window has not been created yet.");
         return nullptr;
     }
     const auto result = CreateWindow2((style | WS_CHILD), extendedStyle, m_window, extraData, wndProc);
     const HWND hWnd = std::get<0>(result);
     if (!hWnd) {
-        Utils::DisplayErrorDialog(L"Failed to create child window.");
+        Utils::DisplayErrorDialog(L"Failed to create the child window.");
         return nullptr;
     }
     return hWnd;
@@ -976,6 +980,7 @@ int WindowPrivate::MessageLoop() const noexcept
     USER32_API(DispatchMessageW);
     if (GetMessageWFunc && TranslateMessageFunc && DispatchMessageWFunc) {
         if (!m_window) {
+            Utils::DisplayErrorDialog(L"Failed to execute the message loop due to the window has not been created yet.");
             return -1;
         }
         MSG msg = {};
@@ -992,21 +997,22 @@ int WindowPrivate::MessageLoop() const noexcept
     }
 }
 
-bool WindowPrivate::Move(const int x, const int y) noexcept
+bool WindowPrivate::Move(const int x, const int y) const noexcept
 {
     return SetGeometry(x, y, m_width, m_height);
 }
 
-bool WindowPrivate::Resize(const UINT w, const UINT h) noexcept
+bool WindowPrivate::Resize(const UINT w, const UINT h) const noexcept
 {
     return SetGeometry(m_x, m_y, w, h);
 }
 
-bool WindowPrivate::SetGeometry(const int x, const int y, const UINT w, const UINT h) noexcept
+bool WindowPrivate::SetGeometry(const int x, const int y, const UINT w, const UINT h) const noexcept
 {
     USER32_API(SetWindowPos);
     if (SetWindowPosFunc) {
         if (!m_window) {
+            Utils::DisplayErrorDialog(L"Failed to change the window geometry due to the window has not been created yet.");
             return false;
         }
         constexpr UINT flags = (SWP_SHOWWINDOW | SWP_NOZORDER | SWP_NOOWNERZORDER);
@@ -1016,9 +1022,14 @@ bool WindowPrivate::SetGeometry(const int x, const int y, const UINT w, const UI
         }
         return true;
     } else {
-        Utils::DisplayErrorDialog(L"SetWindowPos() is not available.");
+        Utils::DisplayErrorDialog(L"Failed to change the window geometry due to SetWindowPos() is not available.");
         return false;
     }
+}
+
+UINT WindowPrivate::GetInternalMetrics(const std::wstring &name) const noexcept
+{
+    // ### TODO
 }
 
 LRESULT CALLBACK WindowPrivate::WindowProc(const HWND hWnd, const UINT message, const WPARAM wParam, const LPARAM lParam) noexcept
@@ -1052,7 +1063,7 @@ LRESULT CALLBACK WindowPrivate::WindowProc(const HWND hWnd, const UINT message, 
         }
         return DefWindowProcWFunc(hWnd, message, wParam, lParam);
     } else {
-        Utils::DisplayErrorDialog(L"SetWindowLongPtrW(), GetWindowLongPtrW() and DefWindowProcW() are not available.");
+        Utils::DisplayErrorDialog(L"Failed to continue the WindowProc function due to SetWindowLongPtrW(), GetWindowLongPtrW() and DefWindowProcW() are not available.");
         return 0;
     }
 }
@@ -1106,8 +1117,8 @@ bool WindowPrivate::InternalMessageHandler(const UINT message, const WPARAM wPar
         // ### TODO: how to detect high contrast theme here
         if (((wParam == 0) || (wParam == 1)) && (_wcsicmp(reinterpret_cast<LPCWSTR>(lParam), L"ImmersiveColorSet") == 0)) {
             m_theme = GetGlobalApplicationTheme2();
-            if (!UpdateWindowTheme2()) {
-                Utils::DisplayErrorDialog(L"Failed to change the window theme.");
+            if (!RefreshWindowTheme2()) {
+                Utils::DisplayErrorDialog(L"Failed to refresh the window theme.");
                 return false;
             }
             if (q_ptr) {
@@ -1122,22 +1133,23 @@ bool WindowPrivate::InternalMessageHandler(const UINT message, const WPARAM wPar
         m_dpi = static_cast<UINT>(std::round(static_cast<double>(dpiX + dpiY) / 2.0));
         const std::wstring dpiMsg = L"Current window's dots-per-inch (DPI) has changed from " + Utils::IntegerToString(oldDPI, 10) + L" to " + Utils::IntegerToString(m_dpi, 10) + L".";
         OutputDebugStringW(dpiMsg.c_str());
-        m_dpr = (static_cast<double>(m_dpi) / static_cast<double>(g_defaultWindowDPI));
         if (q_ptr) {
             q_ptr->OnDotsPerInchChanged(m_dpi);
-            q_ptr->OnDevicePixelRatioChanged(m_dpr);
         }
         const auto prcNewWindow = reinterpret_cast<LPRECT>(lParam);
         if (SetGeometry(prcNewWindow->left, prcNewWindow->top, RECT_WIDTH(*prcNewWindow), RECT_HEIGHT(*prcNewWindow))) {
             *result = 0;
             return true;
         } else {
-            Utils::DisplayErrorDialog(L"Failed to scale the window when DPI changes.");
+            Utils::DisplayErrorDialog(L"Failed to scale the window size according to the new DPI.");
             return false;
         }
     } break;
     case WM_DWMCOLORIZATIONCOLORCHANGED: {
         m_colorizationColor = static_cast<COLORREF>(wParam); // The color format is 0xAARRGGBB.
+        if (q_ptr) {
+            q_ptr->OnColorizationColorChanged(m_colorizationColor);
+        }
     } break;
     case WM_PAINT: {
         *result = 0;
@@ -1201,12 +1213,12 @@ bool WindowPrivate::InternalMessageHandler(const UINT message, const WPARAM wPar
             // Re-apply the original top from before the size of the default frame was applied.
             clientRect->top = originalTop;
         } else {
-            Utils::DisplayErrorDialog(L"DefWindowProcW() is not available.");
+            Utils::DisplayErrorDialog(L"Error occurred when processing WM_NCCALCSIZE due to DefWindowProcW() is not available.");
             return false;
         }
         bool nonClientAreaExists = false;
         const bool max = (m_visibility == WindowState::Maximized);
-        const bool full = false;
+        const bool full = false; // ### TODO
         // We don't need this correction when we're fullscreen. We will
         // have the WS_POPUP size, so we don't have to worry about
         // borders, and the default frame will be fine.
@@ -1288,13 +1300,13 @@ bool WindowPrivate::InternalMessageHandler(const UINT message, const WPARAM wPar
                             return false;
                         }
                     } else {
-                        Utils::DisplayErrorDialog(L"MonitorFromWindow() and GetMonitorInfoW() are not available.");
+                        Utils::DisplayErrorDialog(L"Error occurred when processing WM_NCCALCSIZE due to MonitorFromWindow() and GetMonitorInfoW() are not available.");
                         return false;
                     }
                 }
             }
         } else {
-            Utils::DisplayErrorDialog(L"SHAppBarMessage() is not available.");
+            Utils::DisplayErrorDialog(L"Error occurred when processing WM_NCCALCSIZE due to SHAppBarMessage() is not available.");
             return false;
         }
         // If the window bounds change, we're going to relayout and repaint
@@ -1321,7 +1333,7 @@ bool WindowPrivate::InternalMessageHandler(const UINT message, const WPARAM wPar
                 return false;
             }
         } else {
-            Utils::DisplayErrorDialog(L"ScreenToClient() is not available.");
+            Utils::DisplayErrorDialog(L"Error occurred when processing WM_NCHITTEST due to ScreenToClient() is not available.");
             return false;
         }
         const auto resizeBorderThicknessY = static_cast<LONG>(GetResizeBorderThickness2(false));
@@ -1354,7 +1366,7 @@ bool WindowPrivate::InternalMessageHandler(const UINT message, const WPARAM wPar
             *result = HTCLIENT;
             return true;
         } else {
-            Utils::DisplayErrorDialog(L"DefWindowProcW() is not available.");
+            Utils::DisplayErrorDialog(L"Error occurred when processing WM_NCHITTEST due to DefWindowProcW() is not available.");
             return false;
         }
     } break;
@@ -1365,7 +1377,7 @@ bool WindowPrivate::InternalMessageHandler(const UINT message, const WPARAM wPar
                 *result = 0;
                 return true;
             } else {
-                Utils::DisplayErrorDialog(L"Failed to open the system menu for the main window.");
+                Utils::DisplayErrorDialog(L"Failed to open the system menu for this window.");
                 return false;
             }
         }
@@ -1376,11 +1388,12 @@ bool WindowPrivate::InternalMessageHandler(const UINT message, const WPARAM wPar
     return false;
 }
 
-bool WindowPrivate::UpdateFrameMargins2() noexcept
+bool WindowPrivate::UpdateFrameMargins2() const noexcept
 {
     DWMAPI_API(DwmExtendFrameIntoClientArea);
     if (DwmExtendFrameIntoClientAreaFunc) {
         if (!m_window) {
+            Utils::DisplayErrorDialog(L"Failed to update the frame margins due to the window has not been created yet.");
             return false;
         }
         const MARGINS margins = {0, 0, static_cast<int>(GetFrameBorderThickness2()), 0};
@@ -1391,7 +1404,7 @@ bool WindowPrivate::UpdateFrameMargins2() noexcept
         }
         return true;
     } else {
-        Utils::DisplayErrorDialog(L"DwmExtendFrameIntoClientArea() is not available.");
+        Utils::DisplayErrorDialog(L"Failed to update the frame margins due to DwmExtendFrameIntoClientArea() is not available.");
         return false;
     }
 }
@@ -1528,16 +1541,6 @@ void Window::OnDotsPerInchChanged(const UINT arg) noexcept
     UNREFERENCED_PARAMETER(arg);
 }
 
-double Window::DevicePixelRatio() const noexcept
-{
-    return d_ptr->DevicePixelRatio();
-}
-
-void Window::OnDevicePixelRatioChanged(const double arg) noexcept
-{
-    UNREFERENCED_PARAMETER(arg);
-}
-
 COLORREF Window::ColorizationColor() const noexcept
 {
     return d_ptr->ColorizationColor();
@@ -1573,17 +1576,17 @@ int Window::MessageLoop() const noexcept
     return d_ptr->MessageLoop();
 }
 
-bool Window::Move(const int x, const int y) noexcept
+bool Window::Move(const int x, const int y) const noexcept
 {
     return d_ptr->Move(x, y);
 }
 
-bool Window::Resize(const UINT w, const UINT h) noexcept
+bool Window::Resize(const UINT w, const UINT h) const noexcept
 {
     return d_ptr->Resize(w, h);
 }
 
-bool Window::SetGeometry(const int x, const int y, const UINT w, const UINT h) noexcept
+bool Window::SetGeometry(const int x, const int y, const UINT w, const UINT h) const noexcept
 {
     return d_ptr->SetGeometry(x, y, w, h);
 }
@@ -1601,4 +1604,9 @@ bool Window::FilterMessage(const MSG *msg) const noexcept
 {
     UNREFERENCED_PARAMETER(msg);
     return false;
+}
+
+UINT Window::GetInternalMetrics(const std::wstring &name) const noexcept
+{
+    return d_ptr->GetInternalMetrics(name);
 }

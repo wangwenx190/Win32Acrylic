@@ -72,9 +72,6 @@ public:
     [[nodiscard]] UINT DotsPerInch() const noexcept;
     virtual void OnDotsPerInchChanged(const UINT arg) noexcept;
 
-    [[nodiscard]] double DevicePixelRatio() const noexcept;
-    virtual void OnDevicePixelRatioChanged(const double arg) noexcept;
-
     [[nodiscard]] COLORREF ColorizationColor() const noexcept;
     virtual void OnColorizationColorChanged(const COLORREF arg) noexcept;
 
@@ -84,9 +81,9 @@ public:
     [[nodiscard]] HWND CreateChildWindow(const DWORD style, const DWORD extendedStyle, const WNDPROC wndProc, void *extraData) const noexcept;
     [[nodiscard]] HWND WindowHandle() const noexcept;
     [[nodiscard]] int MessageLoop() const noexcept;
-    [[nodiscard]] bool Move(const int x, const int y) noexcept;
-    [[nodiscard]] bool Resize(const UINT w, const UINT h) noexcept;
-    [[nodiscard]] bool SetGeometry(const int x, const int y, const UINT w, const UINT h) noexcept;
+    [[nodiscard]] bool Move(const int x, const int y) const noexcept;
+    [[nodiscard]] bool Resize(const UINT w, const UINT h) const noexcept;
+    [[nodiscard]] bool SetGeometry(const int x, const int y, const UINT w, const UINT h) const noexcept;
 
     [[nodiscard]] virtual bool MessageHandler(const UINT message, const WPARAM wParam, const LPARAM lParam, LRESULT *result) noexcept;
     [[nodiscard]] virtual bool FilterMessage(const MSG *msg) const noexcept;
@@ -95,8 +92,11 @@ public:
         return (lhs.WindowHandle() == rhs.WindowHandle());
     }
     [[nodiscard]] inline friend bool operator!=(const Window &lhs, const Window &rhs) noexcept {
-        return (!(lhs == rhs));
+        return (lhs.WindowHandle() != rhs.WindowHandle());
     }
+
+protected:
+    [[nodiscard]] UINT GetInternalMetrics(const std::wstring &name) const noexcept;
 
 private:
     Window(const Window &) = delete;
@@ -105,5 +105,6 @@ private:
     Window &operator=(Window &&) = delete;
 
 private:
+    friend class WindowPrivate;
     std::unique_ptr<WindowPrivate> d_ptr;
 };

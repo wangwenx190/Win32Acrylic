@@ -75,3 +75,28 @@ private:
 private:
     std::unique_ptr<OperationResultPrivate> d_ptr;
 };
+
+#ifndef __PRINT_SYSTEM_ERROR_MESSAGE
+#define __PRINT_SYSTEM_ERROR_MESSAGE(function, additionalMessage) \
+if (__operation_result.Failed()) { \
+    const std::wstring __error_message_from_system = __operation_result.Message(); \
+    if (__error_message_from_system.empty()) { \
+        Utils::DisplayErrorDialog(additionalMessage); \
+    } else { \
+        const std::wstring __final_error_message = L"Function \"" L#function L"()\" failed with error code " + Utils::IntegerToString(__operation_result.Code(), 10) + L": " + __error_message_from_system; \
+        Utils::DisplayErrorDialog(__final_error_message); \
+    } \
+}
+#endif
+
+#ifndef PRINT_WIN32_ERROR_MESSAGE
+#define PRINT_WIN32_ERROR_MESSAGE(function, additionalMessage) \
+const OperationResult __operation_result; \
+__PRINT_SYSTEM_ERROR_MESSAGE(function, additionalMessage)
+#endif
+
+#ifndef PRINT_HR_ERROR_MESSAGE
+#define PRINT_HR_ERROR_MESSAGE(function, hr, additionalMessage) \
+const OperationResult __operation_result = OperationResult(hr); \
+__PRINT_SYSTEM_ERROR_MESSAGE(function, additionalMessage)
+#endif

@@ -23,6 +23,7 @@
  */
 
 #include "SystemLibrary.h"
+#include "OperationResult.h"
 #include "Utils.h"
 #include <unordered_map>
 

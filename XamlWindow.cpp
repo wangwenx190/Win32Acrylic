@@ -82,6 +82,7 @@ private:
 
 private:
     XamlWindow *q_ptr = nullptr;
+    std::wstring m_dragBarWindowClassName = {};
     HWND m_dragBarWindow = nullptr;
     HWND m_xamlIslandWindow = nullptr;
     winrt::Windows::UI::Xaml::Hosting::DesktopWindowXamlSource m_xamlSource = nullptr;
@@ -115,7 +116,14 @@ XamlWindowPrivate::~XamlWindowPrivate() noexcept
         m_xamlSource.Close();
         m_xamlSource = nullptr;
     }
-    // TODO: close drag bar window
+    if (q_ptr && m_dragBarWindow && !m_dragBarWindowClassName.empty()) {
+        if (q_ptr->CloseChildWindow(m_dragBarWindow, m_dragBarWindowClassName)) {
+            m_dragBarWindow = nullptr;
+            m_dragBarWindowClassName = {};
+        } else {
+            Utils::DisplayErrorDialog(L"Failed to close the drag bar window.");
+        }
+    }
 }
 
 LRESULT CALLBACK XamlWindowPrivate::DragBarWindowProc(const HWND hWnd, const UINT message, const WPARAM wParam, const LPARAM lParam) noexcept
@@ -245,7 +253,17 @@ bool XamlWindowPrivate::DragBarMessageHandler(const UINT message, const WPARAM w
             *result = 1;
             return true;
         } break;
-        case WM_CLOSE: {} break;
+        case WM_CLOSE: {
+            if (q_ptr->CloseChildWindow(m_dragBarWindow, m_dragBarWindowClassName)) {
+                m_dragBarWindow = nullptr;
+                m_dragBarWindowClassName = {};
+                *result = 0;
+                return true;
+            } else {
+                Utils::DisplayErrorDialog(L"Failed to close the drag bar window.");
+                return false;
+            }
+        } break;
         case WM_DESTROY: {} break;
         default:
             break;
@@ -320,8 +338,10 @@ bool XamlWindowPrivate::InitializeDragBarWindow() noexcept
         Utils::DisplayErrorDialog(L"Can't initialize the drag bar window due to the q_ptr is null.");
         return false;
     }
-    m_dragBarWindow = q_ptr->CreateChildWindow(WS_CHILD, (WS_EX_LAYERED | WS_EX_NOREDIRECTIONBITMAP), DragBarWindowProc, this);
-    if (!m_dragBarWindow) {
+    const auto dragBarWindowCreationData = q_ptr->CreateChildWindow(WS_CHILD, (WS_EX_LAYERED | WS_EX_NOREDIRECTIONBITMAP), DragBarWindowProc, this);
+    m_dragBarWindow = std::get<0>(dragBarWindowCreationData);
+    m_dragBarWindowClassName = std::get<1>(dragBarWindowCreationData);
+    if (!m_dragBarWindow || m_dragBarWindowClassName.empty()) {
         Utils::DisplayErrorDialog(L"Failed to create the drag bar window.");
         return false;
     }

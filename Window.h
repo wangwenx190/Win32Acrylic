@@ -67,7 +67,8 @@ public:
 
     [[nodiscard]] WindowColorizationArea ColorizationArea() const noexcept;
 
-    [[nodiscard]] HWND CreateChildWindow(const DWORD style, const DWORD extendedStyle, const WNDPROC wndProc, void *extraData) const noexcept;
+    [[nodiscard]] std::tuple<HWND, std::wstring> CreateChildWindow(const DWORD style, const DWORD extendedStyle, const WNDPROC wndProc, void *extraData) const noexcept;
+    [[nodiscard]] bool CloseChildWindow(const HWND hWnd, const std::wstring &className) const noexcept;
     [[nodiscard]] HWND WindowHandle() const noexcept;
     [[nodiscard]] int MessageLoop() const noexcept;
     [[nodiscard]] bool Move(const int x, const int y) const noexcept;

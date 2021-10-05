@@ -363,7 +363,7 @@ public:
 
     [[nodiscard]] WindowColorizationArea ColorizationArea() const noexcept;
 
-    [[nodiscard]] HWND CreateChildWindow(const DWORD style, const DWORD extendedStyle, const WNDPROC wndProc, void *extraData) const noexcept;
+    [[nodiscard]] std::tuple<HWND, std::wstring> CreateChildWindow(const DWORD style, const DWORD extendedStyle, const WNDPROC wndProc, void *extraData) const noexcept;
     [[nodiscard]] HWND WindowHandle() const noexcept;
     [[nodiscard]] int MessageLoop() const noexcept;
     [[nodiscard]] bool Move(const int x, const int y) const noexcept;
@@ -917,23 +917,24 @@ WindowColorizationArea WindowPrivate::ColorizationArea() const noexcept
     return m_colorizationArea;
 }
 
-HWND WindowPrivate::CreateChildWindow(const DWORD style, const DWORD extendedStyle, const WNDPROC wndProc, void *extraData) const noexcept
+std::tuple<HWND, std::wstring> WindowPrivate::CreateChildWindow(const DWORD style, const DWORD extendedStyle, const WNDPROC wndProc, void *extraData) const noexcept
 {
+    const std::tuple<HWND, std::wstring> INVALID_RESULT = std::make_tuple(nullptr, std::wstring{});
     if (!wndProc) {
         Utils::DisplayErrorDialog(L"Failed to create the child window due to the WindowProc function pointer is null.");
-        return nullptr;
+        return INVALID_RESULT;
     }
     if (!m_window) {
         Utils::DisplayErrorDialog(L"Failed to create the child window due to the parent window has not been created yet.");
-        return nullptr;
+        return INVALID_RESULT;
     }
     const auto result = CreateWindow2((style | WS_CHILD), extendedStyle, m_window, extraData, wndProc);
     const HWND hWnd = std::get<0>(result);
     if (!hWnd) {
         Utils::DisplayErrorDialog(L"Failed to create the child window.");
-        return nullptr;
+        return INVALID_RESULT;
     }
-    return hWnd;
+    return result;
 }
 
 HWND WindowPrivate::WindowHandle() const noexcept
@@ -1615,9 +1616,22 @@ void Window::OnColorizationAreaChanged(const WindowColorizationArea arg) noexcep
     UNREFERENCED_PARAMETER(arg);
 }
 
-HWND Window::CreateChildWindow(const DWORD style, const DWORD extendedStyle, const WNDPROC wndProc, void *extraData) const noexcept
+std::tuple<HWND, std::wstring> Window::CreateChildWindow(const DWORD style, const DWORD extendedStyle, const WNDPROC wndProc, void *extraData) const noexcept
 {
     return d_ptr->CreateChildWindow(style, extendedStyle, wndProc, extraData);
+}
+
+bool Window::CloseChildWindow(const HWND hWnd, const std::wstring &className) const noexcept
+{
+    if (!hWnd) {
+        Utils::DisplayErrorDialog(L"Can't close the child window due to the window handle is null.");
+        return false;
+    }
+    if (className.empty()) {
+        Utils::DisplayErrorDialog(L"Can't close the child window due to the window class name is empty.");
+        return false;
+    }
+    return CloseWindow2(hWnd, className);
 }
 
 HWND Window::WindowHandle() const noexcept

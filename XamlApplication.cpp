@@ -95,9 +95,22 @@ bool XamlApplicationPrivate::Initialize() noexcept
             return false;
         }
     }
+    if (!Utils::SetProcessDPIAwareness(ProcessDPIAwareness::PerMonitorV2)) {
+        if (!Utils::SetProcessDPIAwareness(ProcessDPIAwareness::PerMonitor)) {
+            if (!Utils::SetProcessDPIAwareness(ProcessDPIAwareness::System)) {
+                if (!Utils::SetProcessDPIAwareness(ProcessDPIAwareness::GdiScaled)) {
+                    Utils::DisplayErrorDialog(L"Failed to enable high DPI scaling for the current process.");
+                    return false;
+                }
+            }
+        }
+    }
+    const ProcessDPIAwareness curPcDPIAwareness = Utils::GetProcessDPIAwareness();
+    const std::wstring curPcDPIAwarenessDbgMsg = L"Current process's DPI awareness: " + Utils::DPIAwarenessToString(curPcDPIAwareness);
+    OutputDebugStringW(curPcDPIAwarenessDbgMsg.c_str());
     m_window = std::make_unique<XamlWindow>();
     // ### TODO: move to screen center.
-    m_window->Visibility(WindowState::Normal);
+    m_window->Visibility(WindowState::Windowed);
     return true;
 }
 

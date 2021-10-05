@@ -335,25 +335,28 @@ public:
     ~WindowPrivate() noexcept;
 
     [[nodiscard]] std::wstring Title() const noexcept;
-    void Title(const std::wstring &value) noexcept;
+    void Title(const std::wstring &value) const noexcept;
 
     [[nodiscard]] int Icon() const noexcept;
-    void Icon(const int value) noexcept;
+    void Icon(const int value) const noexcept;
 
     [[nodiscard]] int X() const noexcept;
-    void X(const int value) noexcept;
+    void X(const int value) const noexcept;
 
     [[nodiscard]] int Y() const noexcept;
-    void Y(const int value) noexcept;
+    void Y(const int value) const noexcept;
 
     [[nodiscard]] UINT Width() const noexcept;
-    void Width(const UINT value) noexcept;
+    void Width(const UINT value) const noexcept;
 
     [[nodiscard]] UINT Height() const noexcept;
-    void Height(const UINT value) noexcept;
+    void Height(const UINT value) const noexcept;
 
     [[nodiscard]] WindowState Visibility() const noexcept;
-    void Visibility(const WindowState value) noexcept;
+    void Visibility(const WindowState value) const noexcept;
+
+    [[nodiscard]] WindowFrameCorner FrameCorner() const noexcept;
+    void FrameCorner(const WindowFrameCorner value) const noexcept;
 
     [[nodiscard]] WindowTheme Theme() const noexcept;
 
@@ -403,6 +406,7 @@ private:
     UINT m_width = 0;
     UINT m_height = 0;
     WindowState m_visibility = WindowState::Hidden;
+    WindowFrameCorner m_frameCorner = WindowFrameCorner::Square;
     WindowTheme m_theme = WindowTheme::Light;
     COLORREF m_colorizationColor = 0;
     WindowColorizationArea m_colorizationArea = WindowColorizationArea::None;
@@ -593,7 +597,7 @@ bool WindowPrivate::SetWindowState2(const WindowState state) const noexcept
         case WindowState::Minimized: {
             nCmdShow = SW_SHOWMINIMIZED;
         } break;
-        case WindowState::Normal: {
+        case WindowState::Windowed: {
             nCmdShow = SW_SHOWNORMAL;
         } break;
         case WindowState::Maximized: {
@@ -694,7 +698,7 @@ UINT WindowPrivate::GetWindowVisibleFrameBorderThickness2() const noexcept
             return g_defaultWindowVisibleFrameBorderThickness;
         }
         const auto dpr = (static_cast<double>(m_dpi) / static_cast<double>(g_defaultWindowDPI));
-        UINT value = 0;
+        UINT value = 0; // ### FIXME: check whether the returned value is auto scaled or not.
         const HRESULT hr = DwmGetWindowAttributeFunc(m_window, g_DWMWA_VISIBLE_FRAME_BORDER_THICKNESS, &value, sizeof(value));
         if (SUCCEEDED(hr)) {
             return static_cast<UINT>(std::round(static_cast<double>(value) * dpr));
@@ -748,6 +752,7 @@ bool WindowPrivate::Initialize() noexcept
     m_width = windowSize.cx;
     m_height = windowSize.cy;
     m_title = {};
+    m_frameCorner = WindowFrameCorner::Square; // ### FIXME: Win10 defaults to Square, Win11 defaults to Round.
     if (q_ptr) {
         q_ptr->OnXChanged(m_x);
         q_ptr->OnYChanged(m_y);
@@ -760,6 +765,7 @@ bool WindowPrivate::Initialize() noexcept
         q_ptr->OnThemeChanged(m_theme);
         q_ptr->OnColorizationColorChanged(m_colorizationColor);
         q_ptr->OnColorizationAreaChanged(m_colorizationArea);
+        q_ptr->OnFrameCornerChanged(m_frameCorner);
     }
     return true;
 }
@@ -800,7 +806,7 @@ std::wstring WindowPrivate::Title() const noexcept
     return m_title;
 }
 
-void WindowPrivate::Title(const std::wstring &value) noexcept
+void WindowPrivate::Title(const std::wstring &value) const noexcept
 {
     USER32_API(SetWindowTextW);
     if (SetWindowTextWFunc) {
@@ -821,7 +827,7 @@ int WindowPrivate::Icon() const noexcept
     return m_icon;
 }
 
-void WindowPrivate::Icon(const int value) noexcept
+void WindowPrivate::Icon(const int value) const noexcept
 {
     // ### TODO
     UNREFERENCED_PARAMETER(value);
@@ -832,7 +838,7 @@ int WindowPrivate::X() const noexcept
     return m_x;
 }
 
-void WindowPrivate::X(const int value) noexcept
+void WindowPrivate::X(const int value) const noexcept
 {
     if (m_x != value) {
         if (!Move(value, m_y)) {
@@ -846,7 +852,7 @@ int WindowPrivate::Y() const noexcept
     return m_y;
 }
 
-void WindowPrivate::Y(const int value) noexcept
+void WindowPrivate::Y(const int value) const noexcept
 {
     if (m_y != value) {
         if (!Move(m_x, value)) {
@@ -860,7 +866,7 @@ UINT WindowPrivate::Width() const noexcept
     return m_width;
 }
 
-void WindowPrivate::Width(const UINT value) noexcept
+void WindowPrivate::Width(const UINT value) const noexcept
 {
     if (m_width != value) {
         if (!Resize(value, m_height)) {
@@ -874,7 +880,7 @@ UINT WindowPrivate::Height() const noexcept
     return m_height;
 }
 
-void WindowPrivate::Height(const UINT value) noexcept
+void WindowPrivate::Height(const UINT value) const noexcept
 {
     if (m_height != value) {
         if (!Resize(m_width, value)) {
@@ -888,13 +894,23 @@ WindowState WindowPrivate::Visibility() const noexcept
     return m_visibility;
 }
 
-void WindowPrivate::Visibility(const WindowState value) noexcept
+void WindowPrivate::Visibility(const WindowState value) const noexcept
 {
     if (m_visibility != value) {
         if (!SetWindowState2(value)) {
             Utils::DisplayErrorDialog(L"Failed to update the Visibility property of this window.");
         }
     }
+}
+
+WindowFrameCorner WindowPrivate::FrameCorner() const noexcept
+{
+    return m_frameCorner;
+}
+
+void WindowPrivate::FrameCorner(const WindowFrameCorner value) const noexcept
+{
+    // ### TODO
 }
 
 WindowTheme WindowPrivate::Theme() const noexcept
@@ -1146,7 +1162,7 @@ bool WindowPrivate::InternalMessageHandler(const UINT message, const WPARAM wPar
         bool needNotify = false;
         if (wParam == SIZE_RESTORED) {
             if ((m_visibility == WindowState::Minimized) || (m_visibility == WindowState::Maximized)) {
-                m_visibility = WindowState::Normal;
+                m_visibility = WindowState::Windowed;
                 needNotify = true;
             }
         } else if (wParam == SIZE_MINIMIZED) {
@@ -1248,7 +1264,16 @@ bool WindowPrivate::InternalMessageHandler(const UINT message, const WPARAM wPar
             return false;
         }
     } break;
-    case WM_NCCREATE: {} break;
+    case WM_NCCREATE: {
+        USER32_API(EnableNonClientDpiScaling);
+        if (EnableNonClientDpiScalingFunc) {
+            if (EnableNonClientDpiScalingFunc(m_window) == FALSE) {
+                PRINT_WIN32_ERROR_MESSAGE(EnableNonClientDpiScaling, L"Failed to enable window non-client area automatic DPI scaling.")
+            }
+        } else {
+            Utils::DisplayErrorDialog(L"Can't enable window non-client area automatic DPI scaling due to EnableNonClientDpiScaling() is not available.");
+        }
+    } break;
     case WM_NCCALCSIZE: {
         if (static_cast<BOOL>(wParam) == FALSE) {
             *result = 0;
@@ -1395,7 +1420,7 @@ bool WindowPrivate::InternalMessageHandler(const UINT message, const WPARAM wPar
         const UINT captionHeight = GetWindowMetrics2(WindowMetrics::CaptionHeight);
         const LONG titleBarHeight = ((m_visibility == WindowState::Maximized) ? captionHeight : (captionHeight + resizeBorderThicknessY));
         const bool isTitleBar = ((m_visibility != WindowState::Minimized) ? (localPos.y <= titleBarHeight) : false);
-        const bool isTop = ((m_visibility == WindowState::Normal) ? (localPos.y <= resizeBorderThicknessY) : false);
+        const bool isTop = ((m_visibility == WindowState::Windowed) ? (localPos.y <= resizeBorderThicknessY) : false);
         USER32_API(DefWindowProcW);
         if (DefWindowProcWFunc) {
             // This will handle the left, right and bottom parts of the frame
@@ -1481,11 +1506,6 @@ void Window::Title(const std::wstring &value) noexcept
     d_ptr->Title(value);
 }
 
-void Window::OnTitleChanged(const std::wstring &arg) noexcept
-{
-    UNREFERENCED_PARAMETER(arg);
-}
-
 int Window::Icon() const noexcept
 {
     return d_ptr->Icon();
@@ -1494,11 +1514,6 @@ int Window::Icon() const noexcept
 void Window::Icon(const int value) noexcept
 {
     d_ptr->Icon(value);
-}
-
-void Window::OnIconChanged(const int arg) noexcept
-{
-    UNREFERENCED_PARAMETER(arg);
 }
 
 int Window::X() const noexcept
@@ -1511,11 +1526,6 @@ void Window::X(const int value) noexcept
     d_ptr->X(value);
 }
 
-void Window::OnXChanged(const int arg) noexcept
-{
-    UNREFERENCED_PARAMETER(arg);
-}
-
 int Window::Y() const noexcept
 {
     return d_ptr->Y();
@@ -1524,11 +1534,6 @@ int Window::Y() const noexcept
 void Window::Y(const int value) noexcept
 {
     d_ptr->Y(value);
-}
-
-void Window::OnYChanged(const int arg) noexcept
-{
-    UNREFERENCED_PARAMETER(arg);
 }
 
 UINT Window::Width() const noexcept
@@ -1541,11 +1546,6 @@ void Window::Width(const UINT value) noexcept
     d_ptr->Width(value);
 }
 
-void Window::OnWidthChanged(const UINT arg) noexcept
-{
-    UNREFERENCED_PARAMETER(arg);
-}
-
 UINT Window::Height() const noexcept
 {
     return d_ptr->Height();
@@ -1554,11 +1554,6 @@ UINT Window::Height() const noexcept
 void Window::Height(const UINT value) noexcept
 {
     d_ptr->Height(value);
-}
-
-void Window::OnHeightChanged(const UINT arg) noexcept
-{
-    UNREFERENCED_PARAMETER(arg);
 }
 
 WindowState Window::Visibility() const noexcept
@@ -1571,9 +1566,14 @@ void Window::Visibility(const WindowState value) noexcept
     d_ptr->Visibility(value);
 }
 
-void Window::OnVisibilityChanged(const WindowState arg) noexcept
+WindowFrameCorner Window::FrameCorner() const noexcept
 {
-    UNREFERENCED_PARAMETER(arg);
+    return d_ptr->FrameCorner();
+}
+
+void Window::FrameCorner(const WindowFrameCorner value) noexcept
+{
+    d_ptr->FrameCorner(value);
 }
 
 WindowTheme Window::Theme() const noexcept
@@ -1581,19 +1581,9 @@ WindowTheme Window::Theme() const noexcept
     return d_ptr->Theme();
 }
 
-void Window::OnThemeChanged(const WindowTheme arg) noexcept
-{
-    UNREFERENCED_PARAMETER(arg);
-}
-
 UINT Window::DotsPerInch() const noexcept
 {
     return d_ptr->DotsPerInch();
-}
-
-void Window::OnDotsPerInchChanged(const UINT arg) noexcept
-{
-    UNREFERENCED_PARAMETER(arg);
 }
 
 COLORREF Window::ColorizationColor() const noexcept
@@ -1601,19 +1591,9 @@ COLORREF Window::ColorizationColor() const noexcept
     return d_ptr->ColorizationColor();
 }
 
-void Window::OnColorizationColorChanged(const COLORREF arg) noexcept
-{
-    UNREFERENCED_PARAMETER(arg);
-}
-
 WindowColorizationArea Window::ColorizationArea() const noexcept
 {
     return d_ptr->ColorizationArea();
-}
-
-void Window::OnColorizationAreaChanged(const WindowColorizationArea arg) noexcept
-{
-    UNREFERENCED_PARAMETER(arg);
 }
 
 std::tuple<HWND, std::wstring> Window::CreateChildWindow(const DWORD style, const DWORD extendedStyle, const WNDPROC wndProc, void *extraData) const noexcept
@@ -1657,6 +1637,66 @@ bool Window::Resize(const UINT w, const UINT h) const noexcept
 bool Window::SetGeometry(const int x, const int y, const UINT w, const UINT h) const noexcept
 {
     return d_ptr->SetGeometry(x, y, w, h);
+}
+
+void Window::OnTitleChanged(const std::wstring &arg) noexcept
+{
+    UNREFERENCED_PARAMETER(arg);
+}
+
+void Window::OnIconChanged(const int arg) noexcept
+{
+    UNREFERENCED_PARAMETER(arg);
+}
+
+void Window::OnXChanged(const int arg) noexcept
+{
+    UNREFERENCED_PARAMETER(arg);
+}
+
+void Window::OnYChanged(const int arg) noexcept
+{
+    UNREFERENCED_PARAMETER(arg);
+}
+
+void Window::OnWidthChanged(const UINT arg) noexcept
+{
+    UNREFERENCED_PARAMETER(arg);
+}
+
+void Window::OnHeightChanged(const UINT arg) noexcept
+{
+    UNREFERENCED_PARAMETER(arg);
+}
+
+void Window::OnVisibilityChanged(const WindowState arg) noexcept
+{
+    UNREFERENCED_PARAMETER(arg);
+}
+
+void Window::OnFrameCornerChanged(const WindowFrameCorner arg) noexcept
+{
+    UNREFERENCED_PARAMETER(arg);
+}
+
+void Window::OnThemeChanged(const WindowTheme arg) noexcept
+{
+    UNREFERENCED_PARAMETER(arg);
+}
+
+void Window::OnDotsPerInchChanged(const UINT arg) noexcept
+{
+    UNREFERENCED_PARAMETER(arg);
+}
+
+void Window::OnColorizationColorChanged(const COLORREF arg) noexcept
+{
+    UNREFERENCED_PARAMETER(arg);
+}
+
+void Window::OnColorizationAreaChanged(const WindowColorizationArea arg) noexcept
+{
+    UNREFERENCED_PARAMETER(arg);
 }
 
 bool Window::MessageHandler(const UINT message, const WPARAM wParam, const LPARAM lParam, LRESULT *result) noexcept

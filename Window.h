@@ -59,6 +59,9 @@ public:
     [[nodiscard]] WindowState Visibility() const noexcept;
     void Visibility(const WindowState value) noexcept;
 
+    [[nodiscard]] WindowFrameCorner FrameCorner() const noexcept;
+    void FrameCorner(const WindowFrameCorner value) noexcept;
+
     [[nodiscard]] WindowTheme Theme() const noexcept;
 
     [[nodiscard]] UINT DotsPerInch() const noexcept;
@@ -94,6 +97,7 @@ protected:
     virtual void OnWidthChanged(const UINT arg) noexcept;
     virtual void OnHeightChanged(const UINT arg) noexcept;
     virtual void OnVisibilityChanged(const WindowState arg) noexcept;
+    virtual void OnFrameCornerChanged(const WindowFrameCorner arg) noexcept;
     virtual void OnThemeChanged(const WindowTheme arg) noexcept;
     virtual void OnDotsPerInchChanged(const UINT arg) noexcept;
     virtual void OnColorizationColorChanged(const COLORREF arg) noexcept;

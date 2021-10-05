@@ -33,7 +33,7 @@ enum class WindowTheme : int
 
 enum class WindowState : int
 {
-    Normal = 0,
+    Windowed = 0,
     Minimized,
     Maximized,
     Hidden
@@ -66,4 +66,10 @@ enum class WindowMetrics : int
     WindowIconHeight,
     WindowSmallIconWidth,
     WindowSmallIconHeight
+};
+
+enum class WindowFrameCorner : int
+{
+    Square = 0,
+    Round
 };

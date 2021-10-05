@@ -55,3 +55,15 @@ enum class WindowColorizationArea : int
     TitleBar_WindowBorder,
     All
 };
+
+enum class WindowMetrics : int
+{
+    ResizeBorderThicknessX = 0,
+    ResizeBorderThicknessY,
+    WindowVisibleFrameBorderThickness,
+    CaptionHeight,
+    WindowIconWidth,
+    WindowIconHeight,
+    WindowSmallIconWidth,
+    WindowSmallIconHeight
+};

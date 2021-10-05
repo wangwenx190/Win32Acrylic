@@ -22,6 +22,8 @@
  * SOFTWARE.
  */
 
+#include <SDKDDKVer.h>
+#include <Windows.h>
 #include "XamlApplication.h"
 
 EXTERN_C int APIENTRY
@@ -38,5 +40,5 @@ wWinMain(
     UNREFERENCED_PARAMETER(nCmdShow);
 
     XamlApplication application;
-    return application.Exec();
+    return application.Run();
 }

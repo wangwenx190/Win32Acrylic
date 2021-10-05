@@ -24,6 +24,8 @@
 
 #include "pch.h"
 #include "XamlApplication.h"
+#include "XamlWindow.h"
+#include "Utils.h"
 
 class XamlApplicationPrivate
 {
@@ -31,7 +33,8 @@ public:
     explicit XamlApplicationPrivate(XamlApplication *q) noexcept;
     ~XamlApplicationPrivate() noexcept;
 
-    [[nodiscard]] int Exec() const noexcept;
+    [[nodiscard]] bool Initialize() noexcept;
+    [[nodiscard]] int Run() const noexcept;
 
 private:
     XamlApplicationPrivate(const XamlApplicationPrivate &) = delete;
@@ -41,4 +44,75 @@ private:
 
 private:
     XamlApplication *q_ptr = nullptr;
+    static bool m_comInitialized;
+    static winrt::Windows::UI::Xaml::Hosting::WindowsXamlManager m_xamlManager;
+    std::unique_ptr<XamlWindow> m_window;
 };
+
+bool XamlApplicationPrivate::m_comInitialized = false;
+winrt::Windows::UI::Xaml::Hosting::WindowsXamlManager XamlApplicationPrivate::m_xamlManager = nullptr;
+
+XamlApplicationPrivate::XamlApplicationPrivate(XamlApplication *q) noexcept
+{
+    if (!q) {
+        Utils::DisplayErrorDialog(L"XamlApplicationPrivate's q is null.");
+        return;
+    }
+    q_ptr = q;
+}
+
+XamlApplicationPrivate::~XamlApplicationPrivate() noexcept
+{
+    if (m_window) {
+        m_window.release();
+    }
+    if (m_xamlManager != nullptr) {
+        m_xamlManager.Close();
+        m_xamlManager = nullptr;
+    }
+}
+
+bool XamlApplicationPrivate::Initialize() noexcept
+{
+    if (!m_comInitialized) {
+        // The call to winrt::init_apartment() initializes COM. By default, in a multi-threaded apartment.
+        winrt::init_apartment(winrt::apartment_type::single_threaded);
+        m_comInitialized = true;
+    }
+    if (m_xamlManager == nullptr) {
+        // Initialize the XAML framework's core window for the current thread.
+        m_xamlManager = winrt::Windows::UI::Xaml::Hosting::WindowsXamlManager::InitializeForCurrentThread();
+    }
+    m_window = std::make_unique<XamlWindow>();
+    // ### TODO: move to screen center.
+    m_window->Visibility(WindowState::Normal);
+    return true;
+}
+
+int XamlApplicationPrivate::Run() const noexcept
+{
+    if (!q_ptr) {
+        Utils::DisplayErrorDialog(L"Can't run the XAML application due to the q_ptr is null.");
+        return -1;
+    }
+    if (!m_window) {
+        Utils::DisplayErrorDialog(L"Can't run the XAML application due to the XAML window has not been created yet.");
+        return -1;
+    }
+    return m_window->MessageLoop();
+}
+
+XamlApplication::XamlApplication() noexcept
+{
+    d_ptr = std::make_unique<XamlApplicationPrivate>(this);
+    if (!d_ptr->Initialize()) {
+        Utils::DisplayErrorDialog(L"Failed to initialize the XAML application.");
+    }
+}
+
+XamlApplication::~XamlApplication() noexcept = default;
+
+int XamlApplication::Run() const noexcept
+{
+    return d_ptr->Run();
+}

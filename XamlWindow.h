@@ -34,6 +34,7 @@ public:
     explicit XamlWindow() noexcept;
     ~XamlWindow() noexcept override;
 
+protected:
     void OnWidthChanged(const UINT arg) noexcept override;
     void OnHeightChanged(const UINT arg) noexcept override;
     void OnVisibilityChanged(const WindowState arg) noexcept override;
@@ -48,5 +49,6 @@ private:
     XamlWindow &operator=(XamlWindow &&) = delete;
 
 private:
+    friend class XamlWindowPrivate;
     std::unique_ptr<XamlWindowPrivate> d_ptr;
 };

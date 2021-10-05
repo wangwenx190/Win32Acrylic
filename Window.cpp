@@ -45,6 +45,10 @@ EXTERN_C IMAGE_DOS_HEADER __ImageBase;
 #define SM_CXPADDEDBORDER (92)
 #endif
 
+#ifndef SM_CYPADDEDBORDER
+#define SM_CYPADDEDBORDER SM_CXPADDEDBORDER
+#endif
+
 #ifndef ABM_GETAUTOHIDEBAREX
 #define ABM_GETAUTOHIDEBAREX (0x0000000b)
 #endif
@@ -73,12 +77,11 @@ EXTERN_C IMAGE_DOS_HEADER __ImageBase;
 #define RECT_HEIGHT(rect) (std::abs((rect).bottom - (rect).top))
 #endif
 
-static constexpr UINT g_defaultResizeBorderThickness = 8;
-static constexpr UINT g_defaultCaptionHeight = 23;
-static constexpr UINT g_defaultFrameBorderThickness = 1;
+static constexpr UINT g_defaultWindowVisibleFrameBorderThickness = 1;
 static constexpr UINT g_defaultWindowDPI = USER_DEFAULT_SCREEN_DPI;
 
-static constexpr UINT g_autoHideTaskbarThickness = 2; // The thickness of an auto-hide taskbar in pixels.
+static constexpr UINT g_defaultAutoHideTaskBarThicknessX = 2;
+static constexpr UINT g_defaultAutoHideTaskBarThicknessY = 2;
 
 static constexpr DWORD g_DWMWA_USE_IMMERSIVE_DARK_MODE_BEFORE_20H1 = 19;
 static constexpr DWORD g_DWMWA_USE_IMMERSIVE_DARK_MODE = 20;
@@ -265,8 +268,8 @@ static constexpr wchar_t g_personalizeRegistryKey[] = LR"(Software\Microsoft\Win
         wcex.hInstance = HINST_THISCOMPONENT;
         wcex.lpszClassName = guid.c_str();
         wcex.hCursor = LoadCursorWFunc(nullptr, IDC_ARROW);
-        wcex.hIcon = LoadIconWFunc(HINST_THISCOMPONENT, MAKEINTRESOURCEW(IDI_XAMLAPPLICATION));
-        wcex.hIconSm = LoadIconWFunc(HINST_THISCOMPONENT, MAKEINTRESOURCEW(IDI_XAMLAPPLICATION_SMALL));
+        wcex.hIcon = LoadIconWFunc(HINST_THISCOMPONENT, MAKEINTRESOURCEW(IDI_MYAPPLICATION));
+        wcex.hIconSm = LoadIconWFunc(HINST_THISCOMPONENT, MAKEINTRESOURCEW(IDI_MYAPPLICATION_SMALL));
         const ATOM atom = RegisterClassExWFunc(&wcex);
         if (atom == INVALID_ATOM) {
             PRINT_WIN32_ERROR_MESSAGE(RegisterClassExW, L"Failed to register a window class.")
@@ -367,7 +370,7 @@ public:
     [[nodiscard]] bool Resize(const UINT w, const UINT h) const noexcept;
     [[nodiscard]] bool SetGeometry(const int x, const int y, const UINT w, const UINT h) const noexcept;
 
-    [[nodiscard]] UINT GetInternalMetrics(const std::wstring &name) const noexcept;
+    [[nodiscard]] UINT GetWindowMetrics2(const WindowMetrics metrics) const noexcept;
 
 private:
     WindowPrivate(const WindowPrivate &) = delete;
@@ -379,17 +382,15 @@ private:
     [[nodiscard]] bool Initialize() noexcept;
     [[nodiscard]] static LRESULT CALLBACK WindowProc(const HWND hWnd, const UINT message, const WPARAM wParam, const LPARAM lParam) noexcept;
     [[nodiscard]] bool InternalMessageHandler(const UINT message, const WPARAM wParam, const LPARAM lParam, LRESULT *result) noexcept;
-    [[nodiscard]] RECT GetWindowFrameGeometry2() const noexcept;
-    [[nodiscard]] SIZE GetWindowClientSize2() const noexcept;
-    [[nodiscard]] bool TriggerFrameChange2() const noexcept;
+    [[nodiscard]] POINT GetWindowPosition2() const noexcept;
+    [[nodiscard]] SIZE GetWindowSize2() const noexcept;
+    [[nodiscard]] bool TriggerWindowFrameChange2() const noexcept;
     [[nodiscard]] bool RefreshWindowTheme2() const noexcept;
     [[nodiscard]] bool OpenSystemMenu2(const POINT pos) const noexcept;
     [[nodiscard]] bool SetWindowState2(const WindowState state) const noexcept;
     [[nodiscard]] UINT GetWindowDPI2() const noexcept;
-    [[nodiscard]] UINT GetResizeBorderThickness2(const bool x) const noexcept;
-    [[nodiscard]] UINT GetCaptionHeight2() const noexcept;
-    [[nodiscard]] UINT GetFrameBorderThickness2() const noexcept;
-    [[nodiscard]] bool UpdateFrameMargins2() const noexcept;
+    [[nodiscard]] UINT GetWindowVisibleFrameBorderThickness2() const noexcept;
+    [[nodiscard]] bool UpdateWindowFrameMargins2() const noexcept;
 
 private:
     Window *q_ptr = nullptr;
@@ -408,12 +409,12 @@ private:
     UINT m_dpi = 0;
 };
 
-RECT WindowPrivate::GetWindowFrameGeometry2() const noexcept
+POINT WindowPrivate::GetWindowPosition2() const noexcept
 {
     USER32_API(GetWindowRect);
     if (GetWindowRectFunc) {
         if (!m_window) {
-            Utils::DisplayErrorDialog(L"Failed to retrieve the window frame geometry due to the window has not been created yet.");
+            Utils::DisplayErrorDialog(L"Failed to retrieve the window position due to the window has not been created yet.");
             return {};
         }
         RECT rect = {0, 0, 0, 0};
@@ -421,19 +422,19 @@ RECT WindowPrivate::GetWindowFrameGeometry2() const noexcept
             PRINT_WIN32_ERROR_MESSAGE(GetWindowRect, L"Failed to retrieve the window frame geometry.")
             return {};
         }
-        return rect;
+        return {rect.left, rect.top};
     } else {
-        Utils::DisplayErrorDialog(L"Failed to retrieve the window frame geometry due to GetWindowRect() is not available.");
+        Utils::DisplayErrorDialog(L"Failed to retrieve the window position due to GetWindowRect() is not available.");
         return {};
     }
 }
 
-SIZE WindowPrivate::GetWindowClientSize2() const noexcept
+SIZE WindowPrivate::GetWindowSize2() const noexcept
 {
     USER32_API(GetClientRect);
     if (GetClientRectFunc) {
         if (!m_window) {
-            Utils::DisplayErrorDialog(L"Failed to retrieve the window client area size due to the window has not been created yet.");
+            Utils::DisplayErrorDialog(L"Failed to retrieve the window size due to the window has not been created yet.");
             return {};
         }
         RECT rect = {0, 0, 0, 0};
@@ -443,27 +444,27 @@ SIZE WindowPrivate::GetWindowClientSize2() const noexcept
         }
         return {RECT_WIDTH(rect), RECT_HEIGHT(rect)};
     } else {
-        Utils::DisplayErrorDialog(L"Failed to retrieve the window client area size due to GetClientRect() is not available.");
+        Utils::DisplayErrorDialog(L"Failed to retrieve the window size due to GetClientRect() is not available.");
         return {};
     }
 }
 
-bool WindowPrivate::TriggerFrameChange2() const noexcept
+bool WindowPrivate::TriggerWindowFrameChange2() const noexcept
 {
     USER32_API(SetWindowPos);
     if (SetWindowPosFunc) {
         if (!m_window) {
-            Utils::DisplayErrorDialog(L"Failed to trigger a frame change event due to the window has not been created yet.");
+            Utils::DisplayErrorDialog(L"Failed to trigger a window frame change event due to the window has not been created yet.");
             return false;
         }
         constexpr UINT flags = (SWP_FRAMECHANGED | SWP_NOACTIVATE | SWP_NOSIZE | SWP_NOMOVE | SWP_NOZORDER | SWP_NOOWNERZORDER);
         if (SetWindowPosFunc(m_window, nullptr, 0, 0, 0, 0, flags) == FALSE) {
-            PRINT_WIN32_ERROR_MESSAGE(SetWindowPos, L"Failed to trigger a frame change event for the window.")
+            PRINT_WIN32_ERROR_MESSAGE(SetWindowPos, L"Failed to trigger a window frame change event for the window.")
             return false;
         }
         return true;
     } else {
-        Utils::DisplayErrorDialog(L"Failed to trigger a frame change event for the window due to SetWindowPos() is not available.");
+        Utils::DisplayErrorDialog(L"Failed to trigger a window frame change event for the window due to SetWindowPos() is not available.");
         return false;
     }
 }
@@ -684,46 +685,13 @@ UINT WindowPrivate::GetWindowDPI2() const noexcept
     }
 }
 
-UINT WindowPrivate::GetResizeBorderThickness2(const bool x) const noexcept
-{
-    USER32_API(GetSystemMetricsForDpi);
-    if (GetSystemMetricsForDpiFunc) {
-        if (!m_window) {
-            Utils::DisplayErrorDialog(L"Failed to retrieve the resize border thickness due to the window has not been created yet.");
-            return g_defaultResizeBorderThickness;
-        }
-        // There is no "SM_CYPADDEDBORDER".
-        const int paddedBorderThickness = GetSystemMetricsForDpiFunc(SM_CXPADDEDBORDER, m_dpi);
-        const int sizeFrameThickness = GetSystemMetricsForDpiFunc((x ? SM_CXSIZEFRAME : SM_CYSIZEFRAME), m_dpi);
-        return static_cast<UINT>(paddedBorderThickness + sizeFrameThickness);
-    } else {
-        Utils::DisplayErrorDialog(L"Failed to retrieve the resize border thickness due to GetSystemMetricsForDpi() is not available.");
-        return g_defaultResizeBorderThickness;
-    }
-}
-
-UINT WindowPrivate::GetCaptionHeight2() const noexcept
-{
-    USER32_API(GetSystemMetricsForDpi);
-    if (GetSystemMetricsForDpiFunc) {
-        if (!m_window) {
-            Utils::DisplayErrorDialog(L"Failed to retrieve the caption height due to the window has not been created yet.");
-            return g_defaultCaptionHeight;
-        }
-        return static_cast<UINT>(GetSystemMetricsForDpiFunc(SM_CYCAPTION, m_dpi));
-    } else {
-        Utils::DisplayErrorDialog(L"Failed to retrieve the caption height due to GetSystemMetricsForDpi() is not available.");
-        return g_defaultCaptionHeight;
-    }
-}
-
-UINT WindowPrivate::GetFrameBorderThickness2() const noexcept
+UINT WindowPrivate::GetWindowVisibleFrameBorderThickness2() const noexcept
 {
     DWMAPI_API(DwmGetWindowAttribute);
     if (DwmGetWindowAttributeFunc) {
         if (!m_window) {
-            Utils::DisplayErrorDialog(L"Failed to retrieve the frame border thickness due to the window has not been created yet.");
-            return g_defaultFrameBorderThickness;
+            Utils::DisplayErrorDialog(L"Failed to retrieve the window visible frame border thickness due to the window has not been created yet.");
+            return g_defaultWindowVisibleFrameBorderThickness;
         }
         const auto dpr = (static_cast<double>(m_dpi) / static_cast<double>(g_defaultWindowDPI));
         UINT value = 0;
@@ -734,11 +702,11 @@ UINT WindowPrivate::GetFrameBorderThickness2() const noexcept
             // We just eat this error because this enum value was introduced in a very
             // late Windows 10 version, so querying it's value will always result in
             // a "parameter error" (code: 87) on systems before that value was introduced.
-            return static_cast<UINT>(std::round(static_cast<double>(g_defaultFrameBorderThickness) * dpr));
+            return static_cast<UINT>(std::round(static_cast<double>(g_defaultWindowVisibleFrameBorderThickness) * dpr));
         }
     } else {
-        Utils::DisplayErrorDialog(L"Failed to retrieve the frame border thickness due to DwmGetWindowAttribute() is not available.");
-        return g_defaultFrameBorderThickness;
+        Utils::DisplayErrorDialog(L"Failed to retrieve the window visible frame border thickness due to DwmGetWindowAttribute() is not available.");
+        return g_defaultWindowVisibleFrameBorderThickness;
     }
 }
 
@@ -755,12 +723,12 @@ bool WindowPrivate::Initialize() noexcept
     m_dpi = GetWindowDPI2();
     const std::wstring dpiMsg = L"Current window's dots-per-inch (DPI): " + Utils::IntegerToString(m_dpi, 10);
     OutputDebugStringW(dpiMsg.c_str());
-    if (!UpdateFrameMargins2()) {
+    if (!UpdateWindowFrameMargins2()) {
         Utils::DisplayErrorDialog(L"Failed to update the window frame margins.");
         return false;
     }
-    if (!TriggerFrameChange2()) {
-        Utils::DisplayErrorDialog(L"Failed to trigger a frame change event for this window.");
+    if (!TriggerWindowFrameChange2()) {
+        Utils::DisplayErrorDialog(L"Failed to trigger a window frame change event for this window.");
         return false;
     }
     m_theme = GetGlobalApplicationTheme2();
@@ -773,10 +741,10 @@ bool WindowPrivate::Initialize() noexcept
     m_colorizationColor = GetGlobalColorizationColor2();
     m_colorizationArea = GetGlobalColorizationArea2();
     m_visibility = WindowState::Hidden;
-    const RECT frameGeometry = GetWindowFrameGeometry2();
-    const SIZE windowSize = GetWindowClientSize2();
-    m_x = frameGeometry.left;
-    m_y = frameGeometry.top;
+    const POINT windowPosition = GetWindowPosition2();
+    const SIZE windowSize = GetWindowSize2();
+    m_x = windowPosition.x;
+    m_y = windowPosition.y;
     m_width = windowSize.cx;
     m_height = windowSize.cy;
     m_title = {};
@@ -1027,9 +995,91 @@ bool WindowPrivate::SetGeometry(const int x, const int y, const UINT w, const UI
     }
 }
 
-UINT WindowPrivate::GetInternalMetrics(const std::wstring &name) const noexcept
+UINT WindowPrivate::GetWindowMetrics2(const WindowMetrics metrics) const noexcept
 {
-    // ### TODO
+    if (!q_ptr) {
+        Utils::DisplayErrorDialog(L"Failed to retrieve the window metrics due to q_ptr is null.");
+        return 0;
+    }
+    if (!m_window) {
+        Utils::DisplayErrorDialog(L"Failed to retrieve the window metrics due to the window has not been created yet.");
+        return 0;
+    }
+    USER32_API(GetSystemMetricsForDpi);
+    if (GetSystemMetricsForDpiFunc) {
+        switch (metrics) {
+        case WindowMetrics::ResizeBorderThicknessX: {
+            const int paddedBorderThicknessX = GetSystemMetricsForDpiFunc(SM_CXPADDEDBORDER, m_dpi);
+            const int sizeFrameThicknessX = GetSystemMetricsForDpiFunc(SM_CXSIZEFRAME, m_dpi);
+            return (paddedBorderThicknessX + sizeFrameThicknessX);
+        } break;
+        case WindowMetrics::ResizeBorderThicknessY: {
+            const int paddedBorderThicknessY = GetSystemMetricsForDpiFunc(SM_CYPADDEDBORDER, m_dpi);
+            const int sizeFrameThicknessY = GetSystemMetricsForDpiFunc(SM_CYSIZEFRAME, m_dpi);
+            return (paddedBorderThicknessY + sizeFrameThicknessY);
+        } break;
+        case WindowMetrics::WindowVisibleFrameBorderThickness: {
+            return GetWindowVisibleFrameBorderThickness2();
+        } break;
+        case WindowMetrics::CaptionHeight: {
+            return GetSystemMetricsForDpiFunc(SM_CYCAPTION, m_dpi);
+        } break;
+        case WindowMetrics::WindowIconWidth: {
+            return GetSystemMetricsForDpiFunc(SM_CXICON, m_dpi);
+        } break;
+        case WindowMetrics::WindowIconHeight: {
+            return GetSystemMetricsForDpiFunc(SM_CYICON, m_dpi);
+        } break;
+        case WindowMetrics::WindowSmallIconWidth: {
+            return GetSystemMetricsForDpiFunc(SM_CXSMICON, m_dpi);
+        } break;
+        case WindowMetrics::WindowSmallIconHeight: {
+            return GetSystemMetricsForDpiFunc(SM_CYSMICON, m_dpi);
+        } break;
+        }
+        return 0;
+    } else {
+        OutputDebugStringW(L"GetSystemMetricsForDpi() is not available.");
+        USER32_API(GetSystemMetrics);
+        if (GetSystemMetricsFunc) {
+            // GetSystemMetrics() will return an automatically scaled value
+            // based on the DPI awareness of the current process.
+            switch (metrics) {
+            case WindowMetrics::ResizeBorderThicknessX: {
+                const int paddedBorderThicknessX = GetSystemMetricsFunc(SM_CXPADDEDBORDER);
+                const int sizeFrameThicknessX = GetSystemMetricsFunc(SM_CXSIZEFRAME);
+                return (paddedBorderThicknessX + sizeFrameThicknessX);
+            } break;
+            case WindowMetrics::ResizeBorderThicknessY: {
+                const int paddedBorderThicknessY = GetSystemMetricsFunc(SM_CYPADDEDBORDER);
+                const int sizeFrameThicknessY = GetSystemMetricsFunc(SM_CYSIZEFRAME);
+                return (paddedBorderThicknessY + sizeFrameThicknessY);
+            } break;
+            case WindowMetrics::WindowVisibleFrameBorderThickness: {
+                return GetWindowVisibleFrameBorderThickness2();
+            } break;
+            case WindowMetrics::CaptionHeight: {
+                return GetSystemMetricsFunc(SM_CYCAPTION);
+            } break;
+            case WindowMetrics::WindowIconWidth: {
+                return GetSystemMetricsFunc(SM_CXICON);
+            } break;
+            case WindowMetrics::WindowIconHeight: {
+                return GetSystemMetricsFunc(SM_CYICON);
+            } break;
+            case WindowMetrics::WindowSmallIconWidth: {
+                return GetSystemMetricsFunc(SM_CXSMICON);
+            } break;
+            case WindowMetrics::WindowSmallIconHeight: {
+                return GetSystemMetricsFunc(SM_CYSMICON);
+            } break;
+            }
+            return 0;
+        } else {
+            Utils::DisplayErrorDialog(L"Failed to retrieve the window metrics due to GetSystemMetricsForDpi() and GetSystemMetrics() are not available.");
+            return 0;
+        }
+    }
 }
 
 LRESULT CALLBACK WindowPrivate::WindowProc(const HWND hWnd, const UINT message, const WPARAM wParam, const LPARAM lParam) noexcept
@@ -1072,6 +1122,10 @@ bool WindowPrivate::InternalMessageHandler(const UINT message, const WPARAM wPar
 {
     if (!result) {
         Utils::DisplayErrorDialog(L"InternalMessageHandler: the pointer to the result of the WindowProc function is null.");
+        return false;
+    }
+    if (!q_ptr) {
+        Utils::DisplayErrorDialog(L"InternalMessageHandler: the q_ptr is null.");
         return false;
     }
     if (!m_window) {
@@ -1229,7 +1283,7 @@ bool WindowPrivate::InternalMessageHandler(const UINT message, const WPARAM wPar
             // then the window is clipped to the monitor so that the resize handle
             // do not appear because you don't need them (because you can't resize
             // a window when it's maximized unless you restore it).
-            const UINT resizeBorderThicknessY = GetResizeBorderThickness2(false);
+            const UINT resizeBorderThicknessY = GetWindowMetrics2(WindowMetrics::ResizeBorderThicknessY);
             clientRect->top += resizeBorderThicknessY;
             nonClientAreaExists = true;
         }
@@ -1283,16 +1337,16 @@ bool WindowPrivate::InternalMessageHandler(const UINT message, const WPARAM wPar
                             // This does however work fine for maximized.
                             if (hasAutohideTaskbar(ABE_TOP)) {
                                 // Peculiarly, when we're fullscreen,
-                                clientRect->top += g_autoHideTaskbarThickness;
+                                clientRect->top += g_defaultAutoHideTaskBarThicknessY;
                                 nonClientAreaExists = true;
                             } else if (hasAutohideTaskbar(ABE_BOTTOM)) {
-                                clientRect->bottom -= g_autoHideTaskbarThickness;
+                                clientRect->bottom -= g_defaultAutoHideTaskBarThicknessY;
                                 nonClientAreaExists = true;
                             } else if (hasAutohideTaskbar(ABE_LEFT)) {
-                                clientRect->left += g_autoHideTaskbarThickness;
+                                clientRect->left += g_defaultAutoHideTaskBarThicknessX;
                                 nonClientAreaExists = true;
                             } else if (hasAutohideTaskbar(ABE_RIGHT)) {
-                                clientRect->right -= g_autoHideTaskbarThickness;
+                                clientRect->right -= g_defaultAutoHideTaskBarThicknessX;
                                 nonClientAreaExists = true;
                             }
                         } else {
@@ -1336,8 +1390,8 @@ bool WindowPrivate::InternalMessageHandler(const UINT message, const WPARAM wPar
             Utils::DisplayErrorDialog(L"Error occurred when processing WM_NCHITTEST due to ScreenToClient() is not available.");
             return false;
         }
-        const auto resizeBorderThicknessY = static_cast<LONG>(GetResizeBorderThickness2(false));
-        const UINT captionHeight = GetCaptionHeight2();
+        const auto resizeBorderThicknessY = static_cast<LONG>(GetWindowMetrics2(WindowMetrics::ResizeBorderThicknessY));
+        const UINT captionHeight = GetWindowMetrics2(WindowMetrics::CaptionHeight);
         const LONG titleBarHeight = ((m_visibility == WindowState::Maximized) ? captionHeight : (captionHeight + resizeBorderThicknessY));
         const bool isTitleBar = ((m_visibility != WindowState::Minimized) ? (localPos.y <= titleBarHeight) : false);
         const bool isTop = ((m_visibility == WindowState::Normal) ? (localPos.y <= resizeBorderThicknessY) : false);
@@ -1388,23 +1442,23 @@ bool WindowPrivate::InternalMessageHandler(const UINT message, const WPARAM wPar
     return false;
 }
 
-bool WindowPrivate::UpdateFrameMargins2() const noexcept
+bool WindowPrivate::UpdateWindowFrameMargins2() const noexcept
 {
     DWMAPI_API(DwmExtendFrameIntoClientArea);
     if (DwmExtendFrameIntoClientAreaFunc) {
         if (!m_window) {
-            Utils::DisplayErrorDialog(L"Failed to update the frame margins due to the window has not been created yet.");
+            Utils::DisplayErrorDialog(L"Failed to update the window frame margins due to the window has not been created yet.");
             return false;
         }
-        const MARGINS margins = {0, 0, static_cast<int>(GetFrameBorderThickness2()), 0};
+        const MARGINS margins = {0, 0, static_cast<int>(GetWindowVisibleFrameBorderThickness2()), 0};
         const HRESULT hr = DwmExtendFrameIntoClientAreaFunc(m_window, &margins);
         if (FAILED(hr)) {
-            PRINT_HR_ERROR_MESSAGE(DwmExtendFrameIntoClientArea, hr, L"Failed to update the frame margins for the window.")
+            PRINT_HR_ERROR_MESSAGE(DwmExtendFrameIntoClientArea, hr, L"Failed to update the window frame margins for the window.")
             return false;
         }
         return true;
     } else {
-        Utils::DisplayErrorDialog(L"Failed to update the frame margins due to DwmExtendFrameIntoClientArea() is not available.");
+        Utils::DisplayErrorDialog(L"Failed to update the window frame margins due to DwmExtendFrameIntoClientArea() is not available.");
         return false;
     }
 }
@@ -1606,7 +1660,7 @@ bool Window::FilterMessage(const MSG *msg) const noexcept
     return false;
 }
 
-UINT Window::GetInternalMetrics(const std::wstring &name) const noexcept
+UINT Window::GetWindowMetrics(const WindowMetrics metrics) const noexcept
 {
-    return d_ptr->GetInternalMetrics(name);
+    return d_ptr->GetWindowMetrics2(metrics);
 }

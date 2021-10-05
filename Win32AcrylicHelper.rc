@@ -27,8 +27,8 @@
 #include "Resource.h"
 
 // Icons
-IDI_XAMLAPPLICATION       ICON "Assets\\Icon\\ApplicationIcon.ico"
-IDI_XAMLAPPLICATION_SMALL ICON "Assets\\Icon\\ApplicationSmallIcon.ico"
+IDI_MYAPPLICATION       ICON "Assets\\Icon\\ApplicationIcon.ico"
+IDI_MYAPPLICATION_SMALL ICON "Assets\\Icon\\ApplicationSmallIcon.ico"
 
 // Bitmaps
 IDB_MINIMIZEBUTTONICON_LIGHT SVG "Assets\\Bitmap\\MinimizeButtonIconLight.svg"

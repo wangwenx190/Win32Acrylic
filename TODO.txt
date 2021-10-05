@@ -9,3 +9,5 @@
 - DWMAPI_API -> DWM_API
 - VC-LTL 设置为可选项
 - 添加clang-cl、intel-cl以及mingw-w64的工具链
+- 将OutputDebugStringW替换为Utils::DisplayErrorDialog
+- Win11 自动使用 MICA 材质 而不是 亚克力

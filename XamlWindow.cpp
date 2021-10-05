@@ -25,7 +25,16 @@
 #include "pch.h"
 #include "XamlWindow.h"
 #include "SystemLibraryManager.h"
+#include "OperationResult.h"
 #include "Utils.h"
+
+#ifndef GET_X_LPARAM
+#define GET_X_LPARAM(lParam) (static_cast<int>(static_cast<short>(LOWORD(lParam))))
+#endif
+
+#ifndef GET_Y_LPARAM
+#define GET_Y_LPARAM(lParam) (static_cast<int>(static_cast<short>(HIWORD(lParam))))
+#endif
 
 namespace Constants {
 namespace Light {
@@ -51,9 +60,10 @@ public:
     explicit XamlWindowPrivate(XamlWindow *q) noexcept;
     ~XamlWindowPrivate() noexcept;
 
-    [[nodiscard]] bool RefreshBackgroundBrush() noexcept;
-    [[nodiscard]] bool SyncXamlIslandWindowGeometry() noexcept;
-    [[nodiscard]] bool SyncDragBarWindowGeometry() noexcept;
+    [[nodiscard]] bool RefreshWindowBackgroundBrush() noexcept;
+    [[nodiscard]] bool SyncXamlIslandWindowGeometry() const noexcept;
+    [[nodiscard]] bool SyncDragBarWindowGeometry() const noexcept;
+    [[nodiscard]] bool SyncInternalWindowsGeometry() const noexcept;
 
     [[nodiscard]] bool MessageHandler(const UINT message, const WPARAM wParam, const LPARAM lParam, LRESULT *result) noexcept;
     [[nodiscard]] bool FilterMessage(const MSG *msg) const noexcept;
@@ -75,8 +85,8 @@ private:
     HWND m_dragBarWindow = nullptr;
     HWND m_xamlIslandWindow = nullptr;
     winrt::Windows::UI::Xaml::Hosting::DesktopWindowXamlSource m_xamlSource = nullptr;
-    winrt::Windows::UI::Xaml::Controls::Grid m_rootGrid = nullptr;
-    winrt::Windows::UI::Xaml::Media::AcrylicBrush m_backgroundBrush = nullptr;
+    winrt::Windows::UI::Xaml::Controls::Grid m_windowRootGrid = nullptr;
+    winrt::Windows::UI::Xaml::Media::AcrylicBrush m_windowBackgroundBrush = nullptr;
     winrt::Windows::UI::Xaml::Controls::Button m_windowIconButton = nullptr;
     winrt::Windows::UI::Xaml::Controls::Button m_minimizeButton = nullptr;
     winrt::Windows::UI::Xaml::Controls::Button m_maximizeButton = nullptr;
@@ -133,20 +143,24 @@ LRESULT CALLBACK XamlWindowPrivate::DragBarWindowProc(const HWND hWnd, const UIN
         }
         return DefWindowProcWFunc(hWnd, message, wParam, lParam);
     } else {
-        Utils::DisplayErrorDialog(L"SetWindowLongPtrW(), GetWindowLongPtrW() and DefWindowProcW() are not available.");
+        Utils::DisplayErrorDialog(L"Failed to continue the WindowProc function of the drag bar window due to SetWindowLongPtrW(), GetWindowLongPtrW() and DefWindowProcW() are not available.");
         return 0;
     }
 }
 
 bool XamlWindowPrivate::DragBarMessageHandler(const UINT message, const WPARAM wParam, const LPARAM lParam, LRESULT *result) noexcept
 {
+    UNREFERENCED_PARAMETER(wParam); // ### TODO: remove
     if (!result) {
+        Utils::DisplayErrorDialog(L"DragBarMessageHandler: the pointer to the result of the WindowProc function is null.");
         return false;
     }
     if (!q_ptr) {
+        Utils::DisplayErrorDialog(L"DragBarMessageHandler: the q_ptr is null.");
         return false;
     }
     if (!m_dragBarWindow) {
+        Utils::DisplayErrorDialog(L"DragBarMessageHandler: the drag bar window has not been created yet.");
         return false;
     }
     if ((message >= WM_MOUSEFIRST) && (message <= WM_MOUSELAST)) {
@@ -243,6 +257,7 @@ bool XamlWindowPrivate::DragBarMessageHandler(const UINT message, const WPARAM w
 bool XamlWindowPrivate::InitializeXamlIsland() noexcept
 {
     if (!q_ptr) {
+        Utils::DisplayErrorDialog(L"Can't initialize the XAML Island due to the q_ptr is null.");
         return false;
     }
     // This DesktopWindowXamlSource is the object that enables a non-UWP desktop application
@@ -276,18 +291,18 @@ bool XamlWindowPrivate::InitializeXamlIsland() noexcept
         return false;
     }
     // Create the XAML content.
-    m_rootGrid = winrt::Windows::UI::Xaml::Controls::Grid();
-    m_backgroundBrush = winrt::Windows::UI::Xaml::Media::AcrylicBrush();
-    if (!RefreshBackgroundBrush()) {
-        Utils::DisplayErrorDialog(L"Failed to refresh the background brush.");
+    m_windowRootGrid = winrt::Windows::UI::Xaml::Controls::Grid();
+    m_windowBackgroundBrush = winrt::Windows::UI::Xaml::Media::AcrylicBrush();
+    if (!RefreshWindowBackgroundBrush()) {
+        Utils::DisplayErrorDialog(L"Failed to refresh the window background brush.");
         return false;
     }
-    m_backgroundBrush.BackgroundSource(winrt::Windows::UI::Xaml::Media::AcrylicBackgroundSource::HostBackdrop);
-    m_rootGrid.Background(m_backgroundBrush);
-    //m_rootGrid.Children().Clear();
-    //m_rootGrid.Children().Append(/* some UWP control */);
-    //m_rootGrid.UpdateLayout();
-    m_xamlSource.Content(m_rootGrid);
+    m_windowBackgroundBrush.BackgroundSource(winrt::Windows::UI::Xaml::Media::AcrylicBackgroundSource::HostBackdrop);
+    m_windowRootGrid.Background(m_windowBackgroundBrush);
+    //m_windowRootGrid.Children().Clear();
+    //m_windowRootGrid.Children().Append(/* some UWP control */);
+    //m_windowRootGrid.UpdateLayout();
+    m_xamlSource.Content(m_windowRootGrid);
     return true;
 }
 
@@ -302,6 +317,7 @@ bool XamlWindowPrivate::InitializeDragBarWindow() noexcept
     // windows and child windows since Windows 8. Previous Windows versions support
     // WS_EX_LAYERED only for top-level windows.
     if (!q_ptr) {
+        Utils::DisplayErrorDialog(L"Can't initialize the drag bar window due to the q_ptr is null.");
         return false;
     }
     m_dragBarWindow = q_ptr->CreateChildWindow(WS_CHILD, (WS_EX_LAYERED | WS_EX_NOREDIRECTIONBITMAP), DragBarWindowProc, this);
@@ -314,11 +330,11 @@ bool XamlWindowPrivate::InitializeDragBarWindow() noexcept
     USER32_API(SetLayeredWindowAttributes);
     if (SetLayeredWindowAttributesFunc) {
         if (SetLayeredWindowAttributesFunc(m_dragBarWindow, RGB(0, 0, 0), 255, LWA_ALPHA) == FALSE) {
-            PRINT_WIN32_ERROR_MESSAGE(SetLayeredWindowAttributes, L"Failed to set layered window attributes.")
+            PRINT_WIN32_ERROR_MESSAGE(SetLayeredWindowAttributes, L"Failed to change layered window attributes.")
             return false;
         }
     } else {
-        Utils::DisplayErrorDialog(L"SetLayeredWindowAttributes() is not available.");
+        Utils::DisplayErrorDialog(L"Failed to initialize the drag bar window due to SetLayeredWindowAttributes() is not available.");
         return false;
     }
     if (!SyncDragBarWindowGeometry()) {
@@ -328,27 +344,29 @@ bool XamlWindowPrivate::InitializeDragBarWindow() noexcept
     return true;
 }
 
-bool XamlWindowPrivate::RefreshBackgroundBrush() noexcept
+bool XamlWindowPrivate::RefreshWindowBackgroundBrush() noexcept
 {
     if (!q_ptr) {
+        Utils::DisplayErrorDialog(L"Can't refresh the window background brush due to the q_ptr is null.");
         return false;
     }
-    if (m_backgroundBrush == nullptr) {
+    if (m_windowBackgroundBrush == nullptr) {
+        Utils::DisplayErrorDialog(L"Can't refresh the window background brush due to the brush has not been created yet.");
         return false;
     }
     switch (q_ptr->Theme()) {
     case WindowTheme::Light: {
-        m_backgroundBrush.TintColor(Constants::Light::TintColor);
-        m_backgroundBrush.TintOpacity(Constants::Light::TintOpacity);
-        m_backgroundBrush.TintLuminosityOpacity(Constants::Light::LuminosityOpacity);
-        m_backgroundBrush.FallbackColor(Constants::Light::FallbackColor);
+        m_windowBackgroundBrush.TintColor(Constants::Light::TintColor);
+        m_windowBackgroundBrush.TintOpacity(Constants::Light::TintOpacity);
+        m_windowBackgroundBrush.TintLuminosityOpacity(Constants::Light::LuminosityOpacity);
+        m_windowBackgroundBrush.FallbackColor(Constants::Light::FallbackColor);
         return true;
     } break;
     case WindowTheme::Dark: {
-        m_backgroundBrush.TintColor(Constants::Dark::TintColor);
-        m_backgroundBrush.TintOpacity(Constants::Dark::TintOpacity);
-        m_backgroundBrush.TintLuminosityOpacity(Constants::Dark::LuminosityOpacity);
-        m_backgroundBrush.FallbackColor(Constants::Dark::FallbackColor);
+        m_windowBackgroundBrush.TintColor(Constants::Dark::TintColor);
+        m_windowBackgroundBrush.TintOpacity(Constants::Dark::TintOpacity);
+        m_windowBackgroundBrush.TintLuminosityOpacity(Constants::Dark::LuminosityOpacity);
+        m_windowBackgroundBrush.FallbackColor(Constants::Dark::FallbackColor);
         return true;
     } break;
     case WindowTheme::HighContrast: {
@@ -358,19 +376,20 @@ bool XamlWindowPrivate::RefreshBackgroundBrush() noexcept
     return false;
 }
 
-bool XamlWindowPrivate::SyncXamlIslandWindowGeometry() noexcept
+bool XamlWindowPrivate::SyncXamlIslandWindowGeometry() const noexcept
 {
     if (!q_ptr) {
+        Utils::DisplayErrorDialog(L"Can't sync the XAML Island window geometry due to the q_ptr is null.");
         return false;
     }
     if (!m_xamlIslandWindow) {
+        Utils::DisplayErrorDialog(L"Can't sync the XAML Island window geometry due to it has not been created yet.");
         return false;
     }
     USER32_API(SetWindowPos);
     if (SetWindowPosFunc) {
-        // ### FIXME
-        constexpr UINT frameBorderThickness = 1;
-        if (SetWindowPosFunc(m_xamlIslandWindow, HWND_BOTTOM, 0, frameBorderThickness, q_ptr->Width(), (q_ptr->Height() - frameBorderThickness), (SWP_SHOWWINDOW | SWP_NOOWNERZORDER)) == FALSE) {
+        const UINT windowVisibleFrameBorderThickness = q_ptr->GetWindowMetrics(WindowMetrics::WindowVisibleFrameBorderThickness);
+        if (SetWindowPosFunc(m_xamlIslandWindow, HWND_BOTTOM, 0, windowVisibleFrameBorderThickness, q_ptr->Width(), (q_ptr->Height() - windowVisibleFrameBorderThickness), (SWP_SHOWWINDOW | SWP_NOOWNERZORDER)) == FALSE) {
             PRINT_WIN32_ERROR_MESSAGE(SetWindowPos, L"Failed to sync the XAML Island window geometry.")
             return false;
         } else {
@@ -382,41 +401,76 @@ bool XamlWindowPrivate::SyncXamlIslandWindowGeometry() noexcept
     }
 }
 
-bool XamlWindowPrivate::SyncDragBarWindowGeometry() noexcept
+bool XamlWindowPrivate::SyncDragBarWindowGeometry() const noexcept
 {
     if (!q_ptr) {
+        Utils::DisplayErrorDialog(L"Can't sync the drag bar window geometry due to the q_ptr is null.");
         return false;
     }
     if (!m_dragBarWindow) {
+        Utils::DisplayErrorDialog(L"Can't sync the drag bar window geometry due to it has not been created yet.");
         return false;
     }
     USER32_API(SetWindowPos);
     if (SetWindowPosFunc) {
-        // ### FIXME
-        constexpr UINT titleBarHeight = 31;
+        const UINT resizeBorderThicknessY = q_ptr->GetWindowMetrics(WindowMetrics::ResizeBorderThicknessY);
+        const UINT captionHeight = q_ptr->GetWindowMetrics(WindowMetrics::CaptionHeight);
+        const UINT titleBarHeight = ((q_ptr->Visibility() == WindowState::Maximized) ? captionHeight : (captionHeight + resizeBorderThicknessY));
         if (SetWindowPosFunc(m_dragBarWindow, HWND_TOP, 0, 0, q_ptr->Width(), titleBarHeight, (SWP_SHOWWINDOW | SWP_NOOWNERZORDER)) == FALSE) {
-            PRINT_WIN32_ERROR_MESSAGE(SetWindowPos, L"Failed to sync drag bar window geometry.")
+            PRINT_WIN32_ERROR_MESSAGE(SetWindowPos, L"Failed to sync the drag bar window geometry.")
             return false;
         } else {
             return true;
         }
     } else {
-        Utils::DisplayErrorDialog(L"Failed to sync drag bar window geometry due to SetWindowPos() is not available.");
+        Utils::DisplayErrorDialog(L"Failed to sync the drag bar window geometry due to SetWindowPos() is not available.");
         return false;
     }
 }
 
+bool XamlWindowPrivate::SyncInternalWindowsGeometry() const noexcept
+{
+    if (!q_ptr) {
+        Utils::DisplayErrorDialog(L"Can't sync the internal windows geometry due to the q_ptr is null.");
+        return false;
+    }
+    if (!m_xamlIslandWindow) {
+        Utils::DisplayErrorDialog(L"Can't sync the internal windows geometry due to the XAML Island window has not been created yet.");
+        return false;
+    }
+    if (!m_dragBarWindow) {
+        Utils::DisplayErrorDialog(L"Can't sync the internal windows geometry due to the drag bar window has not been created yet.");
+        return false;
+    }
+    if (!SyncXamlIslandWindowGeometry()) {
+        Utils::DisplayErrorDialog(L"Failed to sync the XAML Island window geometry.");
+        return false;
+    }
+    if (!SyncDragBarWindowGeometry()) {
+        Utils::DisplayErrorDialog(L"Failed to sync the drag bar window geometry.");
+        return false;
+    }
+    return true;
+}
+
 bool XamlWindowPrivate::MessageHandler(const UINT message, const WPARAM wParam, const LPARAM lParam, LRESULT *result) noexcept
 {
-
+    // ### TODO
+    UNREFERENCED_PARAMETER(message);
+    UNREFERENCED_PARAMETER(wParam);
+    UNREFERENCED_PARAMETER(lParam);
+    UNREFERENCED_PARAMETER(result);
+    return false;
 }
 
 bool XamlWindowPrivate::FilterMessage(const MSG *msg) const noexcept
 {
     if (!msg) {
+        Utils::DisplayErrorDialog(L"Can't filter Win32 messages due to the pointer to it is null.");
         return false;
     }
     if (m_xamlSource == nullptr) {
+        Utils::DisplayErrorDialog(L"Can't filter Win32 messages due to the XAML source has not been created yet.");
         return false;
     }
     const auto interop2 = m_xamlSource.as<IDesktopWindowXamlSourceNative2>();
@@ -424,10 +478,11 @@ bool XamlWindowPrivate::FilterMessage(const MSG *msg) const noexcept
         BOOL filtered = FALSE;
         const HRESULT hr = interop2->PreTranslateMessage(msg, &filtered);
         if (FAILED(hr)) {
-            PRINT_HR_ERROR_MESSAGE(PreTranslateMessage, hr, L"Failed to pre-translate win32 messages.")
+            PRINT_HR_ERROR_MESSAGE(PreTranslateMessage, hr, L"Failed to pre-translate Win32 messages.")
             return false;
+        } else {
+            return (filtered != FALSE);
         }
-        return (filtered != FALSE);
     } else {
         Utils::DisplayErrorDialog(L"Failed to retrieve the IDesktopWindowXamlSourceNative2.");
         return false;
@@ -440,6 +495,32 @@ XamlWindow::XamlWindow() noexcept
 }
 
 XamlWindow::~XamlWindow() noexcept = default;
+
+void XamlWindow::OnWidthChanged(const UINT arg) noexcept
+{
+    UNREFERENCED_PARAMETER(arg);
+    if (!d_ptr->SyncInternalWindowsGeometry()) {
+        Utils::DisplayErrorDialog(L"Failed to sync the internal windows geometry.");
+    }
+}
+
+void XamlWindow::OnHeightChanged(const UINT arg) noexcept
+{
+    UNREFERENCED_PARAMETER(arg);
+    if (!d_ptr->SyncInternalWindowsGeometry()) {
+        Utils::DisplayErrorDialog(L"Failed to sync the internal windows geometry.");
+    }
+}
+
+void XamlWindow::OnVisibilityChanged(const WindowState arg) noexcept
+{
+    if ((arg == WindowState::Hidden) || (arg == WindowState::Minimized)) {
+        return;
+    }
+    if (!d_ptr->SyncInternalWindowsGeometry()) {
+        Utils::DisplayErrorDialog(L"Failed to sync the internal windows geometry.");
+    }
+}
 
 bool XamlWindow::MessageHandler(const UINT message, const WPARAM wParam, const LPARAM lParam, LRESULT *result) noexcept
 {

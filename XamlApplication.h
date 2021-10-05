@@ -34,7 +34,7 @@ public:
     explicit XamlApplication() noexcept;
     ~XamlApplication() noexcept;
 
-    [[nodiscard]] int Exec() const noexcept;
+    [[nodiscard]] int Run() const noexcept;
 
 private:
     XamlApplication(const XamlApplication &) = delete;

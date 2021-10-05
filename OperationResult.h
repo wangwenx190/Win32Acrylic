@@ -47,6 +47,10 @@ public:
     [[nodiscard]] static OperationResult FromWin32(const DWORD code) noexcept;
     [[nodiscard]] static OperationResult FromHResult(const HRESULT hr) noexcept;
 
+    [[nodiscard]] inline operator DWORD() const noexcept {
+        return Code();
+    }
+
     [[nodiscard]] inline friend bool operator==(const OperationResult &lhs, const OperationResult &rhs) noexcept {
         return (lhs.Code() == rhs.Code());
     }
@@ -83,7 +87,7 @@ if (__operation_result.Failed()) { \
     if (__error_message_from_system.empty()) { \
         Utils::DisplayErrorDialog(additionalMessage); \
     } else { \
-        const std::wstring __final_error_message = L"Function \"" L#function L"()\" failed with error code " + Utils::IntegerToString(__operation_result.Code(), 10) + L": " + __error_message_from_system; \
+        const std::wstring __final_error_message = L"Function " L#function L"() failed with error code " + Utils::IntegerToString(__operation_result.Code(), 10) + L": " + __error_message_from_system; \
         Utils::DisplayErrorDialog(__final_error_message); \
     } \
 }

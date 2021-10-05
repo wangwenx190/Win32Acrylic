@@ -24,6 +24,7 @@
 
 #include "Utils.h"
 #include "SystemLibraryManager.h"
+#include "OperationResult.h"
 #include <ShellScalingApi.h>
 #include <ComBaseApi.h>
 

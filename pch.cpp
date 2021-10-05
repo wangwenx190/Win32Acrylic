@@ -23,22 +23,3 @@
  */
 
 #include "pch.h"
-#include "XamlApplication.h"
-
-class XamlApplicationPrivate
-{
-public:
-    explicit XamlApplicationPrivate(XamlApplication *q) noexcept;
-    ~XamlApplicationPrivate() noexcept;
-
-    [[nodiscard]] int Exec() const noexcept;
-
-private:
-    XamlApplicationPrivate(const XamlApplicationPrivate &) = delete;
-    XamlApplicationPrivate &operator=(const XamlApplicationPrivate &) = delete;
-    XamlApplicationPrivate(XamlApplicationPrivate &&) = delete;
-    XamlApplicationPrivate &operator=(XamlApplicationPrivate &&) = delete;
-
-private:
-    XamlApplication *q_ptr = nullptr;
-};

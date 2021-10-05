@@ -46,6 +46,7 @@ set(SOURCES
     Win32AcrylicHelper.rc Win32AcrylicHelper.manifest
     Resource.h
     Definitions.h
+    pch.h pch.cpp
     VersionNumber.hpp
     RuntimeObject.cpp
     OperationResult.h OperationResult.cpp

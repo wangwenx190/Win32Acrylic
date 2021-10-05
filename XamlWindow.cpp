@@ -22,37 +22,7 @@
  * SOFTWARE.
  */
 
-#include <SDKDDKVer.h>
-#include <Windows.h>
-#include <Unknwn.h> // To enable support for non-WinRT interfaces, Unknwn.h must be included before any C++/WinRT headers.
-
-// Avoid collision with WinRT's same name function.
-// https://docs.microsoft.com/en-us/windows/uwp/cpp-and-winrt-apis/faq#how-do-i-resolve-ambiguities-with-getcurrenttime-and-or-try-
-#pragma push_macro("GetCurrentTime")
-#pragma push_macro("TRY")
-#undef GetCurrentTime
-#undef TRY
-
-#include <WinRT\Base.h>
-
-// Workaround for Windows SDK bug.
-// See https://github.com/microsoft/Windows.UI.Composition-Win32-Samples/issues/47
-namespace winrt::impl
-{
-    template <typename Async>
-    auto wait_for(Async const& async, Windows::Foundation::TimeSpan const& timeout);
-}
-
-#include <WinRT\Windows.Foundation.Collections.h>
-#include <WinRT\Windows.UI.Xaml.Hosting.h>
-#include <WinRT\Windows.UI.Xaml.Controls.h>
-#include <WinRT\Windows.UI.Xaml.Media.h>
-#include <Windows.UI.Xaml.Hosting.DesktopWindowXamlSource.h>
-
-// Restore the macros from Win32 headers.
-#pragma pop_macro("TRY")
-#pragma pop_macro("GetCurrentTime")
-
+#include "pch.h"
 #include "XamlWindow.h"
 #include "SystemLibraryManager.h"
 #include "Utils.h"

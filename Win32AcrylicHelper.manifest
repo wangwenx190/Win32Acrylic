@@ -40,8 +40,8 @@
   </trustInfo>
   <compatibility xmlns="urn:schemas-microsoft-com:compatibility.v1">
     <application>
-      <!-- Windows 10 21H1 -->
-      <maxversiontested Id="10.0.19043.0"/>
+      <!-- Windows 10 21H2 -->
+      <maxversiontested Id="10.0.22000.0"/>
       <!-- Windows 10 -->
       <supportedOS Id="{8e0f7a12-bfb3-4fe8-b9a5-48fd50a15a9a}"/>
     </application>

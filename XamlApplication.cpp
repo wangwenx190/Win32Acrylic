@@ -25,6 +25,7 @@
 #include "pch.h"
 #include "XamlApplication.h"
 #include "XamlWindow.h"
+#include "WindowsVersion.h"
 #include "Utils.h"
 
 class XamlApplicationPrivate
@@ -74,6 +75,13 @@ XamlApplicationPrivate::~XamlApplicationPrivate() noexcept
 
 bool XamlApplicationPrivate::Initialize() noexcept
 {
+    const VersionNumber &curOsVer = WindowsVersion::CurrentVersion();
+    const std::wstring osVerDbgMsg = L"Current operating system version: " + WindowsVersion::ToHumanReadableString(curOsVer);
+    OutputDebugStringW(osVerDbgMsg.c_str());
+    if (curOsVer < WindowsVersion::Windows10_19Half1) {
+        Utils::DisplayErrorDialog(L"This application only supports running on Windows 10 19H1 and onwards.");
+        return false;
+    }
     if (!m_comInitialized) {
         // The call to winrt::init_apartment() initializes COM. By default, in a multi-threaded apartment.
         winrt::init_apartment(winrt::apartment_type::single_threaded);
@@ -82,6 +90,10 @@ bool XamlApplicationPrivate::Initialize() noexcept
     if (m_xamlManager == nullptr) {
         // Initialize the XAML framework's core window for the current thread.
         m_xamlManager = winrt::Windows::UI::Xaml::Hosting::WindowsXamlManager::InitializeForCurrentThread();
+        if (m_xamlManager == nullptr) {
+            Utils::DisplayErrorDialog(L"Failed to initialize the XAML framework.");
+            return false;
+        }
     }
     m_window = std::make_unique<XamlWindow>();
     // ### TODO: move to screen center.

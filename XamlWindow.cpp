@@ -389,7 +389,8 @@ bool XamlWindowPrivate::SyncXamlIslandWindowGeometry() const noexcept
     USER32_API(SetWindowPos);
     if (SetWindowPosFunc) {
         const UINT windowVisibleFrameBorderThickness = q_ptr->GetWindowMetrics(WindowMetrics::WindowVisibleFrameBorderThickness);
-        if (SetWindowPosFunc(m_xamlIslandWindow, HWND_BOTTOM, 0, windowVisibleFrameBorderThickness, q_ptr->Width(), (q_ptr->Height() - windowVisibleFrameBorderThickness), (SWP_SHOWWINDOW | SWP_NOOWNERZORDER)) == FALSE) {
+        const UINT actualFrameBorderThickness = ((q_ptr->Visibility() == WindowState::Maximized) ? 0 : windowVisibleFrameBorderThickness);
+        if (SetWindowPosFunc(m_xamlIslandWindow, HWND_BOTTOM, 0, actualFrameBorderThickness, q_ptr->Width(), (q_ptr->Height() - actualFrameBorderThickness), (SWP_SHOWWINDOW | SWP_NOOWNERZORDER)) == FALSE) {
             PRINT_WIN32_ERROR_MESSAGE(SetWindowPos, L"Failed to sync the XAML Island window geometry.")
             return false;
         } else {

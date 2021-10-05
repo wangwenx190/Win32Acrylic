@@ -26,6 +26,7 @@
 #include <Windows.h>
 #include "WindowsVersion.h"
 #include "SystemLibrary.h"
+#include "OperationResult.h"
 #include "Utils.h"
 
 #ifndef STATUS_SUCCESS
@@ -34,7 +35,7 @@
 
 using NTSTATUS = LONG;
 
-const VersionNumber &WindowsVersion::CurrentWindowsVersion() noexcept
+const VersionNumber &WindowsVersion::CurrentVersion() noexcept
 {
     static bool tried = false;
     static VersionNumber version = VersionNumber();
@@ -61,7 +62,7 @@ const VersionNumber &WindowsVersion::CurrentWindowsVersion() noexcept
     return version;
 }
 
-bool WindowsVersion::IsWindowsVersionOrGreater(const VersionNumber &version) noexcept
+bool WindowsVersion::IsGreaterOrEqual(const VersionNumber &version) noexcept
 {
     OSVERSIONINFOEXW osvi;
     SecureZeroMemory(&osvi, sizeof(osvi));
@@ -77,10 +78,10 @@ bool WindowsVersion::IsWindowsVersionOrGreater(const VersionNumber &version) noe
     return (VerifyVersionInfoW(&osvi, VER_MAJORVERSION | VER_MINORVERSION | VER_BUILDNUMBER, dwlConditionMask) != FALSE);
 }
 
-std::wstring WindowsVersion::WindowsVersionToHumanReadableString(const VersionNumber &version) noexcept
+std::wstring WindowsVersion::ToHumanReadableString(const VersionNumber &version) noexcept
 {
     std::wstring humanReadableString = {};
-    if (version >= Windows11) {
+    if (version >= Windows10_21Half2) {
         humanReadableString = L"Windows 11"; // ### TODO
     } else if (version >= Windows10_21Half1) {
         humanReadableString = L"Windows 10 Version 21H1 (May 2021 Update)";

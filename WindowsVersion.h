@@ -53,9 +53,9 @@ namespace WindowsVersion
     [[maybe_unused]] constexpr VersionNumber Windows10_21Half1          = VersionNumber(10, 0, 19043);
     [[maybe_unused]] constexpr VersionNumber Windows10_21Half2          = VersionNumber(10, 0, 22000);
 
-    [[nodiscard]] const VersionNumber &CurrentWindowsVersion() noexcept;
+    [[nodiscard]] const VersionNumber &CurrentVersion() noexcept;
 
-    [[nodiscard]] bool IsWindowsVersionOrGreater(const VersionNumber &version) noexcept;
+    [[nodiscard]] bool IsGreaterOrEqual(const VersionNumber &version) noexcept;
 
-    [[nodiscard]] std::wstring WindowsVersionToHumanReadableString(const VersionNumber &version) noexcept;
+    [[nodiscard]] std::wstring ToHumanReadableString(const VersionNumber &version) noexcept;
 } // namespace WindowsVersion

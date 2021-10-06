@@ -35,8 +35,8 @@
 #ifndef RUNTIMEOBJECT_API_VOID
 #define RUNTIMEOBJECT_API_VOID(symbol, ...) \
     COMBASE_API(symbol); \
-    if (symbol##Func) { \
-        symbol##Func(__VA_ARGS__); \
+    if (symbol##_API) { \
+        symbol##_API(__VA_ARGS__); \
     } else { \
         OutputDebugStringW(L#symbol L"() is not available."); \
     }
@@ -45,8 +45,8 @@
 #ifndef RUNTIMEOBJECT_API_RETURN
 #define RUNTIMEOBJECT_API_RETURN(symbol, defVal, ...) \
     COMBASE_API(symbol); \
-    if (symbol##Func) { \
-        return symbol##Func(__VA_ARGS__); \
+    if (symbol##_API) { \
+        return symbol##_API(__VA_ARGS__); \
     } else { \
         OutputDebugStringW(L#symbol L"() is not available."); \
         return defVal; \
@@ -695,8 +695,8 @@ IIDFromString(
 )
 {
     OLE32_API(IIDFromString);
-    if (IIDFromStringFunc) {
-        return IIDFromStringFunc(lpsz, lpiid);
+    if (IIDFromString_API) {
+        return IIDFromString_API(lpsz, lpiid);
     } else {
         OutputDebugStringW(L"IIDFromString() is not available.");
         return E_NOTIMPL;
@@ -709,8 +709,8 @@ CoIncrementMTAUsage(
 )
 {
     OLE32_API(CoIncrementMTAUsage);
-    if (CoIncrementMTAUsageFunc) {
-        return CoIncrementMTAUsageFunc(pCookie);
+    if (CoIncrementMTAUsage_API) {
+        return CoIncrementMTAUsage_API(pCookie);
     } else {
         OutputDebugStringW(L"CoIncrementMTAUsage() is not available.");
         return E_NOTIMPL;
@@ -725,8 +725,8 @@ SysFreeString(
 )
 {
     OLEAUT32_API(SysFreeString);
-    if (SysFreeStringFunc) {
-        SysFreeStringFunc(bstrString);
+    if (SysFreeString_API) {
+        SysFreeString_API(bstrString);
     } else {
         OutputDebugStringW(L"SysFreeString() is not available.");
     }

@@ -4,8 +4,6 @@
 - 用XAML控件自制一个标题栏，并在WM_NCHITTEST里正确的返回三个系统按钮的位置
 - 点击窗口左上角窗口图标位置，弹出系统菜单
 - 看能否将SystemLibraryManager的宏改进为类或函数
-- DWMAPI_API -> DWM_API
 - VC-LTL 设置为可选项
 - 添加clang-cl、intel-cl以及mingw-w64的工具链
-- 将OutputDebugStringW替换为Utils::DisplayErrorDialog
 - Win11 自动使用 MICA 材质 而不是 亚克力

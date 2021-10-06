@@ -58,7 +58,7 @@ private:
 #endif
 
 #ifndef __RESOLVE_API
-#define __RESOLVE_API(file, symbol) static const auto symbol##Func = __RESOLVE(file, symbol)
+#define __RESOLVE_API(file, symbol) static const auto symbol##_API = __RESOLVE(file, symbol)
 #endif
 
 #ifndef USER32_API
@@ -89,6 +89,6 @@ private:
 #define UXTHEME_API(symbol) __RESOLVE_API(UxTheme.dll, symbol)
 #endif
 
-#ifndef DWMAPI_API
-#define DWMAPI_API(symbol) __RESOLVE_API(DwmApi.dll, symbol)
+#ifndef DWM_API
+#define DWM_API(symbol) __RESOLVE_API(DwmApi.dll, symbol)
 #endif

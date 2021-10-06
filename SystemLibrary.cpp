@@ -75,7 +75,7 @@ private:
     std::unordered_map<std::wstring, FARPROC> m_resolvedSymbols = {};
     static inline bool m_tried = false;
     using LoadLibraryExWSig = decltype(&::LoadLibraryExW);
-    static inline LoadLibraryExWSig m_LoadLibraryExWFunc = nullptr;
+    static inline LoadLibraryExWSig m_LoadLibraryExW_API = nullptr;
 };
 
 void SystemLibraryPrivate::Initialize() noexcept
@@ -84,7 +84,7 @@ void SystemLibraryPrivate::Initialize() noexcept
         return;
     }
     m_tried = true;
-    if (m_LoadLibraryExWFunc) {
+    if (m_LoadLibraryExW_API) {
         return;
     }
     MEMORY_BASIC_INFORMATION mbi;
@@ -94,8 +94,8 @@ void SystemLibraryPrivate::Initialize() noexcept
     } else {
         const auto kernel32 = static_cast<HMODULE>(mbi.AllocationBase);
         if (kernel32) {
-            m_LoadLibraryExWFunc = reinterpret_cast<LoadLibraryExWSig>(GetProcAddress(kernel32, "LoadLibraryExW"));
-            if (!m_LoadLibraryExWFunc) {
+            m_LoadLibraryExW_API = reinterpret_cast<LoadLibraryExWSig>(GetProcAddress(kernel32, "LoadLibraryExW"));
+            if (!m_LoadLibraryExW_API) {
                 PRINT_WIN32_ERROR_MESSAGE(GetProcAddress, L"Failed to resolve symbol \"LoadLibraryExW()\".")
             }
         } else {
@@ -147,7 +147,7 @@ bool SystemLibraryPrivate::Load() noexcept
     if (m_failedToLoad) {
         return false;
     }
-    if (!m_LoadLibraryExWFunc) {
+    if (!m_LoadLibraryExW_API) {
         OutputDebugStringW(L"LoadLibraryExW() is not available.");
         return false;
     }
@@ -155,7 +155,7 @@ bool SystemLibraryPrivate::Load() noexcept
         OutputDebugStringW(L"The file name has not been set, can't load library now.");
         return false;
     }
-    m_module = m_LoadLibraryExWFunc(m_fileName.c_str(), nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
+    m_module = m_LoadLibraryExW_API(m_fileName.c_str(), nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
     if (!m_module) {
         m_failedToLoad = true;
         const std::wstring msg = L"Failed to load dynamic link library \"" + m_fileName + L"\".";

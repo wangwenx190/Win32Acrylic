@@ -36,15 +36,13 @@ static constexpr int g_PROCESS_DPI_UNAWARE_GDISCALED = 4;
 void Utils::DisplayErrorDialog(const std::wstring &text) noexcept
 {
     USER32_API(MessageBoxW);
-    if (MessageBoxWFunc) {
-        if (text.empty()) {
-            OutputDebugStringW(L"Failed to show the message box due to the content is empty.");
-        } else {
+    if (MessageBoxW_API) {
+        if (!text.empty()) {
             OutputDebugStringW(text.c_str());
-            MessageBoxWFunc(nullptr, text.c_str(), L"Error", MB_ICONERROR | MB_OK);
+            MessageBoxW_API(nullptr, text.c_str(), L"Error", MB_ICONERROR | MB_OK);
         }
     } else {
-        OutputDebugStringW(L"MessageBoxW() is not available.");
+        OutputDebugStringW(L"Can't display the error dialog due to MessageBoxW() is not available.");
     }
 }
 
@@ -52,21 +50,21 @@ std::wstring Utils::GenerateGUID() noexcept
 {
     OLE32_API(CoCreateGuid);
     OLE32_API(StringFromGUID2);
-    if (CoCreateGuidFunc && StringFromGUID2Func) {
+    if (CoCreateGuid_API && StringFromGUID2_API) {
         GUID guid = {};
-        const HRESULT hr = CoCreateGuidFunc(&guid);
+        const HRESULT hr = CoCreateGuid_API(&guid);
         if (FAILED(hr)) {
             PRINT_HR_ERROR_MESSAGE(CoCreateGuid, hr, L"Failed to generate a new GUID.")
             return {};
         }
         wchar_t buf[MAX_PATH] = { L'\0' };
-        if (StringFromGUID2Func(guid, buf, MAX_PATH) == 0) {
+        if (StringFromGUID2_API(guid, buf, MAX_PATH) == 0) {
             PRINT_WIN32_ERROR_MESSAGE(StringFromGUID2, L"Failed to convert GUID to string.")
             return {};
         }
         return buf;
     } else {
-        OutputDebugStringW(L"CoCreateGuid() and StringFromGUID2() are not available.");
+        DisplayErrorDialog(L"Can't generate a new GUID due to CoCreateGuid() and StringFromGUID2() are not available.");
         return {};
     }
 }
@@ -75,10 +73,10 @@ ProcessDPIAwareness Utils::GetProcessDPIAwareness() noexcept
 {
     USER32_API(GetThreadDpiAwarenessContext);
     USER32_API(GetAwarenessFromDpiAwarenessContext);
-    if (GetThreadDpiAwarenessContextFunc && GetAwarenessFromDpiAwarenessContextFunc) {
-        const DPI_AWARENESS_CONTEXT context = GetThreadDpiAwarenessContextFunc();
+    if (GetThreadDpiAwarenessContext_API && GetAwarenessFromDpiAwarenessContext_API) {
+        const DPI_AWARENESS_CONTEXT context = GetThreadDpiAwarenessContext_API();
         if (context) {
-            const auto awareness = static_cast<int>(GetAwarenessFromDpiAwarenessContextFunc(context));
+            const auto awareness = static_cast<int>(GetAwarenessFromDpiAwarenessContext_API(context));
             switch (awareness) {
             case g_DPI_AWARENESS_PER_MONITOR_AWARE_V2: {
                 return ProcessDPIAwareness::PerMonitorV2;
@@ -108,9 +106,9 @@ ProcessDPIAwareness Utils::GetProcessDPIAwareness() noexcept
     } else {
         OutputDebugStringW(L"GetThreadDpiAwarenessContext() and GetAwarenessFromDpiAwarenessContext() are not available.");
         SHCORE_API(GetProcessDpiAwareness);
-        if (GetProcessDpiAwarenessFunc) {
+        if (GetProcessDpiAwareness_API) {
             int awareness = 0;
-            const HRESULT hr = GetProcessDpiAwarenessFunc(nullptr, reinterpret_cast<PROCESS_DPI_AWARENESS *>(&awareness));
+            const HRESULT hr = GetProcessDpiAwareness_API(nullptr, reinterpret_cast<PROCESS_DPI_AWARENESS *>(&awareness));
             if (SUCCEEDED(hr)) {
                 switch (awareness) {
                 case g_PROCESS_PER_MONITOR_DPI_AWARE_V2: {
@@ -137,14 +135,14 @@ ProcessDPIAwareness Utils::GetProcessDPIAwareness() noexcept
         } else {
             OutputDebugStringW(L"GetProcessDpiAwareness() is not available.");
             USER32_API(IsProcessDPIAware);
-            if (IsProcessDPIAwareFunc) {
-                if (IsProcessDPIAwareFunc() == FALSE) {
+            if (IsProcessDPIAware_API) {
+                if (IsProcessDPIAware_API() == FALSE) {
                     return ProcessDPIAwareness::Unaware;
                 } else {
                     return ProcessDPIAwareness::System;
                 }
             } else {
-                OutputDebugStringW(L"IsProcessDPIAware() is not available.");
+                DisplayErrorDialog(L"Can't retrieve the DPI awareness of the current process due to IsProcessDPIAware() is not available.");
                 return ProcessDPIAwareness::Unaware;
             }
         }
@@ -178,8 +176,8 @@ bool Utils::SetProcessDPIAwareness(const ProcessDPIAwareness dpiAwareness) noexc
     } break;
     }
     USER32_API(SetProcessDpiAwarenessContext);
-    if (SetProcessDpiAwarenessContextFunc) {
-        if (SetProcessDpiAwarenessContextFunc(dac) == FALSE) {
+    if (SetProcessDpiAwarenessContext_API) {
+        if (SetProcessDpiAwarenessContext_API(dac) == FALSE) {
             const DWORD dwError = GetLastError();
             if (dwError == ERROR_ACCESS_DENIED) {
                 // ERROR_ACCESS_DENIED means set externally (MSVC manifest or external application loading our library).
@@ -195,8 +193,8 @@ bool Utils::SetProcessDPIAwareness(const ProcessDPIAwareness dpiAwareness) noexc
     } else {
         OutputDebugStringW(L"SetProcessDpiAwarenessContext() is not available.");
         SHCORE_API(SetProcessDpiAwareness);
-        if (SetProcessDpiAwarenessFunc) {
-            const HRESULT hr = SetProcessDpiAwarenessFunc(pda);
+        if (SetProcessDpiAwareness_API) {
+            const HRESULT hr = SetProcessDpiAwareness_API(pda);
             if (FAILED(hr)) {
                 if (hr == E_ACCESSDENIED) {
                     // E_ACCESSDENIED means set externally (MSVC manifest or external application loading our library).
@@ -212,8 +210,8 @@ bool Utils::SetProcessDPIAwareness(const ProcessDPIAwareness dpiAwareness) noexc
         } else {
             OutputDebugStringW(L"SetProcessDpiAwareness() is not available.");
             USER32_API(SetProcessDPIAware);
-            if (SetProcessDPIAwareFunc) {
-                if (SetProcessDPIAwareFunc() == FALSE) {
+            if (SetProcessDPIAware_API) {
+                if (SetProcessDPIAware_API() == FALSE) {
                     const DWORD dwError = GetLastError();
                     if (dwError == ERROR_ACCESS_DENIED) {
                         // ERROR_ACCESS_DENIED means set externally (MSVC manifest or external application loading our library).
@@ -227,7 +225,7 @@ bool Utils::SetProcessDPIAwareness(const ProcessDPIAwareness dpiAwareness) noexc
                     return true;
                 }
             } else {
-                OutputDebugStringW(L"SetProcessDPIAware() is not available.");
+                DisplayErrorDialog(L"Can't set the DPI awareness of the current process due to SetProcessDPIAware() is not available.");
                 return false;
             }
         }

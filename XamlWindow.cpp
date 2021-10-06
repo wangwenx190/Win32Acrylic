@@ -131,25 +131,25 @@ LRESULT CALLBACK XamlWindowPrivate::DragBarWindowProc(const HWND hWnd, const UIN
     USER32_API(SetWindowLongPtrW);
     USER32_API(GetWindowLongPtrW);
     USER32_API(DefWindowProcW);
-    if (SetWindowLongPtrWFunc && GetWindowLongPtrWFunc && DefWindowProcWFunc) {
+    if (SetWindowLongPtrW_API && GetWindowLongPtrW_API && DefWindowProcW_API) {
         if (message == WM_NCCREATE) {
             const auto cs = reinterpret_cast<LPCREATESTRUCT>(lParam);
             const auto that = static_cast<XamlWindowPrivate *>(cs->lpCreateParams);
-            if (SetWindowLongPtrWFunc(hWnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(that)) != 0) {
+            if (SetWindowLongPtrW_API(hWnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(that)) != 0) {
                 Utils::DisplayErrorDialog(L"The extra data of the drag bar window has been overwritten.");
             }
         } else if (message == WM_NCDESTROY) {
-            if (SetWindowLongPtrWFunc(hWnd, GWLP_USERDATA, 0) == 0) {
+            if (SetWindowLongPtrW_API(hWnd, GWLP_USERDATA, 0) == 0) {
                 Utils::DisplayErrorDialog(L"The drag bar window doesn't contain any extra data.");
             }
         }
-        if (const auto that = reinterpret_cast<XamlWindowPrivate *>(GetWindowLongPtrWFunc(hWnd, GWLP_USERDATA))) {
+        if (const auto that = reinterpret_cast<XamlWindowPrivate *>(GetWindowLongPtrW_API(hWnd, GWLP_USERDATA))) {
             LRESULT result = 0;
             if (that->DragBarMessageHandler(message, wParam, lParam, &result)) {
                 return result;
             }
         }
-        return DefWindowProcWFunc(hWnd, message, wParam, lParam);
+        return DefWindowProcW_API(hWnd, message, wParam, lParam);
     } else {
         Utils::DisplayErrorDialog(L"Failed to continue the WindowProc function of the drag bar window due to SetWindowLongPtrW(), GetWindowLongPtrW() and DefWindowProcW() are not available.");
         return 0;
@@ -219,17 +219,17 @@ bool XamlWindowPrivate::DragBarMessageHandler(const UINT message, const WPARAM w
         if (nonClientMessage.has_value() && mainWindowHandle) {
             USER32_API(ClientToScreen);
             USER32_API(SendMessageW);
-            if (ClientToScreenFunc && SendMessageWFunc) {
+            if (ClientToScreen_API && SendMessageW_API) {
                 POINT pos = {GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)};
-                if (ClientToScreenFunc(m_dragBarWindow, &pos) == FALSE) {
+                if (ClientToScreen_API(m_dragBarWindow, &pos) == FALSE) {
                     PRINT_WIN32_ERROR_MESSAGE(ClientToScreen, L"Failed to translate from window coordinate to screen coordinate.")
                     return false;
                 }
                 const LPARAM newLParam = MAKELPARAM(pos.x, pos.y);
                 // Hit test the parent window at the screen coordinates the user clicked in the drag input sink window,
                 // then pass that click through as an NC click in that location.
-                const LRESULT hitTestResult = SendMessageWFunc(mainWindowHandle, WM_NCHITTEST, 0, newLParam);
-                SendMessageWFunc(mainWindowHandle, nonClientMessage.value(), hitTestResult, newLParam);
+                const LRESULT hitTestResult = SendMessageW_API(mainWindowHandle, WM_NCHITTEST, 0, newLParam);
+                SendMessageW_API(mainWindowHandle, nonClientMessage.value(), hitTestResult, newLParam);
                 *result = 0;
                 return true;
             } else {
@@ -348,8 +348,8 @@ bool XamlWindowPrivate::InitializeDragBarWindow() noexcept
     // Layered window won't be visible until we call SetLayeredWindowAttributes()
     // or UpdateLayeredWindow().
     USER32_API(SetLayeredWindowAttributes);
-    if (SetLayeredWindowAttributesFunc) {
-        if (SetLayeredWindowAttributesFunc(m_dragBarWindow, RGB(0, 0, 0), 255, LWA_ALPHA) == FALSE) {
+    if (SetLayeredWindowAttributes_API) {
+        if (SetLayeredWindowAttributes_API(m_dragBarWindow, RGB(0, 0, 0), 255, LWA_ALPHA) == FALSE) {
             PRINT_WIN32_ERROR_MESSAGE(SetLayeredWindowAttributes, L"Failed to change layered window attributes.")
             return false;
         }
@@ -407,10 +407,10 @@ bool XamlWindowPrivate::SyncXamlIslandWindowGeometry() const noexcept
         return false;
     }
     USER32_API(SetWindowPos);
-    if (SetWindowPosFunc) {
+    if (SetWindowPos_API) {
         const UINT windowVisibleFrameBorderThickness = q_ptr->GetWindowMetrics(WindowMetrics::WindowVisibleFrameBorderThickness);
         const UINT actualFrameBorderThickness = ((q_ptr->Visibility() == WindowState::Maximized) ? 0 : windowVisibleFrameBorderThickness);
-        if (SetWindowPosFunc(m_xamlIslandWindow, HWND_BOTTOM, 0, actualFrameBorderThickness, q_ptr->Width(), (q_ptr->Height() - actualFrameBorderThickness), (SWP_SHOWWINDOW | SWP_NOOWNERZORDER)) == FALSE) {
+        if (SetWindowPos_API(m_xamlIslandWindow, HWND_BOTTOM, 0, actualFrameBorderThickness, q_ptr->Width(), (q_ptr->Height() - actualFrameBorderThickness), (SWP_SHOWWINDOW | SWP_NOOWNERZORDER)) == FALSE) {
             PRINT_WIN32_ERROR_MESSAGE(SetWindowPos, L"Failed to sync the XAML Island window geometry.")
             return false;
         } else {
@@ -433,11 +433,11 @@ bool XamlWindowPrivate::SyncDragBarWindowGeometry() const noexcept
         return false;
     }
     USER32_API(SetWindowPos);
-    if (SetWindowPosFunc) {
+    if (SetWindowPos_API) {
         const UINT resizeBorderThicknessY = q_ptr->GetWindowMetrics(WindowMetrics::ResizeBorderThicknessY);
         const UINT captionHeight = q_ptr->GetWindowMetrics(WindowMetrics::CaptionHeight);
         const UINT titleBarHeight = ((q_ptr->Visibility() == WindowState::Maximized) ? captionHeight : (captionHeight + resizeBorderThicknessY));
-        if (SetWindowPosFunc(m_dragBarWindow, HWND_TOP, 0, 0, q_ptr->Width(), titleBarHeight, (SWP_SHOWWINDOW | SWP_NOOWNERZORDER)) == FALSE) {
+        if (SetWindowPos_API(m_dragBarWindow, HWND_TOP, 0, 0, q_ptr->Width(), titleBarHeight, (SWP_SHOWWINDOW | SWP_NOOWNERZORDER)) == FALSE) {
             PRINT_WIN32_ERROR_MESSAGE(SetWindowPos, L"Failed to sync the drag bar window geometry.")
             return false;
         } else {

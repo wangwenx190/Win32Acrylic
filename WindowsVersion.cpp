@@ -42,12 +42,12 @@ const VersionNumber &WindowsVersion::CurrentVersion() noexcept
     if (version.Empty()) {
         if (!tried) {
             tried = true;
-            static const auto RtlGetVersionFunc = reinterpret_cast<NTSTATUS(WINAPI *)(PRTL_OSVERSIONINFOW)>(SystemLibrary::GetSymbol(L"NTDll.dll", L"RtlGetVersion"));
-            if (RtlGetVersionFunc) {
+            static const auto RtlGetVersion_API = reinterpret_cast<NTSTATUS(WINAPI *)(PRTL_OSVERSIONINFOW)>(SystemLibrary::GetSymbol(L"NTDll.dll", L"RtlGetVersion"));
+            if (RtlGetVersion_API) {
                 RTL_OSVERSIONINFOW osvi;
                 SecureZeroMemory(&osvi, sizeof(osvi));
                 osvi.dwOSVersionInfoSize = sizeof(osvi);
-                if (RtlGetVersionFunc(&osvi) == STATUS_SUCCESS) {
+                if (RtlGetVersion_API(&osvi) == STATUS_SUCCESS) {
                     version.Major(osvi.dwMajorVersion);
                     version.Minor(osvi.dwMinorVersion);
                     version.Patch(osvi.dwBuildNumber);

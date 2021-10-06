@@ -25,6 +25,7 @@
 #include "Window.h"
 #include "SystemLibraryManager.h"
 #include "OperationResult.h"
+#include "WindowsVersion.h"
 #include "Utils.h"
 #include "Resource.h"
 #include <ShellApi.h>
@@ -85,10 +86,18 @@ static constexpr UINT g_defaultAutoHideTaskBarThicknessY = 2;
 
 static constexpr DWORD g_DWMWA_USE_IMMERSIVE_DARK_MODE_BEFORE_20H1 = 19;
 static constexpr DWORD g_DWMWA_USE_IMMERSIVE_DARK_MODE = 20;
+static constexpr DWORD g_DWMWA_WINDOW_CORNER_PREFERENCE = 33;
 static constexpr DWORD g_DWMWA_VISIBLE_FRAME_BORDER_THICKNESS = 37;
 
 static constexpr wchar_t g_dwmRegistryKey[] = LR"(Software\Microsoft\Windows\DWM)";
 static constexpr wchar_t g_personalizeRegistryKey[] = LR"(Software\Microsoft\Windows\CurrentVersion\Themes\Personalize)";
+
+enum class DwmWindowCornerPreference : WORD
+{
+    DoNotRound = 1,
+    Round = 2,
+    RoundSmall = 3
+};
 
 [[nodiscard]] static inline DWORD GetDWORDFromRegistry(const HKEY rootKey, const std::wstring &subKey, const std::wstring &keyName) noexcept
 {
@@ -369,7 +378,7 @@ public:
     void Visibility(const WindowState value) const noexcept;
 
     [[nodiscard]] WindowFrameCorner FrameCorner() const noexcept;
-    void FrameCorner(const WindowFrameCorner value) const noexcept;
+    void FrameCorner(const WindowFrameCorner value) noexcept;
 
     [[nodiscard]] WindowTheme Theme() const noexcept;
 
@@ -795,7 +804,7 @@ bool WindowPrivate::Initialize() noexcept
     m_width = windowSize.cx;
     m_height = windowSize.cy;
     m_title = {};
-    m_frameCorner = WindowFrameCorner::Square; // ### FIXME: Win10 defaults to Square, Win11 defaults to Round.
+    m_frameCorner = ((WindowsVersion::CurrentVersion() >= WindowsVersion::Windows10_21Half2) ? WindowFrameCorner::Round : WindowFrameCorner::Square);
     if (q_ptr) {
         q_ptr->OnXChanged(m_x);
         q_ptr->OnYChanged(m_y);
@@ -848,17 +857,19 @@ std::wstring WindowPrivate::Title() const noexcept
 
 void WindowPrivate::Title(const std::wstring &value) const noexcept
 {
-    USER32_API(SetWindowTextW);
-    if (SetWindowTextW_API) {
-        if (!m_window) {
-            Utils::DisplayErrorDialog(L"Failed to change the window title due to the window has not been created yet.");
-            return;
+    if (m_title != value) {
+        USER32_API(SetWindowTextW);
+        if (SetWindowTextW_API) {
+            if (!m_window) {
+                Utils::DisplayErrorDialog(L"Failed to change the window title due to the window has not been created yet.");
+                return;
+            }
+            if (SetWindowTextW_API(m_window, value.c_str()) == FALSE) {
+                PRINT_WIN32_ERROR_MESSAGE(SetWindowTextW, L"Failed to change the window title.")
+            }
+        } else {
+            Utils::DisplayErrorDialog(L"Failed to change the window title due to SetWindowTextW() is not available.");
         }
-        if (SetWindowTextW_API(m_window, value.c_str()) == FALSE) {
-            PRINT_WIN32_ERROR_MESSAGE(SetWindowTextW, L"Failed to change the window title.")
-        }
-    } else {
-        Utils::DisplayErrorDialog(L"Failed to change the window title due to SetWindowTextW() is not available.");
     }
 }
 
@@ -869,8 +880,9 @@ int WindowPrivate::Icon() const noexcept
 
 void WindowPrivate::Icon(const int value) const noexcept
 {
-    // ### TODO
-    UNREFERENCED_PARAMETER(value);
+    if (m_icon != value) {
+        // ### TODO
+    }
 }
 
 int WindowPrivate::X() const noexcept
@@ -948,10 +960,27 @@ WindowFrameCorner WindowPrivate::FrameCorner() const noexcept
     return m_frameCorner;
 }
 
-void WindowPrivate::FrameCorner(const WindowFrameCorner value) const noexcept
+void WindowPrivate::FrameCorner(const WindowFrameCorner value) noexcept
 {
-    // ### TODO
-    UNREFERENCED_PARAMETER(value);
+    if (m_frameCorner != value) {
+        if (!m_window) {
+            Utils::DisplayErrorDialog(L"Can't change the window frame corner style due to the window has not been created yet.");
+            return;
+        }
+        DWM_API(DwmSetWindowAttribute);
+        USER32_API(SetWindowRgn);
+        if (DwmSetWindowAttribute_API && SetWindowRgn_API) {
+            const DwmWindowCornerPreference wcp = ((value == WindowFrameCorner::Round) ? DwmWindowCornerPreference::Round : DwmWindowCornerPreference::DoNotRound);
+            const HRESULT hr = DwmSetWindowAttribute_API(m_window, g_DWMWA_WINDOW_CORNER_PREFERENCE, &wcp, sizeof(wcp));
+            if (SUCCEEDED(hr)) {
+                m_frameCorner = value;
+            } else {
+                // ### TODO
+            }
+        } else {
+            Utils::DisplayErrorDialog(L"Can't change the window frame corner style due to DwmSetWindowAttribute() and SetWindowRgn() are not available.");
+        }
+    }
 }
 
 WindowTheme WindowPrivate::Theme() const noexcept
@@ -1193,23 +1222,23 @@ bool WindowPrivate::InternalMessageHandler(const UINT message, const WPARAM wPar
         }
     } break;
     case WM_SIZE: {
-        bool needNotify = false;
+        bool visibilityChanged = false;
         if (wParam == SIZE_RESTORED) {
             if (m_visibility != WindowState::Windowed) {
                 m_visibility = WindowState::Windowed;
-                needNotify = true;
+                visibilityChanged = true;
             }
         } else if (wParam == SIZE_MINIMIZED) {
             m_visibility = WindowState::Minimized;
-            needNotify = true;
+            visibilityChanged = true;
         } else if (wParam == SIZE_MAXIMIZED) {
             m_visibility = WindowState::Maximized;
-            needNotify = true;
+            visibilityChanged = true;
         }
         m_width = LOWORD(lParam);
         m_height = HIWORD(lParam);
         if (q_ptr) {
-            if (needNotify) {
+            if (visibilityChanged) {
                 q_ptr->OnVisibilityChanged(m_visibility);
             }
             q_ptr->OnWidthChanged(m_width);

@@ -47,6 +47,7 @@ set(SOURCES
     Resource.h
     Definitions.h
     pch.h pch.cpp
+    Color.hpp
     VersionNumber.hpp
     RuntimeObject.cpp
     OperationResult.h OperationResult.cpp

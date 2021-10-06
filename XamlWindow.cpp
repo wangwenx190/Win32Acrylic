@@ -168,7 +168,7 @@ bool XamlWindowPrivate::DragBarMessageHandler(const UINT message, const WPARAM w
         return false;
     }
     if (!m_dragBarWindow) {
-        Utils::DisplayErrorDialog(L"DragBarMessageHandler: the drag bar window has not been created yet.");
+        //Utils::DisplayErrorDialog(L"DragBarMessageHandler: the drag bar window has not been created yet.");
         return false;
     }
     if ((message >= WM_MOUSEFIRST) && (message <= WM_MOUSELAST)) {
@@ -540,6 +540,14 @@ void XamlWindow::OnVisibilityChanged(const WindowState arg) noexcept
     }
     if (!d_ptr->SyncInternalWindowsGeometry()) {
         Utils::DisplayErrorDialog(L"Failed to sync the internal windows geometry.");
+    }
+}
+
+void XamlWindow::OnThemeChanged(const WindowTheme arg) noexcept
+{
+    UNREFERENCED_PARAMETER(arg);
+    if (!d_ptr->RefreshWindowBackgroundBrush()) {
+        Utils::DisplayErrorDialog(L"Failed to refresh the window background brush.");
     }
 }
 

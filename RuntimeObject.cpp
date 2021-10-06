@@ -717,6 +717,21 @@ CoIncrementMTAUsage(
     }
 }
 
+HRESULT WINAPI
+CoInitializeEx(
+    LPVOID pvReserved,
+    DWORD  dwCoInit
+)
+{
+    OLE32_API(CoInitializeEx);
+    if (CoInitializeEx_API) {
+        return CoInitializeEx_API(pvReserved, dwCoInit);
+    } else {
+        OutputDebugStringW(L"CoInitializeEx() is not available.");
+        return E_NOTIMPL;
+    }
+}
+
 // COM Automation
 
 void WINAPI
@@ -729,6 +744,64 @@ SysFreeString(
         SysFreeString_API(bstrString);
     } else {
         OutputDebugStringW(L"SysFreeString() is not available.");
+    }
+}
+
+HRESULT WINAPI
+SetErrorInfo(
+    ULONG      dwReserved,
+    IErrorInfo *perrinfo
+)
+{
+    OLEAUT32_API(SetErrorInfo);
+    if (SetErrorInfo_API) {
+        return SetErrorInfo_API(dwReserved, perrinfo);
+    } else {
+        OutputDebugStringW(L"SetErrorInfo() is not available.");
+        return E_NOTIMPL;
+    }
+}
+
+HRESULT WINAPI
+GetErrorInfo(
+    ULONG      dwReserved,
+    IErrorInfo **pperrinfo
+)
+{
+    OLEAUT32_API(GetErrorInfo);
+    if (GetErrorInfo_API) {
+        return GetErrorInfo_API(dwReserved, pperrinfo);
+    } else {
+        OutputDebugStringW(L"GetErrorInfo() is not available.");
+        return E_NOTIMPL;
+    }
+}
+
+BSTR WINAPI
+SysAllocString(
+    const OLECHAR *psz
+)
+{
+    OLEAUT32_API(SysAllocString);
+    if (SysAllocString_API) {
+        return SysAllocString_API(psz);
+    } else {
+        OutputDebugStringW(L"SysAllocString() is not available.");
+        return nullptr;
+    }
+}
+
+UINT WINAPI
+SysStringLen(
+    BSTR pbstr
+)
+{
+    OLEAUT32_API(SysStringLen);
+    if (SysStringLen_API) {
+        return SysStringLen_API(pbstr);
+    } else {
+        OutputDebugStringW(L"SysStringLen() is not available.");
+        return 0;
     }
 }
 
@@ -757,6 +830,40 @@ WINRT_CoIncrementMTAUsage(
 )
 {
     return CoIncrementMTAUsage(pCookie);
+}
+
+HRESULT WINAPI
+WINRT_SetErrorInfo(
+    ULONG      dwReserved,
+    IErrorInfo *perrinfo
+)
+{
+    return SetErrorInfo(dwReserved, perrinfo);
+}
+
+HRESULT WINAPI
+WINRT_GetErrorInfo(
+    ULONG      dwReserved,
+    IErrorInfo **pperrinfo
+)
+{
+    return GetErrorInfo(dwReserved, pperrinfo);
+}
+
+BSTR WINAPI
+WINRT_SysAllocString(
+    const OLECHAR *psz
+)
+{
+    return SysAllocString(psz);
+}
+
+UINT WINAPI
+WINRT_SysStringLen(
+    BSTR pbstr
+)
+{
+    return SysStringLen(pbstr);
 }
 
 #ifdef __cplusplus

@@ -45,13 +45,10 @@ private:
 
 private:
     XamlApplication *q_ptr = nullptr;
-    static bool m_comInitialized;
-    static winrt::Windows::UI::Xaml::Hosting::WindowsXamlManager m_xamlManager;
+    static inline bool m_comInitialized = false;
+    static inline winrt::Windows::UI::Xaml::Hosting::WindowsXamlManager m_xamlManager = nullptr;
     std::unique_ptr<XamlWindow> m_window;
 };
-
-bool XamlApplicationPrivate::m_comInitialized = false;
-winrt::Windows::UI::Xaml::Hosting::WindowsXamlManager XamlApplicationPrivate::m_xamlManager = nullptr;
 
 XamlApplicationPrivate::XamlApplicationPrivate(XamlApplication *q) noexcept
 {

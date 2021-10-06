@@ -124,7 +124,7 @@ static constexpr wchar_t g_personalizeRegistryKey[] = LR"(Software\Microsoft\Win
     }
 }
 
-[[nodiscard]] static inline bool IsVisible(const HWND hWnd) noexcept
+[[maybe_unused]] [[nodiscard]] static inline bool IsVisible(const HWND hWnd) noexcept
 {
     USER32_API(IsWindowVisible);
     if (IsWindowVisible_API) {
@@ -212,7 +212,7 @@ static constexpr wchar_t g_personalizeRegistryKey[] = LR"(Software\Microsoft\Win
 
 [[nodiscard]] static inline COLORREF GetGlobalColorizationColor2() noexcept
 {
-    DWMAPI_API(DwmGetColorizationColor);
+    DWM_API(DwmGetColorizationColor);
     if (DwmGetColorizationColor_API) {
         DWORD color = 0; // The color format of the value is 0xAARRGGBB.
         BOOL opaque = FALSE;
@@ -376,7 +376,7 @@ public:
 
     [[nodiscard]] UINT DotsPerInch() const noexcept;
 
-    [[nodiscard]] COLORREF ColorizationColor() const noexcept;
+    [[nodiscard]] const Color &ColorizationColor() const noexcept;
 
     [[nodiscard]] WindowColorizationArea ColorizationArea() const noexcept;
 
@@ -423,7 +423,7 @@ private:
     WindowState m_visibility = WindowState::Hidden;
     WindowFrameCorner m_frameCorner = WindowFrameCorner::Square;
     WindowTheme m_theme = WindowTheme::Light;
-    COLORREF m_colorizationColor = 0;
+    Color m_colorizationColor = Color();
     WindowColorizationArea m_colorizationArea = WindowColorizationArea::None;
     UINT m_dpi = 0;
 };
@@ -490,7 +490,7 @@ bool WindowPrivate::TriggerWindowFrameChange2() const noexcept
 
 bool WindowPrivate::RefreshWindowTheme2() const noexcept
 {
-    DWMAPI_API(DwmSetWindowAttribute);
+    DWM_API(DwmSetWindowAttribute);
     UXTHEME_API(SetWindowTheme);
     if (DwmSetWindowAttribute_API && SetWindowTheme_API) {
         if (!m_window) {
@@ -706,7 +706,7 @@ UINT WindowPrivate::GetWindowDPI2() const noexcept
 
 UINT WindowPrivate::GetWindowVisibleFrameBorderThickness2() const noexcept
 {
-    DWMAPI_API(DwmGetWindowAttribute);
+    DWM_API(DwmGetWindowAttribute);
     if (DwmGetWindowAttribute_API) {
         if (!m_window) {
             Utils::DisplayErrorDialog(L"Failed to retrieve the window visible frame border thickness due to the window has not been created yet.");
@@ -763,7 +763,7 @@ bool WindowPrivate::Initialize() noexcept
         Utils::DisplayErrorDialog(L"Failed to change the window theme.");
         return false;
     }
-    m_colorizationColor = GetGlobalColorizationColor2();
+    m_colorizationColor = Color(GetGlobalColorizationColor2());
     m_colorizationArea = GetGlobalColorizationArea2();
     m_visibility = WindowState::Hidden;
     const POINT windowPosition = GetWindowPosition2();
@@ -932,6 +932,7 @@ WindowFrameCorner WindowPrivate::FrameCorner() const noexcept
 void WindowPrivate::FrameCorner(const WindowFrameCorner value) const noexcept
 {
     // ### TODO
+    UNREFERENCED_PARAMETER(value);
 }
 
 WindowTheme WindowPrivate::Theme() const noexcept
@@ -944,7 +945,7 @@ UINT WindowPrivate::DotsPerInch() const noexcept
     return m_dpi;
 }
 
-COLORREF WindowPrivate::ColorizationColor() const noexcept
+const Color &WindowPrivate::ColorizationColor() const noexcept
 {
     return m_colorizationColor;
 }
@@ -1167,7 +1168,7 @@ bool WindowPrivate::InternalMessageHandler(const UINT message, const WPARAM wPar
         return false;
     }
     if (!m_window) {
-        Utils::DisplayErrorDialog(L"InternalMessageHandler: this window has not been created yet.");
+        //Utils::DisplayErrorDialog(L"InternalMessageHandler: this window has not been created yet.");
         return false;
     }
     switch (message) {
@@ -1238,7 +1239,7 @@ bool WindowPrivate::InternalMessageHandler(const UINT message, const WPARAM wPar
         }
     } break;
     case WM_DWMCOLORIZATIONCOLORCHANGED: {
-        m_colorizationColor = static_cast<COLORREF>(wParam); // The color format is 0xAARRGGBB.
+        m_colorizationColor = Color(static_cast<COLORREF>(wParam)); // The color format is 0xAARRGGBB.
         if (q_ptr) {
             q_ptr->OnColorizationColorChanged(m_colorizationColor);
         }
@@ -1491,7 +1492,7 @@ bool WindowPrivate::InternalMessageHandler(const UINT message, const WPARAM wPar
 
 bool WindowPrivate::UpdateWindowFrameMargins2() const noexcept
 {
-    DWMAPI_API(DwmExtendFrameIntoClientArea);
+    DWM_API(DwmExtendFrameIntoClientArea);
     if (DwmExtendFrameIntoClientArea_API) {
         if (!m_window) {
             Utils::DisplayErrorDialog(L"Failed to update the window frame margins due to the window has not been created yet.");
@@ -1512,7 +1513,7 @@ bool WindowPrivate::UpdateWindowFrameMargins2() const noexcept
 
 bool WindowPrivate::EnsureNonClientAreaRendering2() const noexcept
 {
-    DWMAPI_API(DwmSetWindowAttribute);
+    DWM_API(DwmSetWindowAttribute);
     if (DwmSetWindowAttribute_API) {
         if (!m_window) {
             Utils::DisplayErrorDialog(L"Can't enable window non-client area rendering due to the window has not been created yet.");
@@ -1525,12 +1526,14 @@ bool WindowPrivate::EnsureNonClientAreaRendering2() const noexcept
             PRINT_HR_ERROR_MESSAGE(DwmSetWindowAttribute, hr, L"Failed to enable window non-client area rendering.")
             return false;
         }
+#if 0
         const BOOL ancp = TRUE;
         hr = DwmSetWindowAttribute_API(m_window, DWMWA_ALLOW_NCPAINT, &ancp, sizeof(ancp));
         if (FAILED(hr)) {
             PRINT_HR_ERROR_MESSAGE(DwmSetWindowAttribute, hr, L"Failed to enable painting on the window non-client area.")
             return false;
         }
+#endif
         return true;
     } else {
         Utils::DisplayErrorDialog(L"Can't enable window non-client area rendering due to DwmSetWindowAttribute() is not available.");
@@ -1635,7 +1638,7 @@ UINT Window::DotsPerInch() const noexcept
     return d_ptr->DotsPerInch();
 }
 
-COLORREF Window::ColorizationColor() const noexcept
+const Color &Window::ColorizationColor() const noexcept
 {
     return d_ptr->ColorizationColor();
 }
@@ -1738,7 +1741,7 @@ void Window::OnDotsPerInchChanged(const UINT arg) noexcept
     UNREFERENCED_PARAMETER(arg);
 }
 
-void Window::OnColorizationColorChanged(const COLORREF arg) noexcept
+void Window::OnColorizationColorChanged(const Color &arg) noexcept
 {
     UNREFERENCED_PARAMETER(arg);
 }

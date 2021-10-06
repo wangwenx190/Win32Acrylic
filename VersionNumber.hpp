@@ -38,7 +38,7 @@ public:
     inline explicit constexpr VersionNumber(const int major, const int minor, const int patch) noexcept : VersionNumber(major, minor, patch, 0) {}
     inline explicit constexpr VersionNumber(const int major, const int minor) noexcept : VersionNumber(major, minor, 0, 0) {}
     inline explicit constexpr VersionNumber(const int major) noexcept : VersionNumber(major, 0, 0, 0) {}
-    inline explicit constexpr VersionNumber() noexcept : VersionNumber(0, 0, 0, 0) {}
+    inline explicit constexpr VersionNumber() noexcept {}
     inline ~VersionNumber() noexcept = default;
 
     inline constexpr void Major(const int major) noexcept {
@@ -98,49 +98,49 @@ public:
         return buf;
     }
 
-    [[nodiscard]] inline friend bool operator==(const VersionNumber &lhs, const VersionNumber &rhs) noexcept {
-        return ((lhs.Major() == rhs.Major()) && (lhs.Minor() == rhs.Minor()) && (lhs.Patch() == rhs.Patch()) && (lhs.Tweak() == rhs.Tweak()));
+    [[nodiscard]] inline constexpr friend bool operator==(const VersionNumber &lhs, const VersionNumber &rhs) noexcept {
+        return ((lhs.m_major == rhs.m_major) && (lhs.m_minor == rhs.m_minor) && (lhs.m_patch == rhs.m_patch) && (lhs.m_tweak == rhs.m_tweak));
     }
-    [[nodiscard]] inline friend bool operator!=(const VersionNumber &lhs, const VersionNumber &rhs) noexcept {
+    [[nodiscard]] inline constexpr friend bool operator!=(const VersionNumber &lhs, const VersionNumber &rhs) noexcept {
         return (!(lhs == rhs));
     }
-    [[nodiscard]] inline friend bool operator>(const VersionNumber &lhs, const VersionNumber &rhs) noexcept {
+    [[nodiscard]] inline constexpr friend bool operator>(const VersionNumber &lhs, const VersionNumber &rhs) noexcept {
         if (lhs == rhs) {
             return false;
         }
-        if (lhs.Major() > rhs.Major()) {
+        if (lhs.m_major > rhs.m_major) {
             return true;
         }
-        if (lhs.Major() < rhs.Major()) {
+        if (lhs.m_major < rhs.m_major) {
             return false;
         }
-        if (lhs.Minor() > rhs.Minor()) {
+        if (lhs.m_minor > rhs.m_minor) {
             return true;
         }
-        if (lhs.Minor() < rhs.Minor()) {
+        if (lhs.m_minor < rhs.m_minor) {
             return false;
         }
-        if (lhs.Patch() > rhs.Patch()) {
+        if (lhs.m_patch > rhs.m_patch) {
             return true;
         }
-        if (lhs.Patch() < rhs.Patch()) {
+        if (lhs.m_patch < rhs.m_patch) {
             return false;
         }
-        if (lhs.Tweak() > rhs.Tweak()) {
+        if (lhs.m_tweak > rhs.m_tweak) {
             return true;
         }
-        if (lhs.Tweak() < rhs.Tweak()) {
+        if (lhs.m_tweak < rhs.m_tweak) {
             return false;
         }
         return false;
     }
-    [[nodiscard]] inline friend bool operator<(const VersionNumber &lhs, const VersionNumber &rhs) noexcept {
+    [[nodiscard]] inline constexpr friend bool operator<(const VersionNumber &lhs, const VersionNumber &rhs) noexcept {
         return ((lhs != rhs) && !(lhs > rhs));
     }
-    [[nodiscard]] inline friend bool operator>=(const VersionNumber &lhs, const VersionNumber &rhs) noexcept {
+    [[nodiscard]] inline constexpr friend bool operator>=(const VersionNumber &lhs, const VersionNumber &rhs) noexcept {
         return ((lhs > rhs) || (lhs == rhs));
     }
-    [[nodiscard]] inline friend bool operator<=(const VersionNumber &lhs, const VersionNumber &rhs) noexcept {
+    [[nodiscard]] inline constexpr friend bool operator<=(const VersionNumber &lhs, const VersionNumber &rhs) noexcept {
         return ((lhs < rhs) || (lhs == rhs));
     }
 

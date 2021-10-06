@@ -29,6 +29,7 @@
 #include <string>
 #include <memory>
 #include "Definitions.h"
+#include "Color.hpp"
 
 class WindowPrivate;
 
@@ -66,7 +67,7 @@ public:
 
     [[nodiscard]] UINT DotsPerInch() const noexcept;
 
-    [[nodiscard]] COLORREF ColorizationColor() const noexcept;
+    [[nodiscard]] const Color &ColorizationColor() const noexcept;
 
     [[nodiscard]] WindowColorizationArea ColorizationArea() const noexcept;
 
@@ -100,7 +101,7 @@ protected:
     virtual void OnFrameCornerChanged(const WindowFrameCorner arg) noexcept;
     virtual void OnThemeChanged(const WindowTheme arg) noexcept;
     virtual void OnDotsPerInchChanged(const UINT arg) noexcept;
-    virtual void OnColorizationColorChanged(const COLORREF arg) noexcept;
+    virtual void OnColorizationColorChanged(const Color &arg) noexcept;
     virtual void OnColorizationAreaChanged(const WindowColorizationArea arg) noexcept;
 
     [[nodiscard]] virtual bool MessageHandler(const UINT message, const WPARAM wParam, const LPARAM lParam, LRESULT *result) noexcept;

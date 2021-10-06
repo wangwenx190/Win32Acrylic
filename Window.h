@@ -39,6 +39,8 @@ public:
     explicit Window() noexcept;
     virtual ~Window() noexcept;
 
+    [[nodiscard]] static int MessageLoop() noexcept;
+
     [[nodiscard]] std::wstring Title() const noexcept;
     void Title(const std::wstring &value) noexcept;
 
@@ -74,7 +76,6 @@ public:
     [[nodiscard]] HWND CreateChildWindow(const DWORD style, const DWORD extendedStyle, const WNDPROC wndProc, void *extraData) const noexcept;
     [[nodiscard]] bool CloseChildWindow(const HWND hWnd) const noexcept;
     [[nodiscard]] HWND WindowHandle() const noexcept;
-    [[nodiscard]] int MessageLoop() const noexcept;
     [[nodiscard]] bool Move(const int x, const int y) const noexcept;
     [[nodiscard]] bool Resize(const UINT w, const UINT h) const noexcept;
     [[nodiscard]] bool SetGeometry(const int x, const int y, const UINT w, const UINT h) const noexcept;

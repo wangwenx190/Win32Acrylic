@@ -350,11 +350,23 @@ enum class DwmWindowCornerPreference : WORD
     }
 }
 
+static inline void QuitApplication() noexcept
+{
+    USER32_API(PostQuitMessage);
+    if (PostQuitMessage_API) {
+        PostQuitMessage_API(0);
+    } else {
+        Utils::DisplayErrorDialog(L"Can't quit application due to PostQuitMessage() is not available.");
+    }
+}
+
 class WindowPrivate
 {
 public:
     explicit WindowPrivate(Window *q) noexcept;
     ~WindowPrivate() noexcept;
+
+    [[nodiscard]] static int MessageLoop() noexcept;
 
     [[nodiscard]] std::wstring Title() const noexcept;
     void Title(const std::wstring &value) const noexcept;
@@ -390,7 +402,6 @@ public:
 
     [[nodiscard]] HWND CreateChildWindow(const DWORD style, const DWORD extendedStyle, const WNDPROC wndProc, void *extraData) const noexcept;
     [[nodiscard]] HWND WindowHandle() const noexcept;
-    [[nodiscard]] int MessageLoop() const noexcept;
     [[nodiscard]] bool Move(const int x, const int y) const noexcept;
     [[nodiscard]] bool Resize(const UINT w, const UINT h) const noexcept;
     [[nodiscard]] bool SetGeometry(const int x, const int y, const UINT w, const UINT h) const noexcept;
@@ -433,6 +444,7 @@ private:
     Color m_colorizationColor = Color();
     WindowColorizationArea m_colorizationArea = WindowColorizationArea::None;
     UINT m_dpi = 0;
+    static inline int m_windowCount = 0;
 };
 
 POINT WindowPrivate::GetWindowPosition2() const noexcept
@@ -831,6 +843,7 @@ WindowPrivate::WindowPrivate(Window *q) noexcept
     q_ptr = q;
     m_window = CreateWindow2((WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN | WS_CLIPSIBLINGS), WS_EX_NOREDIRECTIONBITMAP, nullptr, this, WindowProc);
     if (m_window) {
+        ++m_windowCount;
         if (!Initialize()) {
             Utils::DisplayErrorDialog(L"Failed to initialize WindowPrivate.");
         }
@@ -844,9 +857,41 @@ WindowPrivate::~WindowPrivate() noexcept
     if (m_window) {
         if (CloseWindow2(m_window)) {
             m_window = nullptr;
+            --m_windowCount;
+            if (m_windowCount <= 0) {
+                QuitApplication();
+            }
         } else {
             Utils::DisplayErrorDialog(L"Failed to close this window.");
         }
+    }
+}
+
+int WindowPrivate::MessageLoop() noexcept
+{
+    USER32_API(GetMessageW);
+    USER32_API(TranslateMessage);
+    USER32_API(DispatchMessageW);
+    USER32_API(GetWindowLongPtrW);
+    if (GetMessageW_API && TranslateMessage_API && DispatchMessageW_API && GetWindowLongPtrW_API) {
+        MSG msg = {};
+        while (GetMessageW_API(&msg, nullptr, 0, 0) != FALSE) {
+            bool filtered = false;
+            const auto that = reinterpret_cast<WindowPrivate *>(GetWindowLongPtrW_API(msg.hwnd, GWLP_USERDATA));
+            if (that) {
+                if (that->q_ptr) {
+                    //filtered = that->q_ptr->FilterMessage(&msg);
+                }
+            }
+            if (!filtered) {
+                TranslateMessage_API(&msg);
+                DispatchMessageW_API(&msg);
+            }
+        }
+        return static_cast<int>(msg.wParam);
+    } else {
+        Utils::DisplayErrorDialog(L"Can't continue the message loop due to GetMessageW(), TranslateMessage(), DispatchMessageW() and GetWindowLongPtrW() are not available.");
+        return -1;
     }
 }
 
@@ -1019,30 +1064,6 @@ HWND WindowPrivate::CreateChildWindow(const DWORD style, const DWORD extendedSty
 HWND WindowPrivate::WindowHandle() const noexcept
 {
     return m_window;
-}
-
-int WindowPrivate::MessageLoop() const noexcept
-{
-    USER32_API(GetMessageW);
-    USER32_API(TranslateMessage);
-    USER32_API(DispatchMessageW);
-    if (GetMessageW_API && TranslateMessage_API && DispatchMessageW_API) {
-        if (!m_window) {
-            Utils::DisplayErrorDialog(L"Failed to execute the message loop due to the window has not been created yet.");
-            return -1;
-        }
-        MSG msg = {};
-        while (GetMessageW_API(&msg, nullptr, 0, 0) != FALSE) {
-            if (!q_ptr || !q_ptr->FilterMessage(&msg)) {
-                TranslateMessage_API(&msg);
-                DispatchMessageW_API(&msg);
-            }
-        }
-        return static_cast<int>(msg.wParam);
-    } else {
-        Utils::DisplayErrorDialog(L"Failed to execute the message loop due to GetMessageW(), TranslateMessage() and DispatchMessageW() are not available.");
-        return -1;
-    }
 }
 
 bool WindowPrivate::Move(const int x, const int y) const noexcept
@@ -1318,6 +1339,7 @@ bool WindowPrivate::InternalMessageHandler(const UINT message, const WPARAM wPar
     case WM_CLOSE: {
         if (CloseWindow2(m_window)) {
             m_window = nullptr;
+            --m_windowCount;
             *result = 0;
             return true;
         } else {
@@ -1326,14 +1348,10 @@ bool WindowPrivate::InternalMessageHandler(const UINT message, const WPARAM wPar
         }
     } break;
     case WM_DESTROY: {
-        USER32_API(PostQuitMessage);
-        if (PostQuitMessage_API) {
-            PostQuitMessage_API(0);
+        if (m_windowCount <= 0) {
+            QuitApplication();
             *result = 0;
             return true;
-        } else {
-            Utils::DisplayErrorDialog(L"Failed to destroy this window due to PostQuitMessage() is not available.");
-            return false;
         }
     } break;
     case WM_NCCREATE: {
@@ -1597,6 +1615,11 @@ std::wstring Window::Title() const noexcept
     return d_ptr->Title();
 }
 
+int Window::MessageLoop() noexcept
+{
+    return WindowPrivate::MessageLoop();
+}
+
 void Window::Title(const std::wstring &value) noexcept
 {
     d_ptr->Title(value);
@@ -1709,11 +1732,6 @@ bool Window::CloseChildWindow(const HWND hWnd) const noexcept
 HWND Window::WindowHandle() const noexcept
 {
     return d_ptr->WindowHandle();
-}
-
-int Window::MessageLoop() const noexcept
-{
-    return d_ptr->MessageLoop();
 }
 
 bool Window::Move(const int x, const int y) const noexcept

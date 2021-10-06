@@ -28,6 +28,8 @@
 #include "WindowsVersion.h"
 #include "Utils.h"
 
+static constexpr int g_TOTAL_WINDOW_COUNT = 4;
+
 class XamlApplicationPrivate
 {
 public:
@@ -47,7 +49,7 @@ private:
     XamlApplication *q_ptr = nullptr;
     static inline bool m_comInitialized = false;
     static inline winrt::Windows::UI::Xaml::Hosting::WindowsXamlManager m_xamlManager = nullptr;
-    std::unique_ptr<XamlWindow> m_window;
+    std::vector<XamlWindow *> m_windows = {};
 };
 
 XamlApplicationPrivate::XamlApplicationPrivate(XamlApplication *q) noexcept
@@ -61,8 +63,11 @@ XamlApplicationPrivate::XamlApplicationPrivate(XamlApplication *q) noexcept
 
 XamlApplicationPrivate::~XamlApplicationPrivate() noexcept
 {
-    if (m_window) {
-        m_window.release();
+    if (!m_windows.empty()) {
+        for (const auto window : std::as_const(m_windows)) {
+            delete window;
+        }
+        m_windows.clear();
     }
     if (m_xamlManager != nullptr) {
         m_xamlManager.Close();
@@ -105,9 +110,11 @@ bool XamlApplicationPrivate::Initialize() noexcept
     const ProcessDPIAwareness curPcDPIAwareness = Utils::GetProcessDPIAwareness();
     const std::wstring curPcDPIAwarenessDbgMsg = L"Current process's DPI awareness: " + Utils::DPIAwarenessToString(curPcDPIAwareness);
     OutputDebugStringW(curPcDPIAwarenessDbgMsg.c_str());
-    m_window = std::make_unique<XamlWindow>();
-    // ### TODO: move to screen center.
-    m_window->Visibility(WindowState::Windowed);
+    for (int i = 0; i != g_TOTAL_WINDOW_COUNT; ++i) {
+        const auto window = new XamlWindow;
+        window->Visibility(WindowState::Windowed);
+        m_windows.push_back(window);
+    }
     return true;
 }
 
@@ -117,11 +124,11 @@ int XamlApplicationPrivate::Run() const noexcept
         Utils::DisplayErrorDialog(L"Can't run the XAML application due to the q_ptr is null.");
         return -1;
     }
-    if (!m_window) {
+    if (m_windows.empty()) {
         Utils::DisplayErrorDialog(L"Can't run the XAML application due to the XAML window has not been created yet.");
         return -1;
     }
-    return m_window->MessageLoop();
+    return XamlWindow::MessageLoop();
 }
 
 XamlApplication::XamlApplication() noexcept

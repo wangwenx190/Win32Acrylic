@@ -257,9 +257,8 @@ static constexpr wchar_t g_personalizeRegistryKey[] = LR"(Software\Microsoft\Win
     }
 }
 
-[[nodiscard]] static inline std::tuple<HWND, std::wstring> CreateWindow2(const DWORD style, const DWORD extendedStyle, const HWND parentWindow, void *extraData, const WNDPROC wndProc) noexcept
+[[nodiscard]] static inline HWND CreateWindow2(const DWORD style, const DWORD extendedStyle, const HWND parentWindow, void *extraData, const WNDPROC wndProc) noexcept
 {
-    const std::tuple<HWND, std::wstring> INVALID_RESULT = std::make_tuple(nullptr, std::wstring{});
     USER32_API(LoadCursorW);
     USER32_API(LoadIconW);
     USER32_API(RegisterClassExW);
@@ -267,12 +266,12 @@ static constexpr wchar_t g_personalizeRegistryKey[] = LR"(Software\Microsoft\Win
     if (LoadCursorW_API && LoadIconW_API && RegisterClassExW_API && CreateWindowExW_API) {
         if (!wndProc) {
             Utils::DisplayErrorDialog(L"Failed to register a window class due to the WindowProc function pointer is null.");
-            return INVALID_RESULT;
+            return nullptr;
         }
         const std::wstring guid = Utils::GenerateGUID();
         if (guid.empty()) {
             Utils::DisplayErrorDialog(L"Failed to generate a new GUID.");
-            return INVALID_RESULT;
+            return nullptr;
         }
         WNDCLASSEXW wcex;
         SecureZeroMemory(&wcex, sizeof(wcex));
@@ -287,7 +286,7 @@ static constexpr wchar_t g_personalizeRegistryKey[] = LR"(Software\Microsoft\Win
         const ATOM atom = RegisterClassExW_API(&wcex);
         if (atom == INVALID_ATOM) {
             PRINT_WIN32_ERROR_MESSAGE(RegisterClassExW, L"Failed to register a window class.")
-            return INVALID_RESULT;
+            return nullptr;
         }
         const HWND hWnd = CreateWindowExW_API(
             extendedStyle,       // _In_     DWORD     dwExStyle
@@ -305,39 +304,39 @@ static constexpr wchar_t g_personalizeRegistryKey[] = LR"(Software\Microsoft\Win
             );
         if (!hWnd) {
             PRINT_WIN32_ERROR_MESSAGE(CreateWindowExW, L"Failed to create a window.")
-            return INVALID_RESULT;
+            return nullptr;
         }
-        return std::make_tuple(hWnd, guid);
+        return hWnd;
     } else {
         Utils::DisplayErrorDialog(L"Failed to create a window due to LoadCursorW(), LoadIconW(), RegisterClassExW() and CreateWindowExW() are not available.");
-        return INVALID_RESULT;
+        return nullptr;
     }
 }
 
-[[nodiscard]] static inline bool CloseWindow2(const HWND hWnd, const std::wstring &className) noexcept
+[[nodiscard]] static inline bool CloseWindow2(const HWND hWnd) noexcept
 {
     USER32_API(DestroyWindow);
+    USER32_API(GetClassNameW);
     USER32_API(UnregisterClassW);
-    if (DestroyWindow_API && UnregisterClassW_API) {
+    if (DestroyWindow_API && GetClassNameW_API && UnregisterClassW_API) {
         if (!hWnd) {
             Utils::DisplayErrorDialog(L"Failed to close the window due to the window handle is null.");
-            return false;
-        }
-        if (className.empty()) {
-            Utils::DisplayErrorDialog(L"Failed to close the window due to the class name is empty.");
             return false;
         }
         if (DestroyWindow_API(hWnd) == FALSE) {
             PRINT_WIN32_ERROR_MESSAGE(DestroyWindow, L"Failed to destroy the window.")
             return false;
         }
-        if (UnregisterClassW_API(className.c_str(), HINST_THISCOMPONENT) == FALSE) {
-            PRINT_WIN32_ERROR_MESSAGE(UnregisterClassW, L"Failed to unregister the window class.")
-            return false;
+        wchar_t className[MAX_PATH] = { L'\0' };
+        if (GetClassNameW_API(hWnd, className, MAX_PATH) > 0) {
+            if (UnregisterClassW_API(className, HINST_THISCOMPONENT) == FALSE) {
+                PRINT_WIN32_ERROR_MESSAGE(UnregisterClassW, L"Failed to unregister the window class.")
+                return false;
+            }
         }
         return true;
     } else {
-        Utils::DisplayErrorDialog(L"Failed to close the window due to DestroyWindow() and UnregisterClassW() are not available.");
+        Utils::DisplayErrorDialog(L"Failed to close the window due to DestroyWindow(), GetClassNameW() and UnregisterClassW() are not available.");
         return false;
     }
 }
@@ -380,7 +379,7 @@ public:
 
     [[nodiscard]] WindowColorizationArea ColorizationArea() const noexcept;
 
-    [[nodiscard]] std::tuple<HWND, std::wstring> CreateChildWindow(const DWORD style, const DWORD extendedStyle, const WNDPROC wndProc, void *extraData) const noexcept;
+    [[nodiscard]] HWND CreateChildWindow(const DWORD style, const DWORD extendedStyle, const WNDPROC wndProc, void *extraData) const noexcept;
     [[nodiscard]] HWND WindowHandle() const noexcept;
     [[nodiscard]] int MessageLoop() const noexcept;
     [[nodiscard]] bool Move(const int x, const int y) const noexcept;
@@ -413,7 +412,6 @@ private:
 private:
     Window *q_ptr = nullptr;
     HWND m_window = nullptr;
-    std::wstring m_className = {};
     int m_icon = 0;
     std::wstring m_title = {};
     int m_x = 0;
@@ -624,7 +622,31 @@ bool WindowPrivate::SetWindowState2(const WindowState state) const noexcept
         }
         // Don't check ShowWindow()'s result because it returns the previous window state rather than
         // the operation result of itself.
+        SetLastError(ERROR_SUCCESS);
         ShowWindow_API(m_window, nCmdShow);
+        const OperationResult operationResult;
+        if (operationResult.Failed()) {
+            std::wstring errMsg = L"Function ShowWindow() failed with error code " + Utils::IntegerToString(operationResult.Code(), 10) + L": ";
+            const std::wstring errMsgFromOs = operationResult.Message();
+            if (errMsgFromOs.empty()) {
+                errMsg += L"Failed to change the window state.";
+            } else {
+                errMsg += errMsgFromOs;
+            }
+            return false;
+        }
+        if ((state == WindowState::Windowed) || (state == WindowState::Maximized)) {
+            USER32_API(SetFocus);
+            if (SetFocus_API) {
+                if (SetFocus_API(m_window) == nullptr) {
+                    PRINT_WIN32_ERROR_MESSAGE(SetFocus, L"Failed to send focus to the window.")
+                    return false;
+                }
+            } else {
+                Utils::DisplayErrorDialog(L"Can't send focus to the window due to SetFocus() is not available.");
+                return false;
+            }
+        }
         return true;
     } else {
         Utils::DisplayErrorDialog(L"Failed to change the window state due to ShowWindow() is not available.");
@@ -753,7 +775,7 @@ bool WindowPrivate::Initialize() noexcept
         return false;
     }
     if (!TriggerWindowFrameChange2()) {
-        Utils::DisplayErrorDialog(L"Failed to trigger a window frame change event for this window.");
+        Utils::DisplayErrorDialog(L"Failed to trigger a window frame change event for the window.");
         return false;
     }
     m_theme = GetGlobalApplicationTheme2();
@@ -798,10 +820,8 @@ WindowPrivate::WindowPrivate(Window *q) noexcept
         return;
     }
     q_ptr = q;
-    const auto result = CreateWindow2((WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN | WS_CLIPSIBLINGS), WS_EX_NOREDIRECTIONBITMAP, nullptr, this, WindowProc);
-    m_window = std::get<0>(result);
-    m_className = std::get<1>(result);
-    if (m_window && !m_className.empty()) {
+    m_window = CreateWindow2((WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN | WS_CLIPSIBLINGS), WS_EX_NOREDIRECTIONBITMAP, nullptr, this, WindowProc);
+    if (m_window) {
         if (!Initialize()) {
             Utils::DisplayErrorDialog(L"Failed to initialize WindowPrivate.");
         }
@@ -812,10 +832,9 @@ WindowPrivate::WindowPrivate(Window *q) noexcept
 
 WindowPrivate::~WindowPrivate() noexcept
 {
-    if (m_window && !m_className.empty()) {
-        if (CloseWindow2(m_window, m_className)) {
+    if (m_window) {
+        if (CloseWindow2(m_window)) {
             m_window = nullptr;
-            m_className = {};
         } else {
             Utils::DisplayErrorDialog(L"Failed to close this window.");
         }
@@ -955,24 +974,17 @@ WindowColorizationArea WindowPrivate::ColorizationArea() const noexcept
     return m_colorizationArea;
 }
 
-std::tuple<HWND, std::wstring> WindowPrivate::CreateChildWindow(const DWORD style, const DWORD extendedStyle, const WNDPROC wndProc, void *extraData) const noexcept
+HWND WindowPrivate::CreateChildWindow(const DWORD style, const DWORD extendedStyle, const WNDPROC wndProc, void *extraData) const noexcept
 {
-    const std::tuple<HWND, std::wstring> INVALID_RESULT = std::make_tuple(nullptr, std::wstring{});
     if (!wndProc) {
         Utils::DisplayErrorDialog(L"Failed to create the child window due to the WindowProc function pointer is null.");
-        return INVALID_RESULT;
+        return nullptr;
     }
     if (!m_window) {
         Utils::DisplayErrorDialog(L"Failed to create the child window due to the parent window has not been created yet.");
-        return INVALID_RESULT;
+        return nullptr;
     }
-    const auto result = CreateWindow2((style | WS_CHILD), extendedStyle, m_window, extraData, wndProc);
-    const HWND hWnd = std::get<0>(result);
-    if (!hWnd) {
-        Utils::DisplayErrorDialog(L"Failed to create the child window.");
-        return INVALID_RESULT;
-    }
-    return result;
+    return CreateWindow2((style | WS_CHILD), extendedStyle, m_window, extraData, wndProc);
 }
 
 HWND WindowPrivate::WindowHandle() const noexcept
@@ -1183,7 +1195,7 @@ bool WindowPrivate::InternalMessageHandler(const UINT message, const WPARAM wPar
     case WM_SIZE: {
         bool needNotify = false;
         if (wParam == SIZE_RESTORED) {
-            if ((m_visibility == WindowState::Minimized) || (m_visibility == WindowState::Maximized)) {
+            if (m_visibility != WindowState::Windowed) {
                 m_visibility = WindowState::Windowed;
                 needNotify = true;
             }
@@ -1202,6 +1214,16 @@ bool WindowPrivate::InternalMessageHandler(const UINT message, const WPARAM wPar
             }
             q_ptr->OnWidthChanged(m_width);
             q_ptr->OnHeightChanged(m_height);
+        }
+        if ((m_visibility == WindowState::Windowed) || (m_visibility == WindowState::Maximized)) {
+            if (!UpdateWindowFrameMargins2()) {
+                Utils::DisplayErrorDialog(L"Failed to update the window frame margins.");
+                return false;
+            }
+            if (!TriggerWindowFrameChange2()) {
+                Utils::DisplayErrorDialog(L"Failed to trigger a window frame change event for the window.");
+                return false;
+            }
         }
     } break;
     case WM_SETTINGCHANGE: {
@@ -1265,9 +1287,8 @@ bool WindowPrivate::InternalMessageHandler(const UINT message, const WPARAM wPar
     } break;
     case WM_SETICON: {} break;
     case WM_CLOSE: {
-        if (CloseWindow2(m_window, m_className)) {
+        if (CloseWindow2(m_window)) {
             m_window = nullptr;
-            m_className = {};
             *result = 0;
             return true;
         } else {
@@ -1440,8 +1461,8 @@ bool WindowPrivate::InternalMessageHandler(const UINT message, const WPARAM wPar
         }
         const auto resizeBorderThicknessY = static_cast<LONG>(GetWindowMetrics2(WindowMetrics::ResizeBorderThicknessY));
         const UINT captionHeight = GetWindowMetrics2(WindowMetrics::CaptionHeight);
-        const LONG titleBarHeight = ((m_visibility == WindowState::Maximized) ? captionHeight : (captionHeight + resizeBorderThicknessY));
-        const bool isTitleBar = ((m_visibility != WindowState::Minimized) ? (localPos.y <= titleBarHeight) : false);
+        const LONG titleBarHeight = ((m_visibility == WindowState::Hidden) ? 0 : ((m_visibility == WindowState::Maximized) ? captionHeight : (captionHeight + resizeBorderThicknessY)));
+        const bool isTitleBar = (((m_visibility == WindowState::Windowed) || (m_visibility == WindowState::Maximized)) ? (localPos.y <= titleBarHeight) : false);
         const bool isTop = ((m_visibility == WindowState::Windowed) ? (localPos.y <= resizeBorderThicknessY) : false);
         USER32_API(DefWindowProcW);
         if (DefWindowProcW_API) {
@@ -1498,7 +1519,8 @@ bool WindowPrivate::UpdateWindowFrameMargins2() const noexcept
             Utils::DisplayErrorDialog(L"Failed to update the window frame margins due to the window has not been created yet.");
             return false;
         }
-        const MARGINS margins = {0, 0, static_cast<int>(GetWindowVisibleFrameBorderThickness2()), 0};
+        const UINT windowVisibleFrameBorderThickness = ((m_visibility == WindowState::Windowed) ? GetWindowVisibleFrameBorderThickness2() : 0);
+        const MARGINS margins = {0, 0, static_cast<int>(windowVisibleFrameBorderThickness), 0};
         const HRESULT hr = DwmExtendFrameIntoClientArea_API(m_window, &margins);
         if (FAILED(hr)) {
             PRINT_HR_ERROR_MESSAGE(DwmExtendFrameIntoClientArea, hr, L"Failed to update the window frame margins for the window.")
@@ -1521,20 +1543,13 @@ bool WindowPrivate::EnsureNonClientAreaRendering2() const noexcept
         }
         // Don't use "DWMWA_NCRENDERING_ENABLED" because it's used for querying values only.
         const DWMNCRENDERINGPOLICY ncrp = DWMNCRP_ENABLED;
-        HRESULT hr = DwmSetWindowAttribute_API(m_window, DWMWA_NCRENDERING_POLICY, &ncrp, sizeof(ncrp));
+        const HRESULT hr = DwmSetWindowAttribute_API(m_window, DWMWA_NCRENDERING_POLICY, &ncrp, sizeof(ncrp));
         if (FAILED(hr)) {
             PRINT_HR_ERROR_MESSAGE(DwmSetWindowAttribute, hr, L"Failed to enable window non-client area rendering.")
             return false;
+        } else {
+            return true;
         }
-#if 0
-        const BOOL ancp = TRUE;
-        hr = DwmSetWindowAttribute_API(m_window, DWMWA_ALLOW_NCPAINT, &ancp, sizeof(ancp));
-        if (FAILED(hr)) {
-            PRINT_HR_ERROR_MESSAGE(DwmSetWindowAttribute, hr, L"Failed to enable painting on the window non-client area.")
-            return false;
-        }
-#endif
-        return true;
     } else {
         Utils::DisplayErrorDialog(L"Can't enable window non-client area rendering due to DwmSetWindowAttribute() is not available.");
         return false;
@@ -1648,22 +1663,18 @@ WindowColorizationArea Window::ColorizationArea() const noexcept
     return d_ptr->ColorizationArea();
 }
 
-std::tuple<HWND, std::wstring> Window::CreateChildWindow(const DWORD style, const DWORD extendedStyle, const WNDPROC wndProc, void *extraData) const noexcept
+HWND Window::CreateChildWindow(const DWORD style, const DWORD extendedStyle, const WNDPROC wndProc, void *extraData) const noexcept
 {
     return d_ptr->CreateChildWindow(style, extendedStyle, wndProc, extraData);
 }
 
-bool Window::CloseChildWindow(const HWND hWnd, const std::wstring &className) const noexcept
+bool Window::CloseChildWindow(const HWND hWnd) const noexcept
 {
     if (!hWnd) {
         Utils::DisplayErrorDialog(L"Can't close the child window due to the window handle is null.");
         return false;
     }
-    if (className.empty()) {
-        Utils::DisplayErrorDialog(L"Can't close the child window due to the window class name is empty.");
-        return false;
-    }
-    return CloseWindow2(hWnd, className);
+    return CloseWindow2(hWnd);
 }
 
 HWND Window::WindowHandle() const noexcept

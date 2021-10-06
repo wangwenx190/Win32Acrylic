@@ -82,7 +82,6 @@ private:
 
 private:
     XamlWindow *q_ptr = nullptr;
-    std::wstring m_dragBarWindowClassName = {};
     HWND m_dragBarWindow = nullptr;
     HWND m_xamlIslandWindow = nullptr;
     winrt::Windows::UI::Xaml::Hosting::DesktopWindowXamlSource m_xamlSource = nullptr;
@@ -116,10 +115,9 @@ XamlWindowPrivate::~XamlWindowPrivate() noexcept
         m_xamlSource.Close();
         m_xamlSource = nullptr;
     }
-    if (q_ptr && m_dragBarWindow && !m_dragBarWindowClassName.empty()) {
-        if (q_ptr->CloseChildWindow(m_dragBarWindow, m_dragBarWindowClassName)) {
+    if (q_ptr && m_dragBarWindow) {
+        if (q_ptr->CloseChildWindow(m_dragBarWindow)) {
             m_dragBarWindow = nullptr;
-            m_dragBarWindowClassName = {};
         } else {
             Utils::DisplayErrorDialog(L"Failed to close the drag bar window.");
         }
@@ -254,9 +252,8 @@ bool XamlWindowPrivate::DragBarMessageHandler(const UINT message, const WPARAM w
             return true;
         } break;
         case WM_CLOSE: {
-            if (q_ptr->CloseChildWindow(m_dragBarWindow, m_dragBarWindowClassName)) {
+            if (q_ptr->CloseChildWindow(m_dragBarWindow)) {
                 m_dragBarWindow = nullptr;
-                m_dragBarWindowClassName = {};
                 *result = 0;
                 return true;
             } else {
@@ -338,10 +335,8 @@ bool XamlWindowPrivate::InitializeDragBarWindow() noexcept
         Utils::DisplayErrorDialog(L"Can't initialize the drag bar window due to the q_ptr is null.");
         return false;
     }
-    const auto dragBarWindowCreationData = q_ptr->CreateChildWindow(WS_CHILD, (WS_EX_LAYERED | WS_EX_NOREDIRECTIONBITMAP), DragBarWindowProc, this);
-    m_dragBarWindow = std::get<0>(dragBarWindowCreationData);
-    m_dragBarWindowClassName = std::get<1>(dragBarWindowCreationData);
-    if (!m_dragBarWindow || m_dragBarWindowClassName.empty()) {
+    m_dragBarWindow = q_ptr->CreateChildWindow(WS_CHILD, (WS_EX_LAYERED | WS_EX_NOREDIRECTIONBITMAP), DragBarWindowProc, this);
+    if (!m_dragBarWindow) {
         Utils::DisplayErrorDialog(L"Failed to create the drag bar window.");
         return false;
     }
@@ -476,11 +471,72 @@ bool XamlWindowPrivate::SyncInternalWindowsGeometry() const noexcept
 
 bool XamlWindowPrivate::MessageHandler(const UINT message, const WPARAM wParam, const LPARAM lParam, LRESULT *result) noexcept
 {
-    // ### TODO
-    UNREFERENCED_PARAMETER(message);
-    UNREFERENCED_PARAMETER(wParam);
-    UNREFERENCED_PARAMETER(lParam);
-    UNREFERENCED_PARAMETER(result);
+    UNREFERENCED_PARAMETER(wParam); // ### TODO: remove
+    if (!result) {
+        Utils::DisplayErrorDialog(L"XamlWindowPrivate::MessageHandler: the pointer to the result of the WindowProc function is null.");
+        return false;
+    }
+    switch (message) {
+    case WM_SETFOCUS: {
+        if (m_xamlIslandWindow) {
+            USER32_API(SetFocus);
+            if (SetFocus_API) {
+                // Send focus to the XAML Island child window.
+                if (SetFocus_API(m_xamlIslandWindow) == nullptr) {
+                    PRINT_WIN32_ERROR_MESSAGE(SetFocus, L"Failed to send focus to the XAML Island window.")
+                    return false;
+                } else {
+                    *result = 0;
+                    return true;
+                }
+            } else {
+                Utils::DisplayErrorDialog(L"Can't send focus to the XAML Island window due to SetFocus() is not available.");
+                return false;
+            }
+        }
+    } break;
+    case WM_SETCURSOR: {
+        if (q_ptr && q_ptr->WindowHandle()) {
+            if (LOWORD(lParam) == HTCLIENT) {
+                USER32_API(SendMessageW);
+                USER32_API(GetMessagePos);
+                USER32_API(SetCursor);
+                USER32_API(LoadCursorW);
+                if (SendMessageW_API && GetMessagePos_API && SetCursor_API && LoadCursorW_API) {
+                    // Get the cursor position from the _last message_ and not from
+                    // `GetCursorPos` (which returns the cursor position _at the
+                    // moment_) because if we're lagging behind the cursor's position,
+                    // we still want to get the cursor position that was associated
+                    // with that message at the time it was sent to handle the message
+                    // correctly.
+                    const LRESULT hitTestResult = SendMessageW_API(q_ptr->WindowHandle(), WM_NCHITTEST, 0, GetMessagePos_API());
+                    if (hitTestResult == HTTOP) {
+                        // We have to set the vertical resize cursor manually on
+                        // the top resize handle because Windows thinks that the
+                        // cursor is on the client area because it asked the asked
+                        // the drag window with `WM_NCHITTEST` and it returned
+                        // `HTCLIENT`.
+                        // We don't want to modify the drag window's `WM_NCHITTEST`
+                        // handling to return `HTTOP` because otherwise, the system
+                        // would resize the drag window instead of the top level
+                        // window!
+                        SetCursor_API(LoadCursorW_API(nullptr, IDC_SIZENS));
+                    } else {
+                        // Reset cursor
+                        SetCursor_API(LoadCursorW_API(nullptr, IDC_ARROW));
+                    }
+                    *result = TRUE;
+                    return true;
+                } else {
+                    Utils::DisplayErrorDialog(L"Can't update the cursor shape due to SendMessageW(), GetMessagePos(), SetCursor() and LoadCursorW() are not available.");
+                    return false;
+                }
+            }
+        }
+    } break;
+    default:
+        break;
+    }
     return false;
 }
 

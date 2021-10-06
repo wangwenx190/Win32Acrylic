@@ -96,7 +96,7 @@ void OperationResultPrivate::TryQueryErrorMessageFromSystem() noexcept
 {
     LPWSTR buf = nullptr;
     if (FormatMessageW(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
-                       nullptr, m_code, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), buf, 0, nullptr) == 0) {
+                       nullptr, m_code, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), reinterpret_cast<LPWSTR>(&buf), 0, nullptr) == 0) {
         Utils::DisplayErrorDialog(L"Failed to retrieve error message from system.");
     } else {
         m_message = buf;

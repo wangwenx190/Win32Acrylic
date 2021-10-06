@@ -124,6 +124,20 @@ static constexpr wchar_t g_personalizeRegistryKey[] = LR"(Software\Microsoft\Win
     }
 }
 
+[[nodiscard]] static inline bool IsVisible(const HWND hWnd) noexcept
+{
+    USER32_API(IsWindowVisible);
+    if (IsWindowVisibleFunc) {
+        if (!hWnd) {
+            return false;
+        }
+        return (IsWindowVisibleFunc(hWnd) != FALSE);
+    } else {
+        Utils::DisplayErrorDialog(L"IsWindowVisible() is not available.");
+        return false;
+    }
+}
+
 [[maybe_unused]] [[nodiscard]] static inline bool IsMinimized(const HWND hWnd) noexcept
 {
     USER32_API(IsIconic);
@@ -152,7 +166,7 @@ static constexpr wchar_t g_personalizeRegistryKey[] = LR"(Software\Microsoft\Win
     }
 }
 
-[[maybe_unused]] [[nodiscard]] static inline bool IsNormal(const HWND hWnd) noexcept
+[[maybe_unused]] [[nodiscard]] static inline bool IsWindowed(const HWND hWnd) noexcept
 {
     USER32_API(GetWindowPlacement);
     if (GetWindowPlacementFunc) {
@@ -166,7 +180,7 @@ static constexpr wchar_t g_personalizeRegistryKey[] = LR"(Software\Microsoft\Win
             PRINT_WIN32_ERROR_MESSAGE(GetWindowPlacement, L"Failed to retrieve the window state.")
             return false;
         }
-        return (wp.showCmd == SW_NORMAL);
+        return ((wp.showCmd == SW_NORMAL) || (wp.showCmd == SW_RESTORE));
     } else {
         Utils::DisplayErrorDialog(L"GetWindowPlacement() is not available.");
         return false;
@@ -394,6 +408,7 @@ private:
     [[nodiscard]] UINT GetWindowDPI2() const noexcept;
     [[nodiscard]] UINT GetWindowVisibleFrameBorderThickness2() const noexcept;
     [[nodiscard]] bool UpdateWindowFrameMargins2() const noexcept;
+    [[nodiscard]] bool EnsureNonClientAreaRendering2() const noexcept;
 
 private:
     Window *q_ptr = nullptr;
@@ -595,13 +610,13 @@ bool WindowPrivate::SetWindowState2(const WindowState state) const noexcept
         int nCmdShow = SW_SHOW;
         switch (state) {
         case WindowState::Minimized: {
-            nCmdShow = SW_SHOWMINIMIZED;
+            nCmdShow = SW_MINIMIZE;
         } break;
         case WindowState::Windowed: {
-            nCmdShow = SW_SHOWNORMAL;
+            nCmdShow = ((m_visibility == WindowState::Hidden) ? SW_NORMAL : SW_RESTORE);
         } break;
         case WindowState::Maximized: {
-            nCmdShow = SW_SHOWMAXIMIZED;
+            nCmdShow = SW_MAXIMIZE;
         } break;
         case WindowState::Hidden: {
             nCmdShow = SW_HIDE;
@@ -697,15 +712,17 @@ UINT WindowPrivate::GetWindowVisibleFrameBorderThickness2() const noexcept
             Utils::DisplayErrorDialog(L"Failed to retrieve the window visible frame border thickness due to the window has not been created yet.");
             return g_defaultWindowVisibleFrameBorderThickness;
         }
-        const auto dpr = (static_cast<double>(m_dpi) / static_cast<double>(g_defaultWindowDPI));
-        UINT value = 0; // ### FIXME: check whether the returned value is auto scaled or not.
+        UINT value = 0;
         const HRESULT hr = DwmGetWindowAttributeFunc(m_window, g_DWMWA_VISIBLE_FRAME_BORDER_THICKNESS, &value, sizeof(value));
         if (SUCCEEDED(hr)) {
-            return static_cast<UINT>(std::round(static_cast<double>(value) * dpr));
+            // The returned value is already scaled to the DPI automatically.
+            // Don't double scale it!!!
+            return value;
         } else {
-            // We just eat this error because this enum value was introduced in a very
-            // late Windows 10 version, so querying it's value will always result in
-            // a "parameter error" (code: 87) on systems before that value was introduced.
+            // We just eat this error because this enumeration value is only available
+            // on Windows 10 21H2 and onwards, so querying it's value will always result in
+            // a "parameter error" (error code: 87) on older systems.
+            const auto dpr = (static_cast<double>(m_dpi) / static_cast<double>(g_defaultWindowDPI));
             return static_cast<UINT>(std::round(static_cast<double>(g_defaultWindowVisibleFrameBorderThickness) * dpr));
         }
     } else {
@@ -725,8 +742,12 @@ bool WindowPrivate::Initialize() noexcept
         return false;
     }
     m_dpi = GetWindowDPI2();
-    const std::wstring dpiMsg = L"Current window's dots-per-inch (DPI): " + Utils::IntegerToString(m_dpi, 10);
-    OutputDebugStringW(dpiMsg.c_str());
+    const std::wstring dpiDbgMsg = L"Current window's dots-per-inch (DPI): " + Utils::IntegerToString(m_dpi, 10);
+    OutputDebugStringW(dpiDbgMsg.c_str());
+    if (!EnsureNonClientAreaRendering2()) {
+        Utils::DisplayErrorDialog(L"Failed to enable window non-client area rendering.");
+        return false;
+    }
     if (!UpdateWindowFrameMargins2()) {
         Utils::DisplayErrorDialog(L"Failed to update the window frame margins.");
         return false;
@@ -736,8 +757,8 @@ bool WindowPrivate::Initialize() noexcept
         return false;
     }
     m_theme = GetGlobalApplicationTheme2();
-    const std::wstring themeMsg = L"Current window's theme: " + Utils::ThemeToString(m_theme);
-    OutputDebugStringW(themeMsg.c_str());
+    const std::wstring themeDbgMsg = L"Current window's theme: " + Utils::ThemeToString(m_theme);
+    OutputDebugStringW(themeDbgMsg.c_str());
     if (!RefreshWindowTheme2()) {
         Utils::DisplayErrorDialog(L"Failed to change the window theme.");
         return false;
@@ -1485,6 +1506,34 @@ bool WindowPrivate::UpdateWindowFrameMargins2() const noexcept
         return true;
     } else {
         Utils::DisplayErrorDialog(L"Failed to update the window frame margins due to DwmExtendFrameIntoClientArea() is not available.");
+        return false;
+    }
+}
+
+bool WindowPrivate::EnsureNonClientAreaRendering2() const noexcept
+{
+    DWMAPI_API(DwmSetWindowAttribute);
+    if (DwmSetWindowAttributeFunc) {
+        if (!m_window) {
+            Utils::DisplayErrorDialog(L"Can't enable window non-client area rendering due to the window has not been created yet.");
+            return false;
+        }
+        // Don't use "DWMWA_NCRENDERING_ENABLED" because it's used for querying values only.
+        const DWMNCRENDERINGPOLICY ncrp = DWMNCRP_ENABLED;
+        HRESULT hr = DwmSetWindowAttributeFunc(m_window, DWMWA_NCRENDERING_POLICY, &ncrp, sizeof(ncrp));
+        if (FAILED(hr)) {
+            PRINT_HR_ERROR_MESSAGE(DwmSetWindowAttribute, hr, L"Failed to enable window non-client area rendering.")
+            return false;
+        }
+        const BOOL ancp = TRUE;
+        hr = DwmSetWindowAttributeFunc(m_window, DWMWA_ALLOW_NCPAINT, &ancp, sizeof(ancp));
+        if (FAILED(hr)) {
+            PRINT_HR_ERROR_MESSAGE(DwmSetWindowAttribute, hr, L"Failed to enable painting on the window non-client area.")
+            return false;
+        }
+        return true;
+    } else {
+        Utils::DisplayErrorDialog(L"Can't enable window non-client area rendering due to DwmSetWindowAttribute() is not available.");
         return false;
     }
 }

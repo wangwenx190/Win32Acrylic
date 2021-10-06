@@ -84,12 +84,13 @@ private:
 #define __PRINT_SYSTEM_ERROR_MESSAGE(function, additionalMessage) \
 if (__operation_result.Failed()) { \
     const std::wstring __error_message_from_system = __operation_result.Message(); \
+    std::wstring __final_error_message = L"Function " L#function L"() failed with error code " + Utils::IntegerToString(__operation_result.Code(), 10) + L": "; \
     if (__error_message_from_system.empty()) { \
-        Utils::DisplayErrorDialog(additionalMessage); \
+        __final_error_message += additionalMessage; \
     } else { \
-        const std::wstring __final_error_message = L"Function " L#function L"() failed with error code " + Utils::IntegerToString(__operation_result.Code(), 10) + L": " + __error_message_from_system; \
-        Utils::DisplayErrorDialog(__final_error_message); \
+        __final_error_message += __error_message_from_system; \
     } \
+    Utils::DisplayErrorDialog(__final_error_message); \
 }
 #endif
 

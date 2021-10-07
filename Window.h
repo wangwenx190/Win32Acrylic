@@ -106,7 +106,6 @@ protected:
     virtual void OnColorizationAreaChanged(const WindowColorizationArea arg) noexcept;
 
     [[nodiscard]] virtual bool MessageHandler(const UINT message, const WPARAM wParam, const LPARAM lParam, LRESULT *result) noexcept;
-    [[nodiscard]] virtual bool FilterMessage(const MSG *msg) const noexcept;
 
     [[nodiscard]] UINT GetWindowMetrics(const WindowMetrics metrics) const noexcept;
 

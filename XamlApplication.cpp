@@ -28,8 +28,6 @@
 #include "WindowsVersion.h"
 #include "Utils.h"
 
-static constexpr int g_TOTAL_WINDOW_COUNT = 4;
-
 class XamlApplicationPrivate
 {
 public:
@@ -49,7 +47,7 @@ private:
     XamlApplication *q_ptr = nullptr;
     static inline bool m_comInitialized = false;
     static inline winrt::Windows::UI::Xaml::Hosting::WindowsXamlManager m_xamlManager = nullptr;
-    std::vector<XamlWindow *> m_windows = {};
+    std::unique_ptr<XamlWindow> m_window;
 };
 
 XamlApplicationPrivate::XamlApplicationPrivate(XamlApplication *q) noexcept
@@ -63,11 +61,8 @@ XamlApplicationPrivate::XamlApplicationPrivate(XamlApplication *q) noexcept
 
 XamlApplicationPrivate::~XamlApplicationPrivate() noexcept
 {
-    if (!m_windows.empty()) {
-        for (const auto window : std::as_const(m_windows)) {
-            delete window;
-        }
-        m_windows.clear();
+    if (m_window) {
+        m_window.release();
     }
     if (m_xamlManager != nullptr) {
         m_xamlManager.Close();
@@ -110,11 +105,9 @@ bool XamlApplicationPrivate::Initialize() noexcept
     const ProcessDPIAwareness curPcDPIAwareness = Utils::GetProcessDPIAwareness();
     const std::wstring curPcDPIAwarenessDbgMsg = L"Current process's DPI awareness: " + Utils::DPIAwarenessToString(curPcDPIAwareness);
     OutputDebugStringW(curPcDPIAwarenessDbgMsg.c_str());
-    for (int i = 0; i != g_TOTAL_WINDOW_COUNT; ++i) {
-        const auto window = new XamlWindow;
-        window->Visibility(WindowState::Windowed);
-        m_windows.push_back(window);
-    }
+    m_window = std::make_unique<XamlWindow>();
+    // ### TODO: move to desktop center
+    m_window->Visibility(WindowState::Windowed);
     return true;
 }
 
@@ -124,7 +117,7 @@ int XamlApplicationPrivate::Run() const noexcept
         Utils::DisplayErrorDialog(L"Can't run the XAML application due to the q_ptr is null.");
         return -1;
     }
-    if (m_windows.empty()) {
+    if (!m_window) {
         Utils::DisplayErrorDialog(L"Can't run the XAML application due to the XAML window has not been created yet.");
         return -1;
     }

@@ -332,31 +332,23 @@ enum class DwmWindowCornerPreference : WORD
             Utils::DisplayErrorDialog(L"Failed to close the window due to the window handle is null.");
             return false;
         }
+        wchar_t className[MAX_PATH] = { L'\0' };
+        if (GetClassNameW_API(hWnd, className, MAX_PATH) <= 0) {
+            PRINT_WIN32_ERROR_MESSAGE(GetClassNameW, L"Failed to retrieve the class name of the window.")
+            return false;
+        }
         if (DestroyWindow_API(hWnd) == FALSE) {
             PRINT_WIN32_ERROR_MESSAGE(DestroyWindow, L"Failed to destroy the window.")
             return false;
         }
-        wchar_t className[MAX_PATH] = { L'\0' };
-        if (GetClassNameW_API(hWnd, className, MAX_PATH) > 0) {
-            if (UnregisterClassW_API(className, HINST_THISCOMPONENT) == FALSE) {
-                PRINT_WIN32_ERROR_MESSAGE(UnregisterClassW, L"Failed to unregister the window class.")
-                return false;
-            }
+        if (UnregisterClassW_API(className, HINST_THISCOMPONENT) == FALSE) {
+            PRINT_WIN32_ERROR_MESSAGE(UnregisterClassW, L"Failed to unregister the window class.")
+            return false;
         }
         return true;
     } else {
         Utils::DisplayErrorDialog(L"Failed to close the window due to DestroyWindow(), GetClassNameW() and UnregisterClassW() are not available.");
         return false;
-    }
-}
-
-static inline void QuitApplication() noexcept
-{
-    USER32_API(PostQuitMessage);
-    if (PostQuitMessage_API) {
-        PostQuitMessage_API(0);
-    } else {
-        Utils::DisplayErrorDialog(L"Can't quit application due to PostQuitMessage() is not available.");
     }
 }
 
@@ -444,7 +436,6 @@ private:
     Color m_colorizationColor = Color();
     WindowColorizationArea m_colorizationArea = WindowColorizationArea::None;
     UINT m_dpi = 0;
-    static inline int m_windowCount = 0;
 };
 
 POINT WindowPrivate::GetWindowPosition2() const noexcept
@@ -656,18 +647,6 @@ bool WindowPrivate::SetWindowState2(const WindowState state) const noexcept
             }
             return false;
         }
-        if ((state == WindowState::Windowed) || (state == WindowState::Maximized)) {
-            USER32_API(SetFocus);
-            if (SetFocus_API) {
-                if (SetFocus_API(m_window) == nullptr) {
-                    PRINT_WIN32_ERROR_MESSAGE(SetFocus, L"Failed to send focus to the window.")
-                    return false;
-                }
-            } else {
-                Utils::DisplayErrorDialog(L"Can't send focus to the window due to SetFocus() is not available.");
-                return false;
-            }
-        }
         return true;
     } else {
         Utils::DisplayErrorDialog(L"Failed to change the window state due to ShowWindow() is not available.");
@@ -843,7 +822,6 @@ WindowPrivate::WindowPrivate(Window *q) noexcept
     q_ptr = q;
     m_window = CreateWindow2((WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN | WS_CLIPSIBLINGS), WS_EX_NOREDIRECTIONBITMAP, nullptr, this, WindowProc);
     if (m_window) {
-        ++m_windowCount;
         if (!Initialize()) {
             Utils::DisplayErrorDialog(L"Failed to initialize WindowPrivate.");
         }
@@ -857,10 +835,6 @@ WindowPrivate::~WindowPrivate() noexcept
     if (m_window) {
         if (CloseWindow2(m_window)) {
             m_window = nullptr;
-            --m_windowCount;
-            if (m_windowCount <= 0) {
-                QuitApplication();
-            }
         } else {
             Utils::DisplayErrorDialog(L"Failed to close this window.");
         }
@@ -1192,11 +1166,21 @@ LRESULT CALLBACK WindowPrivate::WindowProc(const HWND hWnd, const UINT message, 
         if (message == WM_NCCREATE) {
             const auto cs = reinterpret_cast<LPCREATESTRUCT>(lParam);
             const auto that = static_cast<WindowPrivate *>(cs->lpCreateParams);
-            if (SetWindowLongPtrW_API(hWnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(that)) != 0) {
+            // SetWindowLongPtrW() won't modify the Last Error state on success
+            // and it's return value is the previous data so we have to judge
+            // the actual operation result from the Last Error state manually.
+            SetLastError(ERROR_SUCCESS);
+            const LONG_PTR result = SetWindowLongPtrW_API(hWnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(that));
+            PRINT_WIN32_ERROR_MESSAGE(SetWindowLongPtrW, L"Failed to set the extra data to the window.")
+            if (result != 0) {
                 Utils::DisplayErrorDialog(L"The extra data of this window has been overwritten.");
             }
         } else if (message == WM_NCDESTROY) {
-            if (SetWindowLongPtrW_API(hWnd, GWLP_USERDATA, 0) == 0) {
+            // See the above comments.
+            SetLastError(ERROR_SUCCESS);
+            const LONG_PTR result = SetWindowLongPtrW_API(hWnd, GWLP_USERDATA, 0);
+            PRINT_WIN32_ERROR_MESSAGE(SetWindowLongPtrW, L"Failed to clear the extra data of the window.")
+            if (result == 0) {
                 Utils::DisplayErrorDialog(L"This window doesn't contain any extra data.");
             }
         }
@@ -1339,7 +1323,6 @@ bool WindowPrivate::InternalMessageHandler(const UINT message, const WPARAM wPar
     case WM_CLOSE: {
         if (CloseWindow2(m_window)) {
             m_window = nullptr;
-            --m_windowCount;
             *result = 0;
             return true;
         } else {
@@ -1348,10 +1331,14 @@ bool WindowPrivate::InternalMessageHandler(const UINT message, const WPARAM wPar
         }
     } break;
     case WM_DESTROY: {
-        if (m_windowCount <= 0) {
-            QuitApplication();
+        USER32_API(PostQuitMessage);
+        if (PostQuitMessage_API) {
+            PostQuitMessage_API(0);
             *result = 0;
             return true;
+        } else {
+            Utils::DisplayErrorDialog(L"Can't quit application due to PostQuitMessage() is not available.");
+            return false;
         }
     } break;
     case WM_NCCREATE: {
@@ -1493,7 +1480,6 @@ bool WindowPrivate::InternalMessageHandler(const UINT message, const WPARAM wPar
         return true;
     } break;
     case WM_NCHITTEST: {
-        // ### TODO: HTSYSMENU/HTMINBUTTON/HTMAXBUTTON/HTCLOSE
         const POINT globalPos = {GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)};
         POINT localPos = globalPos;
         USER32_API(ScreenToClient);
@@ -1722,10 +1708,6 @@ HWND Window::CreateChildWindow(const DWORD style, const DWORD extendedStyle, con
 
 bool Window::CloseChildWindow(const HWND hWnd) const noexcept
 {
-    if (!hWnd) {
-        Utils::DisplayErrorDialog(L"Can't close the child window due to the window handle is null.");
-        return false;
-    }
     return CloseWindow2(hWnd);
 }
 
@@ -1815,12 +1797,6 @@ bool Window::MessageHandler(const UINT message, const WPARAM wParam, const LPARA
     UNREFERENCED_PARAMETER(wParam);
     UNREFERENCED_PARAMETER(lParam);
     UNREFERENCED_PARAMETER(result);
-    return false;
-}
-
-bool Window::FilterMessage(const MSG *msg) const noexcept
-{
-    UNREFERENCED_PARAMETER(msg);
     return false;
 }
 

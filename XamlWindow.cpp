@@ -60,13 +60,17 @@ public:
     explicit XamlWindowPrivate(XamlWindow *q) noexcept;
     ~XamlWindowPrivate() noexcept;
 
+    [[nodiscard]] RECT GetWindowGeometry() const noexcept;
+    [[nodiscard]] double GetDevicePixelRatio() const noexcept;
+    [[nodiscard]] SIZE GetPhysicalSize() const noexcept;
+    [[nodiscard]] winrt::Windows::Foundation::Size GetLogicalSzie() const noexcept;
+
     [[nodiscard]] bool RefreshWindowBackgroundBrush() noexcept;
     [[nodiscard]] bool SyncXamlIslandWindowGeometry() const noexcept;
     [[nodiscard]] bool SyncDragBarWindowGeometry() const noexcept;
     [[nodiscard]] bool SyncInternalWindowsGeometry() const noexcept;
 
     [[nodiscard]] bool MessageHandler(const UINT message, const WPARAM wParam, const LPARAM lParam, LRESULT *result) noexcept;
-    [[nodiscard]] bool FilterMessage(const MSG *msg) const noexcept;
 
 private:
     [[nodiscard]] static LRESULT CALLBACK DragBarWindowProc(const HWND hWnd, const UINT message, const WPARAM wParam, const LPARAM lParam) noexcept;
@@ -133,11 +137,21 @@ LRESULT CALLBACK XamlWindowPrivate::DragBarWindowProc(const HWND hWnd, const UIN
         if (message == WM_NCCREATE) {
             const auto cs = reinterpret_cast<LPCREATESTRUCT>(lParam);
             const auto that = static_cast<XamlWindowPrivate *>(cs->lpCreateParams);
-            if (SetWindowLongPtrW_API(hWnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(that)) != 0) {
+            // SetWindowLongPtrW() won't modify the Last Error state on success
+            // and it's return value is the previous data so we have to judge
+            // the actual operation result from the Last Error state manually.
+            SetLastError(ERROR_SUCCESS);
+            const LONG_PTR result = SetWindowLongPtrW_API(hWnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(that));
+            PRINT_WIN32_ERROR_MESSAGE(SetWindowLongPtrW, L"Failed to set the extra data to the drag bar window.")
+            if (result != 0) {
                 Utils::DisplayErrorDialog(L"The extra data of the drag bar window has been overwritten.");
             }
         } else if (message == WM_NCDESTROY) {
-            if (SetWindowLongPtrW_API(hWnd, GWLP_USERDATA, 0) == 0) {
+            // See the above comments.
+            SetLastError(ERROR_SUCCESS);
+            const LONG_PTR result = SetWindowLongPtrW_API(hWnd, GWLP_USERDATA, 0);
+            PRINT_WIN32_ERROR_MESSAGE(SetWindowLongPtrW, L"Failed to clear the extra data of the drag bar window.")
+            if (result == 0) {
                 Utils::DisplayErrorDialog(L"The drag bar window doesn't contain any extra data.");
             }
         }
@@ -279,9 +293,9 @@ bool XamlWindowPrivate::InitializeXamlIsland() noexcept
     // to host WinRT XAML controls in any UI element that is associated with a window handle (HWND).
     m_xamlSource = winrt::Windows::UI::Xaml::Hosting::DesktopWindowXamlSource();
     // Get handle to the core window.
-    const auto interop = m_xamlSource.as<IDesktopWindowXamlSourceNative>();
+    const auto interop = m_xamlSource.as<IDesktopWindowXamlSourceNative2>();
     if (!interop) {
-        Utils::DisplayErrorDialog(L"Failed to retrieve the IDesktopWindowXamlSourceNative.");
+        Utils::DisplayErrorDialog(L"Failed to retrieve the IDesktopWindowXamlSourceNative2.");
         return false;
     }
     // Parent the DesktopWindowXamlSource object to the current window.
@@ -534,36 +548,13 @@ bool XamlWindowPrivate::MessageHandler(const UINT message, const WPARAM wParam, 
             }
         }
     } break;
+    case WM_NCHITTEST: {
+        // ### TODO: HTSYSMENU/HTMINBUTTON/HTMAXBUTTON/HTCLOSE
+    } break;
     default:
         break;
     }
     return false;
-}
-
-bool XamlWindowPrivate::FilterMessage(const MSG *msg) const noexcept
-{
-    if (!msg) {
-        Utils::DisplayErrorDialog(L"Can't filter Win32 messages due to the pointer to it is null.");
-        return false;
-    }
-    if (m_xamlSource == nullptr) {
-        Utils::DisplayErrorDialog(L"Can't filter Win32 messages due to the XAML source has not been created yet.");
-        return false;
-    }
-    const auto interop2 = m_xamlSource.as<IDesktopWindowXamlSourceNative2>();
-    if (interop2) {
-        BOOL filtered = FALSE;
-        const HRESULT hr = interop2->PreTranslateMessage(msg, &filtered);
-        if (FAILED(hr)) {
-            PRINT_HR_ERROR_MESSAGE(PreTranslateMessage, hr, L"Failed to pre-translate Win32 messages.")
-            return false;
-        } else {
-            return (filtered != FALSE);
-        }
-    } else {
-        Utils::DisplayErrorDialog(L"Failed to retrieve the IDesktopWindowXamlSourceNative2.");
-        return false;
-    }
 }
 
 XamlWindow::XamlWindow() noexcept
@@ -610,9 +601,4 @@ void XamlWindow::OnThemeChanged(const WindowTheme arg) noexcept
 bool XamlWindow::MessageHandler(const UINT message, const WPARAM wParam, const LPARAM lParam, LRESULT *result) noexcept
 {
     return d_ptr->MessageHandler(message, wParam, lParam, result);
-}
-
-bool XamlWindow::FilterMessage(const MSG *msg) const noexcept
-{
-    return d_ptr->FilterMessage(msg);
 }

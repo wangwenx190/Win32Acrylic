@@ -71,6 +71,25 @@
     }
 }
 
+[[nodiscard]] static inline RECT GetWindowFrameGeometry(const HWND hWnd) noexcept
+{
+    USER32_API(GetWindowRect);
+    if (GetWindowRect_API) {
+        if (!hWnd) {
+            return {};
+        }
+        RECT rect = {0, 0, 0, 0};
+        if (GetWindowRect_API(hWnd, &rect) == FALSE) {
+            PRINT_WIN32_ERROR_MESSAGE(GetWindowRect, L"Failed to retrieve the window frame geometry.")
+            return {};
+        }
+        return rect;
+    } else {
+        Utils::DisplayErrorDialog(L"Can't retrieve the window frame geometry due to GetWindowRect() is not available.");
+        return {};
+    }
+}
+
 [[maybe_unused]] [[nodiscard]] static inline bool IsVisible(const HWND hWnd) noexcept
 {
     USER32_API(IsWindowVisible);
@@ -136,9 +155,34 @@
 
 [[nodiscard]] static inline bool IsFullScreen(const HWND hWnd) noexcept
 {
-    // ### TODO
-    UNREFERENCED_PARAMETER(hWnd);
-    return false;
+    USER32_API(MonitorFromWindow);
+    USER32_API(GetMonitorInfoW);
+    if (MonitorFromWindow_API && GetMonitorInfoW_API) {
+        if (!hWnd) {
+            return false;
+        }
+        const HMONITOR mon = MonitorFromWindow_API(hWnd, MONITOR_DEFAULTTOPRIMARY);
+        if (!mon) {
+            PRINT_WIN32_ERROR_MESSAGE(MonitorFromWindow, L"Failed to retrieve the corresponding screen.")
+            return false;
+        }
+        MONITORINFO mi;
+        SecureZeroMemory(&mi, sizeof(mi));
+        mi.cbSize = sizeof(mi);
+        if (GetMonitorInfoW_API(mon, &mi) == FALSE) {
+            PRINT_WIN32_ERROR_MESSAGE(GetMonitorInfoW, L"Failed to retrieve the screen information.")
+            return false;
+        }
+        const RECT screenGeometry = mi.rcMonitor;
+        const RECT windowGeometry = GetWindowFrameGeometry(hWnd);
+        return ((windowGeometry.top == screenGeometry.top)
+                && (windowGeometry.bottom == screenGeometry.bottom)
+                && (windowGeometry.left == screenGeometry.left)
+                && (windowGeometry.right == screenGeometry.right));
+    } else {
+        Utils::DisplayErrorDialog(L"MonitorFromWindow() and GetMonitorInfoW() are not available.");
+        return false;
+    }
 }
 
 [[nodiscard]] static inline bool IsHighContrastModeEnabled() noexcept
@@ -390,22 +434,12 @@ private:
 
 POINT WindowPrivate::GetWindowPosition2() const noexcept
 {
-    USER32_API(GetWindowRect);
-    if (GetWindowRect_API) {
-        if (!m_window) {
-            Utils::DisplayErrorDialog(L"Failed to retrieve the window position due to the window has not been created yet.");
-            return {};
-        }
-        RECT rect = {0, 0, 0, 0};
-        if (GetWindowRect_API(m_window, &rect) == FALSE) {
-            PRINT_WIN32_ERROR_MESSAGE(GetWindowRect, L"Failed to retrieve the window frame geometry.")
-            return {};
-        }
-        return {rect.left, rect.top};
-    } else {
-        Utils::DisplayErrorDialog(L"Failed to retrieve the window position due to GetWindowRect() is not available.");
+    if (!m_window) {
+        Utils::DisplayErrorDialog(L"Can't retrieve the window position due to the window has not been created yet.");
         return {};
     }
+    const RECT frameGeometry = GetWindowFrameGeometry(m_window);
+    return {frameGeometry.left, frameGeometry.top};
 }
 
 SIZE WindowPrivate::GetWindowSize2() const noexcept
@@ -794,25 +828,15 @@ int WindowPrivate::MessageLoop() noexcept
     USER32_API(GetMessageW);
     USER32_API(TranslateMessage);
     USER32_API(DispatchMessageW);
-    USER32_API(GetWindowLongPtrW);
-    if (GetMessageW_API && TranslateMessage_API && DispatchMessageW_API && GetWindowLongPtrW_API) {
+    if (GetMessageW_API && TranslateMessage_API && DispatchMessageW_API) {
         MSG msg = {};
         while (GetMessageW_API(&msg, nullptr, 0, 0) != FALSE) {
-            bool filtered = false;
-            const auto that = reinterpret_cast<WindowPrivate *>(GetWindowLongPtrW_API(msg.hwnd, GWLP_USERDATA));
-            if (that) {
-                if (that->q_ptr) {
-                    //filtered = that->q_ptr->FilterMessage(&msg);
-                }
-            }
-            if (!filtered) {
-                TranslateMessage_API(&msg);
-                DispatchMessageW_API(&msg);
-            }
+            TranslateMessage_API(&msg);
+            DispatchMessageW_API(&msg);
         }
         return static_cast<int>(msg.wParam);
     } else {
-        Utils::DisplayErrorDialog(L"Can't continue the message loop due to GetMessageW(), TranslateMessage(), DispatchMessageW() and GetWindowLongPtrW() are not available.");
+        Utils::DisplayErrorDialog(L"Can't continue the message loop due to GetMessageW(), TranslateMessage() and DispatchMessageW() are not available.");
         return -1;
     }
 }
@@ -942,7 +966,7 @@ void WindowPrivate::FrameCorner(const WindowFrameCorner value) noexcept
             if (SUCCEEDED(hr)) {
                 m_frameCorner = value;
             } else {
-                // ### TODO
+                // ### TODO: SetWindowRgn
             }
         } else {
             Utils::DisplayErrorDialog(L"Can't change the window frame corner style due to DwmSetWindowAttribute() and SetWindowRgn() are not available.");
@@ -1559,6 +1583,21 @@ bool WindowPrivate::UpdateWindowFrameMargins2() const noexcept
             Utils::DisplayErrorDialog(L"Failed to update the window frame margins due to the window has not been created yet.");
             return false;
         }
+        // We removed the whole top part of the frame (see handling of
+        // WM_NCCALCSIZE) so the top border is missing now. We add it back here.
+        // Note #1: You might wonder why we don't remove just the title bar instead
+        //  of removing the whole top part of the frame and then adding the little
+        //  top border back. I tried to do this but it didn't work: DWM drew the
+        //  whole title bar anyways on top of the window. It seems that DWM only
+        //  wants to draw either nothing or the whole top part of the frame.
+        // Note #2: For some reason if you try to set the top margin to just the
+        //  top border height (what we want to do), then there is a transparency
+        //  bug when the window is inactive, so I've decided to add the whole top
+        //  part of the frame instead and then we will hide everything that we
+        //  don't need (that is, the whole thing but the little 1 pixel wide border
+        //  at the top) in the WM_PAINT handler. This eliminates the transparency
+        //  bug and it's what a lot of Win32 apps that customize the title bar do
+        //  so it should work fine.
         const UINT topFrameMargin = (((m_visibility == WindowState::Hidden) || (m_visibility == WindowState::Windowed)) ? (GetWindowMetrics2(WindowMetrics::ResizeBorderThicknessY) + GetWindowMetrics2(WindowMetrics::CaptionHeight)) : 0);
         const MARGINS margins = {0, 0, static_cast<int>(topFrameMargin), 0};
         const HRESULT hr = DwmExtendFrameIntoClientArea_API(m_window, &margins);

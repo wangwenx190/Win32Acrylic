@@ -612,7 +612,8 @@ bool WindowPrivate::OpenSystemMenu2(const POINT pos) const noexcept
 bool WindowPrivate::SetWindowState2(const WindowState state) const noexcept
 {
     USER32_API(ShowWindow);
-    if (ShowWindow_API) {
+    USER32_API(UpdateWindow);
+    if (ShowWindow_API && UpdateWindow_API) {
         if (!m_window) {
             Utils::DisplayErrorDialog(L"Failed to change the window state due to the window has not been created yet.");
             return false;
@@ -635,21 +636,18 @@ bool WindowPrivate::SetWindowState2(const WindowState state) const noexcept
         // Don't check ShowWindow()'s result because it returns the previous window state rather than
         // the operation result of itself.
         SetLastError(ERROR_SUCCESS);
-        ShowWindow_API(m_window, nCmdShow);
-        const OperationResult operationResult;
-        if (operationResult.Failed()) {
-            std::wstring errMsg = L"Function ShowWindow() failed with error code " + Utils::IntegerToString(operationResult.Code(), 10) + L": ";
-            const std::wstring errMsgFromOs = operationResult.Message();
-            if (errMsgFromOs.empty()) {
-                errMsg += L"Failed to change the window state.";
-            } else {
-                errMsg += errMsgFromOs;
+        const BOOL previousState = ShowWindow_API(m_window, nCmdShow);
+        UNREFERENCED_PARAMETER(previousState);
+        PRINT_WIN32_ERROR_MESSAGE(ShowWindow, L"Failed to change the window state.")
+        if ((state == WindowState::Windowed) || (state == WindowState::Maximized)) {
+            if (UpdateWindow_API(m_window) == FALSE) {
+                PRINT_WIN32_ERROR_MESSAGE(UpdateWindow, L"Failed to update the window.")
+                return false;
             }
-            return false;
         }
         return true;
     } else {
-        Utils::DisplayErrorDialog(L"Failed to change the window state due to ShowWindow() is not available.");
+        Utils::DisplayErrorDialog(L"Failed to change the window state due to ShowWindow() and UpdateWindow() are not available.");
         return false;
     }
 }

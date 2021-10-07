@@ -12,3 +12,4 @@
 - first show
 - 先执行用户MessageHandler，然后执行默认handler
 - SetWindowRgn
+- xaml window 支持设置亚克力画刷的属性

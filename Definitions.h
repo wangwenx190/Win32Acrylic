@@ -100,7 +100,7 @@ using NTSTATUS = LONG;
 [[maybe_unused]] constexpr wchar_t DwmRegistryKeyPath[] = LR"(Software\Microsoft\Windows\DWM)";
 [[maybe_unused]] constexpr wchar_t PersonalizeRegistryKeyPath[] = LR"(Software\Microsoft\Windows\CurrentVersion\Themes\Personalize)";
 
-enum class DwmWindowCornerPreference : WORD
+enum class DwmWindowCornerPreference : int
 {
     DoNotRound = 1,
     Round = 2,
@@ -155,4 +155,12 @@ enum class WindowFrameCorner : int
 {
     Square = 0,
     Round
+};
+
+enum class WindowStartupLocation : int
+{
+    Default = 0,
+    OwnerCenter,
+    DesktopCenter, // take the task bar into account
+    ScreenCenter // regardless of the task bar
 };

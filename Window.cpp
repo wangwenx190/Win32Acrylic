@@ -378,6 +378,9 @@ public:
     [[nodiscard]] WindowFrameCorner FrameCorner() const noexcept;
     void FrameCorner(const WindowFrameCorner value) noexcept;
 
+    [[nodiscard]] WindowStartupLocation StartupLocation() const noexcept;
+    void StartupLocation(const WindowStartupLocation value) noexcept;
+
     [[nodiscard]] WindowTheme Theme() const noexcept;
 
     [[nodiscard]] UINT DotsPerInch() const noexcept;
@@ -426,10 +429,12 @@ private:
     UINT m_height = 0;
     WindowState m_visibility = WindowState::Hidden;
     WindowFrameCorner m_frameCorner = WindowFrameCorner::Square;
+    WindowStartupLocation m_startupLocation = WindowStartupLocation::Default;
     WindowTheme m_theme = WindowTheme::Light;
     Color m_colorizationColor = Color();
     WindowColorizationArea m_colorizationArea = WindowColorizationArea::None;
     UINT m_dpi = 0;
+    HBRUSH m_backgroundBrush = nullptr;
 };
 
 POINT WindowPrivate::GetWindowPosition2() const noexcept
@@ -555,20 +560,20 @@ bool WindowPrivate::OpenSystemMenu2(const POINT pos) const noexcept
             }
             return true;
         };
-        const bool max = IsMaximized(m_window);
-        if (!setState(SC_RESTORE, max)) {
+        const bool maxOrFull = (IsMaximized(m_window) || IsFullScreen(m_window));
+        if (!setState(SC_RESTORE, maxOrFull)) {
             return false;
         }
-        if (!setState(SC_MOVE, !max)) {
+        if (!setState(SC_MOVE, !maxOrFull)) {
             return false;
         }
-        if (!setState(SC_SIZE, !max)) {
+        if (!setState(SC_SIZE, !maxOrFull)) {
             return false;
         }
         if (!setState(SC_MINIMIZE, true)) {
             return false;
         }
-        if (!setState(SC_MAXIMIZE, !max)) {
+        if (!setState(SC_MAXIMIZE, !maxOrFull)) {
             return false;
         }
         if (!setState(SC_CLOSE, true)) {
@@ -778,6 +783,7 @@ bool WindowPrivate::Initialize() noexcept
     m_height = windowSize.cy;
     m_title = {};
     m_frameCorner = ((WindowsVersion::CurrentVersion() >= WindowsVersion::Windows10_21Half2) ? WindowFrameCorner::Round : WindowFrameCorner::Square);
+    m_startupLocation = WindowStartupLocation::Default;
     if (q_ptr) {
         q_ptr->OnXChanged(m_x);
         q_ptr->OnYChanged(m_y);
@@ -791,6 +797,7 @@ bool WindowPrivate::Initialize() noexcept
         q_ptr->OnColorizationColorChanged(m_colorizationColor);
         q_ptr->OnColorizationAreaChanged(m_colorizationArea);
         q_ptr->OnFrameCornerChanged(m_frameCorner);
+        q_ptr->OnStartupLocationChanged(m_startupLocation);
     }
     return true;
 }
@@ -971,6 +978,18 @@ void WindowPrivate::FrameCorner(const WindowFrameCorner value) noexcept
         } else {
             Utils::DisplayErrorDialog(L"Can't change the window frame corner style due to DwmSetWindowAttribute() and SetWindowRgn() are not available.");
         }
+    }
+}
+
+WindowStartupLocation WindowPrivate::StartupLocation() const noexcept
+{
+    return m_startupLocation;
+}
+
+void WindowPrivate::StartupLocation(const WindowStartupLocation value) noexcept
+{
+    if (m_startupLocation != value) {
+        // ### TODO
     }
 }
 
@@ -1727,6 +1746,16 @@ void Window::FrameCorner(const WindowFrameCorner value) noexcept
     d_ptr->FrameCorner(value);
 }
 
+WindowStartupLocation Window::StartupLocation() const noexcept
+{
+    return d_ptr->StartupLocation();
+}
+
+void Window::StartupLocation(const WindowStartupLocation value) noexcept
+{
+    d_ptr->StartupLocation(value);
+}
+
 WindowTheme Window::Theme() const noexcept
 {
     return d_ptr->Theme();
@@ -1750,11 +1779,6 @@ WindowColorizationArea Window::ColorizationArea() const noexcept
 HWND Window::CreateChildWindow(const DWORD style, const DWORD extendedStyle, const WNDPROC wndProc, void *extraData) const noexcept
 {
     return d_ptr->CreateChildWindow(style, extendedStyle, wndProc, extraData);
-}
-
-bool Window::CloseChildWindow(const HWND hWnd) const noexcept
-{
-    return CloseWindow2(hWnd);
 }
 
 HWND Window::WindowHandle() const noexcept
@@ -1813,6 +1837,11 @@ void Window::OnVisibilityChanged(const WindowState arg) noexcept
 }
 
 void Window::OnFrameCornerChanged(const WindowFrameCorner arg) noexcept
+{
+    UNREFERENCED_PARAMETER(arg);
+}
+
+void Window::OnStartupLocationChanged(const WindowStartupLocation arg) noexcept
 {
     UNREFERENCED_PARAMETER(arg);
 }

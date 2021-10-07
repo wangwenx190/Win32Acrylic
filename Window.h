@@ -65,6 +65,9 @@ public:
     [[nodiscard]] WindowFrameCorner FrameCorner() const noexcept;
     void FrameCorner(const WindowFrameCorner value) noexcept;
 
+    [[nodiscard]] WindowStartupLocation StartupLocation() const noexcept;
+    void StartupLocation(const WindowStartupLocation value) noexcept;
+
     [[nodiscard]] WindowTheme Theme() const noexcept;
 
     [[nodiscard]] UINT DotsPerInch() const noexcept;
@@ -74,7 +77,6 @@ public:
     [[nodiscard]] WindowColorizationArea ColorizationArea() const noexcept;
 
     [[nodiscard]] HWND CreateChildWindow(const DWORD style, const DWORD extendedStyle, const WNDPROC wndProc, void *extraData) const noexcept;
-    [[nodiscard]] bool CloseChildWindow(const HWND hWnd) const noexcept;
     [[nodiscard]] HWND WindowHandle() const noexcept;
     [[nodiscard]] bool Move(const int x, const int y) const noexcept;
     [[nodiscard]] bool Resize(const UINT w, const UINT h) const noexcept;
@@ -100,6 +102,7 @@ protected:
     virtual void OnHeightChanged(const UINT arg) noexcept;
     virtual void OnVisibilityChanged(const WindowState arg) noexcept;
     virtual void OnFrameCornerChanged(const WindowFrameCorner arg) noexcept;
+    virtual void OnStartupLocationChanged(const WindowStartupLocation arg) noexcept;
     virtual void OnThemeChanged(const WindowTheme arg) noexcept;
     virtual void OnDotsPerInchChanged(const UINT arg) noexcept;
     virtual void OnColorizationColorChanged(const Color &arg) noexcept;

@@ -25,10 +25,6 @@
 #include "OperationResult.h"
 #include "Utils.h"
 
-#ifndef CODE_FROM_HRESULT
-#define CODE_FROM_HRESULT(hr) (static_cast<DWORD>(HRESULT_CODE(hr)))
-#endif
-
 class OperationResultPrivate
 {
 public:

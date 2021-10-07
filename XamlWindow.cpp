@@ -28,14 +28,6 @@
 #include "OperationResult.h"
 #include "Utils.h"
 
-#ifndef GET_X_LPARAM
-#define GET_X_LPARAM(lParam) (static_cast<int>(static_cast<short>(LOWORD(lParam))))
-#endif
-
-#ifndef GET_Y_LPARAM
-#define GET_Y_LPARAM(lParam) (static_cast<int>(static_cast<short>(HIWORD(lParam))))
-#endif
-
 namespace Constants {
 namespace Light {
 static constexpr winrt::Windows::UI::Color TintColor = {255, 252, 252, 252};
@@ -60,10 +52,10 @@ public:
     explicit XamlWindowPrivate(XamlWindow *q) noexcept;
     ~XamlWindowPrivate() noexcept;
 
-    [[nodiscard]] RECT GetWindowGeometry() const noexcept;
     [[nodiscard]] double GetDevicePixelRatio() const noexcept;
     [[nodiscard]] SIZE GetPhysicalSize() const noexcept;
-    [[nodiscard]] winrt::Windows::Foundation::Size GetLogicalSzie() const noexcept;
+    [[nodiscard]] winrt::Windows::Foundation::Size GetLogicalSize(const SIZE physicalSize) const noexcept;
+    [[nodiscard]] winrt::Windows::Foundation::Size GetLogicalSize() const noexcept;
 
     [[nodiscard]] bool RefreshWindowBackgroundBrush() noexcept;
     [[nodiscard]] bool SyncXamlIslandWindowGeometry() const noexcept;
@@ -128,6 +120,38 @@ XamlWindowPrivate::~XamlWindowPrivate() noexcept
     }
 }
 
+double XamlWindowPrivate::GetDevicePixelRatio() const noexcept
+{
+    if (!q_ptr) {
+        Utils::DisplayErrorDialog(L"Can't retrieve the device pixel ratio of the window due to q_ptr is null.");
+        return 0.0;
+    }
+    return (static_cast<double>(q_ptr->DotsPerInch()) / static_cast<double>(USER_DEFAULT_SCREEN_DPI));
+}
+
+SIZE XamlWindowPrivate::GetPhysicalSize() const noexcept
+{
+    if (!q_ptr) {
+        Utils::DisplayErrorDialog(L"Can't retrieve the physical size of the window due to q_ptr is null.");
+        return {};
+    }
+    return {static_cast<LONG>(q_ptr->Width()), static_cast<LONG>(q_ptr->Height())};
+}
+
+winrt::Windows::Foundation::Size XamlWindowPrivate::GetLogicalSize(const SIZE physicalSize) const noexcept
+{
+    const double scale = GetDevicePixelRatio();
+    // 0.5 is to ensure that we pixel snap correctly at the edges, this is necessary with odd DPIs like 1.25, 1.5, 1, .75
+    const double logicalWidth = ((physicalSize.cx / scale) + 0.5);
+    const double logicalHeight = ((physicalSize.cy / scale) + 0.5);
+    return {static_cast<float>(logicalWidth), static_cast<float>(logicalHeight)};
+}
+
+winrt::Windows::Foundation::Size XamlWindowPrivate::GetLogicalSize() const noexcept
+{
+    return GetLogicalSize(GetPhysicalSize());
+}
+
 LRESULT CALLBACK XamlWindowPrivate::DragBarWindowProc(const HWND hWnd, const UINT message, const WPARAM wParam, const LPARAM lParam) noexcept
 {
     USER32_API(SetWindowLongPtrW);
@@ -183,101 +207,69 @@ bool XamlWindowPrivate::DragBarMessageHandler(const UINT message, const WPARAM w
         //Utils::DisplayErrorDialog(L"DragBarMessageHandler: the drag bar window has not been created yet.");
         return false;
     }
-    if ((message >= WM_MOUSEFIRST) && (message <= WM_MOUSELAST)) {
-        std::optional<UINT> nonClientMessage = std::nullopt;
-        switch (message)
-        {
-        // Translate WM_* messages on the window to WM_NC* on the top level window.
-        case WM_LBUTTONDOWN:
-            nonClientMessage = WM_NCLBUTTONDOWN;
-            break;
-        case WM_LBUTTONUP:
-            nonClientMessage = WM_NCLBUTTONUP;
-            break;
-        case WM_LBUTTONDBLCLK:
-            nonClientMessage = WM_NCLBUTTONDBLCLK;
-            break;
-        case WM_MBUTTONDOWN:
-            nonClientMessage = WM_NCMBUTTONDOWN;
-            break;
-        case WM_MBUTTONUP:
-            nonClientMessage = WM_NCMBUTTONUP;
-            break;
-        case WM_MBUTTONDBLCLK:
-            nonClientMessage = WM_NCMBUTTONDBLCLK;
-            break;
-        case WM_RBUTTONDOWN:
-            nonClientMessage = WM_NCRBUTTONDOWN;
-            break;
-        case WM_RBUTTONUP:
-            nonClientMessage = WM_NCRBUTTONUP;
-            break;
-        case WM_RBUTTONDBLCLK:
-            nonClientMessage = WM_NCRBUTTONDBLCLK;
-            break;
-        case WM_XBUTTONDOWN:
-            nonClientMessage = WM_NCXBUTTONDOWN;
-            break;
-        case WM_XBUTTONUP:
-            nonClientMessage = WM_NCXBUTTONUP;
-            break;
-        case WM_XBUTTONDBLCLK:
-            nonClientMessage = WM_NCXBUTTONDBLCLK;
-            break;
-        default:
-            break;
-        }
-        const HWND mainWindowHandle = q_ptr->WindowHandle();
-        if (nonClientMessage.has_value() && mainWindowHandle) {
-            USER32_API(ClientToScreen);
-            USER32_API(SendMessageW);
-            if (ClientToScreen_API && SendMessageW_API) {
-                POINT pos = {GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)};
-                if (ClientToScreen_API(m_dragBarWindow, &pos) == FALSE) {
-                    PRINT_WIN32_ERROR_MESSAGE(ClientToScreen, L"Failed to translate from window coordinate to screen coordinate.")
-                    return false;
-                }
-                const LPARAM newLParam = MAKELPARAM(pos.x, pos.y);
-                // Hit test the parent window at the screen coordinates the user clicked in the drag input sink window,
-                // then pass that click through as an NC click in that location.
-                const LRESULT hitTestResult = SendMessageW_API(mainWindowHandle, WM_NCHITTEST, 0, newLParam);
-                SendMessageW_API(mainWindowHandle, nonClientMessage.value(), hitTestResult, newLParam);
-                *result = 0;
-                return true;
-            } else {
-                Utils::DisplayErrorDialog(L"Failed to send hit test message to the main window due to ClientToScreen() and SendMessageW() are not available.");
+    std::optional<UINT> nonClientMessage = std::nullopt;
+    switch (message)
+    {
+    // Translate WM_* messages on the window to WM_NC* on the top level window.
+    case WM_LBUTTONDOWN:
+        nonClientMessage = WM_NCLBUTTONDOWN;
+        break;
+    case WM_LBUTTONUP:
+        nonClientMessage = WM_NCLBUTTONUP;
+        break;
+    case WM_LBUTTONDBLCLK:
+        nonClientMessage = WM_NCLBUTTONDBLCLK;
+        break;
+    case WM_MBUTTONDOWN:
+        nonClientMessage = WM_NCMBUTTONDOWN;
+        break;
+    case WM_MBUTTONUP:
+        nonClientMessage = WM_NCMBUTTONUP;
+        break;
+    case WM_MBUTTONDBLCLK:
+        nonClientMessage = WM_NCMBUTTONDBLCLK;
+        break;
+    case WM_RBUTTONDOWN:
+        nonClientMessage = WM_NCRBUTTONDOWN;
+        break;
+    case WM_RBUTTONUP:
+        nonClientMessage = WM_NCRBUTTONUP;
+        break;
+    case WM_RBUTTONDBLCLK:
+        nonClientMessage = WM_NCRBUTTONDBLCLK;
+        break;
+    case WM_XBUTTONDOWN:
+        nonClientMessage = WM_NCXBUTTONDOWN;
+        break;
+    case WM_XBUTTONUP:
+        nonClientMessage = WM_NCXBUTTONUP;
+        break;
+    case WM_XBUTTONDBLCLK:
+        nonClientMessage = WM_NCXBUTTONDBLCLK;
+        break;
+    default:
+        break;
+    }
+    const HWND mainWindowHandle = q_ptr->WindowHandle();
+    if (nonClientMessage.has_value() && mainWindowHandle) {
+        USER32_API(ClientToScreen);
+        USER32_API(SendMessageW);
+        if (ClientToScreen_API && SendMessageW_API) {
+            POINT pos = {GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)};
+            if (ClientToScreen_API(m_dragBarWindow, &pos) == FALSE) {
+                PRINT_WIN32_ERROR_MESSAGE(ClientToScreen, L"Failed to translate from window coordinate to screen coordinate.")
                 return false;
             }
-        } else {
-            return false;
-        }
-    } else {
-        switch (message) {
-        case WM_NCCALCSIZE: {
-            *result = WVR_REDRAW;
-            return true;
-        } break;
-        case WM_PAINT: {
+            const LPARAM newLParam = MAKELPARAM(pos.x, pos.y);
+            // Hit test the parent window at the screen coordinates the user clicked in the drag input sink window,
+            // then pass that click through as an NC click in that location.
+            const LRESULT hitTestResult = SendMessageW_API(mainWindowHandle, WM_NCHITTEST, 0, newLParam);
+            SendMessageW_API(mainWindowHandle, nonClientMessage.value(), hitTestResult, newLParam);
             *result = 0;
             return true;
-        } break;
-        case WM_ERASEBKGND: {
-            *result = 1;
-            return true;
-        } break;
-        case WM_CLOSE: {
-            if (q_ptr->CloseChildWindow(m_dragBarWindow)) {
-                m_dragBarWindow = nullptr;
-                *result = 0;
-                return true;
-            } else {
-                Utils::DisplayErrorDialog(L"Failed to close the drag bar window.");
-                return false;
-            }
-        } break;
-        case WM_DESTROY: {} break;
-        default:
-            break;
+        } else {
+            Utils::DisplayErrorDialog(L"Failed to send hit test message to the main window due to ClientToScreen() and SendMessageW() are not available.");
+            return false;
         }
     }
     return false;
@@ -354,18 +346,6 @@ bool XamlWindowPrivate::InitializeDragBarWindow() noexcept
         Utils::DisplayErrorDialog(L"Failed to create the drag bar window.");
         return false;
     }
-    // Layered window won't be visible until we call SetLayeredWindowAttributes()
-    // or UpdateLayeredWindow().
-    USER32_API(SetLayeredWindowAttributes);
-    if (SetLayeredWindowAttributes_API) {
-        if (SetLayeredWindowAttributes_API(m_dragBarWindow, RGB(0, 0, 0), 255, LWA_ALPHA) == FALSE) {
-            PRINT_WIN32_ERROR_MESSAGE(SetLayeredWindowAttributes, L"Failed to change layered window attributes.")
-            return false;
-        }
-    } else {
-        Utils::DisplayErrorDialog(L"Failed to initialize the drag bar window due to SetLayeredWindowAttributes() is not available.");
-        return false;
-    }
     if (!SyncDragBarWindowGeometry()) {
         Utils::DisplayErrorDialog(L"Failed to sync the geometry of the drag bar window.");
         return false;
@@ -422,13 +402,17 @@ bool XamlWindowPrivate::SyncXamlIslandWindowGeometry() const noexcept
         if (SetWindowPos_API(m_xamlIslandWindow, HWND_BOTTOM, 0, actualFrameBorderThickness, q_ptr->Width(), (q_ptr->Height() - actualFrameBorderThickness), (SWP_SHOWWINDOW | SWP_NOOWNERZORDER)) == FALSE) {
             PRINT_WIN32_ERROR_MESSAGE(SetWindowPos, L"Failed to sync the XAML Island window geometry.")
             return false;
-        } else {
-            return true;
         }
     } else {
         Utils::DisplayErrorDialog(L"Failed to sync the XAML Island window geometry due to SetWindowPos() is not available.");
         return false;
     }
+    if (m_windowRootGrid != nullptr) {
+        const auto size = GetLogicalSize();
+        m_windowRootGrid.Width(size.Width);
+        m_windowRootGrid.Height(size.Height);
+    }
+    return true;
 }
 
 bool XamlWindowPrivate::SyncDragBarWindowGeometry() const noexcept
@@ -449,8 +433,20 @@ bool XamlWindowPrivate::SyncDragBarWindowGeometry() const noexcept
         if (SetWindowPos_API(m_dragBarWindow, HWND_TOP, 0, 0, q_ptr->Width(), titleBarHeight, (SWP_SHOWWINDOW | SWP_NOOWNERZORDER)) == FALSE) {
             PRINT_WIN32_ERROR_MESSAGE(SetWindowPos, L"Failed to sync the drag bar window geometry.")
             return false;
+        }
+        // Layered window won't be visible until we call SetLayeredWindowAttributes()
+        // or UpdateLayeredWindow().
+        USER32_API(SetLayeredWindowAttributes);
+        if (SetLayeredWindowAttributes_API) {
+            if (SetLayeredWindowAttributes_API(m_dragBarWindow, 0, 255, LWA_ALPHA) == FALSE) {
+                PRINT_WIN32_ERROR_MESSAGE(SetLayeredWindowAttributes, L"Failed to update the drag bar window.")
+                return false;
+            } else {
+                return true;
+            }
         } else {
-            return true;
+            Utils::DisplayErrorDialog(L"Failed to update the drag bar window due to SetLayeredWindowAttributes() is not available.");
+            return false;
         }
     } else {
         Utils::DisplayErrorDialog(L"Failed to sync the drag bar window geometry due to SetWindowPos() is not available.");

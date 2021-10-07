@@ -53,7 +53,7 @@ public:
         return (lhs.FileName() == rhs.FileName());
     }
     [[nodiscard]] inline friend bool operator!=(const SystemLibrary &lhs, const SystemLibrary &rhs) noexcept {
-        return (!(lhs == rhs));
+        return (lhs.FileName() != rhs.FileName());
     }
 
 private:

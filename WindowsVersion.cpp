@@ -29,12 +29,6 @@
 #include "OperationResult.h"
 #include "Utils.h"
 
-#ifndef STATUS_SUCCESS
-#define STATUS_SUCCESS (static_cast<NTSTATUS>(0x00000000L))
-#endif
-
-using NTSTATUS = LONG;
-
 const VersionNumber &WindowsVersion::CurrentVersion() noexcept
 {
     static bool tried = false;

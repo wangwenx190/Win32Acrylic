@@ -24,6 +24,89 @@
 
 #pragma once
 
+#include <SDKDDKVer.h>
+#include <Windows.h>
+
+#ifndef STATUS_SUCCESS
+#define STATUS_SUCCESS (static_cast<NTSTATUS>(0x00000000L))
+#endif
+
+#ifndef HINST_THISCOMPONENT
+EXTERN_C IMAGE_DOS_HEADER __ImageBase;
+#define HINST_THISCOMPONENT (reinterpret_cast<HINSTANCE>(&__ImageBase))
+#endif
+
+#ifndef USER_DEFAULT_SCREEN_DPI
+#define USER_DEFAULT_SCREEN_DPI (96)
+#endif
+
+#ifndef SM_CXPADDEDBORDER
+#define SM_CXPADDEDBORDER (92)
+#endif
+
+#ifndef SM_CYPADDEDBORDER
+#define SM_CYPADDEDBORDER SM_CXPADDEDBORDER
+#endif
+
+#ifndef WM_DWMCOLORIZATIONCOLORCHANGED
+#define WM_DWMCOLORIZATIONCOLORCHANGED (0x0320)
+#endif
+
+#ifndef WM_DPICHANGED
+#define WM_DPICHANGED (0x02E0)
+#endif
+
+#ifndef CODE_FROM_HRESULT
+#define CODE_FROM_HRESULT(hr) (static_cast<DWORD>(HRESULT_CODE(hr)))
+#endif
+
+#ifndef GET_X_LPARAM
+#define GET_X_LPARAM(lParam) (static_cast<int>(static_cast<short>(LOWORD(lParam))))
+#endif
+
+#ifndef GET_Y_LPARAM
+#define GET_Y_LPARAM(lParam) (static_cast<int>(static_cast<short>(HIWORD(lParam))))
+#endif
+
+#ifndef RECT_WIDTH
+#define RECT_WIDTH(rect) (std::abs((rect).right - (rect).left))
+#endif
+
+#ifndef RECT_HEIGHT
+#define RECT_HEIGHT(rect) (std::abs((rect).bottom - (rect).top))
+#endif
+
+#ifndef WINDOW_BACKGROUND_BRUSH
+#define WINDOW_BACKGROUND_BRUSH (reinterpret_cast<HBRUSH>(GetStockObject_API(BLACK_BRUSH)))
+#endif
+
+using NTSTATUS = LONG;
+
+[[maybe_unused]] constexpr UINT DefaultWindowVisibleFrameBorderThickness = 1;
+
+[[maybe_unused]] constexpr UINT DefaultAutoHideTaskBarThicknessX = 2;
+[[maybe_unused]] constexpr UINT DefaultAutoHideTaskBarThicknessY = 2;
+
+[[maybe_unused]] constexpr DWORD _DWMWA_USE_IMMERSIVE_DARK_MODE_BEFORE_20H1 = 19;
+[[maybe_unused]] constexpr DWORD _DWMWA_USE_IMMERSIVE_DARK_MODE = 20;
+[[maybe_unused]] constexpr DWORD _DWMWA_WINDOW_CORNER_PREFERENCE = 33;
+[[maybe_unused]] constexpr DWORD _DWMWA_VISIBLE_FRAME_BORDER_THICKNESS = 37;
+
+[[maybe_unused]] constexpr int DPI_AWARENESS_PER_MONITOR_AWARE_V2 = 3;
+[[maybe_unused]] constexpr int PROCESS_PER_MONITOR_DPI_AWARE_V2 = 3;
+[[maybe_unused]] constexpr int DPI_AWARENESS_UNAWARE_GDISCALED = 4;
+[[maybe_unused]] constexpr int PROCESS_DPI_UNAWARE_GDISCALED = 4;
+
+[[maybe_unused]] constexpr wchar_t DwmRegistryKeyPath[] = LR"(Software\Microsoft\Windows\DWM)";
+[[maybe_unused]] constexpr wchar_t PersonalizeRegistryKeyPath[] = LR"(Software\Microsoft\Windows\CurrentVersion\Themes\Personalize)";
+
+enum class DwmWindowCornerPreference : WORD
+{
+    DoNotRound = 1,
+    Round = 2,
+    RoundSmall = 3
+};
+
 enum class WindowTheme : int
 {
     Light = 0,

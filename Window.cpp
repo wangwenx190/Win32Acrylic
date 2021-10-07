@@ -33,71 +33,9 @@
 #include <DwmApi.h>
 #include <cmath>
 
-#ifndef HINST_THISCOMPONENT
-EXTERN_C IMAGE_DOS_HEADER __ImageBase;
-#define HINST_THISCOMPONENT (reinterpret_cast<HINSTANCE>(&__ImageBase))
-#endif
-
-#ifndef USER_DEFAULT_SCREEN_DPI
-#define USER_DEFAULT_SCREEN_DPI (96)
-#endif
-
-#ifndef SM_CXPADDEDBORDER
-#define SM_CXPADDEDBORDER (92)
-#endif
-
-#ifndef SM_CYPADDEDBORDER
-#define SM_CYPADDEDBORDER SM_CXPADDEDBORDER
-#endif
-
 #ifndef ABM_GETAUTOHIDEBAREX
 #define ABM_GETAUTOHIDEBAREX (0x0000000b)
 #endif
-
-#ifndef WM_DWMCOLORIZATIONCOLORCHANGED
-#define WM_DWMCOLORIZATIONCOLORCHANGED (0x0320)
-#endif
-
-#ifndef WM_DPICHANGED
-#define WM_DPICHANGED (0x02E0)
-#endif
-
-#ifndef GET_X_LPARAM
-#define GET_X_LPARAM(lParam) (static_cast<int>(static_cast<short>(LOWORD(lParam))))
-#endif
-
-#ifndef GET_Y_LPARAM
-#define GET_Y_LPARAM(lParam) (static_cast<int>(static_cast<short>(HIWORD(lParam))))
-#endif
-
-#ifndef RECT_WIDTH
-#define RECT_WIDTH(rect) (std::abs((rect).right - (rect).left))
-#endif
-
-#ifndef RECT_HEIGHT
-#define RECT_HEIGHT(rect) (std::abs((rect).bottom - (rect).top))
-#endif
-
-static constexpr UINT g_defaultWindowVisibleFrameBorderThickness = 1;
-static constexpr UINT g_defaultWindowDPI = USER_DEFAULT_SCREEN_DPI;
-
-static constexpr UINT g_defaultAutoHideTaskBarThicknessX = 2;
-static constexpr UINT g_defaultAutoHideTaskBarThicknessY = 2;
-
-static constexpr DWORD g_DWMWA_USE_IMMERSIVE_DARK_MODE_BEFORE_20H1 = 19;
-static constexpr DWORD g_DWMWA_USE_IMMERSIVE_DARK_MODE = 20;
-static constexpr DWORD g_DWMWA_WINDOW_CORNER_PREFERENCE = 33;
-static constexpr DWORD g_DWMWA_VISIBLE_FRAME_BORDER_THICKNESS = 37;
-
-static constexpr wchar_t g_dwmRegistryKey[] = LR"(Software\Microsoft\Windows\DWM)";
-static constexpr wchar_t g_personalizeRegistryKey[] = LR"(Software\Microsoft\Windows\CurrentVersion\Themes\Personalize)";
-
-enum class DwmWindowCornerPreference : WORD
-{
-    DoNotRound = 1,
-    Round = 2,
-    RoundSmall = 3
-};
 
 [[nodiscard]] static inline DWORD GetDWORDFromRegistry(const HKEY rootKey, const std::wstring &subKey, const std::wstring &keyName) noexcept
 {
@@ -196,6 +134,13 @@ enum class DwmWindowCornerPreference : WORD
     }
 }
 
+[[nodiscard]] static inline bool IsFullScreen(const HWND hWnd) noexcept
+{
+    // ### TODO
+    UNREFERENCED_PARAMETER(hWnd);
+    return false;
+}
+
 [[nodiscard]] static inline bool IsHighContrastModeEnabled() noexcept
 {
     USER32_API(SystemParametersInfoW);
@@ -216,7 +161,7 @@ enum class DwmWindowCornerPreference : WORD
 
 [[nodiscard]] static inline bool ShouldAppsUseLightTheme() noexcept
 {
-    return (GetDWORDFromRegistry(HKEY_CURRENT_USER, g_personalizeRegistryKey, L"AppsUseLightTheme") != 0);
+    return (GetDWORDFromRegistry(HKEY_CURRENT_USER, PersonalizeRegistryKeyPath, L"AppsUseLightTheme") != 0);
 }
 
 [[nodiscard]] static inline COLORREF GetGlobalColorizationColor2() noexcept
@@ -241,8 +186,8 @@ enum class DwmWindowCornerPreference : WORD
 {
     const HKEY rootKey = HKEY_CURRENT_USER;
     const std::wstring keyName = L"ColorPrevalence";
-    const DWORD dwmValue = GetDWORDFromRegistry(rootKey, g_dwmRegistryKey, keyName);
-    const DWORD themeValue = GetDWORDFromRegistry(rootKey, g_personalizeRegistryKey, keyName);
+    const DWORD dwmValue = GetDWORDFromRegistry(rootKey, DwmRegistryKeyPath, keyName);
+    const DWORD themeValue = GetDWORDFromRegistry(rootKey, PersonalizeRegistryKeyPath, keyName);
     const bool dwm = (dwmValue != 0);
     const bool theme = (themeValue != 0);
     if (dwm && theme) {
@@ -272,7 +217,8 @@ enum class DwmWindowCornerPreference : WORD
     USER32_API(LoadIconW);
     USER32_API(RegisterClassExW);
     USER32_API(CreateWindowExW);
-    if (LoadCursorW_API && LoadIconW_API && RegisterClassExW_API && CreateWindowExW_API) {
+    GDI32_API(GetStockObject);
+    if (LoadCursorW_API && LoadIconW_API && RegisterClassExW_API && CreateWindowExW_API && GetStockObject_API) {
         if (!wndProc) {
             Utils::DisplayErrorDialog(L"Failed to register a window class due to the WindowProc function pointer is null.");
             return nullptr;
@@ -285,13 +231,17 @@ enum class DwmWindowCornerPreference : WORD
         WNDCLASSEXW wcex;
         SecureZeroMemory(&wcex, sizeof(wcex));
         wcex.cbSize = sizeof(wcex);
-        wcex.style = CS_HREDRAW | CS_VREDRAW;
+        wcex.style = CS_HREDRAW | CS_VREDRAW | CS_DBLCLKS;
         wcex.lpfnWndProc = wndProc;
         wcex.hInstance = HINST_THISCOMPONENT;
         wcex.lpszClassName = guid.c_str();
+        wcex.hbrBackground = WINDOW_BACKGROUND_BRUSH;
         wcex.hCursor = LoadCursorW_API(nullptr, IDC_ARROW);
         wcex.hIcon = LoadIconW_API(HINST_THISCOMPONENT, MAKEINTRESOURCEW(IDI_MYAPPLICATION));
         wcex.hIconSm = LoadIconW_API(HINST_THISCOMPONENT, MAKEINTRESOURCEW(IDI_MYAPPLICATION_SMALL));
+        if (extraData) {
+            wcex.cbWndExtra = sizeof(extraData); // ### FIXME: sizeof(extraData) or sizeof(*extraData)???
+        }
         const ATOM atom = RegisterClassExW_API(&wcex);
         if (atom == INVALID_ATOM) {
             PRINT_WIN32_ERROR_MESSAGE(RegisterClassExW, L"Failed to register a window class.")
@@ -317,7 +267,7 @@ enum class DwmWindowCornerPreference : WORD
         }
         return hWnd;
     } else {
-        Utils::DisplayErrorDialog(L"Failed to create a window due to LoadCursorW(), LoadIconW(), RegisterClassExW() and CreateWindowExW() are not available.");
+        Utils::DisplayErrorDialog(L"Failed to create a window due to LoadCursorW(), LoadIconW(), RegisterClassExW(), CreateWindowExW() and GetStockObject() are not available.");
         return nullptr;
     }
 }
@@ -522,8 +472,8 @@ bool WindowPrivate::RefreshWindowTheme2() const noexcept
             // ### TODO
         } break;
         }
-        const HRESULT hr1 = DwmSetWindowAttribute_API(m_window, g_DWMWA_USE_IMMERSIVE_DARK_MODE_BEFORE_20H1, &enableDarkFrame, sizeof(enableDarkFrame));
-        const HRESULT hr2 = DwmSetWindowAttribute_API(m_window, g_DWMWA_USE_IMMERSIVE_DARK_MODE, &enableDarkFrame, sizeof(enableDarkFrame));
+        const HRESULT hr1 = DwmSetWindowAttribute_API(m_window, _DWMWA_USE_IMMERSIVE_DARK_MODE_BEFORE_20H1, &enableDarkFrame, sizeof(enableDarkFrame));
+        const HRESULT hr2 = DwmSetWindowAttribute_API(m_window, _DWMWA_USE_IMMERSIVE_DARK_MODE, &enableDarkFrame, sizeof(enableDarkFrame));
         const HRESULT hr3 = SetWindowTheme_API(m_window, themeName.c_str(), nullptr);
         if (FAILED(hr1) && FAILED(hr2)) {
             PRINT_HR_ERROR_MESSAGE(DwmSetWindowAttribute, hr2, L"Failed to change the window dark mode state.")
@@ -655,7 +605,7 @@ bool WindowPrivate::SetWindowState2(const WindowState state) const noexcept
 UINT WindowPrivate::GetWindowDPI2() const noexcept
 {
     if (!m_window) {
-        return g_defaultWindowDPI;
+        return USER_DEFAULT_SCREEN_DPI;
     }
     USER32_API(GetDpiForWindow);
     if (GetDpiForWindow_API) {
@@ -684,15 +634,15 @@ UINT WindowPrivate::GetWindowDPI2() const noexcept
                                 return static_cast<UINT>(std::round(static_cast<double>(dpiX + dpiY) / 2.0));
                             } else {
                                 PRINT_HR_ERROR_MESSAGE(GetDpiForMonitor, hr, L"Failed to retrieve the screen's DPI.")
-                                return g_defaultWindowDPI;
+                                return USER_DEFAULT_SCREEN_DPI;
                             }
                         } else {
                             PRINT_WIN32_ERROR_MESSAGE(MonitorFromWindow, L"Failed to retrieve the corresponding screen.")
-                            return g_defaultWindowDPI;
+                            return USER_DEFAULT_SCREEN_DPI;
                         }
                     } else {
                         Utils::DisplayErrorDialog(L"Failed to retrieve the screen's DPI due to MonitorFromWindow() is not available.");
-                        return g_defaultWindowDPI;
+                        return USER_DEFAULT_SCREEN_DPI;
                     }
                 } else {
                     OutputDebugStringW(L"GetDpiForMonitor() is not available.");
@@ -706,17 +656,17 @@ UINT WindowPrivate::GetWindowDPI2() const noexcept
                             const int dpiY = GetDeviceCaps_API(hdc, LOGPIXELSY);
                             if (ReleaseDC_API(nullptr, hdc) == 0) {
                                 PRINT_WIN32_ERROR_MESSAGE(ReleaseDC, L"Failed to release the desktop window's DC.")
-                                return g_defaultWindowDPI;
+                                return USER_DEFAULT_SCREEN_DPI;
                             } else {
                                 return static_cast<UINT>(std::round(static_cast<double>(dpiX + dpiY) / 2.0));
                             }
                         } else {
                             PRINT_WIN32_ERROR_MESSAGE(GetDC, L"Failed to retrieve the desktop window's DC.")
-                            return g_defaultWindowDPI;
+                            return USER_DEFAULT_SCREEN_DPI;
                         }
                     } else {
                         Utils::DisplayErrorDialog(L"Failed to retrieve the DPI of this window due to GetDC(), ReleaseDC() and GetDeviceCaps() are not available.");
-                        return g_defaultWindowDPI;
+                        return USER_DEFAULT_SCREEN_DPI;
                     }
                 }
             }
@@ -730,10 +680,10 @@ UINT WindowPrivate::GetWindowVisibleFrameBorderThickness2() const noexcept
     if (DwmGetWindowAttribute_API) {
         if (!m_window) {
             Utils::DisplayErrorDialog(L"Failed to retrieve the window visible frame border thickness due to the window has not been created yet.");
-            return g_defaultWindowVisibleFrameBorderThickness;
+            return DefaultWindowVisibleFrameBorderThickness;
         }
         UINT value = 0;
-        const HRESULT hr = DwmGetWindowAttribute_API(m_window, g_DWMWA_VISIBLE_FRAME_BORDER_THICKNESS, &value, sizeof(value));
+        const HRESULT hr = DwmGetWindowAttribute_API(m_window, _DWMWA_VISIBLE_FRAME_BORDER_THICKNESS, &value, sizeof(value));
         if (SUCCEEDED(hr)) {
             // The returned value is already scaled to the DPI automatically.
             // Don't double scale it!!!
@@ -742,12 +692,12 @@ UINT WindowPrivate::GetWindowVisibleFrameBorderThickness2() const noexcept
             // We just eat this error because this enumeration value is only available
             // on Windows 10 21H2 and onwards, so querying it's value will always result in
             // a "parameter error" (error code: 87) on older systems.
-            const auto dpr = (static_cast<double>(m_dpi) / static_cast<double>(g_defaultWindowDPI));
-            return static_cast<UINT>(std::round(static_cast<double>(g_defaultWindowVisibleFrameBorderThickness) * dpr));
+            const auto dpr = (static_cast<double>(m_dpi) / static_cast<double>(USER_DEFAULT_SCREEN_DPI));
+            return static_cast<UINT>(std::round(static_cast<double>(DefaultWindowVisibleFrameBorderThickness) * dpr));
         }
     } else {
         Utils::DisplayErrorDialog(L"Failed to retrieve the window visible frame border thickness due to DwmGetWindowAttribute() is not available.");
-        return g_defaultWindowVisibleFrameBorderThickness;
+        return DefaultWindowVisibleFrameBorderThickness;
     }
 }
 
@@ -818,7 +768,7 @@ WindowPrivate::WindowPrivate(Window *q) noexcept
         return;
     }
     q_ptr = q;
-    m_window = CreateWindow2((WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN | WS_CLIPSIBLINGS), WS_EX_NOREDIRECTIONBITMAP, nullptr, this, WindowProc);
+    m_window = CreateWindow2(WS_OVERLAPPEDWINDOW, WS_EX_NOREDIRECTIONBITMAP, nullptr, this, WindowProc);
     if (m_window) {
         if (!Initialize()) {
             Utils::DisplayErrorDialog(L"Failed to initialize WindowPrivate.");
@@ -988,7 +938,7 @@ void WindowPrivate::FrameCorner(const WindowFrameCorner value) noexcept
         USER32_API(SetWindowRgn);
         if (DwmSetWindowAttribute_API && SetWindowRgn_API) {
             const DwmWindowCornerPreference wcp = ((value == WindowFrameCorner::Round) ? DwmWindowCornerPreference::Round : DwmWindowCornerPreference::DoNotRound);
-            const HRESULT hr = DwmSetWindowAttribute_API(m_window, g_DWMWA_WINDOW_CORNER_PREFERENCE, &wcp, sizeof(wcp));
+            const HRESULT hr = DwmSetWindowAttribute_API(m_window, _DWMWA_WINDOW_CORNER_PREFERENCE, &wcp, sizeof(wcp));
             if (SUCCEEDED(hr)) {
                 m_frameCorner = value;
             } else {
@@ -1022,15 +972,11 @@ WindowColorizationArea WindowPrivate::ColorizationArea() const noexcept
 
 HWND WindowPrivate::CreateChildWindow(const DWORD style, const DWORD extendedStyle, const WNDPROC wndProc, void *extraData) const noexcept
 {
-    if (!wndProc) {
-        Utils::DisplayErrorDialog(L"Failed to create the child window due to the WindowProc function pointer is null.");
-        return nullptr;
-    }
     if (!m_window) {
-        Utils::DisplayErrorDialog(L"Failed to create the child window due to the parent window has not been created yet.");
+        Utils::DisplayErrorDialog(L"Can't create the child window due to the parent window has not been created yet.");
         return nullptr;
     }
-    return CreateWindow2((style | WS_CHILD), extendedStyle, m_window, extraData, wndProc);
+    return CreateWindow2(((style & WS_CHILD) ? style : (style | WS_CHILD)), extendedStyle, m_window, extraData, wndProc);
 }
 
 HWND WindowPrivate::WindowHandle() const noexcept
@@ -1247,7 +1193,7 @@ bool WindowPrivate::InternalMessageHandler(const UINT message, const WPARAM wPar
             q_ptr->OnWidthChanged(m_width);
             q_ptr->OnHeightChanged(m_height);
         }
-        if ((m_visibility == WindowState::Windowed) || (m_visibility == WindowState::Maximized)) {
+        if (visibilityChanged && (m_visibility != WindowState::Minimized)) {
             if (!UpdateWindowFrameMargins2()) {
                 Utils::DisplayErrorDialog(L"Failed to update the window frame margins.");
                 return false;
@@ -1299,12 +1245,75 @@ bool WindowPrivate::InternalMessageHandler(const UINT message, const WPARAM wPar
         }
     } break;
     case WM_PAINT: {
-        *result = 0;
-        return true;
-    } break;
-    case WM_ERASEBKGND: {
-        *result = 1;
-        return true;
+        USER32_API(BeginPaint);
+        GDI32_API(GetStockObject);
+        USER32_API(FillRect);
+        USER32_API(EndPaint);
+        UXTHEME_API(BeginBufferedPaint);
+        UXTHEME_API(BufferedPaintSetAlpha);
+        UXTHEME_API(EndBufferedPaint);
+        if (BeginPaint_API && FillRect_API && EndPaint_API && BeginBufferedPaint_API && BufferedPaintSetAlpha_API && EndBufferedPaint_API && GetStockObject_API) {
+            PAINTSTRUCT ps;
+            SecureZeroMemory(&ps, sizeof(ps));
+            const HDC hDC = BeginPaint_API(m_window, &ps);
+            if (!hDC) {
+                PRINT_WIN32_ERROR_MESSAGE(BeginPaint, L"Failed to start painting.")
+                return false;
+            }
+            const LONG topBorderHeight = (((m_visibility == WindowState::Maximized) || IsFullScreen(m_window)) ? 0 : GetWindowVisibleFrameBorderThickness2());
+            if (ps.rcPaint.top < topBorderHeight) {
+                RECT rcTopBorder = ps.rcPaint;
+                rcTopBorder.bottom = topBorderHeight;
+                // To show the original top border, we have to paint on top of it with
+                // the alpha component set to 0. This page recommends to paint the area
+                // in black using the stock BLACK_BRUSH to do this:
+                // https://docs.microsoft.com/en-us/windows/win32/dwm/customframe#extending-the-client-frame
+                if (FillRect_API(hDC, &rcTopBorder, WINDOW_BACKGROUND_BRUSH) == 0) {
+                    PRINT_WIN32_ERROR_MESSAGE(FillRect, L"Failed to paint the window background.")
+                    return false;
+                }
+            }
+            if (ps.rcPaint.bottom > topBorderHeight) {
+                RECT rcRest = ps.rcPaint;
+                rcRest.top = topBorderHeight;
+                // To hide the original title bar, we have to paint on top of it with
+                // the alpha component set to 255. This is a hack to do it with GDI.
+                // See UpdateWindowFrameMargins2() for more information.
+                HDC opaqueDc = nullptr;
+                BP_PAINTPARAMS params;
+                SecureZeroMemory(&params, sizeof(params));
+                params.cbSize = sizeof(params);
+                params.dwFlags = (BPPF_NOCLIP | BPPF_ERASE);
+                const HPAINTBUFFER buf = BeginBufferedPaint_API(hDC, &rcRest, BPBF_TOPDOWNDIB, &params, &opaqueDc);
+                if (!buf || !opaqueDc) {
+                    PRINT_WIN32_ERROR_MESSAGE(BeginBufferedPaint, L"Failed to begin the buffered paint.")
+                    return false;
+                }
+                if (FillRect_API(opaqueDc, &rcRest, _backgroundBrush.get()) == 0) {
+                    PRINT_WIN32_ERROR_MESSAGE(FillRect, L"Failed to paint the window background.")
+                    return false;
+                }
+                HRESULT hr = BufferedPaintSetAlpha_API(buf, nullptr, 255);
+                if (FAILED(hr)) {
+                    PRINT_HR_ERROR_MESSAGE(BufferedPaintSetAlpha, hr, L"Failed to change alpha of the buffered paint.")
+                    return false;
+                }
+                hr = EndBufferedPaint_API(buf, TRUE);
+                if (FAILED(hr)) {
+                    PRINT_HR_ERROR_MESSAGE(EndBufferedPaint, hr, L"Failed to finish the buffered paint.")
+                    return false;
+                }
+            }
+            if (EndPaint_API(m_window, &ps) == FALSE) {
+                PRINT_WIN32_ERROR_MESSAGE(EndPaint, L"Failed to end painting.")
+                return false;
+            }
+            *result = 0;
+            return true;
+        } else {
+            Utils::DisplayErrorDialog(L"Can't paint the window due to BeginPaint(), FillRect(), EndPaint(), BeginBufferedPaint(), BufferedPaintSetAlpha(), EndBufferedPaint() and GetStockObject() are not available.");
+            return false;
+        }
     } break;
     case WM_SETTEXT: {
         const auto title = reinterpret_cast<LPCWSTR>(lParam);
@@ -1373,7 +1382,7 @@ bool WindowPrivate::InternalMessageHandler(const UINT message, const WPARAM wPar
         }
         bool nonClientAreaExists = false;
         const bool max = (m_visibility == WindowState::Maximized);
-        const bool full = false; // ### TODO
+        const bool full = IsFullScreen(m_window);
         // We don't need this correction when we're fullscreen. We will
         // have the WS_POPUP size, so we don't have to worry about
         // borders, and the default frame will be fine.
@@ -1438,16 +1447,16 @@ bool WindowPrivate::InternalMessageHandler(const UINT message, const WPARAM wPar
                             // This does however work fine for maximized.
                             if (hasAutohideTaskbar(ABE_TOP)) {
                                 // Peculiarly, when we're fullscreen,
-                                clientRect->top += g_defaultAutoHideTaskBarThicknessY;
+                                clientRect->top += DefaultAutoHideTaskBarThicknessY;
                                 nonClientAreaExists = true;
                             } else if (hasAutohideTaskbar(ABE_BOTTOM)) {
-                                clientRect->bottom -= g_defaultAutoHideTaskBarThicknessY;
+                                clientRect->bottom -= DefaultAutoHideTaskBarThicknessY;
                                 nonClientAreaExists = true;
                             } else if (hasAutohideTaskbar(ABE_LEFT)) {
-                                clientRect->left += g_defaultAutoHideTaskBarThicknessX;
+                                clientRect->left += DefaultAutoHideTaskBarThicknessX;
                                 nonClientAreaExists = true;
                             } else if (hasAutohideTaskbar(ABE_RIGHT)) {
-                                clientRect->right -= g_defaultAutoHideTaskBarThicknessX;
+                                clientRect->right -= DefaultAutoHideTaskBarThicknessX;
                                 nonClientAreaExists = true;
                             }
                         } else {
@@ -1550,8 +1559,8 @@ bool WindowPrivate::UpdateWindowFrameMargins2() const noexcept
             Utils::DisplayErrorDialog(L"Failed to update the window frame margins due to the window has not been created yet.");
             return false;
         }
-        const UINT windowVisibleFrameBorderThickness = ((m_visibility == WindowState::Windowed) ? GetWindowVisibleFrameBorderThickness2() : 0);
-        const MARGINS margins = {0, 0, static_cast<int>(windowVisibleFrameBorderThickness), 0};
+        const UINT topFrameMargin = (((m_visibility == WindowState::Hidden) || (m_visibility == WindowState::Windowed)) ? (GetWindowMetrics2(WindowMetrics::ResizeBorderThicknessY) + GetWindowMetrics2(WindowMetrics::CaptionHeight)) : 0);
+        const MARGINS margins = {0, 0, static_cast<int>(topFrameMargin), 0};
         const HRESULT hr = DwmExtendFrameIntoClientArea_API(m_window, &margins);
         if (FAILED(hr)) {
             PRINT_HR_ERROR_MESSAGE(DwmExtendFrameIntoClientArea, hr, L"Failed to update the window frame margins for the window.")

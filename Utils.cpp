@@ -28,11 +28,6 @@
 #include <ShellScalingApi.h>
 #include <ComBaseApi.h>
 
-static constexpr int g_DPI_AWARENESS_PER_MONITOR_AWARE_V2 = 3;
-static constexpr int g_PROCESS_PER_MONITOR_DPI_AWARE_V2 = 3;
-static constexpr int g_DPI_AWARENESS_UNAWARE_GDISCALED = 4;
-static constexpr int g_PROCESS_DPI_UNAWARE_GDISCALED = 4;
-
 void Utils::DisplayErrorDialog(const std::wstring &text) noexcept
 {
     USER32_API(MessageBoxW);
@@ -78,7 +73,7 @@ ProcessDPIAwareness Utils::GetProcessDPIAwareness() noexcept
         if (context) {
             const auto awareness = static_cast<int>(GetAwarenessFromDpiAwarenessContext_API(context));
             switch (awareness) {
-            case g_DPI_AWARENESS_PER_MONITOR_AWARE_V2: {
+            case DPI_AWARENESS_PER_MONITOR_AWARE_V2: {
                 return ProcessDPIAwareness::PerMonitorV2;
             } break;
             case DPI_AWARENESS_PER_MONITOR_AWARE: {
@@ -87,7 +82,7 @@ ProcessDPIAwareness Utils::GetProcessDPIAwareness() noexcept
             case DPI_AWARENESS_SYSTEM_AWARE: {
                 return ProcessDPIAwareness::System;
             } break;
-            case g_DPI_AWARENESS_UNAWARE_GDISCALED: {
+            case DPI_AWARENESS_UNAWARE_GDISCALED: {
                 return ProcessDPIAwareness::GdiScaled;
             } break;
             case DPI_AWARENESS_UNAWARE: {
@@ -111,7 +106,7 @@ ProcessDPIAwareness Utils::GetProcessDPIAwareness() noexcept
             const HRESULT hr = GetProcessDpiAwareness_API(nullptr, reinterpret_cast<PROCESS_DPI_AWARENESS *>(&awareness));
             if (SUCCEEDED(hr)) {
                 switch (awareness) {
-                case g_PROCESS_PER_MONITOR_DPI_AWARE_V2: {
+                case PROCESS_PER_MONITOR_DPI_AWARE_V2: {
                     return ProcessDPIAwareness::PerMonitorV2;
                 } break;
                 case PROCESS_PER_MONITOR_DPI_AWARE: {
@@ -120,7 +115,7 @@ ProcessDPIAwareness Utils::GetProcessDPIAwareness() noexcept
                 case PROCESS_SYSTEM_DPI_AWARE: {
                     return ProcessDPIAwareness::System;
                 } break;
-                case g_PROCESS_DPI_UNAWARE_GDISCALED: {
+                case PROCESS_DPI_UNAWARE_GDISCALED: {
                     return ProcessDPIAwareness::GdiScaled;
                 } break;
                 case PROCESS_DPI_UNAWARE: {
@@ -156,7 +151,7 @@ bool Utils::SetProcessDPIAwareness(const ProcessDPIAwareness dpiAwareness) noexc
     switch (dpiAwareness) {
     case ProcessDPIAwareness::PerMonitorV2: {
         dac = DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2;
-        pda = static_cast<PROCESS_DPI_AWARENESS>(g_PROCESS_PER_MONITOR_DPI_AWARE_V2);
+        pda = static_cast<PROCESS_DPI_AWARENESS>(PROCESS_PER_MONITOR_DPI_AWARE_V2);
     } break;
     case ProcessDPIAwareness::PerMonitor: {
         dac = DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE;
@@ -168,7 +163,7 @@ bool Utils::SetProcessDPIAwareness(const ProcessDPIAwareness dpiAwareness) noexc
     } break;
     case ProcessDPIAwareness::GdiScaled: {
         dac = DPI_AWARENESS_CONTEXT_UNAWARE_GDISCALED;
-        pda = static_cast<PROCESS_DPI_AWARENESS>(g_PROCESS_DPI_UNAWARE_GDISCALED);
+        pda = static_cast<PROCESS_DPI_AWARENESS>(PROCESS_DPI_UNAWARE_GDISCALED);
     } break;
     case ProcessDPIAwareness::Unaware: {
         dac = DPI_AWARENESS_CONTEXT_UNAWARE;

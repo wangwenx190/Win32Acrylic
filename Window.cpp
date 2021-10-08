@@ -118,7 +118,7 @@
     }
 }
 
-[[nodiscard]] static inline bool IsMaximized(const HWND hWnd) noexcept
+[[maybe_unused]] [[nodiscard]] static inline bool IsMaximized(const HWND hWnd) noexcept
 {
     USER32_API(IsZoomed);
     if (IsZoomed_API) {
@@ -370,13 +370,16 @@ public:
     void Height(const UINT value) const noexcept;
 
     [[nodiscard]] WindowState Visibility() const noexcept;
-    void Visibility(const WindowState value) const noexcept;
+    void Visibility(const WindowState value) noexcept;
 
     [[nodiscard]] WindowFrameCorner FrameCorner() const noexcept;
     void FrameCorner(const WindowFrameCorner value) noexcept;
 
     [[nodiscard]] WindowStartupLocation StartupLocation() const noexcept;
     void StartupLocation(const WindowStartupLocation value) noexcept;
+
+    [[nodiscard]] const Color &TitleBarBackgroundColor() const noexcept;
+    void TitleBarBackgroundColor(const Color &value) noexcept;
 
     [[nodiscard]] WindowTheme Theme() const noexcept;
 
@@ -392,7 +395,7 @@ public:
     [[nodiscard]] bool Resize(const UINT w, const UINT h) const noexcept;
     [[nodiscard]] bool SetGeometry(const int x, const int y, const UINT w, const UINT h) const noexcept;
 
-    [[nodiscard]] UINT GetWindowMetrics2(const WindowMetrics metrics) const noexcept;
+    [[nodiscard]] UINT GetWindowMetrics2(const WindowMetrics metrics) noexcept;
 
 private:
     WindowPrivate(const WindowPrivate &) = delete;
@@ -409,10 +412,10 @@ private:
     [[nodiscard]] bool TriggerWindowFrameChange2() const noexcept;
     [[nodiscard]] bool RefreshWindowTheme2() const noexcept;
     [[nodiscard]] bool OpenSystemMenu2(const POINT pos) const noexcept;
-    [[nodiscard]] bool SetWindowState2(const WindowState state) const noexcept;
+    [[nodiscard]] bool SetWindowState2(const WindowState state) noexcept;
     [[nodiscard]] UINT GetWindowDPI2() const noexcept;
     [[nodiscard]] UINT GetWindowVisibleFrameBorderThickness2() const noexcept;
-    [[nodiscard]] bool UpdateWindowFrameMargins2() const noexcept;
+    [[nodiscard]] bool UpdateWindowFrameMargins2() noexcept;
     [[nodiscard]] bool EnsureNonClientAreaRendering2() const noexcept;
 
 private:
@@ -427,11 +430,22 @@ private:
     WindowState m_visibility = WindowState::Hidden;
     WindowFrameCorner m_frameCorner = WindowFrameCorner::Square;
     WindowStartupLocation m_startupLocation = WindowStartupLocation::Default;
+    Color m_titleBarBackgroundColor = Color();
     WindowTheme m_theme = WindowTheme::Light;
     Color m_colorizationColor = Color();
     WindowColorizationArea m_colorizationArea = WindowColorizationArea::None;
     UINT m_dpi = 0;
-    HBRUSH m_backgroundBrush = nullptr;
+    HBRUSH m_windowBackgroundBrush = nullptr;
+    bool m_exposed = false;
+    UINT m_resizeBorderThicknessX = 0;
+    UINT m_resizeBorderThicknessY = 0;
+    UINT m_windowVisibleFrameBorderThickness = 0;
+    UINT m_captionHeight = 0;
+    UINT m_windowIconWidth = 0;
+    UINT m_windowIconHeight = 0;
+    UINT m_windowSmallIconWidth = 0;
+    UINT m_windowSmallIconHeight = 0;
+    HBRUSH m_titleBarBackgroundBrush = nullptr;
 };
 
 POINT WindowPrivate::GetWindowPosition2() const noexcept
@@ -557,7 +571,7 @@ bool WindowPrivate::OpenSystemMenu2(const POINT pos) const noexcept
             }
             return true;
         };
-        const bool max = IsMaximized(m_window);
+        const bool max = (m_visibility == WindowState::Maximized);
         if (!setState(SC_RESTORE, max)) {
             return false;
         }
@@ -595,7 +609,7 @@ bool WindowPrivate::OpenSystemMenu2(const POINT pos) const noexcept
     }
 }
 
-bool WindowPrivate::SetWindowState2(const WindowState state) const noexcept
+bool WindowPrivate::SetWindowState2(const WindowState state) noexcept
 {
     USER32_API(ShowWindow);
     USER32_API(UpdateWindow);
@@ -610,7 +624,16 @@ bool WindowPrivate::SetWindowState2(const WindowState state) const noexcept
             nCmdShow = SW_MINIMIZE;
         } break;
         case WindowState::Windowed: {
-            nCmdShow = ((m_visibility == WindowState::Hidden) ? SW_NORMAL : SW_RESTORE);
+            if (m_visibility == WindowState::Hidden) {
+                if (m_exposed) {
+                    nCmdShow = SW_SHOW;
+                } else {
+                    m_exposed = true;
+                    nCmdShow = SW_NORMAL;
+                }
+            } else {
+                nCmdShow = SW_RESTORE;
+            }
         } break;
         case WindowState::Maximized: {
             nCmdShow = SW_MAXIMIZE;
@@ -781,21 +804,22 @@ bool WindowPrivate::Initialize() noexcept
     m_title = {};
     m_frameCorner = ((WindowsVersion::CurrentVersion() >= WindowsVersion::Windows10_21Half2) ? WindowFrameCorner::Round : WindowFrameCorner::Square);
     m_startupLocation = WindowStartupLocation::Default;
-    if (q_ptr) {
-        q_ptr->OnXChanged(m_x);
-        q_ptr->OnYChanged(m_y);
-        q_ptr->OnWidthChanged(m_width);
-        q_ptr->OnHeightChanged(m_height);
-        q_ptr->OnVisibilityChanged(m_visibility);
-        q_ptr->OnTitleChanged(m_title);
-        q_ptr->OnIconChanged(m_icon);
-        q_ptr->OnDotsPerInchChanged(m_dpi);
-        q_ptr->OnThemeChanged(m_theme);
-        q_ptr->OnColorizationColorChanged(m_colorizationColor);
-        q_ptr->OnColorizationAreaChanged(m_colorizationArea);
-        q_ptr->OnFrameCornerChanged(m_frameCorner);
-        q_ptr->OnStartupLocationChanged(m_startupLocation);
-    }
+    TitleBarBackgroundColor(Color::FromRgba(0, 0, 0));
+
+    q_ptr->OnXChanged(m_x);
+    q_ptr->OnYChanged(m_y);
+    q_ptr->OnWidthChanged(m_width);
+    q_ptr->OnHeightChanged(m_height);
+    q_ptr->OnVisibilityChanged(m_visibility);
+    q_ptr->OnTitleChanged(m_title);
+    q_ptr->OnIconChanged(m_icon);
+    q_ptr->OnDotsPerInchChanged(m_dpi);
+    q_ptr->OnThemeChanged(m_theme);
+    q_ptr->OnColorizationColorChanged(m_colorizationColor);
+    q_ptr->OnColorizationAreaChanged(m_colorizationArea);
+    q_ptr->OnFrameCornerChanged(m_frameCorner);
+    q_ptr->OnStartupLocationChanged(m_startupLocation);
+
     return true;
 }
 
@@ -808,8 +832,8 @@ WindowPrivate::WindowPrivate(Window *q) noexcept
     q_ptr = q;
     GDI32_API(GetStockObject);
     if (GetStockObject_API) {
-        m_backgroundBrush = static_cast<HBRUSH>(GetStockObject_API(BLACK_BRUSH));
-        if (!m_backgroundBrush) {
+        m_windowBackgroundBrush = static_cast<HBRUSH>(GetStockObject_API(BLACK_BRUSH));
+        if (!m_windowBackgroundBrush) {
             PRINT_WIN32_ERROR_MESSAGE(GetStockObject, L"Failed to retrieve the black brush.")
             return;
         }
@@ -817,7 +841,7 @@ WindowPrivate::WindowPrivate(Window *q) noexcept
         Utils::DisplayErrorDialog(L"Can't retrieve the window background brush due to GetStockObject() is not available.");
         return;
     }
-    m_window = CreateWindow2(WS_OVERLAPPEDWINDOW, WS_EX_NOREDIRECTIONBITMAP, nullptr, this, sizeof(WindowPrivate*), m_backgroundBrush, WindowProc);
+    m_window = CreateWindow2(WS_OVERLAPPEDWINDOW, WS_EX_NOREDIRECTIONBITMAP, nullptr, this, sizeof(WindowPrivate*), m_windowBackgroundBrush, WindowProc);
     if (m_window) {
         if (!Initialize()) {
             Utils::DisplayErrorDialog(L"Failed to initialize WindowPrivate.");
@@ -829,6 +853,18 @@ WindowPrivate::WindowPrivate(Window *q) noexcept
 
 WindowPrivate::~WindowPrivate() noexcept
 {
+    if (m_titleBarBackgroundBrush) {
+        GDI32_API(DeleteObject);
+        if (DeleteObject_API) {
+            if (DeleteObject_API(m_titleBarBackgroundBrush) == FALSE) {
+                PRINT_WIN32_ERROR_MESSAGE(DeleteObject, L"Failed to delete the title bar background brush.")
+            } else {
+                m_titleBarBackgroundBrush = nullptr;
+            }
+        } else {
+            Utils::DisplayErrorDialog(L"Can't delete the title bar background brush due to DeleteObject() is not available.");
+        }
+    }
     if (m_window) {
         if (CloseWindow2(m_window)) {
             m_window = nullptr;
@@ -952,7 +988,7 @@ WindowState WindowPrivate::Visibility() const noexcept
     return m_visibility;
 }
 
-void WindowPrivate::Visibility(const WindowState value) const noexcept
+void WindowPrivate::Visibility(const WindowState value) noexcept
 {
     if (m_visibility != value) {
         if (!SetWindowState2(value)) {
@@ -1001,6 +1037,41 @@ void WindowPrivate::StartupLocation(const WindowStartupLocation value) noexcept
     }
 }
 
+const Color &WindowPrivate::TitleBarBackgroundColor() const noexcept
+{
+    return m_titleBarBackgroundColor;
+}
+
+void WindowPrivate::TitleBarBackgroundColor(const Color &value) noexcept
+{
+    if (m_titleBarBackgroundColor != value) {
+        if (!q_ptr) {
+            Utils::DisplayErrorDialog(L"Can't change the title bar background brush due to q_ptr is null.");
+            return;
+        }
+        GDI32_API(CreateSolidBrush);
+        GDI32_API(DeleteObject);
+        if (CreateSolidBrush_API && DeleteObject_API) {
+            if (m_titleBarBackgroundBrush) {
+                if (DeleteObject_API(m_titleBarBackgroundBrush) == FALSE) {
+                    PRINT_WIN32_ERROR_MESSAGE(DeleteObject, L"Failed to delete the previous title bar background brush.")
+                    return;
+                }
+                m_titleBarBackgroundBrush = nullptr;
+            }
+            m_titleBarBackgroundBrush = CreateSolidBrush_API(value.ToWin32());
+            if (m_titleBarBackgroundBrush) {
+                m_titleBarBackgroundColor = value;
+                q_ptr->OnTitleBarBackgroundColorChanged(m_titleBarBackgroundColor);
+            } else {
+                PRINT_WIN32_ERROR_MESSAGE(CreateSolidBrush, L"Failed to create the title bar background brush.")
+            }
+        } else {
+            Utils::DisplayErrorDialog(L"Can't change the title bar background brush due to CreateSolidBrush() and DeleteObject() are not available.");
+        }
+    }
+}
+
 WindowTheme WindowPrivate::Theme() const noexcept
 {
     return m_theme;
@@ -1027,7 +1098,7 @@ HWND WindowPrivate::CreateChildWindow(const DWORD style, const DWORD extendedSty
         Utils::DisplayErrorDialog(L"Can't create the child window due to the parent window has not been created yet.");
         return nullptr;
     }
-    return CreateWindow2((style | WS_CHILD), extendedStyle, m_window, extraData, extraDataSize, m_backgroundBrush, wndProc);
+    return CreateWindow2((style | WS_CHILD), extendedStyle, m_window, extraData, extraDataSize, m_windowBackgroundBrush, wndProc);
 }
 
 HWND WindowPrivate::WindowHandle() const noexcept
@@ -1065,7 +1136,7 @@ bool WindowPrivate::SetGeometry(const int x, const int y, const UINT w, const UI
     }
 }
 
-UINT WindowPrivate::GetWindowMetrics2(const WindowMetrics metrics) const noexcept
+UINT WindowPrivate::GetWindowMetrics2(const WindowMetrics metrics) noexcept
 {
     if (!q_ptr) {
         Utils::DisplayErrorDialog(L"Failed to retrieve the window metrics due to q_ptr is null.");
@@ -1079,32 +1150,56 @@ UINT WindowPrivate::GetWindowMetrics2(const WindowMetrics metrics) const noexcep
     if (GetSystemMetricsForDpi_API) {
         switch (metrics) {
         case WindowMetrics::ResizeBorderThicknessX: {
-            const int paddedBorderThicknessX = GetSystemMetricsForDpi_API(SM_CXPADDEDBORDER, m_dpi);
-            const int sizeFrameThicknessX = GetSystemMetricsForDpi_API(SM_CXSIZEFRAME, m_dpi);
-            return (paddedBorderThicknessX + sizeFrameThicknessX);
+            if (m_resizeBorderThicknessX == 0) {
+                const int paddedBorderThicknessX = GetSystemMetricsForDpi_API(SM_CXPADDEDBORDER, m_dpi);
+                const int sizeFrameThicknessX = GetSystemMetricsForDpi_API(SM_CXSIZEFRAME, m_dpi);
+                m_resizeBorderThicknessX = (paddedBorderThicknessX + sizeFrameThicknessX);
+            }
+            return m_resizeBorderThicknessX;
         } break;
         case WindowMetrics::ResizeBorderThicknessY: {
-            const int paddedBorderThicknessY = GetSystemMetricsForDpi_API(SM_CYPADDEDBORDER, m_dpi);
-            const int sizeFrameThicknessY = GetSystemMetricsForDpi_API(SM_CYSIZEFRAME, m_dpi);
-            return (paddedBorderThicknessY + sizeFrameThicknessY);
+            if (m_resizeBorderThicknessY == 0) {
+                const int paddedBorderThicknessY = GetSystemMetricsForDpi_API(SM_CYPADDEDBORDER, m_dpi);
+                const int sizeFrameThicknessY = GetSystemMetricsForDpi_API(SM_CYSIZEFRAME, m_dpi);
+                m_resizeBorderThicknessY = (paddedBorderThicknessY + sizeFrameThicknessY);
+            }
+            return m_resizeBorderThicknessY;
         } break;
         case WindowMetrics::WindowVisibleFrameBorderThickness: {
-            return GetWindowVisibleFrameBorderThickness2();
+            if (m_windowVisibleFrameBorderThickness == 0) {
+                m_windowVisibleFrameBorderThickness = GetWindowVisibleFrameBorderThickness2();
+            }
+            return m_windowVisibleFrameBorderThickness;
         } break;
         case WindowMetrics::CaptionHeight: {
-            return GetSystemMetricsForDpi_API(SM_CYCAPTION, m_dpi);
+            if (m_captionHeight == 0) {
+                m_captionHeight = GetSystemMetricsForDpi_API(SM_CYCAPTION, m_dpi);
+            }
+            return m_captionHeight;
         } break;
         case WindowMetrics::WindowIconWidth: {
-            return GetSystemMetricsForDpi_API(SM_CXICON, m_dpi);
+            if (m_windowIconWidth == 0) {
+                m_windowIconWidth = GetSystemMetricsForDpi_API(SM_CXICON, m_dpi);
+            }
+            return m_windowIconWidth;
         } break;
         case WindowMetrics::WindowIconHeight: {
-            return GetSystemMetricsForDpi_API(SM_CYICON, m_dpi);
+            if (m_windowIconHeight == 0) {
+                m_windowIconHeight = GetSystemMetricsForDpi_API(SM_CYICON, m_dpi);
+            }
+            return m_windowIconHeight;
         } break;
         case WindowMetrics::WindowSmallIconWidth: {
-            return GetSystemMetricsForDpi_API(SM_CXSMICON, m_dpi);
+            if (m_windowSmallIconWidth == 0) {
+                m_windowSmallIconWidth = GetSystemMetricsForDpi_API(SM_CXSMICON, m_dpi);
+            }
+            return m_windowSmallIconWidth;
         } break;
         case WindowMetrics::WindowSmallIconHeight: {
-            return GetSystemMetricsForDpi_API(SM_CYSMICON, m_dpi);
+            if (m_windowSmallIconHeight == 0) {
+                m_windowSmallIconHeight = GetSystemMetricsForDpi_API(SM_CYSMICON, m_dpi);
+            }
+            return m_windowSmallIconHeight;
         } break;
         }
         return 0;
@@ -1116,32 +1211,56 @@ UINT WindowPrivate::GetWindowMetrics2(const WindowMetrics metrics) const noexcep
             // based on the DPI awareness of the current process.
             switch (metrics) {
             case WindowMetrics::ResizeBorderThicknessX: {
-                const int paddedBorderThicknessX = GetSystemMetrics_API(SM_CXPADDEDBORDER);
-                const int sizeFrameThicknessX = GetSystemMetrics_API(SM_CXSIZEFRAME);
-                return (paddedBorderThicknessX + sizeFrameThicknessX);
+                if (m_resizeBorderThicknessX == 0) {
+                    const int paddedBorderThicknessX = GetSystemMetrics_API(SM_CXPADDEDBORDER);
+                    const int sizeFrameThicknessX = GetSystemMetrics_API(SM_CXSIZEFRAME);
+                    m_resizeBorderThicknessX = (paddedBorderThicknessX + sizeFrameThicknessX);
+                }
+                return m_resizeBorderThicknessX;
             } break;
             case WindowMetrics::ResizeBorderThicknessY: {
-                const int paddedBorderThicknessY = GetSystemMetrics_API(SM_CYPADDEDBORDER);
-                const int sizeFrameThicknessY = GetSystemMetrics_API(SM_CYSIZEFRAME);
-                return (paddedBorderThicknessY + sizeFrameThicknessY);
+                if (m_resizeBorderThicknessY == 0) {
+                    const int paddedBorderThicknessY = GetSystemMetrics_API(SM_CYPADDEDBORDER);
+                    const int sizeFrameThicknessY = GetSystemMetrics_API(SM_CYSIZEFRAME);
+                    m_resizeBorderThicknessY = (paddedBorderThicknessY + sizeFrameThicknessY);
+                }
+                return m_resizeBorderThicknessY;
             } break;
             case WindowMetrics::WindowVisibleFrameBorderThickness: {
-                return GetWindowVisibleFrameBorderThickness2();
+                if (m_windowVisibleFrameBorderThickness == 0) {
+                    m_windowVisibleFrameBorderThickness = GetWindowVisibleFrameBorderThickness2();
+                }
+                return m_windowVisibleFrameBorderThickness;
             } break;
             case WindowMetrics::CaptionHeight: {
-                return GetSystemMetrics_API(SM_CYCAPTION);
+                if (m_captionHeight == 0) {
+                    m_captionHeight = GetSystemMetrics_API(SM_CYCAPTION);
+                }
+                return m_captionHeight;
             } break;
             case WindowMetrics::WindowIconWidth: {
-                return GetSystemMetrics_API(SM_CXICON);
+                if (m_windowIconWidth == 0) {
+                    m_windowIconWidth = GetSystemMetrics_API(SM_CXICON);
+                }
+                return m_windowIconWidth;
             } break;
             case WindowMetrics::WindowIconHeight: {
-                return GetSystemMetrics_API(SM_CYICON);
+                if (m_windowIconHeight == 0) {
+                    m_windowIconHeight = GetSystemMetrics_API(SM_CYICON);
+                }
+                return m_windowIconHeight;
             } break;
             case WindowMetrics::WindowSmallIconWidth: {
-                return GetSystemMetrics_API(SM_CXSMICON);
+                if (m_windowSmallIconWidth == 0) {
+                    m_windowSmallIconWidth = GetSystemMetrics_API(SM_CXSMICON);
+                }
+                return m_windowSmallIconWidth;
             } break;
             case WindowMetrics::WindowSmallIconHeight: {
-                return GetSystemMetrics_API(SM_CYSMICON);
+                if (m_windowSmallIconHeight == 0) {
+                    m_windowSmallIconHeight = GetSystemMetrics_API(SM_CYSMICON);
+                }
+                return m_windowSmallIconHeight;
             } break;
             }
             return 0;
@@ -1216,10 +1335,8 @@ bool WindowPrivate::InternalMessageHandler(const UINT message, const WPARAM wPar
     case WM_MOVE: {
         m_x = GET_X_LPARAM(lParam);
         m_y = GET_Y_LPARAM(lParam);
-        if (q_ptr) {
-            q_ptr->OnXChanged(m_x);
-            q_ptr->OnYChanged(m_y);
-        }
+        q_ptr->OnXChanged(m_x);
+        q_ptr->OnYChanged(m_y);
     } break;
     case WM_SIZE: {
         bool visibilityChanged = false;
@@ -1237,13 +1354,11 @@ bool WindowPrivate::InternalMessageHandler(const UINT message, const WPARAM wPar
         }
         m_width = LOWORD(lParam);
         m_height = HIWORD(lParam);
-        if (q_ptr) {
-            if (visibilityChanged) {
-                q_ptr->OnVisibilityChanged(m_visibility);
-            }
-            q_ptr->OnWidthChanged(m_width);
-            q_ptr->OnHeightChanged(m_height);
+        if (visibilityChanged) {
+            q_ptr->OnVisibilityChanged(m_visibility);
         }
+        q_ptr->OnWidthChanged(m_width);
+        q_ptr->OnHeightChanged(m_height);
         if (visibilityChanged && (m_visibility != WindowState::Minimized)) {
             if (!UpdateWindowFrameMargins2()) {
                 Utils::DisplayErrorDialog(L"Failed to update the window frame margins.");
@@ -1265,9 +1380,7 @@ bool WindowPrivate::InternalMessageHandler(const UINT message, const WPARAM wPar
                 Utils::DisplayErrorDialog(L"Failed to refresh the window theme.");
                 return false;
             }
-            if (q_ptr) {
-                q_ptr->OnThemeChanged(m_theme);
-            }
+            q_ptr->OnThemeChanged(m_theme);
         }
     } break;
     case WM_DPICHANGED: {
@@ -1277,9 +1390,7 @@ bool WindowPrivate::InternalMessageHandler(const UINT message, const WPARAM wPar
         m_dpi = static_cast<UINT>(std::round(static_cast<double>(dpiX + dpiY) / 2.0));
         const std::wstring dpiDbgMsg = L"Current window's dots-per-inch (DPI) has changed from " + Utils::IntegerToString(oldDPI, 10) + L" to " + Utils::IntegerToString(m_dpi, 10) + L".";
         OutputDebugStringW(dpiDbgMsg.c_str());
-        if (q_ptr) {
-            q_ptr->OnDotsPerInchChanged(m_dpi);
-        }
+        q_ptr->OnDotsPerInchChanged(m_dpi);
         const auto prcNewWindow = reinterpret_cast<LPRECT>(lParam);
         if (SetGeometry(prcNewWindow->left, prcNewWindow->top, RECT_WIDTH(*prcNewWindow), RECT_HEIGHT(*prcNewWindow))) {
             *result = 0;
@@ -1291,11 +1402,13 @@ bool WindowPrivate::InternalMessageHandler(const UINT message, const WPARAM wPar
     } break;
     case WM_DWMCOLORIZATIONCOLORCHANGED: {
         m_colorizationColor = Color(static_cast<COLORREF>(wParam)); // The color format is 0xAARRGGBB.
-        if (q_ptr) {
-            q_ptr->OnColorizationColorChanged(m_colorizationColor);
-        }
+        q_ptr->OnColorizationColorChanged(m_colorizationColor);
     } break;
     case WM_PAINT: {
+        if (!m_windowBackgroundBrush || !m_titleBarBackgroundBrush) {
+            Utils::DisplayErrorDialog(L"Can't paint the window when the window background brush and/or the title bar background brush is null.");
+            return false;
+        }
         USER32_API(BeginPaint);
         USER32_API(FillRect);
         USER32_API(EndPaint);
@@ -1318,7 +1431,7 @@ bool WindowPrivate::InternalMessageHandler(const UINT message, const WPARAM wPar
                 // the alpha component set to 0. This page recommends to paint the area
                 // in black using the stock BLACK_BRUSH to do this:
                 // https://docs.microsoft.com/en-us/windows/win32/dwm/customframe#extending-the-client-frame
-                if (FillRect_API(hDC, &rcTopBorder, m_backgroundBrush) == 0) {
+                if (FillRect_API(hDC, &rcTopBorder, m_windowBackgroundBrush) == 0) {
                     PRINT_WIN32_ERROR_MESSAGE(FillRect, L"Failed to paint the window background.")
                     return false;
                 }
@@ -1339,7 +1452,7 @@ bool WindowPrivate::InternalMessageHandler(const UINT message, const WPARAM wPar
                     PRINT_WIN32_ERROR_MESSAGE(BeginBufferedPaint, L"Failed to begin the buffered paint.")
                     return false;
                 }
-                if (FillRect_API(opaqueDc, &rcRest, _backgroundBrush.get()) == 0) {
+                if (FillRect_API(opaqueDc, &rcRest, m_titleBarBackgroundBrush) == 0) {
                     PRINT_WIN32_ERROR_MESSAGE(FillRect, L"Failed to paint the window background.")
                     return false;
                 }
@@ -1372,9 +1485,7 @@ bool WindowPrivate::InternalMessageHandler(const UINT message, const WPARAM wPar
         } else {
             m_title = {};
         }
-        if (q_ptr) {
-            q_ptr->OnTitleChanged(m_title);
-        }
+        q_ptr->OnTitleChanged(m_title);
     } break;
     case WM_SETICON: {} break;
     case WM_CLOSE: {
@@ -1432,7 +1543,7 @@ bool WindowPrivate::InternalMessageHandler(const UINT message, const WPARAM wPar
         }
         bool nonClientAreaExists = false;
         const bool max = (m_visibility == WindowState::Maximized);
-        const bool full = false; // ### FIXME
+        const bool full = false; // ### TODO
         // We don't need this correction when we're fullscreen. We will
         // have the WS_POPUP size, so we don't have to worry about
         // borders, and the default frame will be fine.
@@ -1601,7 +1712,7 @@ bool WindowPrivate::InternalMessageHandler(const UINT message, const WPARAM wPar
     return false;
 }
 
-bool WindowPrivate::UpdateWindowFrameMargins2() const noexcept
+bool WindowPrivate::UpdateWindowFrameMargins2() noexcept
 {
     DWM_API(DwmExtendFrameIntoClientArea);
     if (DwmExtendFrameIntoClientArea_API) {
@@ -1763,6 +1874,16 @@ void Window::StartupLocation(const WindowStartupLocation value) noexcept
     d_ptr->StartupLocation(value);
 }
 
+const Color &Window::TitleBarBackgroundColor() const noexcept
+{
+    return d_ptr->TitleBarBackgroundColor();
+}
+
+void Window::TitleBarBackgroundColor(const Color &value) noexcept
+{
+    d_ptr->TitleBarBackgroundColor(value);
+}
+
 WindowTheme Window::Theme() const noexcept
 {
     return d_ptr->Theme();
@@ -1849,6 +1970,11 @@ void Window::OnFrameCornerChanged(const WindowFrameCorner arg) noexcept
 }
 
 void Window::OnStartupLocationChanged(const WindowStartupLocation arg) noexcept
+{
+    UNREFERENCED_PARAMETER(arg);
+}
+
+void Window::OnTitleBarBackgroundColorChanged(const Color &arg) noexcept
 {
     UNREFERENCED_PARAMETER(arg);
 }

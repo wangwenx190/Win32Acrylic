@@ -7,9 +7,7 @@
 - VC-LTL 设置为可选项
 - 添加clang-cl、intel-cl以及mingw-w64的工具链
 - Win11 自动使用 MICA 材质 而不是 亚克力
-- 缓存window background brush
-- 缓存window metrics
-- first show
 - 先执行用户MessageHandler，然后执行默认handler
 - SetWindowRgn
 - xaml window 支持设置亚克力画刷的属性
+- 实现startup location

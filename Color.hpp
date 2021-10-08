@@ -111,6 +111,10 @@ public:
         m_a = (static_cast<double>(value) / denominator);
     }
 
+    [[nodiscard]] inline COLORREF ToWin32() const noexcept {
+        return RGB(Red(), Green(), Blue());
+    }
+
     [[nodiscard]] inline constexpr static Color FromRgba(const uint8_t r, const uint8_t g, const uint8_t b, const uint8_t a = 255) noexcept {
         return Color(r, g, b, a);
     }

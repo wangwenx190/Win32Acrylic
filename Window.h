@@ -68,6 +68,9 @@ public:
     [[nodiscard]] WindowStartupLocation StartupLocation() const noexcept;
     void StartupLocation(const WindowStartupLocation value) noexcept;
 
+    [[nodiscard]] const Color &TitleBarBackgroundColor() const noexcept;
+    void TitleBarBackgroundColor(const Color &value) noexcept;
+
     [[nodiscard]] WindowTheme Theme() const noexcept;
 
     [[nodiscard]] UINT DotsPerInch() const noexcept;
@@ -103,6 +106,7 @@ protected:
     virtual void OnVisibilityChanged(const WindowState arg) noexcept;
     virtual void OnFrameCornerChanged(const WindowFrameCorner arg) noexcept;
     virtual void OnStartupLocationChanged(const WindowStartupLocation arg) noexcept;
+    virtual void OnTitleBarBackgroundColorChanged(const Color &arg) noexcept;
     virtual void OnThemeChanged(const WindowTheme arg) noexcept;
     virtual void OnDotsPerInchChanged(const UINT arg) noexcept;
     virtual void OnColorizationColorChanged(const Color &arg) noexcept;

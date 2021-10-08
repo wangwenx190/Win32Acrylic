@@ -76,10 +76,6 @@ EXTERN_C IMAGE_DOS_HEADER __ImageBase;
 #define RECT_HEIGHT(rect) (std::abs((rect).bottom - (rect).top))
 #endif
 
-#ifndef WINDOW_BACKGROUND_BRUSH
-#define WINDOW_BACKGROUND_BRUSH (reinterpret_cast<HBRUSH>(GetStockObject_API(BLACK_BRUSH)))
-#endif
-
 using NTSTATUS = LONG;
 
 [[maybe_unused]] constexpr UINT DefaultWindowVisibleFrameBorderThickness = 1;

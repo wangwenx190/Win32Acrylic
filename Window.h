@@ -76,7 +76,7 @@ public:
 
     [[nodiscard]] WindowColorizationArea ColorizationArea() const noexcept;
 
-    [[nodiscard]] HWND CreateChildWindow(const DWORD style, const DWORD extendedStyle, const WNDPROC wndProc, void *extraData) const noexcept;
+    [[nodiscard]] HWND CreateChildWindow(const DWORD style, const DWORD extendedStyle, const WNDPROC wndProc, void *extraData, const UINT extraDataSize) const noexcept;
     [[nodiscard]] HWND WindowHandle() const noexcept;
     [[nodiscard]] bool Move(const int x, const int y) const noexcept;
     [[nodiscard]] bool Resize(const UINT w, const UINT h) const noexcept;

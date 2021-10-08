@@ -153,38 +153,6 @@
     }
 }
 
-[[nodiscard]] static inline bool IsFullScreen(const HWND hWnd) noexcept
-{
-    USER32_API(MonitorFromWindow);
-    USER32_API(GetMonitorInfoW);
-    if (MonitorFromWindow_API && GetMonitorInfoW_API) {
-        if (!hWnd) {
-            return false;
-        }
-        const HMONITOR mon = MonitorFromWindow_API(hWnd, MONITOR_DEFAULTTOPRIMARY);
-        if (!mon) {
-            PRINT_WIN32_ERROR_MESSAGE(MonitorFromWindow, L"Failed to retrieve the corresponding screen.")
-            return false;
-        }
-        MONITORINFO mi;
-        SecureZeroMemory(&mi, sizeof(mi));
-        mi.cbSize = sizeof(mi);
-        if (GetMonitorInfoW_API(mon, &mi) == FALSE) {
-            PRINT_WIN32_ERROR_MESSAGE(GetMonitorInfoW, L"Failed to retrieve the screen information.")
-            return false;
-        }
-        const RECT screenGeometry = mi.rcMonitor;
-        const RECT windowGeometry = GetWindowFrameGeometry(hWnd);
-        return ((windowGeometry.top == screenGeometry.top)
-                && (windowGeometry.bottom == screenGeometry.bottom)
-                && (windowGeometry.left == screenGeometry.left)
-                && (windowGeometry.right == screenGeometry.right));
-    } else {
-        Utils::DisplayErrorDialog(L"MonitorFromWindow() and GetMonitorInfoW() are not available.");
-        return false;
-    }
-}
-
 [[nodiscard]] static inline bool IsHighContrastModeEnabled() noexcept
 {
     USER32_API(SystemParametersInfoW);
@@ -255,14 +223,40 @@
     }
 }
 
-[[nodiscard]] static inline HWND CreateWindow2(const DWORD style, const DWORD extendedStyle, const HWND parentWindow, void *extraData, const WNDPROC wndProc) noexcept
+[[nodiscard]] static inline RECT GetScreenGeometry(const HWND hWnd, const bool includeTaskBar) noexcept
+{
+    USER32_API(MonitorFromWindow);
+    USER32_API(GetMonitorInfoW);
+    if (MonitorFromWindow_API && GetMonitorInfoW_API) {
+        if (!hWnd) {
+            return {};
+        }
+        const HMONITOR mon = MonitorFromWindow_API(hWnd, MONITOR_DEFAULTTONEAREST);
+        if (!mon) {
+            PRINT_WIN32_ERROR_MESSAGE(MonitorFromWindow, L"Failed to retrieve the corresponding screen.")
+            return {};
+        }
+        MONITORINFO mi;
+        SecureZeroMemory(&mi, sizeof(mi));
+        mi.cbSize = sizeof(mi);
+        if (GetMonitorInfoW_API(mon, &mi) == FALSE) {
+            PRINT_WIN32_ERROR_MESSAGE(GetMonitorInfoW, L"Failed to retrieve the screen information.")
+            return {};
+        }
+        return (includeTaskBar ? mi.rcMonitor : mi.rcWork);
+    } else {
+        Utils::DisplayErrorDialog(L"Can't retrieve the screen geometry due to MonitorFromWindow() and GetMonitorInfoW() are not available.");
+        return {};
+    }
+}
+
+[[nodiscard]] static inline HWND CreateWindow2(const DWORD style, const DWORD extendedStyle, const HWND parentWindow, void *extraData, const UINT extraDataSize, const HBRUSH backgroundBrush, const WNDPROC wndProc) noexcept
 {
     USER32_API(LoadCursorW);
     USER32_API(LoadIconW);
     USER32_API(RegisterClassExW);
     USER32_API(CreateWindowExW);
-    GDI32_API(GetStockObject);
-    if (LoadCursorW_API && LoadIconW_API && RegisterClassExW_API && CreateWindowExW_API && GetStockObject_API) {
+    if (LoadCursorW_API && LoadIconW_API && RegisterClassExW_API && CreateWindowExW_API) {
         if (!wndProc) {
             Utils::DisplayErrorDialog(L"Failed to register a window class due to the WindowProc function pointer is null.");
             return nullptr;
@@ -279,12 +273,16 @@
         wcex.lpfnWndProc = wndProc;
         wcex.hInstance = HINST_THISCOMPONENT;
         wcex.lpszClassName = guid.c_str();
-        wcex.hbrBackground = WINDOW_BACKGROUND_BRUSH;
+        if (backgroundBrush) {
+            wcex.hbrBackground = backgroundBrush;
+        }
         wcex.hCursor = LoadCursorW_API(nullptr, IDC_ARROW);
-        wcex.hIcon = LoadIconW_API(HINST_THISCOMPONENT, MAKEINTRESOURCEW(IDI_MYAPPLICATION));
-        wcex.hIconSm = LoadIconW_API(HINST_THISCOMPONENT, MAKEINTRESOURCEW(IDI_MYAPPLICATION_SMALL));
-        if (extraData) {
-            wcex.cbWndExtra = sizeof(extraData); // ### FIXME: sizeof(extraData) or sizeof(*extraData)???
+        if (!(style & WS_CHILD)) {
+            wcex.hIcon = LoadIconW_API(HINST_THISCOMPONENT, MAKEINTRESOURCEW(IDI_MYAPPLICATION));
+            wcex.hIconSm = LoadIconW_API(HINST_THISCOMPONENT, MAKEINTRESOURCEW(IDI_MYAPPLICATION_SMALL));
+        }
+        if (extraDataSize > 0) {
+            wcex.cbWndExtra = extraDataSize;
         }
         const ATOM atom = RegisterClassExW_API(&wcex);
         if (atom == INVALID_ATOM) {
@@ -311,7 +309,7 @@
         }
         return hWnd;
     } else {
-        Utils::DisplayErrorDialog(L"Failed to create a window due to LoadCursorW(), LoadIconW(), RegisterClassExW(), CreateWindowExW() and GetStockObject() are not available.");
+        Utils::DisplayErrorDialog(L"Failed to create a window due to LoadCursorW(), LoadIconW(), RegisterClassExW() and CreateWindowExW() are not available.");
         return nullptr;
     }
 }
@@ -323,7 +321,6 @@
     USER32_API(UnregisterClassW);
     if (DestroyWindow_API && GetClassNameW_API && UnregisterClassW_API) {
         if (!hWnd) {
-            Utils::DisplayErrorDialog(L"Failed to close the window due to the window handle is null.");
             return false;
         }
         wchar_t className[MAX_PATH] = { L'\0' };
@@ -389,7 +386,7 @@ public:
 
     [[nodiscard]] WindowColorizationArea ColorizationArea() const noexcept;
 
-    [[nodiscard]] HWND CreateChildWindow(const DWORD style, const DWORD extendedStyle, const WNDPROC wndProc, void *extraData) const noexcept;
+    [[nodiscard]] HWND CreateChildWindow(const DWORD style, const DWORD extendedStyle, const WNDPROC wndProc, void *extraData, const UINT extraDataSize) const noexcept;
     [[nodiscard]] HWND WindowHandle() const noexcept;
     [[nodiscard]] bool Move(const int x, const int y) const noexcept;
     [[nodiscard]] bool Resize(const UINT w, const UINT h) const noexcept;
@@ -560,20 +557,20 @@ bool WindowPrivate::OpenSystemMenu2(const POINT pos) const noexcept
             }
             return true;
         };
-        const bool maxOrFull = (IsMaximized(m_window) || IsFullScreen(m_window));
-        if (!setState(SC_RESTORE, maxOrFull)) {
+        const bool max = IsMaximized(m_window);
+        if (!setState(SC_RESTORE, max)) {
             return false;
         }
-        if (!setState(SC_MOVE, !maxOrFull)) {
+        if (!setState(SC_MOVE, !max)) {
             return false;
         }
-        if (!setState(SC_SIZE, !maxOrFull)) {
+        if (!setState(SC_SIZE, !max)) {
             return false;
         }
         if (!setState(SC_MINIMIZE, true)) {
             return false;
         }
-        if (!setState(SC_MAXIMIZE, !maxOrFull)) {
+        if (!setState(SC_MAXIMIZE, !max)) {
             return false;
         }
         if (!setState(SC_CLOSE, true)) {
@@ -809,7 +806,18 @@ WindowPrivate::WindowPrivate(Window *q) noexcept
         return;
     }
     q_ptr = q;
-    m_window = CreateWindow2(WS_OVERLAPPEDWINDOW, WS_EX_NOREDIRECTIONBITMAP, nullptr, this, WindowProc);
+    GDI32_API(GetStockObject);
+    if (GetStockObject_API) {
+        m_backgroundBrush = static_cast<HBRUSH>(GetStockObject_API(BLACK_BRUSH));
+        if (!m_backgroundBrush) {
+            PRINT_WIN32_ERROR_MESSAGE(GetStockObject, L"Failed to retrieve the black brush.")
+            return;
+        }
+    } else {
+        Utils::DisplayErrorDialog(L"Can't retrieve the window background brush due to GetStockObject() is not available.");
+        return;
+    }
+    m_window = CreateWindow2(WS_OVERLAPPEDWINDOW, WS_EX_NOREDIRECTIONBITMAP, nullptr, this, sizeof(WindowPrivate*), m_backgroundBrush, WindowProc);
     if (m_window) {
         if (!Initialize()) {
             Utils::DisplayErrorDialog(L"Failed to initialize WindowPrivate.");
@@ -1013,13 +1021,13 @@ WindowColorizationArea WindowPrivate::ColorizationArea() const noexcept
     return m_colorizationArea;
 }
 
-HWND WindowPrivate::CreateChildWindow(const DWORD style, const DWORD extendedStyle, const WNDPROC wndProc, void *extraData) const noexcept
+HWND WindowPrivate::CreateChildWindow(const DWORD style, const DWORD extendedStyle, const WNDPROC wndProc, void *extraData, const UINT extraDataSize) const noexcept
 {
     if (!m_window) {
         Utils::DisplayErrorDialog(L"Can't create the child window due to the parent window has not been created yet.");
         return nullptr;
     }
-    return CreateWindow2(((style & WS_CHILD) ? style : (style | WS_CHILD)), extendedStyle, m_window, extraData, wndProc);
+    return CreateWindow2((style | WS_CHILD), extendedStyle, m_window, extraData, extraDataSize, m_backgroundBrush, wndProc);
 }
 
 HWND WindowPrivate::WindowHandle() const noexcept
@@ -1289,13 +1297,12 @@ bool WindowPrivate::InternalMessageHandler(const UINT message, const WPARAM wPar
     } break;
     case WM_PAINT: {
         USER32_API(BeginPaint);
-        GDI32_API(GetStockObject);
         USER32_API(FillRect);
         USER32_API(EndPaint);
         UXTHEME_API(BeginBufferedPaint);
         UXTHEME_API(BufferedPaintSetAlpha);
         UXTHEME_API(EndBufferedPaint);
-        if (BeginPaint_API && FillRect_API && EndPaint_API && BeginBufferedPaint_API && BufferedPaintSetAlpha_API && EndBufferedPaint_API && GetStockObject_API) {
+        if (BeginPaint_API && FillRect_API && EndPaint_API && BeginBufferedPaint_API && BufferedPaintSetAlpha_API && EndBufferedPaint_API) {
             PAINTSTRUCT ps;
             SecureZeroMemory(&ps, sizeof(ps));
             const HDC hDC = BeginPaint_API(m_window, &ps);
@@ -1303,7 +1310,7 @@ bool WindowPrivate::InternalMessageHandler(const UINT message, const WPARAM wPar
                 PRINT_WIN32_ERROR_MESSAGE(BeginPaint, L"Failed to start painting.")
                 return false;
             }
-            const LONG topBorderHeight = (((m_visibility == WindowState::Maximized) || IsFullScreen(m_window)) ? 0 : GetWindowVisibleFrameBorderThickness2());
+            const LONG topBorderHeight = ((m_visibility == WindowState::Maximized) ? 0 : GetWindowVisibleFrameBorderThickness2());
             if (ps.rcPaint.top < topBorderHeight) {
                 RECT rcTopBorder = ps.rcPaint;
                 rcTopBorder.bottom = topBorderHeight;
@@ -1311,7 +1318,7 @@ bool WindowPrivate::InternalMessageHandler(const UINT message, const WPARAM wPar
                 // the alpha component set to 0. This page recommends to paint the area
                 // in black using the stock BLACK_BRUSH to do this:
                 // https://docs.microsoft.com/en-us/windows/win32/dwm/customframe#extending-the-client-frame
-                if (FillRect_API(hDC, &rcTopBorder, WINDOW_BACKGROUND_BRUSH) == 0) {
+                if (FillRect_API(hDC, &rcTopBorder, m_backgroundBrush) == 0) {
                     PRINT_WIN32_ERROR_MESSAGE(FillRect, L"Failed to paint the window background.")
                     return false;
                 }
@@ -1354,7 +1361,7 @@ bool WindowPrivate::InternalMessageHandler(const UINT message, const WPARAM wPar
             *result = 0;
             return true;
         } else {
-            Utils::DisplayErrorDialog(L"Can't paint the window due to BeginPaint(), FillRect(), EndPaint(), BeginBufferedPaint(), BufferedPaintSetAlpha(), EndBufferedPaint() and GetStockObject() are not available.");
+            Utils::DisplayErrorDialog(L"Can't paint the window due to BeginPaint(), FillRect(), EndPaint(), BeginBufferedPaint(), BufferedPaintSetAlpha() and EndBufferedPaint() are not available.");
             return false;
         }
     } break;
@@ -1425,7 +1432,7 @@ bool WindowPrivate::InternalMessageHandler(const UINT message, const WPARAM wPar
         }
         bool nonClientAreaExists = false;
         const bool max = (m_visibility == WindowState::Maximized);
-        const bool full = IsFullScreen(m_window);
+        const bool full = false; // ### FIXME
         // We don't need this correction when we're fullscreen. We will
         // have the WS_POPUP size, so we don't have to worry about
         // borders, and the default frame will be fine.
@@ -1776,9 +1783,9 @@ WindowColorizationArea Window::ColorizationArea() const noexcept
     return d_ptr->ColorizationArea();
 }
 
-HWND Window::CreateChildWindow(const DWORD style, const DWORD extendedStyle, const WNDPROC wndProc, void *extraData) const noexcept
+HWND Window::CreateChildWindow(const DWORD style, const DWORD extendedStyle, const WNDPROC wndProc, void *extraData, const UINT extraDataSize) const noexcept
 {
-    return d_ptr->CreateChildWindow(style, extendedStyle, wndProc, extraData);
+    return d_ptr->CreateChildWindow(style, extendedStyle, wndProc, extraData, extraDataSize);
 }
 
 HWND Window::WindowHandle() const noexcept

@@ -119,15 +119,17 @@ SystemLibraryPrivate::~SystemLibraryPrivate() noexcept
 
 void SystemLibraryPrivate::FileName(const std::wstring &fileName) noexcept
 {
-    if (IsLoaded()) {
-        OutputDebugStringW(L"The library has been loaded already, can't change the file name now.");
-        return;
-    }
-    if (!fileName.empty()) {
-        m_fileName = fileName;
-        const auto suffix = m_fileName.find(L".dll");
-        if (suffix == std::string::npos) {
-            m_fileName += L".dll";
+    if (m_fileName != fileName) {
+        if (IsLoaded()) {
+            OutputDebugStringW(L"The library has been loaded already, can't change the file name now.");
+            return;
+        }
+        if (!fileName.empty()) {
+            m_fileName = fileName;
+            const auto suffix = m_fileName.find(L".dll");
+            if (suffix == std::string::npos) {
+                m_fileName += L".dll";
+            }
         }
     }
 }

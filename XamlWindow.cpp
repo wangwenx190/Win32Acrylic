@@ -46,11 +46,33 @@ namespace HighContrast {
 } // namespace HighContrast
 } // namespace Constants
 
+[[nodiscard]] static inline winrt::Windows::UI::Color ToWinRTColor(const Color &value) noexcept
+{
+    return winrt::Windows::UI::ColorHelper::FromArgb(value.Alpha(), value.Red(), value.Green(), value.Blue());
+}
+
+[[nodiscard]] static inline Color ToColor(const winrt::Windows::UI::Color &value) noexcept
+{
+    return Color::FromRgba(value.R, value.G, value.B, value.A);
+}
+
 class XamlWindowPrivate
 {
 public:
     explicit XamlWindowPrivate(XamlWindow *q) noexcept;
     ~XamlWindowPrivate() noexcept;
+
+    [[nodiscard]] const Color &TintColor() const noexcept;
+    void TintColor(const Color &value) noexcept;
+
+    [[nodiscard]] double TintOpacity() const noexcept;
+    void TintOpacity(const double value) noexcept;
+
+    [[nodiscard]] double LuminosityOpacity() const noexcept;
+    void LuminosityOpacity(const double value) noexcept;
+
+    [[nodiscard]] const Color &FallbackColor() const noexcept;
+    void FallbackColor(const Color &value) noexcept;
 
     [[nodiscard]] double GetDevicePixelRatio() const noexcept;
     [[nodiscard]] SIZE GetPhysicalSize() const noexcept;
@@ -80,6 +102,10 @@ private:
     XamlWindow *q_ptr = nullptr;
     HWND m_dragBarWindow = nullptr;
     HWND m_xamlIslandWindow = nullptr;
+    std::optional<Color> m_tintColor = std::nullopt;
+    std::optional<double> m_tintOpacity = std::nullopt;
+    std::optional<double> m_luminosityOpacity = std::nullopt;
+    std::optional<Color> m_fallbackColor = std::nullopt;
     winrt::Windows::UI::Xaml::Hosting::DesktopWindowXamlSource m_xamlSource = nullptr;
     winrt::Windows::UI::Xaml::Controls::Grid m_windowRootGrid = nullptr;
     winrt::Windows::UI::Xaml::Media::AcrylicBrush m_windowBackgroundBrush = nullptr;
@@ -111,12 +137,53 @@ XamlWindowPrivate::~XamlWindowPrivate() noexcept
         m_xamlSource.Close();
         m_xamlSource = nullptr;
     }
-    if (q_ptr && m_dragBarWindow) {
-        if (q_ptr->CloseChildWindow(m_dragBarWindow)) {
-            m_dragBarWindow = nullptr;
-        } else {
-            Utils::DisplayErrorDialog(L"Failed to close the drag bar window.");
-        }
+}
+
+const Color &XamlWindowPrivate::TintColor() const noexcept
+{
+    return m_tintColor.value();
+}
+
+void XamlWindowPrivate::TintColor(const Color &value) noexcept
+{
+    if (m_tintColor.value() != value) {
+        m_tintColor = value;
+    }
+}
+
+double XamlWindowPrivate::TintOpacity() const noexcept
+{
+    return m_tintOpacity.value();
+}
+
+void XamlWindowPrivate::TintOpacity(const double value) noexcept
+{
+    if (m_tintOpacity.value() != value) {
+        m_tintOpacity = value;
+    }
+}
+
+double XamlWindowPrivate::LuminosityOpacity() const noexcept
+{
+    return m_luminosityOpacity.value();
+}
+
+void XamlWindowPrivate::LuminosityOpacity(const double value) noexcept
+{
+    if (m_luminosityOpacity.value() != value) {
+        m_luminosityOpacity = value;
+    }
+}
+
+const Color &XamlWindowPrivate::FallbackColor() const noexcept
+{
+    return m_fallbackColor.value();
+}
+
+void XamlWindowPrivate::FallbackColor(const Color &value) noexcept
+{
+    if (m_fallbackColor.value() != value) {
+        m_fallbackColor = value;
     }
 }
 
@@ -341,7 +408,7 @@ bool XamlWindowPrivate::InitializeDragBarWindow() noexcept
         Utils::DisplayErrorDialog(L"Can't initialize the drag bar window due to the q_ptr is null.");
         return false;
     }
-    m_dragBarWindow = q_ptr->CreateChildWindow(WS_CHILD, (WS_EX_LAYERED | WS_EX_NOREDIRECTIONBITMAP), DragBarWindowProc, this);
+    m_dragBarWindow = q_ptr->CreateChildWindow(WS_CHILD, (WS_EX_LAYERED | WS_EX_NOREDIRECTIONBITMAP), DragBarWindowProc, this, sizeof(XamlWindowPrivate *));
     if (!m_dragBarWindow) {
         Utils::DisplayErrorDialog(L"Failed to create the drag bar window.");
         return false;
@@ -363,26 +430,44 @@ bool XamlWindowPrivate::RefreshWindowBackgroundBrush() noexcept
         Utils::DisplayErrorDialog(L"Can't refresh the window background brush due to the brush has not been created yet.");
         return false;
     }
+    winrt::Windows::UI::Color tintColor = {};
+    double tintOpacity = 0.0;
+    double luminosityOpacity = 0.0;
+    winrt::Windows::UI::Color fallbackColor = {};
     switch (q_ptr->Theme()) {
     case WindowTheme::Light: {
-        m_windowBackgroundBrush.TintColor(Constants::Light::TintColor);
-        m_windowBackgroundBrush.TintOpacity(Constants::Light::TintOpacity);
-        m_windowBackgroundBrush.TintLuminosityOpacity(Constants::Light::LuminosityOpacity);
-        m_windowBackgroundBrush.FallbackColor(Constants::Light::FallbackColor);
-        return true;
+        tintColor = Constants::Light::TintColor;
+        tintOpacity = Constants::Light::TintOpacity;
+        luminosityOpacity = Constants::Light::LuminosityOpacity;
+        fallbackColor = Constants::Light::FallbackColor;
     } break;
     case WindowTheme::Dark: {
-        m_windowBackgroundBrush.TintColor(Constants::Dark::TintColor);
-        m_windowBackgroundBrush.TintOpacity(Constants::Dark::TintOpacity);
-        m_windowBackgroundBrush.TintLuminosityOpacity(Constants::Dark::LuminosityOpacity);
-        m_windowBackgroundBrush.FallbackColor(Constants::Dark::FallbackColor);
-        return true;
+        tintColor = Constants::Dark::TintColor;
+        tintOpacity = Constants::Dark::TintOpacity;
+        luminosityOpacity = Constants::Dark::LuminosityOpacity;
+        fallbackColor = Constants::Dark::FallbackColor;
     } break;
     case WindowTheme::HighContrast: {
         // ### TODO
     } break;
     }
-    return false;
+    if (m_tintColor.has_value()) {
+        tintColor = ToWinRTColor(m_tintColor.value());
+    }
+    if (m_tintOpacity.has_value()) {
+        tintOpacity = m_tintOpacity.value();
+    }
+    if (m_luminosityOpacity.has_value()) {
+        luminosityOpacity = m_luminosityOpacity.value();
+    }
+    if (m_fallbackColor.has_value()) {
+        fallbackColor = ToWinRTColor(m_fallbackColor.value());
+    }
+    m_windowBackgroundBrush.TintColor(tintColor);
+    m_windowBackgroundBrush.TintOpacity(tintOpacity);
+    m_windowBackgroundBrush.TintLuminosityOpacity(luminosityOpacity);
+    m_windowBackgroundBrush.FallbackColor(fallbackColor);
+    return true;
 }
 
 bool XamlWindowPrivate::SyncXamlIslandWindowGeometry() const noexcept
@@ -559,6 +644,46 @@ XamlWindow::XamlWindow() noexcept
 }
 
 XamlWindow::~XamlWindow() noexcept = default;
+
+const Color &XamlWindow::TintColor() const noexcept
+{
+    return d_ptr->TintColor();
+}
+
+void XamlWindow::TintColor(const Color &value) noexcept
+{
+    d_ptr->TintColor(value);
+}
+
+double XamlWindow::TintOpacity() const noexcept
+{
+    return d_ptr->TintOpacity();
+}
+
+void XamlWindow::TintOpacity(const double value) noexcept
+{
+    d_ptr->TintOpacity(value);
+}
+
+double XamlWindow::LuminosityOpacity() const noexcept
+{
+    return d_ptr->LuminosityOpacity();
+}
+
+void XamlWindow::LuminosityOpacity(const double value) noexcept
+{
+    d_ptr->LuminosityOpacity(value);
+}
+
+const Color &XamlWindow::FallbackColor() const noexcept
+{
+    return d_ptr->FallbackColor();
+}
+
+void XamlWindow::FallbackColor(const Color &value) noexcept
+{
+    d_ptr->FallbackColor(value);
+}
 
 void XamlWindow::OnWidthChanged(const UINT arg) noexcept
 {

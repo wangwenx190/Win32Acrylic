@@ -79,8 +79,10 @@ DWORD OperationResultPrivate::Code() const noexcept
 
 void OperationResultPrivate::Code(const DWORD code) noexcept
 {
-    m_code = code;
-    TryQueryErrorMessageFromSystem();
+    if (m_code != code) {
+        m_code = code;
+        TryQueryErrorMessageFromSystem();
+    }
 }
 
 std::wstring OperationResultPrivate::Message() const noexcept

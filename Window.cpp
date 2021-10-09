@@ -176,7 +176,7 @@
     return (GetDWORDFromRegistry(HKEY_CURRENT_USER, PersonalizeRegistryKeyPath, L"AppsUseLightTheme") != 0);
 }
 
-[[nodiscard]] static inline COLORREF GetGlobalColorizationColor2() noexcept
+[[nodiscard]] static inline DWORD GetGlobalColorizationColor2() noexcept
 {
     DWM_API(DwmGetColorizationColor);
     if (DwmGetColorizationColor_API) {
@@ -804,7 +804,6 @@ bool WindowPrivate::Initialize() noexcept
     m_title = {};
     m_frameCorner = ((WindowsVersion::CurrentVersion() >= WindowsVersion::Windows10_21Half2) ? WindowFrameCorner::Round : WindowFrameCorner::Square);
     m_startupLocation = WindowStartupLocation::Default;
-    TitleBarBackgroundColor(Color::FromRgba(0, 0, 0));
 
     q_ptr->OnXChanged(m_x);
     q_ptr->OnYChanged(m_y);
@@ -832,6 +831,7 @@ WindowPrivate::WindowPrivate(Window *q) noexcept
     q_ptr = q;
     GDI32_API(GetStockObject);
     if (GetStockObject_API) {
+        // We need this window background brush in WM_PAINT, so create it early.
         m_windowBackgroundBrush = static_cast<HBRUSH>(GetStockObject_API(BLACK_BRUSH));
         if (!m_windowBackgroundBrush) {
             PRINT_WIN32_ERROR_MESSAGE(GetStockObject, L"Failed to retrieve the black brush.")
@@ -841,7 +841,9 @@ WindowPrivate::WindowPrivate(Window *q) noexcept
         Utils::DisplayErrorDialog(L"Can't retrieve the window background brush due to GetStockObject() is not available.");
         return;
     }
-    m_window = CreateWindow2(WS_OVERLAPPEDWINDOW, WS_EX_NOREDIRECTIONBITMAP, nullptr, this, sizeof(WindowPrivate*), m_windowBackgroundBrush, WindowProc);
+    // Create the title bar background brush early, we'll need it in WM_PAINT.
+    TitleBarBackgroundColor(Color::FromRgba(0, 0, 0));
+    m_window = CreateWindow2(WS_OVERLAPPEDWINDOW, WS_EX_NOREDIRECTIONBITMAP, nullptr, this, sizeof(WindowPrivate *), m_windowBackgroundBrush, WindowProc);
     if (m_window) {
         if (!Initialize()) {
             Utils::DisplayErrorDialog(L"Failed to initialize WindowPrivate.");
@@ -853,6 +855,9 @@ WindowPrivate::WindowPrivate(Window *q) noexcept
 
 WindowPrivate::~WindowPrivate() noexcept
 {
+    // According to MSDN, it's not needed to delete the window background brush
+    // due to it's retrieved through GetStockObject(). But calling DeleteObject()
+    // on it is harmless.
     if (m_titleBarBackgroundBrush) {
         GDI32_API(DeleteObject);
         if (DeleteObject_API) {
@@ -1033,7 +1038,34 @@ WindowStartupLocation WindowPrivate::StartupLocation() const noexcept
 void WindowPrivate::StartupLocation(const WindowStartupLocation value) noexcept
 {
     if (m_startupLocation != value) {
-        // ### TODO
+        if (!q_ptr) {
+            Utils::DisplayErrorDialog(L"Can't set the window startup location due to q_ptr is null.");
+            return;
+        }
+        if (!m_window) {
+            Utils::DisplayErrorDialog(L"Can't set the window startup location due to the window has not been created yet.");
+            return;
+        }
+        m_startupLocation = value;
+        q_ptr->OnStartupLocationChanged(m_startupLocation);
+        RECT rect = {0, 0, 0, 0};
+        if (m_startupLocation == WindowStartupLocation::Default) {
+            return;
+        } else if (m_startupLocation == WindowStartupLocation::OwnerCenter) {
+            // ### TODO
+            return;
+        } else if (m_startupLocation == WindowStartupLocation::DesktopCenter) {
+            rect = GetScreenGeometry(m_window, false);
+        } else if (m_startupLocation == WindowStartupLocation::ScreenCenter) {
+            rect = GetScreenGeometry(m_window, true);
+        }
+        const UINT rectWidth = RECT_WIDTH(rect);
+        const UINT rectHeight = RECT_HEIGHT(rect);
+        const auto newX = static_cast<int>(std::round(static_cast<double>(rectWidth - m_width) / 2.0));
+        const auto newY = static_cast<int>(std::round(static_cast<double>(rectHeight - m_height) / 2.0));
+        if (!Move(newX, newY)) {
+            Utils::DisplayErrorDialog(L"Failed to change the window geometry.");
+        }
     }
 }
 
@@ -1300,14 +1332,13 @@ LRESULT CALLBACK WindowPrivate::WindowProc(const HWND hWnd, const UINT message, 
         }
         if (const auto that = reinterpret_cast<WindowPrivate *>(GetWindowLongPtrW_API(hWnd, GWLP_USERDATA))) {
             LRESULT result = 0;
+            if (that->q_ptr) {
+                if (that->q_ptr->MessageHandler(message, wParam, lParam, &result)) {
+                    return result;
+                }
+            }
             if (that->InternalMessageHandler(message, wParam, lParam, &result)) {
                 return result;
-            } else {
-                if (that->q_ptr) {
-                    if (that->q_ptr->MessageHandler(message, wParam, lParam, &result)) {
-                        return result;
-                    }
-                }
             }
         }
         return DefWindowProcW_API(hWnd, message, wParam, lParam);
@@ -1759,6 +1790,7 @@ bool WindowPrivate::EnsureNonClientAreaRendering2() const noexcept
         }
         // Don't use "DWMWA_NCRENDERING_ENABLED" because it's used for querying values only.
         const DWMNCRENDERINGPOLICY ncrp = DWMNCRP_ENABLED;
+        // Don't use "DWMWA_ALLOW_NCPAINT" because it will make the window look weird.
         const HRESULT hr = DwmSetWindowAttribute_API(m_window, DWMWA_NCRENDERING_POLICY, &ncrp, sizeof(ncrp));
         if (FAILED(hr)) {
             PRINT_HR_ERROR_MESSAGE(DwmSetWindowAttribute, hr, L"Failed to enable window non-client area rendering.")

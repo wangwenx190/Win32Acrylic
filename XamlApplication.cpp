@@ -106,7 +106,7 @@ bool XamlApplicationPrivate::Initialize() noexcept
     const std::wstring curPcDPIAwarenessDbgMsg = L"Current process's DPI awareness: " + Utils::DPIAwarenessToString(curPcDPIAwareness);
     OutputDebugStringW(curPcDPIAwarenessDbgMsg.c_str());
     m_window = std::make_unique<XamlWindow>();
-    // ### TODO: move to desktop center
+    m_window->StartupLocation(WindowStartupLocation::ScreenCenter);
     m_window->Visibility(WindowState::Windowed);
     return true;
 }

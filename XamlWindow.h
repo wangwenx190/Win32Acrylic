@@ -25,6 +25,7 @@
 #pragma once
 
 #include "Window.h"
+#include "Color.hpp"
 
 class XamlWindowPrivate;
 
@@ -33,6 +34,18 @@ class XamlWindow final : public Window
 public:
     explicit XamlWindow() noexcept;
     ~XamlWindow() noexcept override;
+
+    [[nodiscard]] const Color &TintColor() const noexcept;
+    void TintColor(const Color &value) noexcept;
+
+    [[nodiscard]] double TintOpacity() const noexcept;
+    void TintOpacity(const double value) noexcept;
+
+    [[nodiscard]] double LuminosityOpacity() const noexcept;
+    void LuminosityOpacity(const double value) noexcept;
+
+    [[nodiscard]] const Color &FallbackColor() const noexcept;
+    void FallbackColor(const Color &value) noexcept;
 
 protected:
     void OnWidthChanged(const UINT arg) noexcept override;

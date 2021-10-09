@@ -467,6 +467,7 @@ bool XamlWindowPrivate::RefreshWindowBackgroundBrush() noexcept
     m_windowBackgroundBrush.TintOpacity(tintOpacity);
     m_windowBackgroundBrush.TintLuminosityOpacity(luminosityOpacity);
     m_windowBackgroundBrush.FallbackColor(fallbackColor);
+    q_ptr->TitleBarBackgroundColor(ToColor(fallbackColor));
     return true;
 }
 

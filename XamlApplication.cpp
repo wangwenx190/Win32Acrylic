@@ -54,7 +54,7 @@ XamlApplicationPrivate::XamlApplicationPrivate(XamlApplication *q) noexcept
 {
     if (!q) {
         Utils::DisplayErrorDialog(L"XamlApplicationPrivate's q is null.");
-        return;
+        std::exit(-1);
     }
     q_ptr = q;
 }
@@ -129,6 +129,7 @@ XamlApplication::XamlApplication() noexcept
     d_ptr = std::make_unique<XamlApplicationPrivate>(this);
     if (!d_ptr->Initialize()) {
         Utils::DisplayErrorDialog(L"Failed to initialize the XAML application.");
+        std::exit(-1);
     }
 }
 

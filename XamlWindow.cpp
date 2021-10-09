@@ -119,15 +119,17 @@ XamlWindowPrivate::XamlWindowPrivate(XamlWindow *q) noexcept
 {
     if (!q) {
         Utils::DisplayErrorDialog(L"XamlWindowPrivate's q is null.");
-        return;
+        std::exit(-1);
     }
     q_ptr = q;
     if (InitializeXamlIsland()) {
         if (!InitializeDragBarWindow()) {
             Utils::DisplayErrorDialog(L"Failed to initialize the drag bar window.");
+            std::exit(-1);
         }
     } else {
         Utils::DisplayErrorDialog(L"Failed to initialize the XAML Island.");
+        std::exit(-1);
     }
 }
 

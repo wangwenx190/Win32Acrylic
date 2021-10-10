@@ -843,7 +843,7 @@ WindowPrivate::WindowPrivate(Window *q) noexcept
     }
     // Create the title bar background brush early, we'll need it in WM_PAINT.
     TitleBarBackgroundColor(Color::FromRgba(0, 0, 0));
-    m_window = CreateWindow2(WS_OVERLAPPEDWINDOW, /*WS_EX_NOREDIRECTIONBITMAP*/0, nullptr, this, sizeof(WindowPrivate *), m_windowBackgroundBrush, WindowProc);
+    m_window = CreateWindow2(WS_OVERLAPPEDWINDOW, 0L, nullptr, this, sizeof(WindowPrivate *), m_windowBackgroundBrush, WindowProc);
     if (m_window) {
         if (!Initialize()) {
             Utils::DisplayErrorDialog(L"Failed to initialize WindowPrivate.");
@@ -1158,7 +1158,7 @@ bool WindowPrivate::SetGeometry(const int x, const int y, const UINT w, const UI
             Utils::DisplayErrorDialog(L"Failed to change the window geometry due to the window has not been created yet.");
             return false;
         }
-        constexpr UINT flags = (SWP_SHOWWINDOW | SWP_NOZORDER | SWP_NOOWNERZORDER);
+        constexpr UINT flags = (SWP_SHOWWINDOW | SWP_NOACTIVATE | SWP_NOZORDER | SWP_NOOWNERZORDER);
         if (SetWindowPos_API(m_window, nullptr, x, y, w, h, flags) == FALSE) {
             PRINT_WIN32_ERROR_MESSAGE(SetWindowPos, L"Failed to change the window geometry.")
             return false;
@@ -1768,8 +1768,8 @@ bool WindowPrivate::UpdateWindowFrameMargins2() noexcept
         //  at the top) in the WM_PAINT handler. This eliminates the transparency
         //  bug and it's what a lot of Win32 apps that customize the title bar do
         //  so it should work fine.
-        const UINT titleBarFullHeight = (GetWindowMetrics2(WindowMetrics::ResizeBorderThicknessY) + GetWindowMetrics2(WindowMetrics::CaptionHeight));
-        const UINT topFrameMargin = (((m_visibility == WindowState::Hidden) || (m_visibility == WindowState::Windowed)) ? titleBarFullHeight : 0);
+        const UINT titleBarHeight = (GetWindowMetrics2(WindowMetrics::ResizeBorderThicknessY) + GetWindowMetrics2(WindowMetrics::CaptionHeight));
+        const UINT topFrameMargin = ((m_visibility == WindowState::Maximized) ? 0 : titleBarHeight);
         const MARGINS margins = {0, 0, static_cast<int>(topFrameMargin), 0};
         const HRESULT hr = DwmExtendFrameIntoClientArea_API(m_window, &margins);
         if (FAILED(hr)) {

@@ -115,6 +115,7 @@ enum class WindowState : int
     Windowed = 0,
     Minimized,
     Maximized,
+    //FullScreen,
     Hidden
 };
 

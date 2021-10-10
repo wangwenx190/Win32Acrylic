@@ -415,6 +415,19 @@ bool XamlWindowPrivate::InitializeDragBarWindow() noexcept
         Utils::DisplayErrorDialog(L"Failed to create the drag bar window.");
         return false;
     }
+    // Layered window won't be visible until we call SetLayeredWindowAttributes() or UpdateLayeredWindow().
+    USER32_API(SetLayeredWindowAttributes);
+    if (SetLayeredWindowAttributes_API) {
+        if (SetLayeredWindowAttributes_API(m_dragBarWindow, 0, 255, LWA_ALPHA) == FALSE) {
+            PRINT_WIN32_ERROR_MESSAGE(SetLayeredWindowAttributes, L"Failed to update the drag bar window.")
+            return false;
+        } else {
+            return true;
+        }
+    } else {
+        Utils::DisplayErrorDialog(L"Failed to update the drag bar window due to SetLayeredWindowAttributes() is not available.");
+        return false;
+    }
     if (!SyncDragBarWindowGeometry()) {
         Utils::DisplayErrorDialog(L"Failed to sync the geometry of the drag bar window.");
         return false;
@@ -487,7 +500,7 @@ bool XamlWindowPrivate::SyncXamlIslandWindowGeometry() const noexcept
     if (SetWindowPos_API) {
         const UINT windowVisibleFrameBorderThickness = q_ptr->GetWindowMetrics(WindowMetrics::WindowVisibleFrameBorderThickness);
         const UINT actualFrameBorderThickness = ((q_ptr->Visibility() == WindowState::Maximized) ? 0 : windowVisibleFrameBorderThickness);
-        if (SetWindowPos_API(m_xamlIslandWindow, HWND_BOTTOM, 0, actualFrameBorderThickness, q_ptr->Width(), (q_ptr->Height() - actualFrameBorderThickness), (SWP_SHOWWINDOW | SWP_NOOWNERZORDER)) == FALSE) {
+        if (SetWindowPos_API(m_xamlIslandWindow, HWND_BOTTOM, 0, actualFrameBorderThickness, q_ptr->Width(), (q_ptr->Height() - actualFrameBorderThickness), (SWP_SHOWWINDOW | SWP_NOACTIVATE | SWP_NOOWNERZORDER)) == FALSE) {
             PRINT_WIN32_ERROR_MESSAGE(SetWindowPos, L"Failed to sync the XAML Island window geometry.")
             return false;
         }
@@ -496,7 +509,7 @@ bool XamlWindowPrivate::SyncXamlIslandWindowGeometry() const noexcept
         return false;
     }
     if (m_windowRootGrid != nullptr) {
-        const auto size = GetLogicalSize();
+        const winrt::Windows::Foundation::Size size = GetLogicalSize();
         m_windowRootGrid.Width(size.Width);
         m_windowRootGrid.Height(size.Height);
     }
@@ -518,23 +531,11 @@ bool XamlWindowPrivate::SyncDragBarWindowGeometry() const noexcept
         const UINT resizeBorderThicknessY = q_ptr->GetWindowMetrics(WindowMetrics::ResizeBorderThicknessY);
         const UINT captionHeight = q_ptr->GetWindowMetrics(WindowMetrics::CaptionHeight);
         const UINT titleBarHeight = ((q_ptr->Visibility() == WindowState::Maximized) ? captionHeight : (captionHeight + resizeBorderThicknessY));
-        if (SetWindowPos_API(m_dragBarWindow, HWND_TOP, 0, 0, q_ptr->Width(), titleBarHeight, (SWP_SHOWWINDOW | SWP_NOOWNERZORDER)) == FALSE) {
+        if (SetWindowPos_API(m_dragBarWindow, HWND_TOP, 0, 0, q_ptr->Width(), titleBarHeight, (SWP_SHOWWINDOW | SWP_NOACTIVATE | SWP_NOOWNERZORDER)) == FALSE) {
             PRINT_WIN32_ERROR_MESSAGE(SetWindowPos, L"Failed to sync the drag bar window geometry.")
             return false;
-        }
-        // Layered window won't be visible until we call SetLayeredWindowAttributes()
-        // or UpdateLayeredWindow().
-        USER32_API(SetLayeredWindowAttributes);
-        if (SetLayeredWindowAttributes_API) {
-            if (SetLayeredWindowAttributes_API(m_dragBarWindow, 0, 255, LWA_ALPHA) == FALSE) {
-                PRINT_WIN32_ERROR_MESSAGE(SetLayeredWindowAttributes, L"Failed to update the drag bar window.")
-                return false;
-            } else {
-                return true;
-            }
         } else {
-            Utils::DisplayErrorDialog(L"Failed to update the drag bar window due to SetLayeredWindowAttributes() is not available.");
-            return false;
+            return true;
         }
     } else {
         Utils::DisplayErrorDialog(L"Failed to sync the drag bar window geometry due to SetWindowPos() is not available.");
@@ -706,7 +707,7 @@ void XamlWindow::OnHeightChanged(const UINT arg) noexcept
 
 void XamlWindow::OnVisibilityChanged(const WindowState arg) noexcept
 {
-    if ((arg == WindowState::Hidden) || (arg == WindowState::Minimized)) {
+    if (arg == WindowState::Minimized) {
         return;
     }
     if (!d_ptr->SyncInternalWindowsGeometry()) {

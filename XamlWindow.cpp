@@ -421,8 +421,6 @@ bool XamlWindowPrivate::InitializeDragBarWindow() noexcept
         if (SetLayeredWindowAttributes_API(m_dragBarWindow, 0, 255, LWA_ALPHA) == FALSE) {
             PRINT_WIN32_ERROR_MESSAGE(SetLayeredWindowAttributes, L"Failed to update the drag bar window.")
             return false;
-        } else {
-            return true;
         }
     } else {
         Utils::DisplayErrorDialog(L"Failed to update the drag bar window due to SetLayeredWindowAttributes() is not available.");
@@ -500,7 +498,8 @@ bool XamlWindowPrivate::SyncXamlIslandWindowGeometry() const noexcept
     if (SetWindowPos_API) {
         const UINT windowVisibleFrameBorderThickness = q_ptr->GetWindowMetrics(WindowMetrics::WindowVisibleFrameBorderThickness);
         const UINT actualFrameBorderThickness = ((q_ptr->Visibility() == WindowState::Maximized) ? 0 : windowVisibleFrameBorderThickness);
-        if (SetWindowPos_API(m_xamlIslandWindow, HWND_BOTTOM, 0, actualFrameBorderThickness, q_ptr->Width(), (q_ptr->Height() - actualFrameBorderThickness), (SWP_SHOWWINDOW | SWP_NOACTIVATE | SWP_NOOWNERZORDER)) == FALSE) {
+        const UINT xamlIslandWindowActualHeight = (q_ptr->Height() - actualFrameBorderThickness);
+        if (SetWindowPos_API(m_xamlIslandWindow, HWND_BOTTOM, 0, actualFrameBorderThickness, q_ptr->Width(), xamlIslandWindowActualHeight, (SWP_SHOWWINDOW | SWP_NOACTIVATE | SWP_NOOWNERZORDER)) == FALSE) {
             PRINT_WIN32_ERROR_MESSAGE(SetWindowPos, L"Failed to sync the XAML Island window geometry.")
             return false;
         }

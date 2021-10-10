@@ -84,13 +84,14 @@ public:
     [[nodiscard]] bool SyncDragBarWindowGeometry() const noexcept;
     [[nodiscard]] bool SyncInternalWindowsGeometry() const noexcept;
 
-    [[nodiscard]] bool MessageHandler(const UINT message, const WPARAM wParam, const LPARAM lParam, LRESULT *result) noexcept;
+    [[nodiscard]] bool MainWindowMessageHandler(const UINT message, const WPARAM wParam, const LPARAM lParam, LRESULT *result) noexcept;
 
 private:
     [[nodiscard]] static LRESULT CALLBACK DragBarWindowProc(const HWND hWnd, const UINT message, const WPARAM wParam, const LPARAM lParam) noexcept;
     [[nodiscard]] bool DragBarMessageHandler(const UINT message, const WPARAM wParam, const LPARAM lParam, LRESULT *result) noexcept;
     [[nodiscard]] bool InitializeXamlIsland() noexcept;
     [[nodiscard]] bool InitializeDragBarWindow() noexcept;
+    [[nodiscard]] UINT GetTopFrameMargin() const noexcept;
 
 private:
     XamlWindowPrivate(const XamlWindowPrivate &) = delete;
@@ -204,7 +205,8 @@ SIZE XamlWindowPrivate::GetPhysicalSize() const noexcept
         Utils::DisplayErrorDialog(L"Can't retrieve the physical size of the window due to q_ptr is null.");
         return {};
     }
-    return {static_cast<LONG>(q_ptr->Width()), static_cast<LONG>(q_ptr->Height())};
+    const UINT topFrameMargin = GetTopFrameMargin();
+    return {static_cast<LONG>(q_ptr->Width()), static_cast<LONG>(q_ptr->Height() - topFrameMargin)};
 }
 
 winrt::Windows::Foundation::Size XamlWindowPrivate::GetLogicalSize(const SIZE physicalSize) const noexcept
@@ -433,6 +435,19 @@ bool XamlWindowPrivate::InitializeDragBarWindow() noexcept
     return true;
 }
 
+UINT XamlWindowPrivate::GetTopFrameMargin() const noexcept
+{
+    if (!q_ptr) {
+        Utils::DisplayErrorDialog(L"Can't retrieve the top frame margin due to q_ptr is null.");
+        return 0;
+    }
+    if (q_ptr->Visibility() == WindowState::Maximized) {
+        return 0;
+    } else {
+        return q_ptr->GetWindowMetrics(WindowMetrics::WindowVisibleFrameBorderThickness);
+    }
+}
+
 bool XamlWindowPrivate::RefreshWindowBackgroundBrush() noexcept
 {
     if (!q_ptr) {
@@ -496,10 +511,9 @@ bool XamlWindowPrivate::SyncXamlIslandWindowGeometry() const noexcept
     }
     USER32_API(SetWindowPos);
     if (SetWindowPos_API) {
-        const UINT windowVisibleFrameBorderThickness = q_ptr->GetWindowMetrics(WindowMetrics::WindowVisibleFrameBorderThickness);
-        const UINT actualFrameBorderThickness = ((q_ptr->Visibility() == WindowState::Maximized) ? 0 : windowVisibleFrameBorderThickness);
-        const UINT xamlIslandWindowActualHeight = (q_ptr->Height() - actualFrameBorderThickness);
-        if (SetWindowPos_API(m_xamlIslandWindow, HWND_BOTTOM, 0, actualFrameBorderThickness, q_ptr->Width(), xamlIslandWindowActualHeight, (SWP_SHOWWINDOW | SWP_NOACTIVATE | SWP_NOOWNERZORDER)) == FALSE) {
+        const UINT topFrameMargin = GetTopFrameMargin();
+        const UINT actualHeight = (q_ptr->Height() - topFrameMargin);
+        if (SetWindowPos_API(m_xamlIslandWindow, HWND_BOTTOM, 0, topFrameMargin, q_ptr->Width(), actualHeight, (SWP_SHOWWINDOW | SWP_NOACTIVATE | SWP_NOOWNERZORDER)) == FALSE) {
             PRINT_WIN32_ERROR_MESSAGE(SetWindowPos, L"Failed to sync the XAML Island window geometry.")
             return false;
         }
@@ -567,7 +581,7 @@ bool XamlWindowPrivate::SyncInternalWindowsGeometry() const noexcept
     return true;
 }
 
-bool XamlWindowPrivate::MessageHandler(const UINT message, const WPARAM wParam, const LPARAM lParam, LRESULT *result) noexcept
+bool XamlWindowPrivate::MainWindowMessageHandler(const UINT message, const WPARAM wParam, const LPARAM lParam, LRESULT *result) noexcept
 {
     UNREFERENCED_PARAMETER(wParam); // ### TODO: remove
     if (!result) {
@@ -724,5 +738,5 @@ void XamlWindow::OnThemeChanged(const WindowTheme arg) noexcept
 
 bool XamlWindow::MessageHandler(const UINT message, const WPARAM wParam, const LPARAM lParam, LRESULT *result) noexcept
 {
-    return d_ptr->MessageHandler(message, wParam, lParam, result);
+    return d_ptr->MainWindowMessageHandler(message, wParam, lParam, result);
 }

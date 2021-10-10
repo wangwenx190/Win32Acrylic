@@ -127,7 +127,7 @@ void SystemLibraryPrivate::FileName(const std::wstring &fileName) noexcept
         if (!fileName.empty()) {
             m_fileName = fileName;
             const auto suffix = m_fileName.find(L".dll");
-            if (suffix == std::string::npos) {
+            if (suffix == std::wstring::npos) {
                 m_fileName += L".dll";
             }
         }

@@ -349,6 +349,9 @@ public:
     explicit WindowPrivate(Window *q) noexcept;
     ~WindowPrivate() noexcept;
 
+    template<class T>
+    [[nodiscard]] static T *GetThisFromHandle(const HWND hWnd) noexcept;
+
     [[nodiscard]] static int MessageLoop() noexcept;
 
     [[nodiscard]] std::wstring Title() const noexcept;
@@ -464,6 +467,28 @@ private:
     std::function<bool(const UINT, const WPARAM, const LPARAM, LRESULT *)> m_windowMessageHandlerCallback = nullptr;
     std::function<bool(const MSG *)> m_windowMessageFilterCallback = nullptr;
 };
+
+template<class T>
+T *WindowPrivate::GetThisFromHandle(const HWND hWnd) noexcept
+{
+    USER32_API(GetWindowLongPtrW);
+    if (GetWindowLongPtrW_API) {
+        if (!hWnd) {
+            return nullptr;
+        }
+        SetLastError(ERROR_SUCCESS);
+        const LONG_PTR result = GetWindowLongPtrW_API(hWnd, GWLP_USERDATA);
+        PRINT_WIN32_ERROR_MESSAGE(GetWindowLongPtrW, L"Failed to retrieve the user data of the window.")
+        if (result == 0) {
+            //Utils::DisplayErrorDialog(L"The retrieved user data of the window is null.");
+            return nullptr;
+        }
+        return reinterpret_cast<T *>(result);
+    } else {
+        Utils::DisplayErrorDialog(L"Can't retrieve the user data of the window due to GetWindowLongPtrW() is not available.");
+        return nullptr;
+    }
+}
 
 POINT WindowPrivate::GetWindowPosition2() const noexcept
 {
@@ -887,8 +912,18 @@ int WindowPrivate::MessageLoop() noexcept
     if (GetMessageW_API && TranslateMessage_API && DispatchMessageW_API) {
         MSG msg = {};
         while (GetMessageW_API(&msg, nullptr, 0, 0) != FALSE) {
-            TranslateMessage_API(&msg);
-            DispatchMessageW_API(&msg);
+            bool filtered = false;
+#if 0
+            if (const auto that = GetThisFromHandle<WindowPrivate>(msg.hwnd)) {
+                if (that->m_windowMessageFilterCallback) {
+                    filtered = that->m_windowMessageFilterCallback(&msg);
+                }
+            }
+#endif
+            if (!filtered) {
+                TranslateMessage_API(&msg);
+                DispatchMessageW_API(&msg);
+            }
         }
         return static_cast<int>(msg.wParam);
     } else {
@@ -1298,9 +1333,8 @@ UINT WindowPrivate::GetWindowMetrics2(const WindowMetrics metrics) noexcept
 LRESULT CALLBACK WindowPrivate::WindowProc(const HWND hWnd, const UINT message, const WPARAM wParam, const LPARAM lParam) noexcept
 {
     USER32_API(SetWindowLongPtrW);
-    USER32_API(GetWindowLongPtrW);
     USER32_API(DefWindowProcW);
-    if (SetWindowLongPtrW_API && GetWindowLongPtrW_API && DefWindowProcW_API) {
+    if (SetWindowLongPtrW_API && DefWindowProcW_API) {
         if (message == WM_NCCREATE) {
             const auto cs = reinterpret_cast<LPCREATESTRUCT>(lParam);
             const auto that = static_cast<WindowPrivate *>(cs->lpCreateParams);
@@ -1322,7 +1356,7 @@ LRESULT CALLBACK WindowPrivate::WindowProc(const HWND hWnd, const UINT message, 
                 Utils::DisplayErrorDialog(L"This window doesn't contain any extra data.");
             }
         }
-        if (const auto that = reinterpret_cast<WindowPrivate *>(GetWindowLongPtrW_API(hWnd, GWLP_USERDATA))) {
+        if (const auto that = GetThisFromHandle<WindowPrivate>(hWnd)) {
             LRESULT result = 0;
             if (that->m_windowMessageHandlerCallback) {
                 if (that->m_windowMessageHandlerCallback(message, wParam, lParam, &result)) {
@@ -1335,7 +1369,7 @@ LRESULT CALLBACK WindowPrivate::WindowProc(const HWND hWnd, const UINT message, 
         }
         return DefWindowProcW_API(hWnd, message, wParam, lParam);
     } else {
-        Utils::DisplayErrorDialog(L"Failed to continue the WindowProc function due to SetWindowLongPtrW(), GetWindowLongPtrW() and DefWindowProcW() are not available.");
+        Utils::DisplayErrorDialog(L"Failed to continue the WindowProc function due to SetWindowLongPtrW() and DefWindowProcW() are not available.");
         return 0;
     }
 }

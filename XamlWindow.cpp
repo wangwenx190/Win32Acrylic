@@ -86,6 +86,7 @@ public:
 
 protected:
     [[nodiscard]] bool MainWindowMessageHandler(const UINT message, const WPARAM wParam, const LPARAM lParam, LRESULT *result) noexcept;
+    [[nodiscard]] bool MainWindowMessageFilter(const MSG *message) noexcept;
 
     void OnWidthChanged(const UINT arg) noexcept;
     void OnHeightChanged(const UINT arg) noexcept;
@@ -131,6 +132,8 @@ XamlWindowPrivate::XamlWindowPrivate(XamlWindow *q) noexcept
     q_ptr = q;
     if (InitializeXamlIsland()) {
         if (InitializeDragBarWindow()) {
+            q_ptr->WindowMessageHandler(std::bind(&XamlWindowPrivate::MainWindowMessageHandler, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, std::placeholders::_4));
+            q_ptr->WindowMessageFilter(std::bind(&XamlWindowPrivate::MainWindowMessageFilter, this, std::placeholders::_1));
             q_ptr->WidthChangeHandler(std::bind(&XamlWindowPrivate::OnWidthChanged, this, std::placeholders::_1));
             q_ptr->HeightChangeHandler(std::bind(&XamlWindowPrivate::OnHeightChanged, this, std::placeholders::_1));
             q_ptr->VisibilityChangeHandler(std::bind(&XamlWindowPrivate::OnVisibilityChanged, this, std::placeholders::_1));
@@ -369,7 +372,7 @@ bool XamlWindowPrivate::InitializeXamlIsland() noexcept
     // Get handle to the core window.
     const auto interop = m_xamlSource.as<IDesktopWindowXamlSourceNative2>();
     if (!interop) {
-        Utils::DisplayErrorDialog(L"Failed to retrieve the IDesktopWindowXamlSourceNative2.");
+        Utils::DisplayErrorDialog(L"Failed to retrieve the core window.");
         return false;
     }
     // Parent the DesktopWindowXamlSource object to the current window.
@@ -569,10 +572,6 @@ bool XamlWindowPrivate::SyncDragBarWindowGeometry() const noexcept
 
 bool XamlWindowPrivate::SyncInternalWindowsGeometry() const noexcept
 {
-    if (!q_ptr) {
-        Utils::DisplayErrorDialog(L"Can't sync the internal windows geometry due to the q_ptr is null.");
-        return false;
-    }
     if (!m_xamlIslandWindow) {
         Utils::DisplayErrorDialog(L"Can't sync the internal windows geometry due to the XAML Island window has not been created yet.");
         return false;
@@ -664,6 +663,28 @@ bool XamlWindowPrivate::MainWindowMessageHandler(const UINT message, const WPARA
         break;
     }
     return false;
+}
+
+bool XamlWindowPrivate::MainWindowMessageFilter(const MSG *message) noexcept
+{
+    if (m_xamlSource == nullptr) {
+        return false;
+    }
+    if (!message) {
+        return false;
+    }
+    BOOL filtered = FALSE;
+    const auto interop = m_xamlSource.as<IDesktopWindowXamlSourceNative2>();
+    if (!interop) {
+        Utils::DisplayErrorDialog(L"Can't retrieve the core window of the XAML Source.");
+        return false;
+    }
+    const HRESULT hr = interop->PreTranslateMessage(message, &filtered);
+    if (FAILED(hr)) {
+        PRINT_HR_ERROR_MESSAGE(PreTranslateMessage, hr, L"Failed to pre-translate the window messages.")
+        return false;
+    }
+    return (filtered != FALSE);
 }
 
 void XamlWindowPrivate::OnWidthChanged(const UINT arg) noexcept

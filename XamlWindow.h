@@ -33,7 +33,7 @@ class XamlWindow final : public Window
 {
 public:
     explicit XamlWindow() noexcept;
-    ~XamlWindow() noexcept override;
+    ~XamlWindow() noexcept;
 
     [[nodiscard]] const Color &TintColor() const noexcept;
     void TintColor(const Color &value) noexcept;
@@ -46,14 +46,6 @@ public:
 
     [[nodiscard]] const Color &FallbackColor() const noexcept;
     void FallbackColor(const Color &value) noexcept;
-
-protected:
-    void OnWidthChanged(const UINT arg) noexcept override;
-    void OnHeightChanged(const UINT arg) noexcept override;
-    void OnVisibilityChanged(const WindowState arg) noexcept override;
-    void OnThemeChanged(const WindowTheme arg) noexcept override;
-
-    [[nodiscard]] bool MessageHandler(const UINT message, const WPARAM wParam, const LPARAM lParam, LRESULT *result) noexcept override;
 
 private:
     XamlWindow(const XamlWindow &) = delete;

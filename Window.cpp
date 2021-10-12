@@ -419,6 +419,7 @@ private:
     [[nodiscard]] bool EnsureNonClientAreaRendering2() const noexcept;
 
 private:
+    friend class Window;
     Window *q_ptr = nullptr;
     HWND m_window = nullptr;
     int m_icon = 0;
@@ -446,6 +447,22 @@ private:
     UINT m_windowSmallIconWidth = 0;
     UINT m_windowSmallIconHeight = 0;
     HBRUSH m_titleBarBackgroundBrush = nullptr;
+    std::function<void(const std::wstring &)> m_titleChangeHandlerCallback = nullptr;
+    std::function<void(const int arg)> m_iconChangeHandlerCallback = nullptr;
+    std::function<void(const int arg)> m_xChangeHandlerCallback = nullptr;
+    std::function<void(const int arg)> m_yChangeHandlerCallback = nullptr;
+    std::function<void(const UINT arg)> m_widthChangeHandlerCallback = nullptr;
+    std::function<void(const UINT arg)> m_heightChangeHandlerCallback = nullptr;
+    std::function<void(const WindowState arg)> m_visibilityChangeHandlerCallback = nullptr;
+    std::function<void(const WindowFrameCorner arg)> m_frameCornerChangeHandlerCallback = nullptr;
+    std::function<void(const WindowStartupLocation arg)> m_startupLocationChangeHandlerCallback = nullptr;
+    std::function<void(const Color &arg)> m_titleBarBackgroundColorChangeHandlerCallback = nullptr;
+    std::function<void(const WindowTheme arg)> m_themeChangeHandlerCallback = nullptr;
+    std::function<void(const UINT arg)> m_dotsPerInchChangeHandlerCallback = nullptr;
+    std::function<void(const Color &arg)> m_colorizationColorChangeHandlerCallback = nullptr;
+    std::function<void(const WindowColorizationArea arg)> m_colorizationAreaChangeHandlerCallback = nullptr;
+    std::function<bool(const UINT, const WPARAM, const LPARAM, LRESULT *)> m_windowMessageHandlerCallback = nullptr;
+    std::function<bool(const MSG *)> m_windowMessageFilterCallback = nullptr;
 };
 
 POINT WindowPrivate::GetWindowPosition2() const noexcept
@@ -762,10 +779,6 @@ UINT WindowPrivate::GetWindowVisibleFrameBorderThickness2() const noexcept
 
 bool WindowPrivate::Initialize() noexcept
 {
-    if (!q_ptr) {
-        Utils::DisplayErrorDialog(L"Failed to initialize WindowPrivate due to q_ptr is null.");
-        return false;
-    }
     if (!m_window) {
         Utils::DisplayErrorDialog(L"Failed to initialize WindowPrivate due to this window has not been created.");
         return false;
@@ -804,21 +817,6 @@ bool WindowPrivate::Initialize() noexcept
     m_title = {};
     m_frameCorner = ((WindowsVersion::CurrentVersion() >= WindowsVersion::Windows10_21Half2) ? WindowFrameCorner::Round : WindowFrameCorner::Square);
     m_startupLocation = WindowStartupLocation::Default;
-
-    q_ptr->OnXChanged(m_x);
-    q_ptr->OnYChanged(m_y);
-    q_ptr->OnWidthChanged(m_width);
-    q_ptr->OnHeightChanged(m_height);
-    q_ptr->OnVisibilityChanged(m_visibility);
-    q_ptr->OnTitleChanged(m_title);
-    q_ptr->OnIconChanged(m_icon);
-    q_ptr->OnDotsPerInchChanged(m_dpi);
-    q_ptr->OnThemeChanged(m_theme);
-    q_ptr->OnColorizationColorChanged(m_colorizationColor);
-    q_ptr->OnColorizationAreaChanged(m_colorizationArea);
-    q_ptr->OnFrameCornerChanged(m_frameCorner);
-    q_ptr->OnStartupLocationChanged(m_startupLocation);
-
     return true;
 }
 
@@ -1040,16 +1038,14 @@ WindowStartupLocation WindowPrivate::StartupLocation() const noexcept
 void WindowPrivate::StartupLocation(const WindowStartupLocation value) noexcept
 {
     if (m_startupLocation != value) {
-        if (!q_ptr) {
-            Utils::DisplayErrorDialog(L"Can't set the window startup location due to q_ptr is null.");
-            return;
-        }
         if (!m_window) {
             Utils::DisplayErrorDialog(L"Can't set the window startup location due to the window has not been created yet.");
             return;
         }
         m_startupLocation = value;
-        q_ptr->OnStartupLocationChanged(m_startupLocation);
+        if (m_startupLocationChangeHandlerCallback) {
+            m_startupLocationChangeHandlerCallback(m_startupLocation);
+        }
         RECT rect = {0, 0, 0, 0};
         if (m_startupLocation == WindowStartupLocation::Default) {
             return;
@@ -1079,10 +1075,6 @@ const Color &WindowPrivate::TitleBarBackgroundColor() const noexcept
 void WindowPrivate::TitleBarBackgroundColor(const Color &value) noexcept
 {
     if (m_titleBarBackgroundColor != value) {
-        if (!q_ptr) {
-            Utils::DisplayErrorDialog(L"Can't change the title bar background brush due to q_ptr is null.");
-            return;
-        }
         GDI32_API(CreateSolidBrush);
         GDI32_API(DeleteObject);
         if (CreateSolidBrush_API && DeleteObject_API) {
@@ -1096,7 +1088,9 @@ void WindowPrivate::TitleBarBackgroundColor(const Color &value) noexcept
             m_titleBarBackgroundBrush = CreateSolidBrush_API(value.ToWin32());
             if (m_titleBarBackgroundBrush) {
                 m_titleBarBackgroundColor = value;
-                q_ptr->OnTitleBarBackgroundColorChanged(m_titleBarBackgroundColor);
+                if (m_titleBarBackgroundColorChangeHandlerCallback) {
+                    m_titleBarBackgroundColorChangeHandlerCallback(m_titleBarBackgroundColor);
+                }
             } else {
                 PRINT_WIN32_ERROR_MESSAGE(CreateSolidBrush, L"Failed to create the title bar background brush.")
             }
@@ -1172,10 +1166,6 @@ bool WindowPrivate::SetGeometry(const int x, const int y, const UINT w, const UI
 
 UINT WindowPrivate::GetWindowMetrics2(const WindowMetrics metrics) noexcept
 {
-    if (!q_ptr) {
-        Utils::DisplayErrorDialog(L"Failed to retrieve the window metrics due to q_ptr is null.");
-        return 0;
-    }
     if (!m_window) {
         Utils::DisplayErrorDialog(L"Failed to retrieve the window metrics due to the window has not been created yet.");
         return 0;
@@ -1334,8 +1324,8 @@ LRESULT CALLBACK WindowPrivate::WindowProc(const HWND hWnd, const UINT message, 
         }
         if (const auto that = reinterpret_cast<WindowPrivate *>(GetWindowLongPtrW_API(hWnd, GWLP_USERDATA))) {
             LRESULT result = 0;
-            if (that->q_ptr) {
-                if (that->q_ptr->MessageHandler(message, wParam, lParam, &result)) {
+            if (that->m_windowMessageHandlerCallback) {
+                if (that->m_windowMessageHandlerCallback(message, wParam, lParam, &result)) {
                     return result;
                 }
             }
@@ -1356,10 +1346,6 @@ bool WindowPrivate::InternalMessageHandler(const UINT message, const WPARAM wPar
         Utils::DisplayErrorDialog(L"InternalMessageHandler: the pointer to the result of the WindowProc function is null.");
         return false;
     }
-    if (!q_ptr) {
-        Utils::DisplayErrorDialog(L"InternalMessageHandler: the q_ptr is null.");
-        return false;
-    }
     if (!m_window) {
         //Utils::DisplayErrorDialog(L"InternalMessageHandler: this window has not been created yet.");
         return false;
@@ -1368,8 +1354,12 @@ bool WindowPrivate::InternalMessageHandler(const UINT message, const WPARAM wPar
     case WM_MOVE: {
         m_x = GET_X_LPARAM(lParam);
         m_y = GET_Y_LPARAM(lParam);
-        q_ptr->OnXChanged(m_x);
-        q_ptr->OnYChanged(m_y);
+        if (m_xChangeHandlerCallback) {
+            m_xChangeHandlerCallback(m_x);
+        }
+        if (m_yChangeHandlerCallback) {
+            m_yChangeHandlerCallback(m_y);
+        }
     } break;
     case WM_SIZE: {
         bool visibilityChanged = false;
@@ -1388,10 +1378,16 @@ bool WindowPrivate::InternalMessageHandler(const UINT message, const WPARAM wPar
         m_width = LOWORD(lParam);
         m_height = HIWORD(lParam);
         if (visibilityChanged) {
-            q_ptr->OnVisibilityChanged(m_visibility);
+            if (m_visibilityChangeHandlerCallback) {
+                m_visibilityChangeHandlerCallback(m_visibility);
+            }
         }
-        q_ptr->OnWidthChanged(m_width);
-        q_ptr->OnHeightChanged(m_height);
+        if (m_widthChangeHandlerCallback) {
+            m_widthChangeHandlerCallback(m_width);
+        }
+        if (m_heightChangeHandlerCallback) {
+            m_heightChangeHandlerCallback(m_height);
+        }
         if (visibilityChanged && (m_visibility != WindowState::Minimized)) {
             if (!UpdateWindowFrameMargins2()) {
                 Utils::DisplayErrorDialog(L"Failed to update the window frame margins.");
@@ -1409,11 +1405,13 @@ bool WindowPrivate::InternalMessageHandler(const UINT message, const WPARAM wPar
         // ### TODO: how to detect high contrast theme here
         if (((wParam == 0) || (wParam == 1)) && (_wcsicmp(reinterpret_cast<LPCWSTR>(lParam), L"ImmersiveColorSet") == 0)) {
             m_theme = GetGlobalApplicationTheme2();
+            if (m_themeChangeHandlerCallback) {
+                m_themeChangeHandlerCallback(m_theme);
+            }
             if (!RefreshWindowTheme2()) {
                 Utils::DisplayErrorDialog(L"Failed to refresh the window theme.");
                 return false;
             }
-            q_ptr->OnThemeChanged(m_theme);
         }
     } break;
     case WM_DPICHANGED: {
@@ -1423,7 +1421,9 @@ bool WindowPrivate::InternalMessageHandler(const UINT message, const WPARAM wPar
         m_dpi = static_cast<UINT>(std::round(static_cast<double>(dpiX + dpiY) / 2.0));
         const std::wstring dpiDbgMsg = L"Current window's dots-per-inch (DPI) has changed from " + Utils::IntegerToString(oldDPI, 10) + L" to " + Utils::IntegerToString(m_dpi, 10) + L".";
         OutputDebugStringW(dpiDbgMsg.c_str());
-        q_ptr->OnDotsPerInchChanged(m_dpi);
+        if (m_dotsPerInchChangeHandlerCallback) {
+            m_dotsPerInchChangeHandlerCallback(m_dpi);
+        }
         const auto prcNewWindow = reinterpret_cast<LPRECT>(lParam);
         if (SetGeometry(prcNewWindow->left, prcNewWindow->top, RECT_WIDTH(*prcNewWindow), RECT_HEIGHT(*prcNewWindow))) {
             *result = 0;
@@ -1435,7 +1435,9 @@ bool WindowPrivate::InternalMessageHandler(const UINT message, const WPARAM wPar
     } break;
     case WM_DWMCOLORIZATIONCOLORCHANGED: {
         m_colorizationColor = Color(static_cast<COLORREF>(wParam)); // The color format is 0xAARRGGBB.
-        q_ptr->OnColorizationColorChanged(m_colorizationColor);
+        if (m_colorizationColorChangeHandlerCallback) {
+            m_colorizationColorChangeHandlerCallback(m_colorizationColor);
+        }
     } break;
     case WM_PAINT: {
         if (!m_windowBackgroundBrush || !m_titleBarBackgroundBrush) {
@@ -1518,7 +1520,9 @@ bool WindowPrivate::InternalMessageHandler(const UINT message, const WPARAM wPar
         } else {
             m_title = {};
         }
-        q_ptr->OnTitleChanged(m_title);
+        if (m_titleChangeHandlerCallback) {
+            m_titleChangeHandlerCallback(m_title);
+        }
     } break;
     case WM_SETICON: {} break;
     case WM_CLOSE: {
@@ -1964,83 +1968,84 @@ bool Window::SetGeometry(const int x, const int y, const UINT w, const UINT h) c
     return d_ptr->SetGeometry(x, y, w, h);
 }
 
-void Window::OnTitleChanged(const std::wstring &arg) noexcept
+void Window::TitleChangeHandler(const std::function<void (const std::wstring &)> &cb) noexcept
 {
-    UNREFERENCED_PARAMETER(arg);
+    d_ptr->m_titleChangeHandlerCallback = cb;
 }
 
-void Window::OnIconChanged(const int arg) noexcept
+void Window::IconChangeHandler(const std::function<void (const int)> &cb) noexcept
 {
-    UNREFERENCED_PARAMETER(arg);
+    d_ptr->m_iconChangeHandlerCallback = cb;
 }
 
-void Window::OnXChanged(const int arg) noexcept
+void Window::XChangeHandler(const std::function<void (const int)> &cb) noexcept
 {
-    UNREFERENCED_PARAMETER(arg);
+    d_ptr->m_xChangeHandlerCallback = cb;
 }
 
-void Window::OnYChanged(const int arg) noexcept
+void Window::YChangeHandler(const std::function<void (const int)> &cb) noexcept
 {
-    UNREFERENCED_PARAMETER(arg);
+    d_ptr->m_yChangeHandlerCallback = cb;
 }
 
-void Window::OnWidthChanged(const UINT arg) noexcept
+void Window::WidthChangeHandler(const std::function<void (const UINT)> &cb) noexcept
 {
-    UNREFERENCED_PARAMETER(arg);
+    d_ptr->m_widthChangeHandlerCallback = cb;
 }
 
-void Window::OnHeightChanged(const UINT arg) noexcept
+void Window::HeightChangeHandler(const std::function<void (const UINT)> &cb) noexcept
 {
-    UNREFERENCED_PARAMETER(arg);
+    d_ptr->m_heightChangeHandlerCallback = cb;
 }
 
-void Window::OnVisibilityChanged(const WindowState arg) noexcept
+void Window::VisibilityChangeHandler(const std::function<void (const WindowState)> &cb) noexcept
 {
-    UNREFERENCED_PARAMETER(arg);
+    d_ptr->m_visibilityChangeHandlerCallback = cb;
 }
 
-void Window::OnFrameCornerChanged(const WindowFrameCorner arg) noexcept
+void Window::FrameCornerChangeHandler(const std::function<void (const WindowFrameCorner)> &cb) noexcept
 {
-    UNREFERENCED_PARAMETER(arg);
+    d_ptr->m_frameCornerChangeHandlerCallback = cb;
 }
 
-void Window::OnStartupLocationChanged(const WindowStartupLocation arg) noexcept
+void Window::StartupLocationChangeHandler(const std::function<void (const WindowStartupLocation)> &cb) noexcept
 {
-    UNREFERENCED_PARAMETER(arg);
+    d_ptr->m_startupLocationChangeHandlerCallback = cb;
 }
 
-void Window::OnTitleBarBackgroundColorChanged(const Color &arg) noexcept
+void Window::TitleBarBackgroundColorChangeHandler(const std::function<void (const Color &)> &cb) noexcept
 {
-    UNREFERENCED_PARAMETER(arg);
+    d_ptr->m_titleBarBackgroundColorChangeHandlerCallback = cb;
 }
 
-void Window::OnThemeChanged(const WindowTheme arg) noexcept
+void Window::ThemeChangeHandler(const std::function<void (const WindowTheme)> &cb) noexcept
 {
-    UNREFERENCED_PARAMETER(arg);
+    d_ptr->m_themeChangeHandlerCallback = cb;
 }
 
-void Window::OnDotsPerInchChanged(const UINT arg) noexcept
+void Window::DotsPerInchChangeHandler(const std::function<void (const UINT)> &cb) noexcept
 {
-    UNREFERENCED_PARAMETER(arg);
+    d_ptr->m_dotsPerInchChangeHandlerCallback = cb;
 }
 
-void Window::OnColorizationColorChanged(const Color &arg) noexcept
+void Window::ColorizationColorChangeHandler(const std::function<void (const Color &)> &cb) noexcept
 {
-    UNREFERENCED_PARAMETER(arg);
+    d_ptr->m_colorizationColorChangeHandlerCallback = cb;
 }
 
-void Window::OnColorizationAreaChanged(const WindowColorizationArea arg) noexcept
+void Window::ColorizationAreaChangeHandler(const std::function<void (const WindowColorizationArea)> &cb) noexcept
 {
-    UNREFERENCED_PARAMETER(arg);
+    d_ptr->m_colorizationAreaChangeHandlerCallback = cb;
 }
 
-bool Window::MessageHandler(const UINT message, const WPARAM wParam, const LPARAM lParam, LRESULT *result) noexcept
+void Window::WindowMessageHandler(const std::function<bool (const UINT, const WPARAM, const LPARAM, LRESULT *)> &cb) noexcept
 {
-    UNREFERENCED_PARAMETER(message);
-    UNREFERENCED_PARAMETER(wParam);
-    UNREFERENCED_PARAMETER(lParam);
-    UNREFERENCED_PARAMETER(result);
-    return false;
+    d_ptr->m_windowMessageHandlerCallback = cb;
+}
+
+void Window::WindowMessageFilter(const std::function<bool (const MSG *)> &cb) noexcept
+{
+    d_ptr->m_windowMessageFilterCallback = cb;
 }
 
 UINT Window::GetWindowMetrics(const WindowMetrics metrics) const noexcept

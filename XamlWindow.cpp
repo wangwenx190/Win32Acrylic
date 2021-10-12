@@ -84,7 +84,13 @@ public:
     [[nodiscard]] bool SyncDragBarWindowGeometry() const noexcept;
     [[nodiscard]] bool SyncInternalWindowsGeometry() const noexcept;
 
+protected:
     [[nodiscard]] bool MainWindowMessageHandler(const UINT message, const WPARAM wParam, const LPARAM lParam, LRESULT *result) noexcept;
+
+    void OnWidthChanged(const UINT arg) noexcept;
+    void OnHeightChanged(const UINT arg) noexcept;
+    void OnVisibilityChanged(const WindowState arg) noexcept;
+    void OnThemeChanged(const WindowTheme arg) noexcept;
 
 private:
     [[nodiscard]] static LRESULT CALLBACK DragBarWindowProc(const HWND hWnd, const UINT message, const WPARAM wParam, const LPARAM lParam) noexcept;
@@ -124,7 +130,12 @@ XamlWindowPrivate::XamlWindowPrivate(XamlWindow *q) noexcept
     }
     q_ptr = q;
     if (InitializeXamlIsland()) {
-        if (!InitializeDragBarWindow()) {
+        if (InitializeDragBarWindow()) {
+            q_ptr->WidthChangeHandler(std::bind(&XamlWindowPrivate::OnWidthChanged, this, std::placeholders::_1));
+            q_ptr->HeightChangeHandler(std::bind(&XamlWindowPrivate::OnHeightChanged, this, std::placeholders::_1));
+            q_ptr->VisibilityChangeHandler(std::bind(&XamlWindowPrivate::OnVisibilityChanged, this, std::placeholders::_1));
+            q_ptr->ThemeChangeHandler(std::bind(&XamlWindowPrivate::OnThemeChanged, this, std::placeholders::_1));
+        } else {
             Utils::DisplayErrorDialog(L"Failed to initialize the drag bar window.");
             std::exit(-1);
         }
@@ -655,6 +666,40 @@ bool XamlWindowPrivate::MainWindowMessageHandler(const UINT message, const WPARA
     return false;
 }
 
+void XamlWindowPrivate::OnWidthChanged(const UINT arg) noexcept
+{
+    UNREFERENCED_PARAMETER(arg);
+    if (!SyncInternalWindowsGeometry()) {
+        Utils::DisplayErrorDialog(L"Failed to sync the internal windows geometry.");
+    }
+}
+
+void XamlWindowPrivate::OnHeightChanged(const UINT arg) noexcept
+{
+    UNREFERENCED_PARAMETER(arg);
+    if (!SyncInternalWindowsGeometry()) {
+        Utils::DisplayErrorDialog(L"Failed to sync the internal windows geometry.");
+    }
+}
+
+void XamlWindowPrivate::OnVisibilityChanged(const WindowState arg) noexcept
+{
+    if (arg == WindowState::Minimized) {
+        return;
+    }
+    if (!SyncInternalWindowsGeometry()) {
+        Utils::DisplayErrorDialog(L"Failed to sync the internal windows geometry.");
+    }
+}
+
+void XamlWindowPrivate::OnThemeChanged(const WindowTheme arg) noexcept
+{
+    UNREFERENCED_PARAMETER(arg);
+    if (!RefreshWindowBackgroundBrush()) {
+        Utils::DisplayErrorDialog(L"Failed to refresh the window background brush.");
+    }
+}
+
 XamlWindow::XamlWindow() noexcept
 {
     d_ptr = std::make_unique<XamlWindowPrivate>(this);
@@ -700,43 +745,4 @@ const Color &XamlWindow::FallbackColor() const noexcept
 void XamlWindow::FallbackColor(const Color &value) noexcept
 {
     d_ptr->FallbackColor(value);
-}
-
-void XamlWindow::OnWidthChanged(const UINT arg) noexcept
-{
-    UNREFERENCED_PARAMETER(arg);
-    if (!d_ptr->SyncInternalWindowsGeometry()) {
-        Utils::DisplayErrorDialog(L"Failed to sync the internal windows geometry.");
-    }
-}
-
-void XamlWindow::OnHeightChanged(const UINT arg) noexcept
-{
-    UNREFERENCED_PARAMETER(arg);
-    if (!d_ptr->SyncInternalWindowsGeometry()) {
-        Utils::DisplayErrorDialog(L"Failed to sync the internal windows geometry.");
-    }
-}
-
-void XamlWindow::OnVisibilityChanged(const WindowState arg) noexcept
-{
-    if (arg == WindowState::Minimized) {
-        return;
-    }
-    if (!d_ptr->SyncInternalWindowsGeometry()) {
-        Utils::DisplayErrorDialog(L"Failed to sync the internal windows geometry.");
-    }
-}
-
-void XamlWindow::OnThemeChanged(const WindowTheme arg) noexcept
-{
-    UNREFERENCED_PARAMETER(arg);
-    if (!d_ptr->RefreshWindowBackgroundBrush()) {
-        Utils::DisplayErrorDialog(L"Failed to refresh the window background brush.");
-    }
-}
-
-bool XamlWindow::MessageHandler(const UINT message, const WPARAM wParam, const LPARAM lParam, LRESULT *result) noexcept
-{
-    return d_ptr->MainWindowMessageHandler(message, wParam, lParam, result);
 }

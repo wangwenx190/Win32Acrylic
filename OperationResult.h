@@ -47,10 +47,6 @@ public:
     [[nodiscard]] static OperationResult FromWin32(const DWORD code) noexcept;
     [[nodiscard]] static OperationResult FromHResult(const HRESULT hr) noexcept;
 
-    [[nodiscard]] inline operator DWORD() const noexcept {
-        return Code();
-    }
-
     [[nodiscard]] inline friend bool operator==(const OperationResult &lhs, const OperationResult &rhs) noexcept {
         return (lhs.Code() == rhs.Code());
     }

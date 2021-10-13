@@ -30,16 +30,16 @@
 
 namespace Constants {
 namespace Light {
-static constexpr winrt::Windows::UI::Color TintColor = {255, 252, 252, 252};
-static constexpr double TintOpacity = 0.0;
-static constexpr double LuminosityOpacity = 0.85;
-static constexpr winrt::Windows::UI::Color FallbackColor = {255, 249, 249, 249};
+static constexpr const winrt::Windows::UI::Color TintColor = {255, 252, 252, 252};
+static constexpr const double TintOpacity = 0.0;
+static constexpr const double LuminosityOpacity = 0.85;
+static constexpr const winrt::Windows::UI::Color FallbackColor = {255, 249, 249, 249};
 } // namespace Light
 namespace Dark {
-static constexpr winrt::Windows::UI::Color TintColor = {255, 44, 44, 44};
-static constexpr double TintOpacity = 0.15;
-static constexpr double LuminosityOpacity = 0.96;
-static constexpr winrt::Windows::UI::Color FallbackColor = {255, 44, 44, 44};
+static constexpr const winrt::Windows::UI::Color TintColor = {255, 44, 44, 44};
+static constexpr const double TintOpacity = 0.15;
+static constexpr const double LuminosityOpacity = 0.96;
+static constexpr const winrt::Windows::UI::Color FallbackColor = {255, 44, 44, 44};
 } // namespace Dark
 namespace HighContrast {
 // ### TO BE IMPLEMENTED
@@ -132,7 +132,7 @@ XamlWindowPrivate::XamlWindowPrivate(XamlWindow *q) noexcept
     q_ptr = q;
     if (InitializeXamlIsland()) {
         if (InitializeDragBarWindow()) {
-            q_ptr->WindowMessageHandler(std::bind(&XamlWindowPrivate::MainWindowMessageHandler, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, std::placeholders::_4));
+            q_ptr->CustomMessageHandler(std::bind(&XamlWindowPrivate::MainWindowMessageHandler, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, std::placeholders::_4));
             q_ptr->WindowMessageFilter(std::bind(&XamlWindowPrivate::MainWindowMessageFilter, this, std::placeholders::_1));
             q_ptr->WidthChangeHandler(std::bind(&XamlWindowPrivate::OnWidthChanged, this, std::placeholders::_1));
             q_ptr->HeightChangeHandler(std::bind(&XamlWindowPrivate::OnHeightChanged, this, std::placeholders::_1));
@@ -572,6 +572,10 @@ bool XamlWindowPrivate::SyncDragBarWindowGeometry() const noexcept
 
 bool XamlWindowPrivate::SyncInternalWindowsGeometry() const noexcept
 {
+    if (!q_ptr) {
+        Utils::DisplayErrorDialog(L"Can't sync the internal windows geometry due to the q_ptr is null.");
+        return false;
+    }
     if (!m_xamlIslandWindow) {
         Utils::DisplayErrorDialog(L"Can't sync the internal windows geometry due to the XAML Island window has not been created yet.");
         return false;
@@ -579,6 +583,14 @@ bool XamlWindowPrivate::SyncInternalWindowsGeometry() const noexcept
     if (!m_dragBarWindow) {
         Utils::DisplayErrorDialog(L"Can't sync the internal windows geometry due to the drag bar window has not been created yet.");
         return false;
+    }
+    if (q_ptr->Visibility() == WindowState::Minimized) {
+        // When the window is minimized, the x/y/width/height of it will become negative
+        // because Windows actually move it out of the current screen. Passing a negative
+        // number to our change handler is meaningless and thus we should ignore it.
+        // But we should not ignore it when the window is hidden because they will always
+        // be valid no matter the window itself is visible or not.
+        return true;
     }
     if (!SyncXamlIslandWindowGeometry()) {
         Utils::DisplayErrorDialog(L"Failed to sync the XAML Island window geometry.");
@@ -705,9 +717,7 @@ void XamlWindowPrivate::OnHeightChanged(const UINT arg) noexcept
 
 void XamlWindowPrivate::OnVisibilityChanged(const WindowState arg) noexcept
 {
-    if (arg == WindowState::Minimized) {
-        return;
-    }
+    UNREFERENCED_PARAMETER(arg);
     if (!SyncInternalWindowsGeometry()) {
         Utils::DisplayErrorDialog(L"Failed to sync the internal windows geometry.");
     }

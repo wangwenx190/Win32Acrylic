@@ -78,23 +78,23 @@ EXTERN_C IMAGE_DOS_HEADER __ImageBase;
 
 using NTSTATUS = LONG;
 
-[[maybe_unused]] constexpr UINT DefaultWindowVisibleFrameBorderThickness = 1;
+[[maybe_unused]] constexpr const UINT DefaultWindowVisibleFrameBorderThickness = 1;
 
-[[maybe_unused]] constexpr UINT DefaultAutoHideTaskBarThicknessX = 2;
-[[maybe_unused]] constexpr UINT DefaultAutoHideTaskBarThicknessY = 2;
+[[maybe_unused]] constexpr const UINT DefaultAutoHideTaskBarThicknessX = 2;
+[[maybe_unused]] constexpr const UINT DefaultAutoHideTaskBarThicknessY = 2;
 
-[[maybe_unused]] constexpr DWORD _DWMWA_USE_IMMERSIVE_DARK_MODE_BEFORE_20H1 = 19;
-[[maybe_unused]] constexpr DWORD _DWMWA_USE_IMMERSIVE_DARK_MODE = 20;
-[[maybe_unused]] constexpr DWORD _DWMWA_WINDOW_CORNER_PREFERENCE = 33;
-[[maybe_unused]] constexpr DWORD _DWMWA_VISIBLE_FRAME_BORDER_THICKNESS = 37;
+[[maybe_unused]] constexpr const DWORD _DWMWA_USE_IMMERSIVE_DARK_MODE_BEFORE_20H1 = 19;
+[[maybe_unused]] constexpr const DWORD _DWMWA_USE_IMMERSIVE_DARK_MODE = 20;
+[[maybe_unused]] constexpr const DWORD _DWMWA_WINDOW_CORNER_PREFERENCE = 33;
+[[maybe_unused]] constexpr const DWORD _DWMWA_VISIBLE_FRAME_BORDER_THICKNESS = 37;
 
-[[maybe_unused]] constexpr int DPI_AWARENESS_PER_MONITOR_AWARE_V2 = 3;
-[[maybe_unused]] constexpr int PROCESS_PER_MONITOR_DPI_AWARE_V2 = 3;
-[[maybe_unused]] constexpr int DPI_AWARENESS_UNAWARE_GDISCALED = 4;
-[[maybe_unused]] constexpr int PROCESS_DPI_UNAWARE_GDISCALED = 4;
+[[maybe_unused]] constexpr const int DPI_AWARENESS_PER_MONITOR_AWARE_V2 = 3;
+[[maybe_unused]] constexpr const int PROCESS_PER_MONITOR_DPI_AWARE_V2 = 3;
+[[maybe_unused]] constexpr const int DPI_AWARENESS_UNAWARE_GDISCALED = 4;
+[[maybe_unused]] constexpr const int PROCESS_DPI_UNAWARE_GDISCALED = 4;
 
-[[maybe_unused]] constexpr wchar_t DwmRegistryKeyPath[] = LR"(Software\Microsoft\Windows\DWM)";
-[[maybe_unused]] constexpr wchar_t PersonalizeRegistryKeyPath[] = LR"(Software\Microsoft\Windows\CurrentVersion\Themes\Personalize)";
+[[maybe_unused]] constexpr const wchar_t DwmRegistryKeyPath[] = LR"(Software\Microsoft\Windows\DWM)";
+[[maybe_unused]] constexpr const wchar_t PersonalizeRegistryKeyPath[] = LR"(Software\Microsoft\Windows\CurrentVersion\Themes\Personalize)";
 
 enum class DwmWindowCornerPreference : int
 {

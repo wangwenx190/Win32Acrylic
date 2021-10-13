@@ -30,7 +30,7 @@
 
 class Color
 {
-    static inline constexpr double denominator = 255.0;
+    static inline constexpr const double denominator = 255.0;
 public:
     inline constexpr explicit Color(const double r, const double g, const double b, const double a) noexcept {
         m_r = r;

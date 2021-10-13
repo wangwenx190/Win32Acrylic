@@ -86,10 +86,6 @@ public:
     [[nodiscard]] bool Resize(const UINT w, const UINT h) const noexcept;
     [[nodiscard]] bool SetGeometry(const int x, const int y, const UINT w, const UINT h) const noexcept;
 
-    [[nodiscard]] inline operator HWND() const noexcept {
-        return WindowHandle();
-    }
-
     [[nodiscard]] inline friend bool operator==(const Window &lhs, const Window &rhs) noexcept {
         return (lhs.WindowHandle() == rhs.WindowHandle());
     }
@@ -112,7 +108,7 @@ protected:
     void DotsPerInchChangeHandler(const std::function<void(const UINT arg)> &cb) noexcept;
     void ColorizationColorChangeHandler(const std::function<void(const Color &arg)> &cb) noexcept;
     void ColorizationAreaChangeHandler(const std::function<void(const WindowColorizationArea arg)> &cb) noexcept;
-    void WindowMessageHandler(const std::function<bool(const UINT, const WPARAM, const LPARAM, LRESULT *)> &cb) noexcept;
+    void CustomMessageHandler(const std::function<bool(const UINT, const WPARAM, const LPARAM, LRESULT *)> &cb) noexcept;
     void WindowMessageFilter(const std::function<bool(const MSG *)> &cb) noexcept;
 
     [[nodiscard]] UINT GetWindowMetrics(const WindowMetrics metrics) const noexcept;
@@ -124,6 +120,5 @@ private:
     Window &operator=(Window &&) = delete;
 
 private:
-    friend class WindowPrivate;
     std::unique_ptr<WindowPrivate> d_ptr;
 };

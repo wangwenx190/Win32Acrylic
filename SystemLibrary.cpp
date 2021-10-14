@@ -193,7 +193,7 @@ void SystemLibraryPrivate::Unload() noexcept
         for (auto &&symbol : std::as_const(m_resolvedSymbols)) {
             const auto name = symbol.first;
             if (!name.empty()) {
-                msg += L"\"" + name + L"()\", ";
+                msg += (name + L"(), ");
                 if (!hasSymbol) {
                     hasSymbol = true;
                 }

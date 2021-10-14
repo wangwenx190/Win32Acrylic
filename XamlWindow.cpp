@@ -84,18 +84,17 @@ public:
     [[nodiscard]] bool SyncDragBarWindowGeometry() const noexcept;
     [[nodiscard]] bool SyncInternalWindowsGeometry() const noexcept;
 
-protected:
-    [[nodiscard]] bool MainWindowMessageHandler(const UINT message, const WPARAM wParam, const LPARAM lParam, LRESULT *result) noexcept;
-    [[nodiscard]] bool MainWindowMessageFilter(const MSG *message) noexcept;
+private:
+    [[nodiscard]] bool MainWindowMessageHandler(const UINT message, const WPARAM wParam, const LPARAM lParam, LRESULT *result) const noexcept;
+    [[nodiscard]] bool MainWindowMessageFilter(const MSG *message) const noexcept;
 
-    void OnWidthChanged(const UINT arg) noexcept;
-    void OnHeightChanged(const UINT arg) noexcept;
-    void OnVisibilityChanged(const WindowState arg) noexcept;
+    void OnWidthChanged(const UINT arg) const noexcept;
+    void OnHeightChanged(const UINT arg) const noexcept;
+    void OnVisibilityChanged(const WindowState arg) const noexcept;
     void OnThemeChanged(const WindowTheme arg) noexcept;
 
-private:
     [[nodiscard]] static LRESULT CALLBACK DragBarWindowProc(const HWND hWnd, const UINT message, const WPARAM wParam, const LPARAM lParam) noexcept;
-    [[nodiscard]] bool DragBarMessageHandler(const UINT message, const WPARAM wParam, const LPARAM lParam, LRESULT *result) noexcept;
+    [[nodiscard]] bool DragBarMessageHandler(const UINT message, const WPARAM wParam, const LPARAM lParam, LRESULT *result) const noexcept;
     [[nodiscard]] bool InitializeXamlIsland() noexcept;
     [[nodiscard]] bool InitializeDragBarWindow() noexcept;
     [[nodiscard]] UINT GetTopFrameMargin() const noexcept;
@@ -277,7 +276,7 @@ LRESULT CALLBACK XamlWindowPrivate::DragBarWindowProc(const HWND hWnd, const UIN
     }
 }
 
-bool XamlWindowPrivate::DragBarMessageHandler(const UINT message, const WPARAM wParam, const LPARAM lParam, LRESULT *result) noexcept
+bool XamlWindowPrivate::DragBarMessageHandler(const UINT message, const WPARAM wParam, const LPARAM lParam, LRESULT *result) const noexcept
 {
     UNREFERENCED_PARAMETER(wParam); // ### TODO: remove
     if (!result) {
@@ -603,7 +602,7 @@ bool XamlWindowPrivate::SyncInternalWindowsGeometry() const noexcept
     return true;
 }
 
-bool XamlWindowPrivate::MainWindowMessageHandler(const UINT message, const WPARAM wParam, const LPARAM lParam, LRESULT *result) noexcept
+bool XamlWindowPrivate::MainWindowMessageHandler(const UINT message, const WPARAM wParam, const LPARAM lParam, LRESULT *result) const noexcept
 {
     UNREFERENCED_PARAMETER(wParam); // ### TODO: remove
     if (!result) {
@@ -677,7 +676,7 @@ bool XamlWindowPrivate::MainWindowMessageHandler(const UINT message, const WPARA
     return false;
 }
 
-bool XamlWindowPrivate::MainWindowMessageFilter(const MSG *message) noexcept
+bool XamlWindowPrivate::MainWindowMessageFilter(const MSG *message) const noexcept
 {
     if (m_xamlSource == nullptr) {
         return false;
@@ -699,7 +698,7 @@ bool XamlWindowPrivate::MainWindowMessageFilter(const MSG *message) noexcept
     return (filtered != FALSE);
 }
 
-void XamlWindowPrivate::OnWidthChanged(const UINT arg) noexcept
+void XamlWindowPrivate::OnWidthChanged(const UINT arg) const noexcept
 {
     UNREFERENCED_PARAMETER(arg);
     if (!SyncInternalWindowsGeometry()) {
@@ -707,7 +706,7 @@ void XamlWindowPrivate::OnWidthChanged(const UINT arg) noexcept
     }
 }
 
-void XamlWindowPrivate::OnHeightChanged(const UINT arg) noexcept
+void XamlWindowPrivate::OnHeightChanged(const UINT arg) const noexcept
 {
     UNREFERENCED_PARAMETER(arg);
     if (!SyncInternalWindowsGeometry()) {
@@ -715,7 +714,7 @@ void XamlWindowPrivate::OnHeightChanged(const UINT arg) noexcept
     }
 }
 
-void XamlWindowPrivate::OnVisibilityChanged(const WindowState arg) noexcept
+void XamlWindowPrivate::OnVisibilityChanged(const WindowState arg) const noexcept
 {
     UNREFERENCED_PARAMETER(arg);
     if (!SyncInternalWindowsGeometry()) {

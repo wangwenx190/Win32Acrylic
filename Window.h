@@ -32,6 +32,18 @@
 #include "Definitions.h"
 #include "Color.hpp"
 
+using StrChangeHandlerCallback = std::function<void (const std::wstring &)>;
+using IntChangeHandlerCallback = std::function<void (const int)>;
+using UIntChangeHandlerCallback = std::function<void (const UINT)>;
+using WindowStateChangeHandlerCallback = std::function<void (const WindowState)>;
+using WindowFrameCornerChangeHandlerCallback = std::function<void (const WindowFrameCorner)>;
+using WindowStartupLocationChangeHandlerCallback = std::function<void (const WindowStartupLocation)>;
+using ColorChangeHandlerCallback = std::function<void (const Color &)>;
+using WindowThemeChangeHandlerCallback = std::function<void (const WindowTheme)>;
+using WindowColorizationAreaChangeHandlerCallback = std::function<void (const WindowColorizationArea)>;
+using WindowMessageHandlerCallback = std::function<bool (const UINT, const WPARAM, const LPARAM, LRESULT *)>;
+using WindowMessageFilterCallback = std::function<bool (const MSG *)>;
+
 class WindowPrivate;
 
 class Window
@@ -44,9 +56,6 @@ public:
 
     [[nodiscard]] std::wstring Title() const noexcept;
     void Title(const std::wstring &value) noexcept;
-
-    [[nodiscard]] int Icon() const noexcept;
-    void Icon(const int value) noexcept;
 
     [[nodiscard]] int X() const noexcept;
     void X(const int value) noexcept;
@@ -94,22 +103,21 @@ public:
     }
 
 protected:
-    void TitleChangeHandler(const std::function<void(const std::wstring &)> &cb) noexcept;
-    void IconChangeHandler(const std::function<void(const int arg)> &cb) noexcept;
-    void XChangeHandler(const std::function<void(const int arg)> &cb) noexcept;
-    void YChangeHandler(const std::function<void(const int arg)> &cb) noexcept;
-    void WidthChangeHandler(const std::function<void(const UINT arg)> &cb) noexcept;
-    void HeightChangeHandler(const std::function<void(const UINT arg)> &cb) noexcept;
-    void VisibilityChangeHandler(const std::function<void(const WindowState arg)> &cb) noexcept;
-    void FrameCornerChangeHandler(const std::function<void(const WindowFrameCorner arg)> &cb) noexcept;
-    void StartupLocationChangeHandler(const std::function<void(const WindowStartupLocation arg)> &cb) noexcept;
-    void TitleBarBackgroundColorChangeHandler(const std::function<void(const Color &arg)> &cb) noexcept;
-    void ThemeChangeHandler(const std::function<void(const WindowTheme arg)> &cb) noexcept;
-    void DotsPerInchChangeHandler(const std::function<void(const UINT arg)> &cb) noexcept;
-    void ColorizationColorChangeHandler(const std::function<void(const Color &arg)> &cb) noexcept;
-    void ColorizationAreaChangeHandler(const std::function<void(const WindowColorizationArea arg)> &cb) noexcept;
-    void CustomMessageHandler(const std::function<bool(const UINT, const WPARAM, const LPARAM, LRESULT *)> &cb) noexcept;
-    void WindowMessageFilter(const std::function<bool(const MSG *)> &cb) noexcept;
+    void TitleChangeHandler(const StrChangeHandlerCallback &cb) noexcept;
+    void XChangeHandler(const IntChangeHandlerCallback &cb) noexcept;
+    void YChangeHandler(const IntChangeHandlerCallback &cb) noexcept;
+    void WidthChangeHandler(const UIntChangeHandlerCallback &cb) noexcept;
+    void HeightChangeHandler(const UIntChangeHandlerCallback &cb) noexcept;
+    void VisibilityChangeHandler(const WindowStateChangeHandlerCallback &cb) noexcept;
+    void FrameCornerChangeHandler(const WindowFrameCornerChangeHandlerCallback &cb) noexcept;
+    void StartupLocationChangeHandler(const WindowStartupLocationChangeHandlerCallback &cb) noexcept;
+    void TitleBarBackgroundColorChangeHandler(const ColorChangeHandlerCallback &cb) noexcept;
+    void ThemeChangeHandler(const WindowThemeChangeHandlerCallback &cb) noexcept;
+    void DotsPerInchChangeHandler(const UIntChangeHandlerCallback &cb) noexcept;
+    void ColorizationColorChangeHandler(const ColorChangeHandlerCallback &cb) noexcept;
+    void ColorizationAreaChangeHandler(const WindowColorizationAreaChangeHandlerCallback &cb) noexcept;
+    void CustomMessageHandler(const WindowMessageHandlerCallback &cb) noexcept;
+    void WindowMessageFilter(const WindowMessageFilterCallback &cb) noexcept;
 
     [[nodiscard]] UINT GetWindowMetrics(const WindowMetrics metrics) const noexcept;
 

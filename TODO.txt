@@ -8,3 +8,4 @@
 - 添加clang-cl、intel-cl以及mingw-w64的工具链
 - Win11 自动使用 MICA 材质 而不是 亚克力
 - SetWindowRgn
+- 将Utils里的功能尽量移到需要他们的地方去

@@ -84,6 +84,9 @@ public:
     [[nodiscard]] bool SyncDragBarWindowGeometry() const noexcept;
     [[nodiscard]] bool SyncInternalWindowsGeometry() const noexcept;
 
+    [[nodiscard]] UINT GetTitleBarHeight() const noexcept;
+    [[nodiscard]] UINT GetTopFrameMargin() const noexcept;
+
 private:
     [[nodiscard]] bool MainWindowMessageHandler(const UINT message, const WPARAM wParam, const LPARAM lParam, LRESULT *result) const noexcept;
     [[nodiscard]] bool MainWindowMessageFilter(const MSG *message) const noexcept;
@@ -97,7 +100,12 @@ private:
     [[nodiscard]] bool DragBarMessageHandler(const UINT message, const WPARAM wParam, const LPARAM lParam, LRESULT *result) const noexcept;
     [[nodiscard]] bool InitializeXamlIsland() noexcept;
     [[nodiscard]] bool InitializeDragBarWindow() noexcept;
-    [[nodiscard]] UINT GetTopFrameMargin() const noexcept;
+
+    [[nodiscard]] bool CreateXamlContents() noexcept;
+    [[nodiscard]] bool UpdateSystemButtonStyle() noexcept;
+    [[nodiscard]] bool UpdateTitleBarStyle() noexcept;
+
+    [[nodiscard]] bool OnSystemButtonClicked(const DWORD flag) const noexcept;
 
 private:
     XamlWindowPrivate(const XamlWindowPrivate &) = delete;
@@ -120,6 +128,8 @@ private:
     winrt::Windows::UI::Xaml::Controls::Button m_minimizeButton = nullptr;
     winrt::Windows::UI::Xaml::Controls::Button m_maximizeButton = nullptr;
     winrt::Windows::UI::Xaml::Controls::Button m_closeButton = nullptr;
+    winrt::Windows::UI::Xaml::Controls::StackPanel m_minMaxCloseControl = nullptr;
+    winrt::Windows::UI::Xaml::Controls::TextBlock m_windowTextLabel = nullptr;
 };
 
 XamlWindowPrivate::XamlWindowPrivate(XamlWindow *q) noexcept
@@ -461,6 +471,66 @@ UINT XamlWindowPrivate::GetTopFrameMargin() const noexcept
     }
 }
 
+bool XamlWindowPrivate::CreateXamlContents() noexcept
+{
+    // System buttons
+    m_minimizeButton = winrt::Windows::UI::Xaml::Controls::Button();
+    m_maximizeButton = winrt::Windows::UI::Xaml::Controls::Button();
+    m_closeButton = winrt::Windows::UI::Xaml::Controls::Button();
+    if (!UpdateSystemButtonStyle()) {
+        Utils::DisplayErrorDialog(L"Failed to update the system button style.");
+        return false;
+    }
+    m_minMaxCloseControl = winrt::Windows::UI::Xaml::Controls::StackPanel();
+    m_minMaxCloseControl.Children().Append(m_minimizeButton);
+    m_minMaxCloseControl.Children().Append(m_maximizeButton);
+    m_minMaxCloseControl.Children().Append(m_closeButton);
+
+    // Title bar
+
+    // Window
+    auto titleBarRow = winrt::Windows::UI::Xaml::Controls::RowDefinition();
+    auto contentRow = winrt::Windows::UI::Xaml::Controls::RowDefinition();
+
+    return true;
+}
+
+bool XamlWindowPrivate::UpdateSystemButtonStyle() noexcept
+{
+    if ((m_minimizeButton == nullptr) || (m_maximizeButton == nullptr) || (m_closeButton == nullptr)) {
+        Utils::DisplayErrorDialog(L"Can't update the system button style due to they have not been created yet.");
+        return false;
+    }
+    const LONG systemButtonPhysicalHeight = GetTitleBarHeight();
+    const auto systemButtonPhysicalWidth = static_cast<LONG>(std::round(static_cast<double>(systemButtonPhysicalHeight) * 1.5));
+    const auto systemButtonLogicalSize = GetLogicalSize({systemButtonPhysicalWidth, systemButtonPhysicalHeight});
+    m_minimizeButton.Width(systemButtonLogicalSize.Width);
+    m_minimizeButton.Height(systemButtonLogicalSize.Height);
+    m_maximizeButton.Width(systemButtonLogicalSize.Width);
+    m_maximizeButton.Height(systemButtonLogicalSize.Height);
+    m_closeButton.Width(systemButtonLogicalSize.Width);
+    m_closeButton.Height(systemButtonLogicalSize.Height);
+    return true;
+}
+
+bool XamlWindowPrivate::UpdateTitleBarStyle() noexcept
+{
+    // ### TODO
+    return true;
+}
+
+bool XamlWindowPrivate::OnSystemButtonClicked(const DWORD flag) const noexcept
+{
+    USER32_API(GetCursorPos);
+    USER32_API(PostMessageW);
+    if (GetCursorPos_API && PostMessageW_API) {
+        //
+    } else {
+        Utils::DisplayErrorDialog(L"Can't respond to user click due to GetCursorPos() and PostMessageW() are not available.");
+        return false;
+    }
+}
+
 bool XamlWindowPrivate::RefreshWindowBackgroundBrush() noexcept
 {
     if (!q_ptr) {
@@ -471,10 +541,10 @@ bool XamlWindowPrivate::RefreshWindowBackgroundBrush() noexcept
         Utils::DisplayErrorDialog(L"Can't refresh the window background brush due to the brush has not been created yet.");
         return false;
     }
-    winrt::Windows::UI::Color tintColor = {};
+    auto tintColor = winrt::Windows::UI::Color();
     double tintOpacity = 0.0;
     double luminosityOpacity = 0.0;
-    winrt::Windows::UI::Color fallbackColor = {};
+    auto fallbackColor = winrt::Windows::UI::Color();
     switch (q_ptr->Theme()) {
     case WindowTheme::Light: {
         tintColor = Constants::Light::TintColor;
@@ -554,9 +624,7 @@ bool XamlWindowPrivate::SyncDragBarWindowGeometry() const noexcept
     }
     USER32_API(SetWindowPos);
     if (SetWindowPos_API) {
-        const UINT resizeBorderThicknessY = q_ptr->GetWindowMetrics(WindowMetrics::ResizeBorderThicknessY);
-        const UINT captionHeight = q_ptr->GetWindowMetrics(WindowMetrics::CaptionHeight);
-        const UINT titleBarHeight = ((q_ptr->Visibility() == WindowState::Maximized) ? captionHeight : (captionHeight + resizeBorderThicknessY));
+        const UINT titleBarHeight = GetTitleBarHeight();
         if (SetWindowPos_API(m_dragBarWindow, HWND_TOP, 0, 0, q_ptr->Width(), titleBarHeight, (SWP_SHOWWINDOW | SWP_NOACTIVATE | SWP_NOOWNERZORDER)) == FALSE) {
             PRINT_WIN32_ERROR_MESSAGE(SetWindowPos, L"Failed to sync the drag bar window geometry.")
             return false;
@@ -600,6 +668,18 @@ bool XamlWindowPrivate::SyncInternalWindowsGeometry() const noexcept
         return false;
     }
     return true;
+}
+
+UINT XamlWindowPrivate::GetTitleBarHeight() const noexcept
+{
+    if (!q_ptr) {
+        Utils::DisplayErrorDialog(L"Can't retrieve the title bar height due to the q_ptr is null.");
+        return 0;
+    }
+    const UINT resizeBorderThicknessY = q_ptr->GetWindowMetrics(WindowMetrics::ResizeBorderThicknessY);
+    const UINT captionHeight = q_ptr->GetWindowMetrics(WindowMetrics::CaptionHeight);
+    const UINT titleBarHeight = ((q_ptr->Visibility() == WindowState::Maximized) ? captionHeight : (captionHeight + resizeBorderThicknessY));
+    return titleBarHeight;
 }
 
 bool XamlWindowPrivate::MainWindowMessageHandler(const UINT message, const WPARAM wParam, const LPARAM lParam, LRESULT *result) const noexcept

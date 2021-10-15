@@ -105,7 +105,12 @@ private:
     [[nodiscard]] bool UpdateSystemButtonStyle() noexcept;
     [[nodiscard]] bool UpdateTitleBarStyle() noexcept;
 
-    [[nodiscard]] bool OnSystemButtonClicked(const DWORD flag) const noexcept;
+    void OnSystemButtonEntered(winrt::Windows::Foundation::IInspectable const &sender, winrt::Windows::UI::Xaml::Input::PointerRoutedEventArgs const &e) noexcept;
+    void OnSystemButtonLeaved(winrt::Windows::Foundation::IInspectable const &sender, winrt::Windows::UI::Xaml::Input::PointerRoutedEventArgs const &e) noexcept;
+    void OnSystemButtonPressed(winrt::Windows::Foundation::IInspectable const &sender, winrt::Windows::UI::Xaml::Input::PointerRoutedEventArgs const &e) noexcept;
+    void OnSystemButtonReleased(winrt::Windows::Foundation::IInspectable const &sender, winrt::Windows::UI::Xaml::Input::PointerRoutedEventArgs const &e) noexcept;
+
+    [[nodiscard]] bool SetWindowState(const DWORD flag) const noexcept;
 
 private:
     XamlWindowPrivate(const XamlWindowPrivate &) = delete;
@@ -475,22 +480,79 @@ bool XamlWindowPrivate::CreateXamlContents() noexcept
 {
     // System buttons
     m_minimizeButton = winrt::Windows::UI::Xaml::Controls::Button();
+    m_minimizeButton.Name(L"MinimizeButton");
+    m_minimizeButton.AddHandler(
+        winrt::Windows::UI::Xaml::UIElement::PointerEnteredEvent(),
+        winrt::box_value(winrt::Windows::UI::Xaml::Input::PointerEventHandler(this, &XamlWindowPrivate::OnSystemButtonEntered)),
+        true);
+    m_minimizeButton.AddHandler(
+        winrt::Windows::UI::Xaml::UIElement::PointerExitedEvent(),
+        winrt::box_value(winrt::Windows::UI::Xaml::Input::PointerEventHandler(this, &XamlWindowPrivate::OnSystemButtonLeaved)),
+        true);
+    m_minimizeButton.AddHandler(
+        winrt::Windows::UI::Xaml::UIElement::PointerPressedEvent(),
+        winrt::box_value(winrt::Windows::UI::Xaml::Input::PointerEventHandler(this, &XamlWindowPrivate::OnSystemButtonPressed)),
+        true);
+    m_minimizeButton.AddHandler(
+        winrt::Windows::UI::Xaml::UIElement::PointerReleasedEvent(),
+        winrt::box_value(winrt::Windows::UI::Xaml::Input::PointerEventHandler(this, &XamlWindowPrivate::OnSystemButtonReleased)),
+        true);
+
     m_maximizeButton = winrt::Windows::UI::Xaml::Controls::Button();
+    m_maximizeButton.Name(L"MaximizeButton");
+    m_maximizeButton.AddHandler(
+        winrt::Windows::UI::Xaml::UIElement::PointerEnteredEvent(),
+        winrt::box_value(winrt::Windows::UI::Xaml::Input::PointerEventHandler(this, &XamlWindowPrivate::OnSystemButtonEntered)),
+        true);
+    m_maximizeButton.AddHandler(
+        winrt::Windows::UI::Xaml::UIElement::PointerExitedEvent(),
+        winrt::box_value(winrt::Windows::UI::Xaml::Input::PointerEventHandler(this, &XamlWindowPrivate::OnSystemButtonLeaved)),
+        true);
+    m_maximizeButton.AddHandler(
+        winrt::Windows::UI::Xaml::UIElement::PointerPressedEvent(),
+        winrt::box_value(winrt::Windows::UI::Xaml::Input::PointerEventHandler(this, &XamlWindowPrivate::OnSystemButtonPressed)),
+        true);
+    m_maximizeButton.AddHandler(
+        winrt::Windows::UI::Xaml::UIElement::PointerReleasedEvent(),
+        winrt::box_value(winrt::Windows::UI::Xaml::Input::PointerEventHandler(this, &XamlWindowPrivate::OnSystemButtonReleased)),
+        true);
+
     m_closeButton = winrt::Windows::UI::Xaml::Controls::Button();
-    if (!UpdateSystemButtonStyle()) {
-        Utils::DisplayErrorDialog(L"Failed to update the system button style.");
-        return false;
-    }
+    m_closeButton.Name(L"CloseButton");
+    m_closeButton.AddHandler(
+        winrt::Windows::UI::Xaml::UIElement::PointerEnteredEvent(),
+        winrt::box_value(winrt::Windows::UI::Xaml::Input::PointerEventHandler(this, &XamlWindowPrivate::OnSystemButtonEntered)),
+        true);
+    m_closeButton.AddHandler(
+        winrt::Windows::UI::Xaml::UIElement::PointerExitedEvent(),
+        winrt::box_value(winrt::Windows::UI::Xaml::Input::PointerEventHandler(this, &XamlWindowPrivate::OnSystemButtonLeaved)),
+        true);
+    m_closeButton.AddHandler(
+        winrt::Windows::UI::Xaml::UIElement::PointerPressedEvent(),
+        winrt::box_value(winrt::Windows::UI::Xaml::Input::PointerEventHandler(this, &XamlWindowPrivate::OnSystemButtonPressed)),
+        true);
+    m_closeButton.AddHandler(
+        winrt::Windows::UI::Xaml::UIElement::PointerReleasedEvent(),
+        winrt::box_value(winrt::Windows::UI::Xaml::Input::PointerEventHandler(this, &XamlWindowPrivate::OnSystemButtonReleased)),
+        true);
+
     m_minMaxCloseControl = winrt::Windows::UI::Xaml::Controls::StackPanel();
+    m_minMaxCloseControl.HorizontalAlignment(winrt::Windows::UI::Xaml::HorizontalAlignment::Right);
     m_minMaxCloseControl.Children().Append(m_minimizeButton);
     m_minMaxCloseControl.Children().Append(m_maximizeButton);
     m_minMaxCloseControl.Children().Append(m_closeButton);
 
     // Title bar
+    m_windowTextLabel = winrt::Windows::UI::Xaml::Controls::TextBlock();
 
     // Window
     auto titleBarRow = winrt::Windows::UI::Xaml::Controls::RowDefinition();
     auto contentRow = winrt::Windows::UI::Xaml::Controls::RowDefinition();
+
+    if (!UpdateSystemButtonStyle()) {
+        Utils::DisplayErrorDialog(L"Failed to update the system button style.");
+        return false;
+    }
 
     return true;
 }
@@ -519,7 +581,7 @@ bool XamlWindowPrivate::UpdateTitleBarStyle() noexcept
     return true;
 }
 
-bool XamlWindowPrivate::OnSystemButtonClicked(const DWORD flag) const noexcept
+bool XamlWindowPrivate::SetWindowState(const DWORD flag) const noexcept
 {
     USER32_API(GetCursorPos);
     USER32_API(PostMessageW);

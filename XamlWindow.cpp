@@ -107,10 +107,9 @@ private:
 
     void OnSystemButtonEntered(winrt::Windows::Foundation::IInspectable const &sender, winrt::Windows::UI::Xaml::Input::PointerRoutedEventArgs const &e) noexcept;
     void OnSystemButtonLeaved(winrt::Windows::Foundation::IInspectable const &sender, winrt::Windows::UI::Xaml::Input::PointerRoutedEventArgs const &e) noexcept;
-    void OnSystemButtonPressed(winrt::Windows::Foundation::IInspectable const &sender, winrt::Windows::UI::Xaml::Input::PointerRoutedEventArgs const &e) noexcept;
-    void OnSystemButtonReleased(winrt::Windows::Foundation::IInspectable const &sender, winrt::Windows::UI::Xaml::Input::PointerRoutedEventArgs const &e) noexcept;
+    void OnSystemButtonClicked(winrt::Windows::Foundation::IInspectable const &sender, winrt::Windows::UI::Xaml::RoutedEventArgs const &e) noexcept;
 
-    [[nodiscard]] bool SetWindowState(const DWORD flag) const noexcept;
+    [[nodiscard]] static bool SetWindowState(const HWND hWnd, const DWORD extraFlags) noexcept;
 
 private:
     XamlWindowPrivate(const XamlWindowPrivate &) = delete;
@@ -127,14 +126,16 @@ private:
     std::optional<double> m_luminosityOpacity = std::nullopt;
     std::optional<Color> m_fallbackColor = std::nullopt;
     winrt::Windows::UI::Xaml::Hosting::DesktopWindowXamlSource m_xamlSource = nullptr;
-    winrt::Windows::UI::Xaml::Controls::Grid m_windowRootGrid = nullptr;
-    winrt::Windows::UI::Xaml::Media::AcrylicBrush m_windowBackgroundBrush = nullptr;
+    winrt::Windows::UI::Xaml::Controls::Grid m_rootGrid = nullptr;
+    winrt::Windows::UI::Xaml::Media::AcrylicBrush m_acrylicBrush = nullptr;
     winrt::Windows::UI::Xaml::Controls::Button m_windowIconButton = nullptr;
     winrt::Windows::UI::Xaml::Controls::Button m_minimizeButton = nullptr;
     winrt::Windows::UI::Xaml::Controls::Button m_maximizeButton = nullptr;
     winrt::Windows::UI::Xaml::Controls::Button m_closeButton = nullptr;
-    winrt::Windows::UI::Xaml::Controls::StackPanel m_minMaxCloseControl = nullptr;
-    winrt::Windows::UI::Xaml::Controls::TextBlock m_windowTextLabel = nullptr;
+    winrt::Windows::UI::Xaml::Controls::StackPanel m_systemButtonControl = nullptr;
+    winrt::Windows::UI::Xaml::Controls::Grid m_titleBarControl = nullptr;
+    winrt::Windows::UI::Xaml::Controls::TextBlock m_windowTitleLabel = nullptr;
+    //winrt::Windows::UI::Xaml::Controls::Button::Click_revoker m_systemButtonClickRevoker;
 };
 
 XamlWindowPrivate::XamlWindowPrivate(XamlWindow *q) noexcept
@@ -411,18 +412,11 @@ bool XamlWindowPrivate::InitializeXamlIsland() noexcept
         return false;
     }
     // Create the XAML content.
-    m_windowRootGrid = winrt::Windows::UI::Xaml::Controls::Grid();
-    m_windowBackgroundBrush = winrt::Windows::UI::Xaml::Media::AcrylicBrush();
-    if (!RefreshWindowBackgroundBrush()) {
-        Utils::DisplayErrorDialog(L"Failed to refresh the window background brush.");
+    if (!CreateXamlContents()) {
+        Utils::DisplayErrorDialog(L"Failed to create the XAML contents.");
         return false;
     }
-    m_windowBackgroundBrush.BackgroundSource(winrt::Windows::UI::Xaml::Media::AcrylicBackgroundSource::HostBackdrop);
-    m_windowRootGrid.Background(m_windowBackgroundBrush);
-    //m_windowRootGrid.Children().Clear();
-    //m_windowRootGrid.Children().Append(/* some UWP control */);
-    //m_windowRootGrid.UpdateLayout();
-    m_xamlSource.Content(m_windowRootGrid);
+    m_xamlSource.Content(m_rootGrid);
     return true;
 }
 
@@ -489,14 +483,8 @@ bool XamlWindowPrivate::CreateXamlContents() noexcept
         winrt::Windows::UI::Xaml::UIElement::PointerExitedEvent(),
         winrt::box_value(winrt::Windows::UI::Xaml::Input::PointerEventHandler(this, &XamlWindowPrivate::OnSystemButtonLeaved)),
         true);
-    m_minimizeButton.AddHandler(
-        winrt::Windows::UI::Xaml::UIElement::PointerPressedEvent(),
-        winrt::box_value(winrt::Windows::UI::Xaml::Input::PointerEventHandler(this, &XamlWindowPrivate::OnSystemButtonPressed)),
-        true);
-    m_minimizeButton.AddHandler(
-        winrt::Windows::UI::Xaml::UIElement::PointerReleasedEvent(),
-        winrt::box_value(winrt::Windows::UI::Xaml::Input::PointerEventHandler(this, &XamlWindowPrivate::OnSystemButtonReleased)),
-        true);
+    const auto revoker1 = m_minimizeButton.Click(winrt::auto_revoke, { this, &XamlWindowPrivate::OnSystemButtonClicked });
+    UNREFERENCED_PARAMETER(revoker1);
 
     m_maximizeButton = winrt::Windows::UI::Xaml::Controls::Button();
     m_maximizeButton.Name(L"MaximizeButton");
@@ -508,14 +496,8 @@ bool XamlWindowPrivate::CreateXamlContents() noexcept
         winrt::Windows::UI::Xaml::UIElement::PointerExitedEvent(),
         winrt::box_value(winrt::Windows::UI::Xaml::Input::PointerEventHandler(this, &XamlWindowPrivate::OnSystemButtonLeaved)),
         true);
-    m_maximizeButton.AddHandler(
-        winrt::Windows::UI::Xaml::UIElement::PointerPressedEvent(),
-        winrt::box_value(winrt::Windows::UI::Xaml::Input::PointerEventHandler(this, &XamlWindowPrivate::OnSystemButtonPressed)),
-        true);
-    m_maximizeButton.AddHandler(
-        winrt::Windows::UI::Xaml::UIElement::PointerReleasedEvent(),
-        winrt::box_value(winrt::Windows::UI::Xaml::Input::PointerEventHandler(this, &XamlWindowPrivate::OnSystemButtonReleased)),
-        true);
+    const auto revoker2 = m_maximizeButton.Click(winrt::auto_revoke, { this, &XamlWindowPrivate::OnSystemButtonClicked });
+    UNREFERENCED_PARAMETER(revoker2);
 
     m_closeButton = winrt::Windows::UI::Xaml::Controls::Button();
     m_closeButton.Name(L"CloseButton");
@@ -527,27 +509,78 @@ bool XamlWindowPrivate::CreateXamlContents() noexcept
         winrt::Windows::UI::Xaml::UIElement::PointerExitedEvent(),
         winrt::box_value(winrt::Windows::UI::Xaml::Input::PointerEventHandler(this, &XamlWindowPrivate::OnSystemButtonLeaved)),
         true);
-    m_closeButton.AddHandler(
-        winrt::Windows::UI::Xaml::UIElement::PointerPressedEvent(),
-        winrt::box_value(winrt::Windows::UI::Xaml::Input::PointerEventHandler(this, &XamlWindowPrivate::OnSystemButtonPressed)),
-        true);
-    m_closeButton.AddHandler(
-        winrt::Windows::UI::Xaml::UIElement::PointerReleasedEvent(),
-        winrt::box_value(winrt::Windows::UI::Xaml::Input::PointerEventHandler(this, &XamlWindowPrivate::OnSystemButtonReleased)),
-        true);
+    const auto revoker3 = m_closeButton.Click(winrt::auto_revoke, { this, &XamlWindowPrivate::OnSystemButtonClicked });
+    UNREFERENCED_PARAMETER(revoker3);
 
-    m_minMaxCloseControl = winrt::Windows::UI::Xaml::Controls::StackPanel();
-    m_minMaxCloseControl.HorizontalAlignment(winrt::Windows::UI::Xaml::HorizontalAlignment::Right);
-    m_minMaxCloseControl.Children().Append(m_minimizeButton);
-    m_minMaxCloseControl.Children().Append(m_maximizeButton);
-    m_minMaxCloseControl.Children().Append(m_closeButton);
+    m_systemButtonControl = winrt::Windows::UI::Xaml::Controls::StackPanel();
+    m_systemButtonControl.HorizontalAlignment(winrt::Windows::UI::Xaml::HorizontalAlignment::Right);
+    m_systemButtonControl.VerticalAlignment(winrt::Windows::UI::Xaml::VerticalAlignment::Top);
+
+    m_systemButtonControl.Children().Clear();
+    m_systemButtonControl.Children().Append(m_minimizeButton);
+    m_systemButtonControl.Children().Append(m_maximizeButton);
+    m_systemButtonControl.Children().Append(m_closeButton);
 
     // Title bar
-    m_windowTextLabel = winrt::Windows::UI::Xaml::Controls::TextBlock();
+    m_windowIconButton = winrt::Windows::UI::Xaml::Controls::Button();
+
+    m_windowTitleLabel = winrt::Windows::UI::Xaml::Controls::TextBlock();
+    m_windowTitleLabel.HorizontalAlignment(winrt::Windows::UI::Xaml::HorizontalAlignment::Stretch);
+    m_windowTitleLabel.VerticalAlignment(winrt::Windows::UI::Xaml::VerticalAlignment::Center); // ### TODO: Or Stretch?
+    m_windowTitleLabel.HorizontalTextAlignment(winrt::Windows::UI::Xaml::TextAlignment::Center);
+
+    m_titleBarControl = winrt::Windows::UI::Xaml::Controls::Grid();
+    m_titleBarControl.HorizontalAlignment(winrt::Windows::UI::Xaml::HorizontalAlignment::Stretch);
+    m_titleBarControl.VerticalAlignment(winrt::Windows::UI::Xaml::VerticalAlignment::Top);
+
+    auto windowIconColumn = winrt::Windows::UI::Xaml::Controls::ColumnDefinition();
+    auto windowTitleColumn = winrt::Windows::UI::Xaml::Controls::ColumnDefinition();
+    auto systemButtonsColumn = winrt::Windows::UI::Xaml::Controls::ColumnDefinition();
+
+    windowIconColumn.Width(winrt::Windows::UI::Xaml::GridLengthHelper::FromPixels(30));
+    windowTitleColumn.Width(winrt::Windows::UI::Xaml::GridLengthHelper::FromValueAndType(1.0, winrt::Windows::UI::Xaml::GridUnitType::Star));
+    systemButtonsColumn.Width(winrt::Windows::UI::Xaml::GridLengthHelper::Auto());
+
+    m_titleBarControl.ColumnDefinitions().Append(windowIconColumn);
+    m_titleBarControl.ColumnDefinitions().Append(windowTitleColumn);
+    m_titleBarControl.ColumnDefinitions().Append(systemButtonsColumn);
+
+    m_titleBarControl.Children().Clear();
+    m_titleBarControl.Children().Append(m_windowIconButton);
+    m_titleBarControl.Children().Append(m_windowTitleLabel);
+    m_titleBarControl.Children().Append(m_systemButtonControl);
+
+    winrt::Windows::UI::Xaml::Controls::Grid::SetColumn(m_windowIconButton, 0);
+    winrt::Windows::UI::Xaml::Controls::Grid::SetColumn(m_windowTitleLabel, 1);
+    winrt::Windows::UI::Xaml::Controls::Grid::SetColumn(m_systemButtonControl, 2);
 
     // Window
+    m_rootGrid = winrt::Windows::UI::Xaml::Controls::Grid();
+    m_rootGrid.HorizontalAlignment(winrt::Windows::UI::Xaml::HorizontalAlignment::Stretch);
+    m_rootGrid.VerticalAlignment(winrt::Windows::UI::Xaml::VerticalAlignment::Stretch);
+
     auto titleBarRow = winrt::Windows::UI::Xaml::Controls::RowDefinition();
-    auto contentRow = winrt::Windows::UI::Xaml::Controls::RowDefinition();
+    auto windowContentRow = winrt::Windows::UI::Xaml::Controls::RowDefinition();
+
+    titleBarRow.Height(winrt::Windows::UI::Xaml::GridLengthHelper::FromPixels(30));
+    windowContentRow.Height(winrt::Windows::UI::Xaml::GridLengthHelper::FromValueAndType(1.0, winrt::Windows::UI::Xaml::GridUnitType::Star));
+
+    m_rootGrid.RowDefinitions().Append(titleBarRow);
+    m_rootGrid.RowDefinitions().Append(windowContentRow);
+
+    m_rootGrid.Children().Clear();
+    m_rootGrid.Children().Append(m_titleBarControl);
+
+    winrt::Windows::UI::Xaml::Controls::Grid::SetRow(m_titleBarControl, 0);
+
+    m_acrylicBrush = winrt::Windows::UI::Xaml::Media::AcrylicBrush();
+    m_acrylicBrush.BackgroundSource(winrt::Windows::UI::Xaml::Media::AcrylicBackgroundSource::HostBackdrop);
+    if (!RefreshWindowBackgroundBrush()) {
+        Utils::DisplayErrorDialog(L"Failed to refresh the window background brush.");
+        return false;
+    }
+
+    m_rootGrid.Background(m_acrylicBrush);
 
     if (!UpdateSystemButtonStyle()) {
         Utils::DisplayErrorDialog(L"Failed to update the system button style.");
@@ -581,12 +614,39 @@ bool XamlWindowPrivate::UpdateTitleBarStyle() noexcept
     return true;
 }
 
-bool XamlWindowPrivate::SetWindowState(const DWORD flag) const noexcept
+bool XamlWindowPrivate::SetWindowState(const HWND hWnd, const DWORD extraFlags) noexcept
 {
     USER32_API(GetCursorPos);
+    USER32_API(GetWindowPlacement);
     USER32_API(PostMessageW);
-    if (GetCursorPos_API && PostMessageW_API) {
-        //
+    if (GetCursorPos_API && GetWindowPlacement_API && PostMessageW_API) {
+        if (!hWnd) {
+            return false;
+        }
+        POINT pos = {};
+        if (GetCursorPos_API(&pos) == FALSE) {
+            PRINT_WIN32_ERROR_MESSAGE(GetCursorPos, L"")
+            return false;
+        }
+        const LPARAM lParam = MAKELPARAM(pos.x, pos.y);
+        WINDOWPLACEMENT wp;
+        SecureZeroMemory(&wp, sizeof(wp));
+        wp.length = sizeof(wp);
+        if (GetWindowPlacement_API(hWnd, &wp) == FALSE) {
+            PRINT_WIN32_ERROR_MESSAGE(GetWindowPlacement, L"")
+            return false;
+        }
+        DWORD flags = extraFlags;
+        if ((wp.showCmd == SW_NORMAL) || (wp.showCmd == SW_RESTORE)) {
+            flags |= SC_MAXIMIZE;
+        } else if (wp.showCmd == SW_MAXIMIZE) {
+            flags |= SC_RESTORE;
+        }
+        if (PostMessageW_API(hWnd, WM_SYSCOMMAND, static_cast<WPARAM>(flags), lParam) == FALSE) {
+            PRINT_WIN32_ERROR_MESSAGE(PostMessageW, L"")
+            return false;
+        }
+        return true;
     } else {
         Utils::DisplayErrorDialog(L"Can't respond to user click due to GetCursorPos() and PostMessageW() are not available.");
         return false;
@@ -599,7 +659,7 @@ bool XamlWindowPrivate::RefreshWindowBackgroundBrush() noexcept
         Utils::DisplayErrorDialog(L"Can't refresh the window background brush due to the q_ptr is null.");
         return false;
     }
-    if (m_windowBackgroundBrush == nullptr) {
+    if (m_acrylicBrush == nullptr) {
         Utils::DisplayErrorDialog(L"Can't refresh the window background brush due to the brush has not been created yet.");
         return false;
     }
@@ -636,10 +696,10 @@ bool XamlWindowPrivate::RefreshWindowBackgroundBrush() noexcept
     if (m_fallbackColor.has_value()) {
         fallbackColor = ToWinRTColor(m_fallbackColor.value());
     }
-    m_windowBackgroundBrush.TintColor(tintColor);
-    m_windowBackgroundBrush.TintOpacity(tintOpacity);
-    m_windowBackgroundBrush.TintLuminosityOpacity(luminosityOpacity);
-    m_windowBackgroundBrush.FallbackColor(fallbackColor);
+    m_acrylicBrush.TintColor(tintColor);
+    m_acrylicBrush.TintOpacity(tintOpacity);
+    m_acrylicBrush.TintLuminosityOpacity(luminosityOpacity);
+    m_acrylicBrush.FallbackColor(fallbackColor);
     q_ptr->TitleBarBackgroundColor(ToColor(fallbackColor));
     return true;
 }
@@ -666,10 +726,10 @@ bool XamlWindowPrivate::SyncXamlIslandWindowGeometry() const noexcept
         Utils::DisplayErrorDialog(L"Failed to sync the XAML Island window geometry due to SetWindowPos() is not available.");
         return false;
     }
-    if (m_windowRootGrid != nullptr) {
+    if (m_rootGrid != nullptr) {
         const winrt::Windows::Foundation::Size size = GetLogicalSize();
-        m_windowRootGrid.Width(size.Width);
-        m_windowRootGrid.Height(size.Height);
+        m_rootGrid.Width(size.Width);
+        m_rootGrid.Height(size.Height);
     }
     return true;
 }

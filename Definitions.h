@@ -121,7 +121,7 @@ enum class WindowState : int
 
 enum class ProcessDPIAwareness : int
 {
-    PerMonitorV2 = 0,
+    PerMonitorVersion2 = 0,
     PerMonitor,
     System,
     GdiScaled,

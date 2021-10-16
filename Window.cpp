@@ -37,6 +37,29 @@
 #define ABM_GETAUTOHIDEBAREX (0x0000000b)
 #endif
 
+[[nodiscard]] static inline std::wstring GenerateGUID() noexcept
+{
+    OLE32_API(CoCreateGuid);
+    OLE32_API(StringFromGUID2);
+    if (CoCreateGuid_API && StringFromGUID2_API) {
+        GUID guid = {};
+        const HRESULT hr = CoCreateGuid_API(&guid);
+        if (FAILED(hr)) {
+            PRINT_HR_ERROR_MESSAGE(CoCreateGuid, hr, L"Failed to generate a new GUID.")
+            return {};
+        }
+        wchar_t buf[MAX_PATH] = { L'\0' };
+        if (StringFromGUID2_API(guid, buf, MAX_PATH) == 0) {
+            PRINT_WIN32_ERROR_MESSAGE(StringFromGUID2, L"Failed to convert GUID to string.")
+            return {};
+        }
+        return buf;
+    } else {
+        Utils::DisplayErrorDialog(L"Can't generate a new GUID due to CoCreateGuid() and StringFromGUID2() are not available.");
+        return {};
+    }
+}
+
 [[nodiscard]] static inline DWORD GetDWORDFromRegistry(const HKEY rootKey, const std::wstring &subKey, const std::wstring &keyName) noexcept
 {
     ADVAPI32_API(RegOpenKeyExW);
@@ -261,7 +284,7 @@
             Utils::DisplayErrorDialog(L"Failed to register a window class due to the WindowProc function pointer is null.");
             return nullptr;
         }
-        const std::wstring guid = Utils::GenerateGUID();
+        const std::wstring guid = GenerateGUID();
         if (guid.empty()) {
             Utils::DisplayErrorDialog(L"Failed to generate a new GUID.");
             return nullptr;
@@ -847,8 +870,6 @@ bool WindowPrivate::Initialize() noexcept
         return false;
     }
     m_theme = GetGlobalApplicationTheme2();
-    const std::wstring themeDbgMsg = L"Current window's theme: " + Utils::ThemeToString(m_theme);
-    OutputDebugStringW(themeDbgMsg.c_str());
     if (!RefreshWindowTheme2()) {
         Utils::DisplayErrorDialog(L"Failed to change the window theme.");
         return false;

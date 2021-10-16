@@ -38,10 +38,10 @@ const VersionNumber &WindowsVersion::CurrentVersion() noexcept
             tried = true;
             static const auto RtlGetVersion_API = reinterpret_cast<NTSTATUS(WINAPI *)(PRTL_OSVERSIONINFOW)>(SystemLibrary::GetSymbol(L"NTDll.dll", L"RtlGetVersion"));
             if (RtlGetVersion_API) {
-                RTL_OSVERSIONINFOW osvi;
+                RTL_OSVERSIONINFOEXW osvi;
                 SecureZeroMemory(&osvi, sizeof(osvi));
                 osvi.dwOSVersionInfoSize = sizeof(osvi);
-                if (RtlGetVersion_API(&osvi) == STATUS_SUCCESS) {
+                if (RtlGetVersion_API(reinterpret_cast<PRTL_OSVERSIONINFOW>(&osvi)) == STATUS_SUCCESS) {
                     version.Major(osvi.dwMajorVersion);
                     version.Minor(osvi.dwMinorVersion);
                     version.Patch(osvi.dwBuildNumber);

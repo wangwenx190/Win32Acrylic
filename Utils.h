@@ -24,18 +24,10 @@
 
 #pragma once
 
-#include <SDKDDKVer.h>
-#include <Windows.h>
 #include <string>
-#include "Definitions.h"
 
 namespace Utils
 {
     void DisplayErrorDialog(const std::wstring &text) noexcept;
-    [[nodiscard]] std::wstring GenerateGUID() noexcept;
-    [[nodiscard]] ProcessDPIAwareness GetProcessDPIAwareness() noexcept;
-    [[nodiscard]] bool SetProcessDPIAwareness(const ProcessDPIAwareness dpiAwareness) noexcept;
     [[nodiscard]] std::wstring IntegerToString(const int num, const int radix) noexcept;
-    [[nodiscard]] std::wstring DPIAwarenessToString(const ProcessDPIAwareness value) noexcept;
-    [[nodiscard]] std::wstring ThemeToString(const WindowTheme value) noexcept;
 } // namespace Utils

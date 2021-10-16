@@ -32,12 +32,9 @@
     if (str.empty()) {
         return {};
     }
-    const int required = WideCharToMultiByte(CP_UTF8, 0, str.c_str(), -1, nullptr, 0, nullptr, nullptr);
-    auto buf = new char[required];
-    WideCharToMultiByte(CP_UTF8, 0, str.c_str(), -1, buf, required, nullptr, nullptr);
-    const std::string result = buf;
-    delete [] buf;
-    buf = nullptr;
+    const int size = WideCharToMultiByte(CP_UTF8, 0, &str[0], str.size(), nullptr, 0, nullptr, nullptr);
+    std::string result(size, '\0');
+    WideCharToMultiByte(CP_UTF8, 0, &str[0], str.size(), &result[0], size, nullptr, nullptr);
     return result;
 }
 

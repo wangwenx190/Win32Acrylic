@@ -61,7 +61,7 @@ set(_common_flags "/bigobj /D_CRT_NON_CONFORMING_SWPRINTFS /D_CRT_SECURE_NO_WARN
 set(_debug_flags "/D_DEBUG /JMC /MTd /Od /Ob0 /RTC1 /Z7")
 # /GA (Optimize for Windows Application): using it for a DLL can result in bad code generation.
 set(_release_flags "/DNDEBUG /GA /GL /GT /Gw /Gy /guard:cf /guard:ehcont /MT /Zc:inline")
-set(_link_flags "/CETCOMPAT /DYNAMICBASE /GUARD:CF /HIGHENTROPYVA /INCREMENTAL:NO /LARGEADDRESSAWARE /LTCG /NOLOGO /NXCOMPAT /OPT:REF /OPT:ICF /OPT:LBR /TSAWARE /WX")
+set(_link_flags "/CETCOMPAT /DYNAMICBASE /GUARD:CF /GUARD:EHCONT /HIGHENTROPYVA /INCREMENTAL:NO /LARGEADDRESSAWARE /LTCG /NOLOGO /NXCOMPAT /OPT:REF /OPT:ICF /OPT:LBR /TSAWARE /WX")
 
 set(CMAKE_C_FLAGS "${_common_flags} /std:c17" CACHE STRING "" FORCE)
 set(CMAKE_C_FLAGS_DEBUG "${_debug_flags}" CACHE STRING "" FORCE)

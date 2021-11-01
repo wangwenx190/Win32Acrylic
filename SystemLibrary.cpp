@@ -23,19 +23,44 @@
  */
 
 #include "SystemLibrary.h"
-#include "OperationResult.h"
-#include "Utils.h"
+#include <VersionHelpers.h>
 #include <unordered_map>
 
-[[nodiscard]] static inline std::string WideToMulti(const std::wstring &str) noexcept
+static constexpr const wchar_t __NEW_LINE[] = L"\r\n";
+
+static bool g_bSystemEnvironmentDetected = false;
+static bool g_bLoadFromSystem32Available = false;
+
+[[nodiscard]] static inline std::string UTF16ToUTF8(const std::wstring &UTF16String) noexcept
 {
-    if (str.empty()) {
+    if (UTF16String.empty()) {
         return {};
     }
-    const int size = WideCharToMultiByte(CP_UTF8, 0, &str[0], str.size(), nullptr, 0, nullptr, nullptr);
-    std::string result(size, '\0');
-    WideCharToMultiByte(CP_UTF8, 0, &str[0], str.size(), &result[0], size, nullptr, nullptr);
-    return result;
+    const auto originalLength = static_cast<int>(UTF16String.size());
+    const auto originalString = &UTF16String[0];
+    const int newLength = WideCharToMultiByte(CP_UTF8, 0, originalString, originalLength, nullptr, 0, nullptr, nullptr);
+    if (newLength <= 0) {
+        return {};
+    }
+    std::string UTF8String(newLength, '\0');
+    WideCharToMultiByte(CP_UTF8, 0, originalString, originalLength, &UTF8String[0], newLength, nullptr, nullptr);
+    return UTF8String;
+}
+
+[[nodiscard]] static inline std::wstring UTF8ToUTF16(const std::string &UTF8String) noexcept
+{
+    if (UTF8String.empty()) {
+        return {};
+    }
+    const auto originalLength = static_cast<int>(UTF8String.size());
+    const auto originalString = &UTF8String[0];
+    const int newLength = MultiByteToWideChar(CP_UTF8, 0, originalString, originalLength, nullptr, 0);
+    if (newLength <= 0) {
+        return {};
+    }
+    std::wstring UTF16String(newLength, L'\0');
+    MultiByteToWideChar(CP_UTF8, 0, originalString, originalLength, &UTF16String[0], newLength);
+    return UTF16String;
 }
 
 class SystemLibraryPrivate
@@ -47,22 +72,19 @@ public:
     void FileName(const std::wstring &fileName) noexcept;
     [[nodiscard]] std::wstring FileName() const noexcept;
 
-    [[nodiscard]] bool IsLoaded() const noexcept;
-    [[nodiscard]] bool Load() noexcept;
-    void Unload() noexcept;
+    [[nodiscard]] bool Loaded() const noexcept;
+    [[nodiscard]] bool Load(const bool load) noexcept;
 
     [[nodiscard]] FARPROC GetSymbol(const std::wstring &function) noexcept;
 
-    [[nodiscard]] static FARPROC GetSymbol(const std::wstring &fileName, const std::wstring &function) noexcept;
+    [[nodiscard]] static FARPROC GetSymbolNoCache(const std::wstring &fileName, const std::wstring &function) noexcept;
 
 private:
-    SystemLibraryPrivate(const SystemLibraryPrivate &) = delete;
-    SystemLibraryPrivate &operator=(const SystemLibraryPrivate &) = delete;
-    SystemLibraryPrivate(SystemLibraryPrivate &&) = delete;
-    SystemLibraryPrivate &operator=(SystemLibraryPrivate &&) = delete;
+    explicit SystemLibraryPrivate(const SystemLibraryPrivate &) noexcept = delete;
+    explicit SystemLibraryPrivate(SystemLibraryPrivate &&) noexcept = delete;
 
-private:
-    void Initialize() noexcept;
+    SystemLibraryPrivate &operator=(const SystemLibraryPrivate &) const noexcept = delete;
+    SystemLibraryPrivate &operator=(SystemLibraryPrivate &&) const noexcept = delete;
 
 private:
     SystemLibrary *q_ptr = nullptr;
@@ -70,64 +92,49 @@ private:
     std::wstring m_fileName = {};
     HMODULE m_module = nullptr;
     std::unordered_map<std::wstring, FARPROC> m_resolvedSymbols = {};
-    static inline bool m_tried = false;
-    using LoadLibraryExWSig = decltype(&::LoadLibraryExW);
-    static inline LoadLibraryExWSig m_LoadLibraryExW_API = nullptr;
 };
-
-void SystemLibraryPrivate::Initialize() noexcept
-{
-    if (m_tried) {
-        return;
-    }
-    m_tried = true;
-    if (m_LoadLibraryExW_API) {
-        return;
-    }
-    MEMORY_BASIC_INFORMATION mbi;
-    SecureZeroMemory(&mbi, sizeof(mbi));
-    if (VirtualQuery(reinterpret_cast<LPCVOID>(&VirtualQuery), &mbi, sizeof(mbi)) == 0) {
-        PRINT_WIN32_ERROR_MESSAGE(VirtualQuery, L"Failed to retrieve the memory basic information.")
-    } else {
-        const auto kernel32 = static_cast<HMODULE>(mbi.AllocationBase);
-        if (kernel32) {
-            m_LoadLibraryExW_API = reinterpret_cast<LoadLibraryExWSig>(GetProcAddress(kernel32, "LoadLibraryExW"));
-            if (!m_LoadLibraryExW_API) {
-                PRINT_WIN32_ERROR_MESSAGE(GetProcAddress, L"Failed to resolve symbol \"LoadLibraryExW()\".")
-            }
-        } else {
-            OutputDebugStringW(L"Failed to retrieve the base address of \"Kernel32.dll\".");
-        }
-    }
-}
 
 SystemLibraryPrivate::SystemLibraryPrivate(SystemLibrary *q) noexcept
 {
     q_ptr = q;
-    Initialize();
+    if (!g_bSystemEnvironmentDetected) {
+        g_bSystemEnvironmentDetected = true;
+        if (IsWindows8OrGreater()) {
+            g_bLoadFromSystem32Available = true;
+        } else {
+            g_bLoadFromSystem32Available = (GetSymbolNoCache(L"kernel32.dll", L"AddDllDirectory") != nullptr);
+        }
+        std::wstring dbgMsg = LR"("LOAD_LIBRARY_SEARCH_SYSTEM32" is )";
+        if (!g_bLoadFromSystem32Available) {
+            dbgMsg += L"not ";
+        }
+        dbgMsg += std::wstring(L"available on the current platform.") + std::wstring(__NEW_LINE);
+        OutputDebugStringW(dbgMsg.c_str());
+    }
 }
 
 SystemLibraryPrivate::~SystemLibraryPrivate() noexcept
 {
-    if (IsLoaded()) {
-        Unload();
+    if (Loaded()) {
+        const bool result = Load(false);
+        // The result is not important here.
+        UNREFERENCED_PARAMETER(result);
     }
 }
 
 void SystemLibraryPrivate::FileName(const std::wstring &fileName) noexcept
 {
+    if (Loaded()) {
+        // You should unload the library first to be able to set a different filename.
+        return;
+    }
+    if (fileName.empty()) {
+        // To unload the library, call "Load(false)" explicitly.
+        return;
+    }
     if (m_fileName != fileName) {
-        if (IsLoaded()) {
-            OutputDebugStringW(L"The library has been loaded already, can't change the file name now.");
-            return;
-        }
-        if (!fileName.empty()) {
-            m_fileName = fileName;
-            const auto suffix = m_fileName.find(L".dll");
-            if (suffix == std::wstring::npos) {
-                m_fileName += L".dll";
-            }
-        }
+        // We assume the given filename is in good form.
+        m_fileName = fileName;
     }
 }
 
@@ -136,139 +143,175 @@ std::wstring SystemLibraryPrivate::FileName() const noexcept
     return m_fileName;
 }
 
-bool SystemLibraryPrivate::IsLoaded() const noexcept
+bool SystemLibraryPrivate::Loaded() const noexcept
 {
     return (m_module != nullptr);
 }
 
-bool SystemLibraryPrivate::Load() noexcept
+bool SystemLibraryPrivate::Load(const bool load) noexcept
 {
-    if (m_failedToLoad) {
-        return false;
-    }
-    if (!m_LoadLibraryExW_API) {
-        OutputDebugStringW(L"LoadLibraryExW() is not available.");
-        return false;
-    }
-    if (m_fileName.empty()) {
-        OutputDebugStringW(L"The file name has not been set, can't load library now.");
-        return false;
-    }
-    m_module = m_LoadLibraryExW_API(m_fileName.c_str(), nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
-    if (!m_module) {
-        m_failedToLoad = true;
-        const std::wstring msg = L"Failed to load dynamic link library \"" + m_fileName + L"\".";
-        PRINT_WIN32_ERROR_MESSAGE(LoadLibraryExW, msg)
-        return false;
-    }
-    return true;
-}
-
-void SystemLibraryPrivate::Unload() noexcept
-{
-    if (m_failedToLoad) {
-        return;
-    }
-    if (!IsLoaded()) {
-        return;
-    }
-    {
-        const std::wstring msg = L"Unloading dynamic link library \"" + m_fileName + L"\" ...";
-        OutputDebugStringW(msg.c_str());
-    }
-    if (FreeLibrary(m_module) == FALSE) {
-        const std::wstring msg = L"Failed to unload dynamic link library \"" + m_fileName + L"\".";
-        PRINT_WIN32_ERROR_MESSAGE(FreeLibrary, msg)
-    }
-    m_module = nullptr;
-    m_fileName = {};
-    if (m_resolvedSymbols.empty()) {
-        OutputDebugStringW(L"No symbols cached.");
+    if (load) {
+        if (Loaded()) {
+            // No need to reload an already loaded library.
+            return true;
+        }
+        if (m_failedToLoad) {
+            // Avoid loading a library which can't be loaded over and over again.
+            return false;
+        }
+        if (m_fileName.empty()) {
+            OutputDebugStringW(L"Can't load the system library now due to the file name has not been set yet.");
+            return false;
+        }
+        {
+            const std::wstring dbgMsg = std::wstring(LR"(Loading system library ")") + m_fileName + std::wstring(LR"(" ......)") + std::wstring(__NEW_LINE);
+            OutputDebugStringW(dbgMsg.c_str());
+        }
+        HMODULE module = nullptr;
+        if (g_bLoadFromSystem32Available) {
+            module = LoadLibraryExW(m_fileName.c_str(), nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
+        } else {
+            module = LoadLibraryW(m_fileName.c_str());
+        }
+        if (!module) {
+            const std::wstring dbgMsg = std::wstring(L"Loading failed.") + std::wstring(__NEW_LINE);
+            OutputDebugStringW(dbgMsg.c_str());
+            m_failedToLoad = true;
+            return false;
+        }
+        {
+            const std::wstring dbgMsg = std::wstring(L"Loading finished successfully.") + std::wstring(__NEW_LINE);
+            OutputDebugStringW(dbgMsg.c_str());
+        }
+        m_module = module;
     } else {
-        bool hasSymbol = false;
-        std::wstring msg = L"Cached symbols: [";
-        for (auto &&symbol : std::as_const(m_resolvedSymbols)) {
-            const auto name = symbol.first;
-            if (!name.empty()) {
-                msg += (name + L"(), ");
-                if (!hasSymbol) {
-                    hasSymbol = true;
+        if (!Loaded()) {
+            // No need to unload a library which has not been loaded yet.
+            return true;
+        }
+        {
+            const std::wstring dbgMsg = std::wstring(LR"(Unloading system library ")") + m_fileName + std::wstring(LR"(" ......)") + std::wstring(__NEW_LINE);
+            OutputDebugStringW(dbgMsg.c_str());
+        }
+        m_fileName = {};
+        if (!m_resolvedSymbols.empty()) {
+            bool hasContent = false;
+            std::wstring dbgMsg = L"Cached symbols: [";
+            for (auto &&symbol : std::as_const(m_resolvedSymbols)) {
+                const std::wstring &name = symbol.first;
+                // It may never be empty, but let's be safe.
+                if (!name.empty()) {
+                    dbgMsg += name + std::wstring(L"(), ");
+                    if (!hasContent) {
+                        hasContent = true;
+                    }
                 }
             }
+            if (hasContent) {
+                dbgMsg.erase(dbgMsg.cend() - 2);
+            }
+            dbgMsg += std::wstring(L"]") + std::wstring(__NEW_LINE);
+            OutputDebugStringW(dbgMsg.c_str());
+            m_resolvedSymbols = {};
         }
-        if (hasSymbol) {
-            msg.erase(msg.cend() - 2, msg.cend());
+        // Reset it to "false" to avoid blocking us from re-use the current instance.
+        m_failedToLoad = false;
+        const BOOL result = FreeLibrary(m_module);
+        m_module = nullptr;
+        if (result == FALSE) {
+            const std::wstring dbgMsg = std::wstring(L"Unloading failed.") + std::wstring(__NEW_LINE);
+            OutputDebugStringW(dbgMsg.c_str());
+            return false;
         }
-        msg += L"].";
-        OutputDebugStringW(msg.c_str());
-        m_resolvedSymbols.clear();
+        {
+            const std::wstring dbgMsg = std::wstring(L"Unloading finished successfully.") + std::wstring(__NEW_LINE);
+            OutputDebugStringW(dbgMsg.c_str());
+        }
     }
+    return true;
 }
 
 FARPROC SystemLibraryPrivate::GetSymbol(const std::wstring &function) noexcept
 {
     if (m_failedToLoad) {
+        // Don't try further if the library can't be loaded successfully.
         return nullptr;
     }
-    if (!IsLoaded()) {
-        if (!Load()) {
-            OutputDebugStringW(L"Can't resolve the symbol due to the library can't be loaded.");
-            return nullptr;
-        }
-    }
+    // Return early if the parameter is not valid.
     if (function.empty()) {
-        OutputDebugStringW(L"Can't resolve the symbol due to its name is empty.");
         return nullptr;
     }
-    const auto search = m_resolvedSymbols.find(function);
-    if (search == m_resolvedSymbols.cend()) {
-        const std::string name = WideToMulti(function);
-        if (name.empty()) {
-            OutputDebugStringW(L"Can't convert a wide char array to multi-byte char array.");
+    if (!Loaded()) {
+        if (!Load(true)) {
             return nullptr;
         }
-        const auto addr = GetProcAddress(m_module, name.c_str());
-        if (!addr) {
-            const std::wstring msg = L"Failed to resolve symbol \"" + function + L"()\".";
-            PRINT_WIN32_ERROR_MESSAGE(GetProcAddress, msg)
-        }
-        m_resolvedSymbols.insert({function, addr});
-        return addr;
-    } else {
-        return search->second;
     }
+    bool shouldInsert = true;
+    FARPROC address = nullptr;
+    const auto resolve = [this](const std::wstring &nameWide) -> FARPROC {
+        // "nameWide" may never be empty, but let's be safe.
+        if (nameWide.empty()) {
+            return nullptr;
+        }
+        const std::string nameMultiByte = UTF16ToUTF8(nameWide);
+        // "nameMultiByte" may never be empty, but let's be safe.
+        if (nameMultiByte.empty()) {
+            return nullptr;
+        }
+        const FARPROC address = GetProcAddress(m_module, nameMultiByte.c_str());
+        if (!address) {
+            const std::wstring dbgMsg = std::wstring(LR"(Failed to resolve symbol ")") + nameWide + std::wstring(L"()\" from \"") + m_fileName + std::wstring(LR"(".)") + std::wstring(__NEW_LINE);
+            OutputDebugStringW(dbgMsg.c_str());
+            return nullptr;
+        }
+        return address;
+    };
+    if (m_resolvedSymbols.empty()) {
+        address = resolve(function);
+    } else {
+        const auto search = m_resolvedSymbols.find(function);
+        if (search == m_resolvedSymbols.cend()) {
+            address = resolve(function);
+        } else {
+            shouldInsert = false;
+            address = search->second;
+        }
+    }
+    if (shouldInsert) {
+        // We intend to append the symbol address to the cache list unconditionally even if
+        // we failed to resolve it to avoid unneeded resolving operations afterwards.
+        m_resolvedSymbols.insert({function, address});
+    }
+    return address;
 }
 
-FARPROC SystemLibraryPrivate::GetSymbol(const std::wstring &fileName, const std::wstring &function) noexcept
+FARPROC SystemLibraryPrivate::GetSymbolNoCache(const std::wstring &fileName, const std::wstring &function) noexcept
 {
     if (fileName.empty() || function.empty()) {
-        Utils::DisplayErrorDialog(L"Failed to resolve the given symbol due to the file name or symbol name is empty.");
         return nullptr;
     }
     const HMODULE module = GetModuleHandleW(fileName.c_str());
-    if (module) {
-        const std::string functionA = WideToMulti(function);
-        if (functionA.empty()) {
-            Utils::DisplayErrorDialog(L"Failed to convert a wide char array to multi-byte char array.");
-            return nullptr;
-        } else {
-            const FARPROC addr = GetProcAddress(module, functionA.c_str());
-            if (addr) {
-                return addr;
-            } else {
-                PRINT_WIN32_ERROR_MESSAGE(GetProcAddress, L"Failed to resolve the given symbol.")
-                return nullptr;
-            }
-        }
-    } else {
-        PRINT_WIN32_ERROR_MESSAGE(GetModuleHandleW, L"Failed to load the given module.")
+    if (!module) {
+        const std::wstring dbgMsg = std::wstring(LR"(Failed to retrieve the module handle of ")") + function + std::wstring(LR"(".)") + std::wstring(__NEW_LINE);
+        OutputDebugStringW(dbgMsg.c_str());
         return nullptr;
     }
+    // "functionMultiByte" may never be empty, but let's be safe.
+    const std::string functionMultiByte = UTF16ToUTF8(function);
+    if (functionMultiByte.empty()) {
+        return nullptr;
+    }
+    const FARPROC address = GetProcAddress(module, functionMultiByte.c_str());
+    if (!address) {
+        const std::wstring dbgMsg = std::wstring(LR"(Failed to resolve symbol ")") + function + std::wstring(L"()\" from \"") + fileName + std::wstring(LR"(".)") + std::wstring(__NEW_LINE);
+        OutputDebugStringW(dbgMsg.c_str());
+        return nullptr;
+    }
+    return address;
 }
 
-SystemLibrary::SystemLibrary() noexcept
+SystemLibrary::SystemLibrary() noexcept : d_ptr(std::make_unique<SystemLibraryPrivate>(this))
 {
-    d_ptr = std::make_unique<SystemLibraryPrivate>(this);
 }
 
 SystemLibrary::SystemLibrary(const std::wstring &fileName) noexcept : SystemLibrary()
@@ -288,19 +331,14 @@ std::wstring SystemLibrary::FileName() const noexcept
     return d_ptr->FileName();
 }
 
-bool SystemLibrary::IsLoaded() const noexcept
+bool SystemLibrary::Loaded() const noexcept
 {
-    return d_ptr->IsLoaded();
+    return d_ptr->Loaded();
 }
 
-bool SystemLibrary::Load() noexcept
+bool SystemLibrary::Load(const bool load) noexcept
 {
-    return d_ptr->Load();
-}
-
-void SystemLibrary::Unload() noexcept
-{
-    d_ptr->Unload();
+    return d_ptr->Load(load);
 }
 
 FARPROC SystemLibrary::GetSymbol(const std::wstring &function) noexcept
@@ -308,7 +346,17 @@ FARPROC SystemLibrary::GetSymbol(const std::wstring &function) noexcept
     return d_ptr->GetSymbol(function);
 }
 
-FARPROC SystemLibrary::GetSymbol(const std::wstring &fileName, const std::wstring &function) noexcept
+FARPROC SystemLibrary::GetSymbolNoCache(const std::wstring &fileName, const std::wstring &function) noexcept
 {
-    return SystemLibraryPrivate::GetSymbol(fileName, function);
+    return SystemLibraryPrivate::GetSymbolNoCache(fileName, function);
+}
+
+[[nodiscard]] bool operator==(const SystemLibrary &lhs, const SystemLibrary &rhs) noexcept
+{
+    return (lhs.FileName() == rhs.FileName());
+}
+
+[[nodiscard]] bool operator!=(const SystemLibrary &lhs, const SystemLibrary &rhs) noexcept
+{
+    return (!(lhs == rhs));
 }

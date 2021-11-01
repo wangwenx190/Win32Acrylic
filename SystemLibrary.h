@@ -26,8 +26,8 @@
 
 #include <SDKDDKVer.h>
 #include <Windows.h>
-#include <memory>
 #include <string>
+#include <memory>
 
 class SystemLibraryPrivate;
 
@@ -41,27 +41,23 @@ public:
     void FileName(const std::wstring &fileName) noexcept;
     [[nodiscard]] std::wstring FileName() const noexcept;
 
-    [[nodiscard]] bool IsLoaded() const noexcept;
-    [[nodiscard]] bool Load() noexcept;
-    void Unload() noexcept;
+    [[nodiscard]] bool Loaded() const noexcept;
+    [[nodiscard]] bool Load(const bool load) noexcept;
 
     [[nodiscard]] FARPROC GetSymbol(const std::wstring &function) noexcept;
 
-    [[nodiscard]] static FARPROC GetSymbol(const std::wstring &fileName, const std::wstring &function) noexcept;
-
-    [[nodiscard]] inline friend bool operator==(const SystemLibrary &lhs, const SystemLibrary &rhs) noexcept {
-        return (lhs.FileName() == rhs.FileName());
-    }
-    [[nodiscard]] inline friend bool operator!=(const SystemLibrary &lhs, const SystemLibrary &rhs) noexcept {
-        return (lhs.FileName() != rhs.FileName());
-    }
+    [[nodiscard]] static FARPROC GetSymbolNoCache(const std::wstring &fileName, const std::wstring &function) noexcept;
 
 private:
-    SystemLibrary(const SystemLibrary &) = delete;
-    SystemLibrary &operator=(const SystemLibrary &) = delete;
-    SystemLibrary(SystemLibrary &&) = delete;
-    SystemLibrary &operator=(SystemLibrary &&) = delete;
+    explicit SystemLibrary(const SystemLibrary &) noexcept = delete;
+    explicit SystemLibrary(SystemLibrary &&) noexcept = delete;
+
+    SystemLibrary &operator=(const SystemLibrary &) const noexcept = delete;
+    SystemLibrary &operator=(SystemLibrary &&) const noexcept = delete;
 
 private:
     std::unique_ptr<SystemLibraryPrivate> d_ptr;
 };
+
+[[nodiscard]] bool operator==(const SystemLibrary &lhs, const SystemLibrary &rhs) noexcept;
+[[nodiscard]] bool operator!=(const SystemLibrary &lhs, const SystemLibrary &rhs) noexcept;

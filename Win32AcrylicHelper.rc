@@ -26,25 +26,8 @@
 #include <Windows.h>
 #include "Resource.h"
 
-// Icons
-IDI_MYAPPLICATION       ICON "Assets\\Icon\\ApplicationIcon.ico"
-IDI_MYAPPLICATION_SMALL ICON "Assets\\Icon\\ApplicationSmallIcon.ico"
-
-// Bitmaps
-IDB_MINIMIZEBUTTONICON_LIGHT SVG "Assets\\Bitmap\\MinimizeButtonIconLight.svg"
-IDB_MAXIMIZEBUTTONICON_LIGHT SVG "Assets\\Bitmap\\MaximizeButtonIconLight.svg"
-IDB_CLOSEBUTTONICON_LIGHT    SVG "Assets\\Bitmap\\CloseButtonIconLight.svg"
-IDB_RESTOREBUTTONICON_LIGHT  SVG "Assets\\Bitmap\\RestoreButtonIconLight.svg"
-
-IDB_MINIMIZEBUTTONICON_DARK SVG "Assets\\Bitmap\\MinimizeButtonIconDark.svg"
-IDB_MAXIMIZEBUTTONICON_DARK SVG "Assets\\Bitmap\\MaximizeButtonIconDark.svg"
-IDB_CLOSEBUTTONICON_DARK    SVG "Assets\\Bitmap\\CloseButtonIconDark.svg"
-IDB_RESTOREBUTTONICON_DARK  SVG "Assets\\Bitmap\\RestoreButtonIconDark.svg"
-
-//IDB_MINIMIZEBUTTONICON_HIGHCONTRAST SVG "Assets\\Bitmap\\MinimizeButtonIconHighContrast.svg"
-//IDB_MAXIMIZEBUTTONICON_HIGHCONTRAST SVG "Assets\\Bitmap\\MaximizeButtonIconHighContrast.svg"
-//IDB_CLOSEBUTTONICON_HIGHCONTRAST    SVG "Assets\\Bitmap\\CloseButtonIconHighContrast.svg"
-//IDB_RESTOREBUTTONICON_HIGHCONTRAST  SVG "Assets\\Bitmap\\RestoreButtonIconHighContrast.svg"
+IDI_WIN32ACRYLICHELPER_ICON       ICON "Assets\\Icon\\ApplicationIcon.ico"
+IDI_WIN32ACRYLICHELPER_SMALL_ICON ICON "Assets\\Icon\\ApplicationSmallIcon.ico"
 
 VS_VERSION_INFO VERSIONINFO
 FILEVERSION     1,0,0,0
@@ -74,6 +57,9 @@ BEGIN
             #endif
             VALUE "ProductName",      "Win32AcrylicHelper\0"
             VALUE "ProductVersion",   "1.0.0.0\0"
+            VALUE "Comments",         "Based on the XAML Island technology.\0"
+            VALUE "InternalName",     "Win32AcrylicHelper\0"
+            VALUE "LegalTrademarks",  "wangwenx190\0"
         END
     END
     BLOCK "VarFileInfo"

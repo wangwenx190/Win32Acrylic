@@ -34,15 +34,18 @@ public:
 
     [[nodiscard]] FARPROC GetSymbol(const std::wstring &fileName, const std::wstring &symbolName) noexcept;
 
+    void Release() noexcept;
+
 private:
-    SystemLibraryManagerPrivate(const SystemLibraryManagerPrivate &) = delete;
-    SystemLibraryManagerPrivate &operator=(const SystemLibraryManagerPrivate &) = delete;
-    SystemLibraryManagerPrivate(SystemLibraryManagerPrivate &&) = delete;
-    SystemLibraryManagerPrivate &operator=(SystemLibraryManagerPrivate &&) = delete;
+    explicit SystemLibraryManagerPrivate(const SystemLibraryManagerPrivate &) noexcept = delete;
+    explicit SystemLibraryManagerPrivate(SystemLibraryManagerPrivate &&) noexcept = delete;
+
+    SystemLibraryManagerPrivate &operator=(const SystemLibraryManagerPrivate &) const noexcept = delete;
+    SystemLibraryManagerPrivate &operator=(SystemLibraryManagerPrivate &&) const noexcept = delete;
 
 private:
     SystemLibraryManager *q_ptr = nullptr;
-    std::unordered_map<std::wstring, SystemLibrary *> m_loadedLibraries = {};
+    std::unordered_map<std::wstring, std::shared_ptr<SystemLibrary>> m_loadedLibraries = {};
 };
 
 SystemLibraryManagerPrivate::SystemLibraryManagerPrivate(SystemLibraryManager *q) noexcept
@@ -52,44 +55,54 @@ SystemLibraryManagerPrivate::SystemLibraryManagerPrivate(SystemLibraryManager *q
 
 SystemLibraryManagerPrivate::~SystemLibraryManagerPrivate() noexcept
 {
-    if (!m_loadedLibraries.empty()) {
-        for (auto &&library : std::as_const(m_loadedLibraries)) {
-            auto pLibrary = library.second;
-            if (pLibrary) {
-                if (pLibrary->IsLoaded()) {
-                    pLibrary->Unload();
-                }
-                delete pLibrary;
-                pLibrary = nullptr;
-            }
-        }
-        m_loadedLibraries.clear();
-    }
+    Release();
 }
 
 FARPROC SystemLibraryManagerPrivate::GetSymbol(const std::wstring &fileName, const std::wstring &symbolName) noexcept
 {
-    if (fileName.empty()) {
-        OutputDebugStringW(L"Failed to resolve symbol from library due to the given file name is empty.");
+    if (fileName.empty() || symbolName.empty()) {
         return nullptr;
     }
-    if (symbolName.empty()) {
-        OutputDebugStringW(L"Failed to resolve symbol from library due to the given symbol name is empty.");
-        return nullptr;
-    }
-    const auto search = m_loadedLibraries.find(fileName);
-    if (search == m_loadedLibraries.cend()) {
-        const auto library = new SystemLibrary(fileName);
-        m_loadedLibraries.insert({fileName, library});
-        return library->GetSymbol(symbolName);
+    bool shouldInsert = true;
+    std::shared_ptr<SystemLibrary> library = nullptr;
+    if (m_loadedLibraries.empty()) {
+        library = std::make_shared<SystemLibrary>(fileName);
     } else {
-        return search->second->GetSymbol(symbolName);
+        const auto search = m_loadedLibraries.find(fileName);
+        if (search == m_loadedLibraries.cend()) {
+            library = std::make_shared<SystemLibrary>(fileName);
+        } else {
+            shouldInsert = false;
+            library = search->second;
+        }
     }
+    if (shouldInsert) {
+        m_loadedLibraries.insert({fileName, library});
+    }
+    // "library" may never be null, but let's be safe.
+    return (library ? library->GetSymbol(symbolName) : nullptr);
 }
 
-SystemLibraryManager::SystemLibraryManager() noexcept
+void SystemLibraryManagerPrivate::Release() noexcept
 {
-    d_ptr = std::make_unique<SystemLibraryManagerPrivate>(this);
+    if (m_loadedLibraries.empty()) {
+        return;
+    }
+    for (auto &&library : std::as_const(m_loadedLibraries)) {
+        auto pLibrary = library.second;
+        // It may never be null, but let's be safe.
+        if (pLibrary) {
+            const bool result = pLibrary->Load(false);
+            // The result is not important here.
+            UNREFERENCED_PARAMETER(result);
+            pLibrary.reset();
+        }
+    }
+    m_loadedLibraries = {};
+}
+
+SystemLibraryManager::SystemLibraryManager() noexcept : d_ptr(std::make_unique<SystemLibraryManagerPrivate>(this))
+{
 }
 
 SystemLibraryManager::~SystemLibraryManager() noexcept = default;
@@ -103,4 +116,9 @@ SystemLibraryManager &SystemLibraryManager::instance() noexcept
 FARPROC SystemLibraryManager::GetSymbol(const std::wstring &fileName, const std::wstring &symbolName) noexcept
 {
     return d_ptr->GetSymbol(fileName, symbolName);
+}
+
+void SystemLibraryManager::Release() noexcept
+{
+    d_ptr->Release();
 }

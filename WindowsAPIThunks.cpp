@@ -22,35 +22,15 @@
  * SOFTWARE.
  */
 
-#pragma once
+#include "WindowsAPIThunks.h"
+#include "SystemLibraryManager.h"
 
-#include <SDKDDKVer.h>
-#include <Windows.h>
-#include <string>
-#include <memory>
-
-class SystemLibraryManagerPrivate;
-
-class SystemLibraryManager
+EXTERN_C FARPROC WINAPI GetWindowsAPIByName(LPCWSTR library, LPCWSTR symbol) noexcept
 {
-public:
-    [[nodiscard]] static SystemLibraryManager &instance() noexcept;
-
-    [[nodiscard]] FARPROC GetSymbol(const std::wstring &fileName, const std::wstring &symbolName) noexcept;
-
-    void Release() noexcept;
-
-private:
-    explicit SystemLibraryManager() noexcept;
-    ~SystemLibraryManager() noexcept;
-
-private:
-    explicit SystemLibraryManager(const SystemLibraryManager &) noexcept = delete;
-    explicit SystemLibraryManager(SystemLibraryManager &&) noexcept = delete;
-
-    SystemLibraryManager &operator=(const SystemLibraryManager &) const noexcept = delete;
-    SystemLibraryManager &operator=(SystemLibraryManager &&) const noexcept = delete;
-
-private:
-    std::unique_ptr<SystemLibraryManagerPrivate> d_ptr;
-};
+    if (!library || !symbol) {
+        // Construct a std::(w)string from null pointer will result in application crash.
+        // Return early in this case to prevent such things from happening.
+        return nullptr;
+    }
+    return SystemLibraryManager::instance().GetSymbol(library, symbol);
+}

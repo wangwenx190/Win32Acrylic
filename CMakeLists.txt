@@ -22,7 +22,7 @@
   SOFTWARE.
 ]]
 
-cmake_minimum_required(VERSION 3.21.2 FATAL_ERROR)
+cmake_minimum_required(VERSION 3.22 FATAL_ERROR)
 
 project(Win32AcrylicHelper VERSION 1.0.0.0 LANGUAGES CXX RC)
 
@@ -30,17 +30,10 @@ if(NOT DEFINED CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE "Release" CACHE STRING "" FORCE)
 endif()
 
-if(NOT DEFINED ACRYLIC_TARGET_ARCHITECTURE)
-    if("${CMAKE_SIZEOF_VOID_P}" STREQUAL "8")
-        set(ACRYLIC_TARGET_ARCHITECTURE "x64")
-    else()
-        set(ACRYLIC_TARGET_ARCHITECTURE "x86")
-    endif()
-endif()
+set(CMAKE_C_STANDARD_LIBRARIES "" CACHE STRING "" FORCE)
+set(CMAKE_CXX_STANDARD_LIBRARIES "" CACHE STRING "" FORCE)
 
-include("${PROJECT_SOURCE_DIR}/toolchain.cmake")
-
-include("${PROJECT_SOURCE_DIR}/VC-LTL.cmake")
+include(VC-LTL.cmake)
 
 set(SOURCES
     Win32AcrylicHelper.rc Win32AcrylicHelper.manifest
@@ -55,6 +48,7 @@ set(SOURCES
     Utils.h Utils.cpp
     SystemLibrary.h SystemLibrary.cpp
     SystemLibraryManager.h SystemLibraryManager.cpp
+    WindowsAPIThunks.h WindowsAPIThunks.cpp
     Window.h Window.cpp
     XamlWindow.h XamlWindow.cpp
     XamlApplication.h XamlApplication.cpp
@@ -62,6 +56,10 @@ set(SOURCES
 )
 
 add_executable(${PROJECT_NAME} WIN32 ${SOURCES})
+
+target_link_libraries(${PROJECT_NAME} PRIVATE
+    kernel32.lib
+)
 
 set(_target_arch_suffix "32")
 if("${CMAKE_SIZEOF_VOID_P}" STREQUAL "8")

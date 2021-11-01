@@ -38,7 +38,7 @@ public:
     inline explicit constexpr VersionNumber(const int major, const int minor, const int patch) noexcept : VersionNumber(major, minor, patch, 0) {}
     inline explicit constexpr VersionNumber(const int major, const int minor) noexcept : VersionNumber(major, minor, 0, 0) {}
     inline explicit constexpr VersionNumber(const int major) noexcept : VersionNumber(major, 0, 0, 0) {}
-    inline explicit constexpr VersionNumber() noexcept {}
+    inline explicit constexpr VersionNumber() noexcept = default;
     inline ~VersionNumber() noexcept = default;
 
     inline constexpr void Major(const int major) noexcept {

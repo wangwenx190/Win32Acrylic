@@ -22,24 +22,17 @@
  * SOFTWARE.
  */
 
-#include <SDKDDKVer.h>
-#include <Windows.h>
-#include "Utils.h"
+#ifndef _SHELL32_
+#define _SHELL32_
+#endif // _SHELL32_
 
-static constexpr const wchar_t __NEW_LINE[] = L"\r\n";
+#include "WindowsAPIThunks.h"
+#include "SystemLibraryManager.h"
 
-void Utils::DisplayErrorDialog(const std::wstring &text) noexcept
-{
-    if (!text.empty()) {
-        const std::wstring textWithNewLine = text + std::wstring(__NEW_LINE);
-        OutputDebugStringW(textWithNewLine.c_str());
-        MessageBoxW(nullptr, text.c_str(), L"Error", MB_ICONERROR | MB_OK);
-    }
-}
+#include <ShellApi.h>
 
-std::wstring Utils::IntegerToString(const int num, const int radix) noexcept
-{
-    wchar_t buf[MAX_PATH] = { L'\0' };
-    _itow(num, buf, radix);
-    return buf;
-}
+#ifndef __SHELL32_DLL_FILENAME
+#define __SHELL32_DLL_FILENAME shell32.dll
+#endif // __SHELL32_DLL_FILENAME
+
+__THUNK_API(__SHELL32_DLL_FILENAME, SHAppBarMessage, UINT_PTR, DEFAULT_UINT, (DWORD arg1, PAPPBARDATA arg2), (arg1, arg2))

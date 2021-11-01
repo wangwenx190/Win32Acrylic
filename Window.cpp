@@ -23,13 +23,12 @@
  */
 
 #include "Window.h"
-#include "SystemLibraryManager.h"
 #include "OperationResult.h"
 #include "WindowsVersion.h"
 #include "Utils.h"
 #include "Resource.h"
+#include <ComBaseApi.h>
 #include <ShellApi.h>
-#include <ShellScalingApi.h>
 #include <DwmApi.h>
 #include <cmath>
 
@@ -39,159 +38,108 @@
 
 [[nodiscard]] static inline std::wstring GenerateGUID() noexcept
 {
-    OLE32_API(CoCreateGuid);
-    OLE32_API(StringFromGUID2);
-    if (CoCreateGuid_API && StringFromGUID2_API) {
-        GUID guid = {};
-        const HRESULT hr = CoCreateGuid_API(&guid);
-        if (FAILED(hr)) {
-            PRINT_HR_ERROR_MESSAGE(CoCreateGuid, hr, L"Failed to generate a new GUID.")
-            return {};
-        }
-        wchar_t buf[MAX_PATH] = { L'\0' };
-        if (StringFromGUID2_API(guid, buf, MAX_PATH) == 0) {
-            PRINT_WIN32_ERROR_MESSAGE(StringFromGUID2, L"Failed to convert GUID to string.")
-            return {};
-        }
-        return buf;
-    } else {
-        Utils::DisplayErrorDialog(L"Can't generate a new GUID due to CoCreateGuid() and StringFromGUID2() are not available.");
+    GUID guid = {};
+    const HRESULT hr = CoCreateGuid(&guid);
+    if (FAILED(hr)) {
+        PRINT_HR_ERROR_MESSAGE(CoCreateGuid, hr, L"Failed to generate a new GUID.")
         return {};
     }
+    wchar_t buf[MAX_PATH] = { L'\0' };
+    if (StringFromGUID2(guid, buf, MAX_PATH) == 0) {
+        PRINT_WIN32_ERROR_MESSAGE(StringFromGUID2, L"Failed to convert GUID to string.")
+        return {};
+    }
+    return buf;
 }
 
 [[nodiscard]] static inline DWORD GetDWORDFromRegistry(const HKEY rootKey, const std::wstring &subKey, const std::wstring &keyName) noexcept
 {
-    ADVAPI32_API(RegOpenKeyExW);
-    ADVAPI32_API(RegQueryValueExW);
-    ADVAPI32_API(RegCloseKey);
-    if (RegOpenKeyExW_API && RegQueryValueExW_API && RegCloseKey_API) {
-        if (!rootKey || subKey.empty() || keyName.empty()) {
-            Utils::DisplayErrorDialog(L"Can't query the registry due to invalid parameters are passed.");
-            return 0;
-        }
-        HKEY hKey = nullptr;
-        if (RegOpenKeyExW_API(rootKey, subKey.c_str(), 0, KEY_READ, &hKey) != ERROR_SUCCESS) {
-            PRINT_WIN32_ERROR_MESSAGE(RegOpenKeyExW, L"Failed to open the registry key to read.")
-            return 0;
-        }
-        DWORD dwValue = 0;
-        DWORD dwType = REG_DWORD;
-        DWORD dwSize = sizeof(dwValue);
-        const bool success = (RegQueryValueExW_API(hKey, keyName.c_str(), nullptr, &dwType, reinterpret_cast<LPBYTE>(&dwValue), &dwSize) == ERROR_SUCCESS);
-        if (!success) {
-            PRINT_WIN32_ERROR_MESSAGE(RegQueryValueExW, L"Failed to query the registry key value.")
-            // Don't return early here because we have to close the opened registry key later.
-        }
-        if (RegCloseKey_API(hKey) != ERROR_SUCCESS) {
-            PRINT_WIN32_ERROR_MESSAGE(RegCloseKey, L"Failed to close the registry key.")
-            return 0;
-        }
-        return dwValue;
-    } else {
-        Utils::DisplayErrorDialog(L"Failed to read DWORD from registry due to RegOpenKeyExW(), RegQueryValueExW() and RegCloseKey() are not available.");
+    if (!rootKey || subKey.empty() || keyName.empty()) {
+        Utils::DisplayErrorDialog(L"Can't query the registry due to invalid parameters are passed.");
         return 0;
     }
+    HKEY hKey = nullptr;
+    if (RegOpenKeyExW(rootKey, subKey.c_str(), 0, KEY_READ, &hKey) != ERROR_SUCCESS) {
+        PRINT_WIN32_ERROR_MESSAGE(RegOpenKeyExW, L"Failed to open the registry key to read.")
+        return 0;
+    }
+    DWORD dwValue = 0;
+    DWORD dwType = REG_DWORD;
+    DWORD dwSize = sizeof(dwValue);
+    const bool success = (RegQueryValueExW(hKey, keyName.c_str(), nullptr, &dwType, reinterpret_cast<LPBYTE>(&dwValue), &dwSize) == ERROR_SUCCESS);
+    if (!success) {
+        PRINT_WIN32_ERROR_MESSAGE(RegQueryValueExW, L"Failed to query the registry key value.")
+        // Don't return early here because we have to close the opened registry key later.
+    }
+    if (RegCloseKey(hKey) != ERROR_SUCCESS) {
+        PRINT_WIN32_ERROR_MESSAGE(RegCloseKey, L"Failed to close the registry key.")
+        return 0;
+    }
+    return dwValue;
 }
 
 [[nodiscard]] static inline RECT GetWindowFrameGeometry(const HWND hWnd) noexcept
 {
-    USER32_API(GetWindowRect);
-    if (GetWindowRect_API) {
-        if (!hWnd) {
-            return {};
-        }
-        RECT rect = {0, 0, 0, 0};
-        if (GetWindowRect_API(hWnd, &rect) == FALSE) {
-            PRINT_WIN32_ERROR_MESSAGE(GetWindowRect, L"Failed to retrieve the window frame geometry.")
-            return {};
-        }
-        return rect;
-    } else {
-        Utils::DisplayErrorDialog(L"Can't retrieve the window frame geometry due to GetWindowRect() is not available.");
+    if (!hWnd) {
         return {};
     }
+    RECT rect = {0, 0, 0, 0};
+    if (GetWindowRect(hWnd, &rect) == FALSE) {
+        PRINT_WIN32_ERROR_MESSAGE(GetWindowRect, L"Failed to retrieve the window frame geometry.")
+        return {};
+    }
+    return rect;
 }
 
 [[maybe_unused]] [[nodiscard]] static inline bool IsVisible(const HWND hWnd) noexcept
 {
-    USER32_API(IsWindowVisible);
-    if (IsWindowVisible_API) {
-        if (!hWnd) {
-            return false;
-        }
-        return (IsWindowVisible_API(hWnd) != FALSE);
-    } else {
-        Utils::DisplayErrorDialog(L"IsWindowVisible() is not available.");
+    if (!hWnd) {
         return false;
     }
+    return (IsWindowVisible(hWnd) != FALSE);
 }
 
 [[maybe_unused]] [[nodiscard]] static inline bool IsMinimized(const HWND hWnd) noexcept
 {
-    USER32_API(IsIconic);
-    if (IsIconic_API) {
-        if (!hWnd) {
-            return false;
-        }
-        return (IsIconic_API(hWnd) != FALSE);
-    } else {
-        Utils::DisplayErrorDialog(L"IsIconic() is not available.");
+    if (!hWnd) {
         return false;
     }
+    return (IsIconic(hWnd) != FALSE);
 }
 
 [[maybe_unused]] [[nodiscard]] static inline bool IsMaximized(const HWND hWnd) noexcept
 {
-    USER32_API(IsZoomed);
-    if (IsZoomed_API) {
-        if (!hWnd) {
-            return false;
-        }
-        return (IsZoomed_API(hWnd) != FALSE);
-    } else {
-        Utils::DisplayErrorDialog(L"IsZoomed() is not available.");
+    if (!hWnd) {
         return false;
     }
+    return (IsZoomed(hWnd) != FALSE);
 }
 
 [[maybe_unused]] [[nodiscard]] static inline bool IsWindowed(const HWND hWnd) noexcept
 {
-    USER32_API(GetWindowPlacement);
-    if (GetWindowPlacement_API) {
-        if (!hWnd) {
-            return false;
-        }
-        WINDOWPLACEMENT wp;
-        SecureZeroMemory(&wp, sizeof(wp));
-        wp.length = sizeof(wp);
-        if (GetWindowPlacement_API(hWnd, &wp) == FALSE) {
-            PRINT_WIN32_ERROR_MESSAGE(GetWindowPlacement, L"Failed to retrieve the window state.")
-            return false;
-        }
-        return ((wp.showCmd == SW_NORMAL) || (wp.showCmd == SW_RESTORE));
-    } else {
-        Utils::DisplayErrorDialog(L"GetWindowPlacement() is not available.");
+    if (!hWnd) {
         return false;
     }
+    WINDOWPLACEMENT wp;
+    SecureZeroMemory(&wp, sizeof(wp));
+    wp.length = sizeof(wp);
+    if (GetWindowPlacement(hWnd, &wp) == FALSE) {
+        PRINT_WIN32_ERROR_MESSAGE(GetWindowPlacement, L"Failed to retrieve the window state.")
+        return false;
+    }
+    return ((wp.showCmd == SW_NORMAL) || (wp.showCmd == SW_RESTORE));
 }
 
 [[nodiscard]] static inline bool IsHighContrastModeEnabled() noexcept
 {
-    USER32_API(SystemParametersInfoW);
-    if (SystemParametersInfoW_API) {
-        HIGHCONTRASTW hc;
-        SecureZeroMemory(&hc, sizeof(hc));
-        hc.cbSize = sizeof(hc);
-        if (SystemParametersInfoW_API(SPI_GETHIGHCONTRAST, sizeof(hc), &hc, 0) == FALSE) {
-            PRINT_WIN32_ERROR_MESSAGE(SystemParametersInfoW, L"Failed to retrieve the high contrast mode state.")
-            return false;
-        }
-        return (hc.dwFlags & HCF_HIGHCONTRASTON);
-    } else {
-        Utils::DisplayErrorDialog(L"Failed to query the high contrast mode state due to SystemParametersInfoW() is not available.");
+    HIGHCONTRASTW hc;
+    SecureZeroMemory(&hc, sizeof(hc));
+    hc.cbSize = sizeof(hc);
+    if (SystemParametersInfoW(SPI_GETHIGHCONTRAST, sizeof(hc), &hc, 0) == FALSE) {
+        PRINT_WIN32_ERROR_MESSAGE(SystemParametersInfoW, L"Failed to retrieve the high contrast mode state.")
         return false;
     }
+    return (hc.dwFlags & HCF_HIGHCONTRASTON);
 }
 
 [[nodiscard]] static inline bool ShouldAppsUseLightTheme() noexcept
@@ -201,20 +149,14 @@
 
 [[nodiscard]] static inline DWORD GetGlobalColorizationColor2() noexcept
 {
-    DWM_API(DwmGetColorizationColor);
-    if (DwmGetColorizationColor_API) {
-        DWORD color = 0; // The color format of the value is 0xAARRGGBB.
-        BOOL opaque = FALSE;
-        const HRESULT hr = DwmGetColorizationColor_API(&color, &opaque);
-        if (FAILED(hr)) {
-            PRINT_HR_ERROR_MESSAGE(DwmGetColorizationColor, hr, L"Failed to retrieve the colorization color.")
-            return 0;
-        }
-        return color;
-    } else {
-        Utils::DisplayErrorDialog(L"Failed to retrieve the colorization color due to DwmGetColorizationColor() is not available.");
+    DWORD color = 0; // The color format of the value is 0xAARRGGBB.
+    BOOL opaque = FALSE;
+    const HRESULT hr = DwmGetColorizationColor(&color, &opaque);
+    if (FAILED(hr)) {
+        PRINT_HR_ERROR_MESSAGE(DwmGetColorizationColor, hr, L"Failed to retrieve the colorization color.")
         return 0;
     }
+    return color;
 }
 
 [[nodiscard]] static inline WindowColorizationArea GetGlobalColorizationArea2() noexcept
@@ -248,122 +190,98 @@
 
 [[nodiscard]] static inline RECT GetScreenGeometry(const HWND hWnd, const bool includeTaskBar) noexcept
 {
-    USER32_API(MonitorFromWindow);
-    USER32_API(GetMonitorInfoW);
-    if (MonitorFromWindow_API && GetMonitorInfoW_API) {
-        if (!hWnd) {
-            return {};
-        }
-        const HMONITOR mon = MonitorFromWindow_API(hWnd, MONITOR_DEFAULTTONEAREST);
-        if (!mon) {
-            PRINT_WIN32_ERROR_MESSAGE(MonitorFromWindow, L"Failed to retrieve the corresponding screen.")
-            return {};
-        }
-        MONITORINFO mi;
-        SecureZeroMemory(&mi, sizeof(mi));
-        mi.cbSize = sizeof(mi);
-        if (GetMonitorInfoW_API(mon, &mi) == FALSE) {
-            PRINT_WIN32_ERROR_MESSAGE(GetMonitorInfoW, L"Failed to retrieve the screen information.")
-            return {};
-        }
-        return (includeTaskBar ? mi.rcMonitor : mi.rcWork);
-    } else {
-        Utils::DisplayErrorDialog(L"Can't retrieve the screen geometry due to MonitorFromWindow() and GetMonitorInfoW() are not available.");
+    if (!hWnd) {
         return {};
     }
+    const HMONITOR mon = MonitorFromWindow(hWnd, MONITOR_DEFAULTTONEAREST);
+    if (!mon) {
+        PRINT_WIN32_ERROR_MESSAGE(MonitorFromWindow, L"Failed to retrieve the corresponding screen.")
+        return {};
+    }
+    MONITORINFO mi;
+    SecureZeroMemory(&mi, sizeof(mi));
+    mi.cbSize = sizeof(mi);
+    if (GetMonitorInfoW(mon, &mi) == FALSE) {
+        PRINT_WIN32_ERROR_MESSAGE(GetMonitorInfoW, L"Failed to retrieve the screen information.")
+        return {};
+    }
+    return (includeTaskBar ? mi.rcMonitor : mi.rcWork);
 }
 
 [[nodiscard]] static inline HWND CreateWindow2(const DWORD style, const DWORD extendedStyle, const HWND parentWindow, void *extraData, const UINT extraDataSize, const HBRUSH backgroundBrush, const WNDPROC wndProc) noexcept
 {
-    USER32_API(LoadCursorW);
-    USER32_API(LoadIconW);
-    USER32_API(RegisterClassExW);
-    USER32_API(CreateWindowExW);
-    if (LoadCursorW_API && LoadIconW_API && RegisterClassExW_API && CreateWindowExW_API) {
-        if (!wndProc) {
-            Utils::DisplayErrorDialog(L"Failed to register a window class due to the WindowProc function pointer is null.");
-            return nullptr;
-        }
-        const std::wstring guid = GenerateGUID();
-        if (guid.empty()) {
-            Utils::DisplayErrorDialog(L"Failed to generate a new GUID.");
-            return nullptr;
-        }
-        WNDCLASSEXW wcex;
-        SecureZeroMemory(&wcex, sizeof(wcex));
-        wcex.cbSize = sizeof(wcex);
-        wcex.style = CS_HREDRAW | CS_VREDRAW | CS_DBLCLKS;
-        wcex.lpfnWndProc = wndProc;
-        wcex.hInstance = HINST_THISCOMPONENT;
-        wcex.lpszClassName = guid.c_str();
-        if (backgroundBrush) {
-            wcex.hbrBackground = backgroundBrush;
-        }
-        wcex.hCursor = LoadCursorW_API(nullptr, IDC_ARROW);
-        if (!(style & WS_CHILD)) {
-            wcex.hIcon = LoadIconW_API(HINST_THISCOMPONENT, MAKEINTRESOURCEW(IDI_MYAPPLICATION));
-            wcex.hIconSm = LoadIconW_API(HINST_THISCOMPONENT, MAKEINTRESOURCEW(IDI_MYAPPLICATION_SMALL));
-        }
-        if (extraDataSize > 0) {
-            wcex.cbWndExtra = extraDataSize;
-        }
-        const ATOM atom = RegisterClassExW_API(&wcex);
-        if (atom == INVALID_ATOM) {
-            PRINT_WIN32_ERROR_MESSAGE(RegisterClassExW, L"Failed to register a window class.")
-            return nullptr;
-        }
-        const HWND hWnd = CreateWindowExW_API(
-            extendedStyle,       // _In_     DWORD     dwExStyle
-            guid.c_str(),        // _In_opt_ LPCWSTR   lpClassName
-            nullptr,             // _In_opt_ LPCWSTR   lpWindowName
-            style,               // _In_     DWORD     dwStyle
-            CW_USEDEFAULT,       // _In_     int       X
-            CW_USEDEFAULT,       // _In_     int       Y
-            CW_USEDEFAULT,       // _In_     int       nWidth
-            CW_USEDEFAULT,       // _In_     int       nHeight
-            parentWindow,        // _In_opt_ HWND      hWndParent
-            nullptr,             // _In_opt_ HMENU     hMenu
-            HINST_THISCOMPONENT, // _In_opt_ HINSTANCE hInstance
-            extraData            // _In_opt_ LPVOID    lpParam
-            );
-        if (!hWnd) {
-            PRINT_WIN32_ERROR_MESSAGE(CreateWindowExW, L"Failed to create a window.")
-            return nullptr;
-        }
-        return hWnd;
-    } else {
-        Utils::DisplayErrorDialog(L"Failed to create a window due to LoadCursorW(), LoadIconW(), RegisterClassExW() and CreateWindowExW() are not available.");
+    if (!wndProc) {
+        Utils::DisplayErrorDialog(L"Failed to register a window class due to the WindowProc function pointer is null.");
         return nullptr;
     }
+    const std::wstring guid = GenerateGUID();
+    if (guid.empty()) {
+        Utils::DisplayErrorDialog(L"Failed to generate a new GUID.");
+        return nullptr;
+    }
+    WNDCLASSEXW wcex;
+    SecureZeroMemory(&wcex, sizeof(wcex));
+    wcex.cbSize = sizeof(wcex);
+    wcex.style = CS_HREDRAW | CS_VREDRAW | CS_DBLCLKS;
+    wcex.lpfnWndProc = wndProc;
+    wcex.hInstance = HINST_THISCOMPONENT;
+    wcex.lpszClassName = guid.c_str();
+    if (backgroundBrush) {
+        wcex.hbrBackground = backgroundBrush;
+    }
+    wcex.hCursor = LoadCursorW(nullptr, IDC_ARROW);
+    if (!(style & WS_CHILD)) {
+        wcex.hIcon = LoadIconW(HINST_THISCOMPONENT, MAKEINTRESOURCEW(IDI_WIN32ACRYLICHELPER_ICON));
+        wcex.hIconSm = LoadIconW(HINST_THISCOMPONENT, MAKEINTRESOURCEW(IDI_WIN32ACRYLICHELPER_SMALL_ICON));
+    }
+    if (extraDataSize > 0) {
+        wcex.cbWndExtra = extraDataSize;
+    }
+    const ATOM atom = RegisterClassExW(&wcex);
+    if (atom == INVALID_ATOM) {
+        PRINT_WIN32_ERROR_MESSAGE(RegisterClassExW, L"Failed to register a window class.")
+        return nullptr;
+    }
+    const HWND hWnd = CreateWindowExW(
+        extendedStyle,       // _In_     DWORD     dwExStyle
+        guid.c_str(),        // _In_opt_ LPCWSTR   lpClassName
+        nullptr,             // _In_opt_ LPCWSTR   lpWindowName
+        style,               // _In_     DWORD     dwStyle
+        CW_USEDEFAULT,       // _In_     int       X
+        CW_USEDEFAULT,       // _In_     int       Y
+        CW_USEDEFAULT,       // _In_     int       nWidth
+        CW_USEDEFAULT,       // _In_     int       nHeight
+        parentWindow,        // _In_opt_ HWND      hWndParent
+        nullptr,             // _In_opt_ HMENU     hMenu
+        HINST_THISCOMPONENT, // _In_opt_ HINSTANCE hInstance
+        extraData            // _In_opt_ LPVOID    lpParam
+        );
+    if (!hWnd) {
+        PRINT_WIN32_ERROR_MESSAGE(CreateWindowExW, L"Failed to create a window.")
+        return nullptr;
+    }
+    return hWnd;
 }
 
 [[nodiscard]] static inline bool CloseWindow2(const HWND hWnd) noexcept
 {
-    USER32_API(DestroyWindow);
-    USER32_API(GetClassNameW);
-    USER32_API(UnregisterClassW);
-    if (DestroyWindow_API && GetClassNameW_API && UnregisterClassW_API) {
-        if (!hWnd) {
-            return false;
-        }
-        wchar_t className[MAX_PATH] = { L'\0' };
-        if (GetClassNameW_API(hWnd, className, MAX_PATH) <= 0) {
-            PRINT_WIN32_ERROR_MESSAGE(GetClassNameW, L"Failed to retrieve the class name of the window.")
-            return false;
-        }
-        if (DestroyWindow_API(hWnd) == FALSE) {
-            PRINT_WIN32_ERROR_MESSAGE(DestroyWindow, L"Failed to destroy the window.")
-            return false;
-        }
-        if (UnregisterClassW_API(className, HINST_THISCOMPONENT) == FALSE) {
-            PRINT_WIN32_ERROR_MESSAGE(UnregisterClassW, L"Failed to unregister the window class.")
-            return false;
-        }
-        return true;
-    } else {
-        Utils::DisplayErrorDialog(L"Failed to close the window due to DestroyWindow(), GetClassNameW() and UnregisterClassW() are not available.");
+    if (!hWnd) {
         return false;
     }
+    wchar_t className[MAX_PATH] = { L'\0' };
+    if (GetClassNameW(hWnd, className, MAX_PATH) <= 0) {
+        PRINT_WIN32_ERROR_MESSAGE(GetClassNameW, L"Failed to retrieve the class name of the window.")
+        return false;
+    }
+    if (DestroyWindow(hWnd) == FALSE) {
+        PRINT_WIN32_ERROR_MESSAGE(DestroyWindow, L"Failed to destroy the window.")
+        return false;
+    }
+    if (UnregisterClassW(className, HINST_THISCOMPONENT) == FALSE) {
+        PRINT_WIN32_ERROR_MESSAGE(UnregisterClassW, L"Failed to unregister the window class.")
+        return false;
+    }
+    return true;
 }
 
 class WindowPrivate
@@ -459,7 +377,6 @@ private:
     [[nodiscard]] UINT GetWindowDPI2() const noexcept;
     [[nodiscard]] UINT GetWindowVisibleFrameBorderThickness2() const noexcept;
     [[nodiscard]] bool UpdateWindowFrameMargins2() noexcept;
-    [[nodiscard]] bool EnsureNonClientAreaRendering2() const noexcept;
     void TitleChangeHandler() const noexcept;
     void XChangeHandler() const noexcept;
     void YChangeHandler() const noexcept;
@@ -521,19 +438,13 @@ private:
 template<typename T>
 T *WindowPrivate::GetThisFromHandle(const HWND hWnd) noexcept
 {
-    USER32_API(GetWindowLongPtrW);
-    if (GetWindowLongPtrW_API) {
-        if (!hWnd) {
-            return nullptr;
-        }
-        SetLastError(ERROR_SUCCESS);
-        const LONG_PTR result = GetWindowLongPtrW_API(hWnd, GWLP_USERDATA);
-        PRINT_WIN32_ERROR_MESSAGE(GetWindowLongPtrW, L"Failed to retrieve the user data of the window.")
-        return ((result == 0) ? nullptr : reinterpret_cast<T *>(result));
-    } else {
-        Utils::DisplayErrorDialog(L"Can't retrieve the user data of the window due to GetWindowLongPtrW() is not available.");
+    if (!hWnd) {
         return nullptr;
     }
+    SetLastError(ERROR_SUCCESS);
+    const LONG_PTR result = GetWindowLongPtrW(hWnd, GWLP_USERDATA);
+    PRINT_WIN32_ERROR_MESSAGE(GetWindowLongPtrW, L"Failed to retrieve the user data of the window.")
+    return ((result == 0) ? nullptr : reinterpret_cast<T *>(result));
 }
 
 POINT WindowPrivate::GetWindowPosition2() const noexcept
@@ -548,303 +459,194 @@ POINT WindowPrivate::GetWindowPosition2() const noexcept
 
 SIZE WindowPrivate::GetWindowSize2() const noexcept
 {
-    USER32_API(GetClientRect);
-    if (GetClientRect_API) {
-        if (!m_window) {
-            Utils::DisplayErrorDialog(L"Failed to retrieve the window size due to the window has not been created yet.");
-            return {};
-        }
-        RECT rect = {0, 0, 0, 0};
-        if (GetClientRect_API(m_window, &rect) == FALSE) {
-            PRINT_WIN32_ERROR_MESSAGE(GetClientRect, L"Failed to retrieve the window client area size.")
-            return {};
-        }
-        return {RECT_WIDTH(rect), RECT_HEIGHT(rect)};
-    } else {
-        Utils::DisplayErrorDialog(L"Failed to retrieve the window size due to GetClientRect() is not available.");
+    if (!m_window) {
+        Utils::DisplayErrorDialog(L"Failed to retrieve the window size due to the window has not been created yet.");
         return {};
     }
+    RECT rect = {0, 0, 0, 0};
+    if (GetClientRect(m_window, &rect) == FALSE) {
+        PRINT_WIN32_ERROR_MESSAGE(GetClientRect, L"Failed to retrieve the window client area size.")
+        return {};
+    }
+    return {RECT_WIDTH(rect), RECT_HEIGHT(rect)};
 }
 
 bool WindowPrivate::TriggerWindowFrameChange2() const noexcept
 {
-    USER32_API(SetWindowPos);
-    if (SetWindowPos_API) {
-        if (!m_window) {
-            Utils::DisplayErrorDialog(L"Failed to trigger a window frame change event due to the window has not been created yet.");
-            return false;
-        }
-        constexpr const UINT flags = (SWP_FRAMECHANGED | SWP_NOACTIVATE | SWP_NOSIZE | SWP_NOMOVE | SWP_NOZORDER | SWP_NOOWNERZORDER);
-        if (SetWindowPos_API(m_window, nullptr, 0, 0, 0, 0, flags) == FALSE) {
-            PRINT_WIN32_ERROR_MESSAGE(SetWindowPos, L"Failed to trigger a window frame change event for the window.")
-            return false;
-        }
-        return true;
-    } else {
-        Utils::DisplayErrorDialog(L"Failed to trigger a window frame change event for the window due to SetWindowPos() is not available.");
+    if (!m_window) {
+        Utils::DisplayErrorDialog(L"Failed to trigger a window frame change event due to the window has not been created yet.");
         return false;
     }
+    constexpr const UINT flags = (SWP_FRAMECHANGED | SWP_NOACTIVATE | SWP_NOSIZE | SWP_NOMOVE | SWP_NOZORDER | SWP_NOOWNERZORDER);
+    if (SetWindowPos(m_window, nullptr, 0, 0, 0, 0, flags) == FALSE) {
+        PRINT_WIN32_ERROR_MESSAGE(SetWindowPos, L"Failed to trigger a window frame change event for the window.")
+        return false;
+    }
+    return true;
 }
 
 bool WindowPrivate::RefreshWindowTheme2() const noexcept
 {
-    DWM_API(DwmSetWindowAttribute);
-    UXTHEME_API(SetWindowTheme);
-    if (DwmSetWindowAttribute_API && SetWindowTheme_API) {
-        if (!m_window) {
-            Utils::DisplayErrorDialog(L"Failed to refresh the window theme due to the window has not been created yet.");
-            return false;
-        }
-        BOOL enableDarkFrame = FALSE;
-        std::wstring themeName = {};
-        switch (m_theme) {
-        case WindowTheme::Light: {
-            enableDarkFrame = FALSE;
-            themeName = {};
-        } break;
-        case WindowTheme::Dark: {
-            enableDarkFrame = TRUE;
-            themeName = L"Dark_Explorer";
-        } break;
-        case WindowTheme::HighContrast: {
-            // ### TODO
-        } break;
-        }
-        const HRESULT hr1 = DwmSetWindowAttribute_API(m_window, _DWMWA_USE_IMMERSIVE_DARK_MODE_BEFORE_20H1, &enableDarkFrame, sizeof(enableDarkFrame));
-        const HRESULT hr2 = DwmSetWindowAttribute_API(m_window, _DWMWA_USE_IMMERSIVE_DARK_MODE, &enableDarkFrame, sizeof(enableDarkFrame));
-        const HRESULT hr3 = SetWindowTheme_API(m_window, themeName.c_str(), nullptr);
-        if (FAILED(hr1) && FAILED(hr2)) {
-            PRINT_HR_ERROR_MESSAGE(DwmSetWindowAttribute, hr2, L"Failed to change the window dark mode state.")
-            return false;
-        }
-        if (FAILED(hr3)) {
-            PRINT_HR_ERROR_MESSAGE(SetWindowTheme, hr3, L"Failed to change the window theme.")
-            return false;
-        }
-        return true;
-    } else {
-        Utils::DisplayErrorDialog(L"Failed to refresh the window theme due to DwmSetWindowAttribute() and SetWindowTheme() are not available.");
+    if (!m_window) {
+        Utils::DisplayErrorDialog(L"Failed to refresh the window theme due to the window has not been created yet.");
         return false;
     }
+    BOOL enableDarkFrame = FALSE;
+    std::wstring themeName = {};
+    switch (m_theme) {
+    case WindowTheme::Light: {
+        enableDarkFrame = FALSE;
+        themeName = {};
+    } break;
+    case WindowTheme::Dark: {
+        enableDarkFrame = TRUE;
+        themeName = L"Dark_Explorer";
+    } break;
+    case WindowTheme::HighContrast: {
+        // ### TODO
+    } break;
+    }
+    const HRESULT hr1 = DwmSetWindowAttribute(m_window, _DWMWA_USE_IMMERSIVE_DARK_MODE_BEFORE_20H1, &enableDarkFrame, sizeof(enableDarkFrame));
+    const HRESULT hr2 = DwmSetWindowAttribute(m_window, _DWMWA_USE_IMMERSIVE_DARK_MODE, &enableDarkFrame, sizeof(enableDarkFrame));
+    const HRESULT hr3 = SetWindowTheme(m_window, themeName.c_str(), nullptr);
+    if (FAILED(hr1) && FAILED(hr2)) {
+        PRINT_HR_ERROR_MESSAGE(DwmSetWindowAttribute, hr2, L"Failed to change the window dark mode state.")
+        return false;
+    }
+    if (FAILED(hr3)) {
+        PRINT_HR_ERROR_MESSAGE(SetWindowTheme, hr3, L"Failed to change the window theme.")
+        return false;
+    }
+    return true;
 }
 
 bool WindowPrivate::OpenSystemMenu2(const POINT pos) const noexcept
 {
-    USER32_API(GetSystemMenu);
-    USER32_API(SetMenuItemInfoW);
-    USER32_API(SetMenuDefaultItem);
-    USER32_API(TrackPopupMenu);
-    USER32_API(PostMessageW);
-    if (GetSystemMenu_API && SetMenuItemInfoW_API && SetMenuDefaultItem_API && TrackPopupMenu_API && PostMessageW_API) {
-        if (!m_window) {
-            Utils::DisplayErrorDialog(L"Failed to open the system menu due to the window has not been created yet.");
-            return false;
-        }
-        const HMENU menu = GetSystemMenu_API(m_window, FALSE);
-        if (!menu) {
-            PRINT_WIN32_ERROR_MESSAGE(GetSystemMenu, L"Failed to retrieve the system menu of the window.")
-            return false;
-        }
-        // Update the options based on window state.
-        MENUITEMINFOW mii;
-        SecureZeroMemory(&mii, sizeof(mii));
-        mii.cbSize = sizeof(mii);
-        mii.fMask = MIIM_STATE;
-        mii.fType = MFT_STRING;
-        const auto setState = [&mii, menu](const UINT item, const bool enabled) -> bool {
-            mii.fState = (enabled ? MF_ENABLED : MF_DISABLED);
-            if (SetMenuItemInfoW_API(menu, item, FALSE, &mii) == FALSE) {
-                PRINT_WIN32_ERROR_MESSAGE(SetMenuItemInfoW, L"Failed to set menu item information.")
-                return false;
-            }
-            return true;
-        };
-        const bool max = (m_visibility == WindowState::Maximized);
-        if (!setState(SC_RESTORE, max)) {
-            return false;
-        }
-        if (!setState(SC_MOVE, !max)) {
-            return false;
-        }
-        if (!setState(SC_SIZE, !max)) {
-            return false;
-        }
-        if (!setState(SC_MINIMIZE, true)) {
-            return false;
-        }
-        if (!setState(SC_MAXIMIZE, !max)) {
-            return false;
-        }
-        if (!setState(SC_CLOSE, true)) {
-            return false;
-        }
-        if (SetMenuDefaultItem_API(menu, UINT_MAX, FALSE) == FALSE) {
-            PRINT_WIN32_ERROR_MESSAGE(SetMenuDefaultItem, L"Failed to set default menu item.")
-            return false;
-        }
-        // ### TODO: support RTL layout: TPM_LAYOUTRTL
-        const auto ret = TrackPopupMenu_API(menu, TPM_RETURNCMD, pos.x, pos.y, 0, m_window, nullptr);
-        if (ret != 0) {
-            if (PostMessageW_API(m_window, WM_SYSCOMMAND, ret, 0) == FALSE) {
-                PRINT_WIN32_ERROR_MESSAGE(PostMessageW, L"Failed to post message.")
-                return false;
-            }
-        }
-        return true;
-    } else {
-        Utils::DisplayErrorDialog(L"Failed to open the system menu due to GetSystemMenu(), SetMenuItemInfoW(), SetMenuDefaultItem(), TrackPopupMenu() and PostMessageW() are not available.");
+    if (!m_window) {
+        Utils::DisplayErrorDialog(L"Failed to open the system menu due to the window has not been created yet.");
         return false;
     }
+    const HMENU menu = GetSystemMenu(m_window, FALSE);
+    if (!menu) {
+        PRINT_WIN32_ERROR_MESSAGE(GetSystemMenu, L"Failed to retrieve the system menu of the window.")
+        return false;
+    }
+    // Update the options based on window state.
+    MENUITEMINFOW mii;
+    SecureZeroMemory(&mii, sizeof(mii));
+    mii.cbSize = sizeof(mii);
+    mii.fMask = MIIM_STATE;
+    mii.fType = MFT_STRING;
+    const auto setState = [&mii, menu](const UINT item, const bool enabled) -> bool {
+        mii.fState = (enabled ? MF_ENABLED : MF_DISABLED);
+        if (SetMenuItemInfoW(menu, item, FALSE, &mii) == FALSE) {
+            PRINT_WIN32_ERROR_MESSAGE(SetMenuItemInfoW, L"Failed to set menu item information.")
+            return false;
+        }
+        return true;
+    };
+    const bool max = (m_visibility == WindowState::Maximized);
+    if (!setState(SC_RESTORE, max)) {
+        return false;
+    }
+    if (!setState(SC_MOVE, !max)) {
+        return false;
+    }
+    if (!setState(SC_SIZE, !max)) {
+        return false;
+    }
+    if (!setState(SC_MINIMIZE, true)) {
+        return false;
+    }
+    if (!setState(SC_MAXIMIZE, !max)) {
+        return false;
+    }
+    if (!setState(SC_CLOSE, true)) {
+        return false;
+    }
+    if (SetMenuDefaultItem(menu, UINT_MAX, FALSE) == FALSE) {
+        PRINT_WIN32_ERROR_MESSAGE(SetMenuDefaultItem, L"Failed to set default menu item.")
+        return false;
+    }
+    // ### TODO: support RTL layout: TPM_LAYOUTRTL
+    const auto ret = TrackPopupMenu(menu, TPM_RETURNCMD, pos.x, pos.y, 0, m_window, nullptr);
+    if (ret != 0) {
+        if (PostMessageW(m_window, WM_SYSCOMMAND, ret, 0) == FALSE) {
+            PRINT_WIN32_ERROR_MESSAGE(PostMessageW, L"Failed to post message.")
+            return false;
+        }
+    }
+    return true;
 }
 
 bool WindowPrivate::SetWindowState2(const WindowState state) noexcept
 {
-    USER32_API(ShowWindow);
-    USER32_API(UpdateWindow);
-    if (ShowWindow_API && UpdateWindow_API) {
-        if (!m_window) {
-            Utils::DisplayErrorDialog(L"Failed to change the window state due to the window has not been created yet.");
-            return false;
-        }
-        int nCmdShow = SW_SHOW;
-        switch (state) {
-        case WindowState::Minimized: {
-            nCmdShow = SW_MINIMIZE;
-        } break;
-        case WindowState::Windowed: {
-            if (m_visibility == WindowState::Hidden) {
-                if (m_exposed) {
-                    nCmdShow = SW_SHOW;
-                } else {
-                    m_exposed = true;
-                    nCmdShow = SW_NORMAL;
-                }
-            } else {
-                nCmdShow = SW_RESTORE;
-            }
-        } break;
-        case WindowState::Maximized: {
-            nCmdShow = SW_MAXIMIZE;
-        } break;
-        case WindowState::Hidden: {
-            nCmdShow = SW_HIDE;
-        } break;
-        }
-        // Don't check ShowWindow()'s result because it returns the previous window state rather than
-        // the operation result of itself.
-        SetLastError(ERROR_SUCCESS);
-        const BOOL previousState = ShowWindow_API(m_window, nCmdShow);
-        UNREFERENCED_PARAMETER(previousState);
-        PRINT_WIN32_ERROR_MESSAGE(ShowWindow, L"Failed to change the window state.")
-        if ((state == WindowState::Windowed) || (state == WindowState::Maximized)) {
-            if (UpdateWindow_API(m_window) == FALSE) {
-                PRINT_WIN32_ERROR_MESSAGE(UpdateWindow, L"Failed to update the window.")
-                return false;
-            }
-        }
-        return true;
-    } else {
-        Utils::DisplayErrorDialog(L"Failed to change the window state due to ShowWindow() and UpdateWindow() are not available.");
+    if (!m_window) {
+        Utils::DisplayErrorDialog(L"Failed to change the window state due to the window has not been created yet.");
         return false;
     }
+    int nCmdShow = SW_SHOW;
+    switch (state) {
+    case WindowState::Minimized: {
+        nCmdShow = SW_MINIMIZE;
+    } break;
+    case WindowState::Windowed: {
+        if (m_visibility == WindowState::Hidden) {
+            if (m_exposed) {
+                nCmdShow = SW_SHOW;
+            } else {
+                m_exposed = true;
+                nCmdShow = SW_NORMAL;
+            }
+        } else {
+            nCmdShow = SW_RESTORE;
+        }
+    } break;
+    case WindowState::Maximized: {
+        nCmdShow = SW_MAXIMIZE;
+    } break;
+    case WindowState::Hidden: {
+        nCmdShow = SW_HIDE;
+    } break;
+    }
+    // Don't check ShowWindow()'s result because it returns the previous window state rather than
+    // the operation result of itself.
+    SetLastError(ERROR_SUCCESS);
+    const BOOL previousState = ShowWindow(m_window, nCmdShow);
+    UNREFERENCED_PARAMETER(previousState);
+    PRINT_WIN32_ERROR_MESSAGE(ShowWindow, L"Failed to change the window state.")
+    if ((state == WindowState::Windowed) || (state == WindowState::Maximized)) {
+        if (UpdateWindow(m_window) == FALSE) {
+            PRINT_WIN32_ERROR_MESSAGE(UpdateWindow, L"Failed to update the window.")
+            return false;
+        }
+    }
+    return true;
 }
 
 UINT WindowPrivate::GetWindowDPI2() const noexcept
 {
-    if (!m_window) {
-        return USER_DEFAULT_SCREEN_DPI;
-    }
-    USER32_API(GetDpiForWindow);
-    if (GetDpiForWindow_API) {
-        return GetDpiForWindow_API(m_window);
-    } else {
-        OutputDebugStringW(L"GetDpiForWindow() is not available.");
-        USER32_API(GetSystemDpiForProcess);
-        if (GetSystemDpiForProcess_API) {
-            return GetSystemDpiForProcess_API(GetCurrentProcess());
-        } else {
-            OutputDebugStringW(L"GetSystemDpiForProcess() is not available.");
-            USER32_API(GetDpiForSystem);
-            if (GetDpiForSystem_API) {
-                return GetDpiForSystem_API();
-            } else {
-                OutputDebugStringW(L"GetDpiForSystem() is not available.");
-                SHCORE_API(GetDpiForMonitor);
-                if (GetDpiForMonitor_API) {
-                    USER32_API(MonitorFromWindow);
-                    if (MonitorFromWindow_API) {
-                        const HMONITOR mon = MonitorFromWindow_API(m_window, MONITOR_DEFAULTTONEAREST);
-                        if (mon) {
-                            UINT dpiX = 0, dpiY = 0;
-                            const HRESULT hr = GetDpiForMonitor_API(mon, MDT_EFFECTIVE_DPI, &dpiX, &dpiY);
-                            if (SUCCEEDED(hr)) {
-                                return static_cast<UINT>(std::round(static_cast<double>(dpiX + dpiY) / 2.0));
-                            } else {
-                                PRINT_HR_ERROR_MESSAGE(GetDpiForMonitor, hr, L"Failed to retrieve the screen's DPI.")
-                                return USER_DEFAULT_SCREEN_DPI;
-                            }
-                        } else {
-                            PRINT_WIN32_ERROR_MESSAGE(MonitorFromWindow, L"Failed to retrieve the corresponding screen.")
-                            return USER_DEFAULT_SCREEN_DPI;
-                        }
-                    } else {
-                        Utils::DisplayErrorDialog(L"Failed to retrieve the screen's DPI due to MonitorFromWindow() is not available.");
-                        return USER_DEFAULT_SCREEN_DPI;
-                    }
-                } else {
-                    OutputDebugStringW(L"GetDpiForMonitor() is not available.");
-                    USER32_API(GetDC);
-                    USER32_API(ReleaseDC);
-                    GDI32_API(GetDeviceCaps);
-                    if (GetDC_API && GetDeviceCaps_API && ReleaseDC_API) {
-                        const HDC hdc = GetDC_API(nullptr);
-                        if (hdc) {
-                            const int dpiX = GetDeviceCaps_API(hdc, LOGPIXELSX);
-                            const int dpiY = GetDeviceCaps_API(hdc, LOGPIXELSY);
-                            if (ReleaseDC_API(nullptr, hdc) == 0) {
-                                PRINT_WIN32_ERROR_MESSAGE(ReleaseDC, L"Failed to release the desktop window's DC.")
-                                return USER_DEFAULT_SCREEN_DPI;
-                            } else {
-                                return static_cast<UINT>(std::round(static_cast<double>(dpiX + dpiY) / 2.0));
-                            }
-                        } else {
-                            PRINT_WIN32_ERROR_MESSAGE(GetDC, L"Failed to retrieve the desktop window's DC.")
-                            return USER_DEFAULT_SCREEN_DPI;
-                        }
-                    } else {
-                        Utils::DisplayErrorDialog(L"Failed to retrieve the DPI of this window due to GetDC(), ReleaseDC() and GetDeviceCaps() are not available.");
-                        return USER_DEFAULT_SCREEN_DPI;
-                    }
-                }
-            }
-        }
-    }
+    return (m_window ? GetDpiForWindow(m_window) : USER_DEFAULT_SCREEN_DPI);
 }
 
 UINT WindowPrivate::GetWindowVisibleFrameBorderThickness2() const noexcept
 {
-    DWM_API(DwmGetWindowAttribute);
-    if (DwmGetWindowAttribute_API) {
-        if (!m_window) {
-            Utils::DisplayErrorDialog(L"Failed to retrieve the window visible frame border thickness due to the window has not been created yet.");
-            return DefaultWindowVisibleFrameBorderThickness;
-        }
-        UINT value = 0;
-        const HRESULT hr = DwmGetWindowAttribute_API(m_window, _DWMWA_VISIBLE_FRAME_BORDER_THICKNESS, &value, sizeof(value));
-        if (SUCCEEDED(hr)) {
-            // The returned value is already scaled to the DPI automatically.
-            // Don't double scale it!!!
-            return value;
-        } else {
-            // We just eat this error because this enumeration value is only available
-            // on Windows 10 21H2 and onwards, so querying it's value will always result in
-            // a "parameter error" (error code: 87) on older systems.
-            const auto dpr = (static_cast<double>(m_dpi) / static_cast<double>(USER_DEFAULT_SCREEN_DPI));
-            return static_cast<UINT>(std::round(static_cast<double>(DefaultWindowVisibleFrameBorderThickness) * dpr));
-        }
-    } else {
-        Utils::DisplayErrorDialog(L"Failed to retrieve the window visible frame border thickness due to DwmGetWindowAttribute() is not available.");
+    if (!m_window) {
+        Utils::DisplayErrorDialog(L"Failed to retrieve the window visible frame border thickness due to the window has not been created yet.");
         return DefaultWindowVisibleFrameBorderThickness;
+    }
+    UINT value = 0;
+    const HRESULT hr = DwmGetWindowAttribute(m_window, _DWMWA_VISIBLE_FRAME_BORDER_THICKNESS, &value, sizeof(value));
+    if (SUCCEEDED(hr)) {
+        // The returned value is already scaled to the DPI automatically.
+        // Don't double scale it!!!
+        return value;
+    } else {
+        // We just eat this error because this enumeration value is only available
+        // on Windows 10 21H2 and onwards, so querying it's value will always result in
+        // a "parameter error" (error code: 87) on older systems.
+        const auto dpr = (static_cast<double>(m_dpi) / static_cast<double>(USER_DEFAULT_SCREEN_DPI));
+        return static_cast<UINT>(std::round(static_cast<double>(DefaultWindowVisibleFrameBorderThickness) * dpr));
     }
 }
 
@@ -857,10 +659,6 @@ bool WindowPrivate::Initialize() noexcept
     m_dpi = GetWindowDPI2();
     const std::wstring dpiDbgMsg = L"Current window's dots-per-inch (DPI): " + Utils::IntegerToString(m_dpi, 10);
     OutputDebugStringW(dpiDbgMsg.c_str());
-    if (!EnsureNonClientAreaRendering2()) {
-        Utils::DisplayErrorDialog(L"Failed to enable window non-client area rendering.");
-        return false;
-    }
     if (!UpdateWindowFrameMargins2()) {
         Utils::DisplayErrorDialog(L"Failed to update the window frame margins.");
         return false;
@@ -884,7 +682,7 @@ bool WindowPrivate::Initialize() noexcept
     m_width = windowSize.cx;
     m_height = windowSize.cy;
     m_title = {};
-    m_frameCorner = ((WindowsVersion::CurrentVersion() >= WindowsVersion::Windows10_21Half2) ? WindowFrameCorner::Round : WindowFrameCorner::Square);
+    m_frameCorner = ((WindowsVersion::CurrentVersion() >= WindowsVersion::Windows11) ? WindowFrameCorner::Round : WindowFrameCorner::Square);
     m_startupLocation = WindowStartupLocation::Default;
     return true;
 }
@@ -896,16 +694,10 @@ WindowPrivate::WindowPrivate(Window *q) noexcept
         std::exit(-1);
     }
     q_ptr = q;
-    GDI32_API(GetStockObject);
-    if (GetStockObject_API) {
-        // We need this window background brush in WM_PAINT, so create it early.
-        m_windowBackgroundBrush = static_cast<HBRUSH>(GetStockObject_API(BLACK_BRUSH));
-        if (!m_windowBackgroundBrush) {
-            PRINT_WIN32_ERROR_MESSAGE(GetStockObject, L"Failed to retrieve the black brush.")
-            std::exit(-1);
-        }
-    } else {
-        Utils::DisplayErrorDialog(L"Can't retrieve the window background brush due to GetStockObject() is not available.");
+    // We need this window background brush in WM_PAINT, so create it early.
+    m_windowBackgroundBrush = static_cast<HBRUSH>(GetStockObject(BLACK_BRUSH));
+    if (!m_windowBackgroundBrush) {
+        PRINT_WIN32_ERROR_MESSAGE(GetStockObject, L"Failed to retrieve the black brush.")
         std::exit(-1);
     }
     // Create the title bar background brush early, we'll need it in WM_PAINT.
@@ -928,15 +720,10 @@ WindowPrivate::~WindowPrivate() noexcept
     // due to it's retrieved through GetStockObject(). But calling DeleteObject()
     // on it is harmless.
     if (m_titleBarBackgroundBrush) {
-        GDI32_API(DeleteObject);
-        if (DeleteObject_API) {
-            if (DeleteObject_API(m_titleBarBackgroundBrush) == FALSE) {
-                PRINT_WIN32_ERROR_MESSAGE(DeleteObject, L"Failed to delete the title bar background brush.")
-            } else {
-                m_titleBarBackgroundBrush = nullptr;
-            }
+        if (DeleteObject(m_titleBarBackgroundBrush) == FALSE) {
+            PRINT_WIN32_ERROR_MESSAGE(DeleteObject, L"Failed to delete the title bar background brush.")
         } else {
-            Utils::DisplayErrorDialog(L"Can't delete the title bar background brush due to DeleteObject() is not available.");
+            m_titleBarBackgroundBrush = nullptr;
         }
     }
     if (m_window) {
@@ -950,28 +737,20 @@ WindowPrivate::~WindowPrivate() noexcept
 
 int WindowPrivate::MessageLoop() noexcept
 {
-    USER32_API(GetMessageW);
-    USER32_API(TranslateMessage);
-    USER32_API(DispatchMessageW);
-    if (GetMessageW_API && TranslateMessage_API && DispatchMessageW_API) {
-        MSG msg = {};
-        while (GetMessageW_API(&msg, nullptr, 0, 0) != FALSE) {
+    MSG msg = {};
+    while (GetMessageW(&msg, nullptr, 0, 0) != FALSE) {
 #if 0
-            const auto that = GetThisFromHandle<WindowPrivate>(msg.hwnd);
-            const bool filtered = (that && that->WindowMessageFilter(&msg));
+        const auto that = GetThisFromHandle<WindowPrivate>(msg.hwnd);
+        const bool filtered = (that && that->WindowMessageFilter(&msg));
 #else
-            static constexpr const bool filtered = false;
+        static constexpr const bool filtered = false;
 #endif
-            if (!filtered) {
-                TranslateMessage_API(&msg);
-                DispatchMessageW_API(&msg);
-            }
+        if (!filtered) {
+            TranslateMessage(&msg);
+            DispatchMessageW(&msg);
         }
-        return static_cast<int>(msg.wParam);
-    } else {
-        Utils::DisplayErrorDialog(L"Can't continue the message loop due to GetMessageW(), TranslateMessage() and DispatchMessageW() are not available.");
-        return -1;
     }
+    return static_cast<int>(msg.wParam);
 }
 
 std::wstring WindowPrivate::Title() const noexcept
@@ -982,17 +761,12 @@ std::wstring WindowPrivate::Title() const noexcept
 void WindowPrivate::Title(const std::wstring &value) const noexcept
 {
     if (m_title != value) {
-        USER32_API(SetWindowTextW);
-        if (SetWindowTextW_API) {
-            if (!m_window) {
-                Utils::DisplayErrorDialog(L"Failed to change the window title due to the window has not been created yet.");
-                return;
-            }
-            if (SetWindowTextW_API(m_window, value.c_str()) == FALSE) {
-                PRINT_WIN32_ERROR_MESSAGE(SetWindowTextW, L"Failed to change the window title.")
-            }
-        } else {
-            Utils::DisplayErrorDialog(L"Failed to change the window title due to SetWindowTextW() is not available.");
+        if (!m_window) {
+            Utils::DisplayErrorDialog(L"Failed to change the window title due to the window has not been created yet.");
+            return;
+        }
+        if (SetWindowTextW(m_window, value.c_str()) == FALSE) {
+            PRINT_WIN32_ERROR_MESSAGE(SetWindowTextW, L"Failed to change the window title.")
         }
     }
 }
@@ -1079,18 +853,12 @@ void WindowPrivate::FrameCorner(const WindowFrameCorner value) noexcept
             Utils::DisplayErrorDialog(L"Can't change the window frame corner style due to the window has not been created yet.");
             return;
         }
-        DWM_API(DwmSetWindowAttribute);
-        USER32_API(SetWindowRgn);
-        if (DwmSetWindowAttribute_API && SetWindowRgn_API) {
-            const DwmWindowCornerPreference wcp = ((value == WindowFrameCorner::Round) ? DwmWindowCornerPreference::Round : DwmWindowCornerPreference::DoNotRound);
-            const HRESULT hr = DwmSetWindowAttribute_API(m_window, _DWMWA_WINDOW_CORNER_PREFERENCE, &wcp, sizeof(wcp));
-            if (SUCCEEDED(hr)) {
-                m_frameCorner = value;
-            } else {
-                // ### TODO: SetWindowRgn
-            }
+        const DwmWindowCornerPreference wcp = ((value == WindowFrameCorner::Round) ? DwmWindowCornerPreference::Round : DwmWindowCornerPreference::DoNotRound);
+        const HRESULT hr = DwmSetWindowAttribute(m_window, _DWMWA_WINDOW_CORNER_PREFERENCE, &wcp, sizeof(wcp));
+        if (SUCCEEDED(hr)) {
+            m_frameCorner = value;
         } else {
-            Utils::DisplayErrorDialog(L"Can't change the window frame corner style due to DwmSetWindowAttribute() and SetWindowRgn() are not available.");
+            // ### TODO: SetWindowRgn
         }
     }
 }
@@ -1138,25 +906,19 @@ const Color &WindowPrivate::TitleBarBackgroundColor() const noexcept
 void WindowPrivate::TitleBarBackgroundColor(const Color &value) noexcept
 {
     if (m_titleBarBackgroundColor != value) {
-        GDI32_API(CreateSolidBrush);
-        GDI32_API(DeleteObject);
-        if (CreateSolidBrush_API && DeleteObject_API) {
-            if (m_titleBarBackgroundBrush) {
-                if (DeleteObject_API(m_titleBarBackgroundBrush) == FALSE) {
-                    PRINT_WIN32_ERROR_MESSAGE(DeleteObject, L"Failed to delete the previous title bar background brush.")
-                    return;
-                }
-                m_titleBarBackgroundBrush = nullptr;
+        if (m_titleBarBackgroundBrush) {
+            if (DeleteObject(m_titleBarBackgroundBrush) == FALSE) {
+                PRINT_WIN32_ERROR_MESSAGE(DeleteObject, L"Failed to delete the previous title bar background brush.")
+                return;
             }
-            m_titleBarBackgroundBrush = CreateSolidBrush_API(value.ToWin32());
-            if (m_titleBarBackgroundBrush) {
-                m_titleBarBackgroundColor = value;
-                TitleBarBackgroundColorChangeHandler();
-            } else {
-                PRINT_WIN32_ERROR_MESSAGE(CreateSolidBrush, L"Failed to create the title bar background brush.")
-            }
+            m_titleBarBackgroundBrush = nullptr;
+        }
+        m_titleBarBackgroundBrush = CreateSolidBrush(value.ToWin32());
+        if (m_titleBarBackgroundBrush) {
+            m_titleBarBackgroundColor = value;
+            TitleBarBackgroundColorChangeHandler();
         } else {
-            Utils::DisplayErrorDialog(L"Can't change the title bar background brush due to CreateSolidBrush() and DeleteObject() are not available.");
+            PRINT_WIN32_ERROR_MESSAGE(CreateSolidBrush, L"Failed to create the title bar background brush.")
         }
     }
 }
@@ -1207,22 +969,16 @@ bool WindowPrivate::Resize(const UINT w, const UINT h) const noexcept
 
 bool WindowPrivate::SetGeometry(const int x, const int y, const UINT w, const UINT h) const noexcept
 {
-    USER32_API(SetWindowPos);
-    if (SetWindowPos_API) {
-        if (!m_window) {
-            Utils::DisplayErrorDialog(L"Failed to change the window geometry due to the window has not been created yet.");
-            return false;
-        }
-        constexpr const UINT flags = (SWP_SHOWWINDOW | SWP_NOACTIVATE | SWP_NOZORDER | SWP_NOOWNERZORDER);
-        if (SetWindowPos_API(m_window, nullptr, x, y, w, h, flags) == FALSE) {
-            PRINT_WIN32_ERROR_MESSAGE(SetWindowPos, L"Failed to change the window geometry.")
-            return false;
-        }
-        return true;
-    } else {
-        Utils::DisplayErrorDialog(L"Failed to change the window geometry due to SetWindowPos() is not available.");
+    if (!m_window) {
+        Utils::DisplayErrorDialog(L"Failed to change the window geometry due to the window has not been created yet.");
         return false;
     }
+    constexpr const UINT flags = (SWP_SHOWWINDOW | SWP_NOACTIVATE | SWP_NOZORDER | SWP_NOOWNERZORDER);
+    if (SetWindowPos(m_window, nullptr, x, y, w, h, flags) == FALSE) {
+        PRINT_WIN32_ERROR_MESSAGE(SetWindowPos, L"Failed to change the window geometry.")
+        return false;
+    }
+    return true;
 }
 
 UINT WindowPrivate::GetWindowMetrics2(const WindowMetrics metrics) noexcept
@@ -1231,129 +987,61 @@ UINT WindowPrivate::GetWindowMetrics2(const WindowMetrics metrics) noexcept
         Utils::DisplayErrorDialog(L"Failed to retrieve the window metrics due to the window has not been created yet.");
         return 0;
     }
-    USER32_API(GetSystemMetricsForDpi);
-    if (GetSystemMetricsForDpi_API) {
-        switch (metrics) {
-        case WindowMetrics::ResizeBorderThicknessX: {
-            if (m_resizeBorderThicknessX == 0) {
-                const int paddedBorderThicknessX = GetSystemMetricsForDpi_API(SM_CXPADDEDBORDER, m_dpi);
-                const int sizeFrameThicknessX = GetSystemMetricsForDpi_API(SM_CXSIZEFRAME, m_dpi);
-                m_resizeBorderThicknessX = (paddedBorderThicknessX + sizeFrameThicknessX);
-            }
-            return m_resizeBorderThicknessX;
-        } break;
-        case WindowMetrics::ResizeBorderThicknessY: {
-            if (m_resizeBorderThicknessY == 0) {
-                const int paddedBorderThicknessY = GetSystemMetricsForDpi_API(SM_CYPADDEDBORDER, m_dpi);
-                const int sizeFrameThicknessY = GetSystemMetricsForDpi_API(SM_CYSIZEFRAME, m_dpi);
-                m_resizeBorderThicknessY = (paddedBorderThicknessY + sizeFrameThicknessY);
-            }
-            return m_resizeBorderThicknessY;
-        } break;
-        case WindowMetrics::WindowVisibleFrameBorderThickness: {
-            if (m_windowVisibleFrameBorderThickness == 0) {
-                m_windowVisibleFrameBorderThickness = GetWindowVisibleFrameBorderThickness2();
-            }
-            return m_windowVisibleFrameBorderThickness;
-        } break;
-        case WindowMetrics::CaptionHeight: {
-            if (m_captionHeight == 0) {
-                m_captionHeight = GetSystemMetricsForDpi_API(SM_CYCAPTION, m_dpi);
-            }
-            return m_captionHeight;
-        } break;
-        case WindowMetrics::WindowIconWidth: {
-            if (m_windowIconWidth == 0) {
-                m_windowIconWidth = GetSystemMetricsForDpi_API(SM_CXICON, m_dpi);
-            }
-            return m_windowIconWidth;
-        } break;
-        case WindowMetrics::WindowIconHeight: {
-            if (m_windowIconHeight == 0) {
-                m_windowIconHeight = GetSystemMetricsForDpi_API(SM_CYICON, m_dpi);
-            }
-            return m_windowIconHeight;
-        } break;
-        case WindowMetrics::WindowSmallIconWidth: {
-            if (m_windowSmallIconWidth == 0) {
-                m_windowSmallIconWidth = GetSystemMetricsForDpi_API(SM_CXSMICON, m_dpi);
-            }
-            return m_windowSmallIconWidth;
-        } break;
-        case WindowMetrics::WindowSmallIconHeight: {
-            if (m_windowSmallIconHeight == 0) {
-                m_windowSmallIconHeight = GetSystemMetricsForDpi_API(SM_CYSMICON, m_dpi);
-            }
-            return m_windowSmallIconHeight;
-        } break;
+    switch (metrics) {
+    case WindowMetrics::ResizeBorderThicknessX: {
+        if (m_resizeBorderThicknessX == 0) {
+            const int paddedBorderThicknessX = GetSystemMetricsForDpi(SM_CXPADDEDBORDER, m_dpi);
+            const int sizeFrameThicknessX = GetSystemMetricsForDpi(SM_CXSIZEFRAME, m_dpi);
+            m_resizeBorderThicknessX = (paddedBorderThicknessX + sizeFrameThicknessX);
         }
-        return 0;
-    } else {
-        OutputDebugStringW(L"GetSystemMetricsForDpi() is not available.");
-        USER32_API(GetSystemMetrics);
-        if (GetSystemMetrics_API) {
-            // GetSystemMetrics() will return an automatically scaled value
-            // based on the DPI awareness of the current process.
-            switch (metrics) {
-            case WindowMetrics::ResizeBorderThicknessX: {
-                if (m_resizeBorderThicknessX == 0) {
-                    const int paddedBorderThicknessX = GetSystemMetrics_API(SM_CXPADDEDBORDER);
-                    const int sizeFrameThicknessX = GetSystemMetrics_API(SM_CXSIZEFRAME);
-                    m_resizeBorderThicknessX = (paddedBorderThicknessX + sizeFrameThicknessX);
-                }
-                return m_resizeBorderThicknessX;
-            } break;
-            case WindowMetrics::ResizeBorderThicknessY: {
-                if (m_resizeBorderThicknessY == 0) {
-                    const int paddedBorderThicknessY = GetSystemMetrics_API(SM_CYPADDEDBORDER);
-                    const int sizeFrameThicknessY = GetSystemMetrics_API(SM_CYSIZEFRAME);
-                    m_resizeBorderThicknessY = (paddedBorderThicknessY + sizeFrameThicknessY);
-                }
-                return m_resizeBorderThicknessY;
-            } break;
-            case WindowMetrics::WindowVisibleFrameBorderThickness: {
-                if (m_windowVisibleFrameBorderThickness == 0) {
-                    m_windowVisibleFrameBorderThickness = GetWindowVisibleFrameBorderThickness2();
-                }
-                return m_windowVisibleFrameBorderThickness;
-            } break;
-            case WindowMetrics::CaptionHeight: {
-                if (m_captionHeight == 0) {
-                    m_captionHeight = GetSystemMetrics_API(SM_CYCAPTION);
-                }
-                return m_captionHeight;
-            } break;
-            case WindowMetrics::WindowIconWidth: {
-                if (m_windowIconWidth == 0) {
-                    m_windowIconWidth = GetSystemMetrics_API(SM_CXICON);
-                }
-                return m_windowIconWidth;
-            } break;
-            case WindowMetrics::WindowIconHeight: {
-                if (m_windowIconHeight == 0) {
-                    m_windowIconHeight = GetSystemMetrics_API(SM_CYICON);
-                }
-                return m_windowIconHeight;
-            } break;
-            case WindowMetrics::WindowSmallIconWidth: {
-                if (m_windowSmallIconWidth == 0) {
-                    m_windowSmallIconWidth = GetSystemMetrics_API(SM_CXSMICON);
-                }
-                return m_windowSmallIconWidth;
-            } break;
-            case WindowMetrics::WindowSmallIconHeight: {
-                if (m_windowSmallIconHeight == 0) {
-                    m_windowSmallIconHeight = GetSystemMetrics_API(SM_CYSMICON);
-                }
-                return m_windowSmallIconHeight;
-            } break;
-            }
-            return 0;
-        } else {
-            Utils::DisplayErrorDialog(L"Failed to retrieve the window metrics due to GetSystemMetricsForDpi() and GetSystemMetrics() are not available.");
-            return 0;
+        return m_resizeBorderThicknessX;
+    } break;
+    case WindowMetrics::ResizeBorderThicknessY: {
+        if (m_resizeBorderThicknessY == 0) {
+            const int paddedBorderThicknessY = GetSystemMetricsForDpi(SM_CYPADDEDBORDER, m_dpi);
+            const int sizeFrameThicknessY = GetSystemMetricsForDpi(SM_CYSIZEFRAME, m_dpi);
+            m_resizeBorderThicknessY = (paddedBorderThicknessY + sizeFrameThicknessY);
         }
+        return m_resizeBorderThicknessY;
+    } break;
+    case WindowMetrics::WindowVisibleFrameBorderThickness: {
+        if (m_windowVisibleFrameBorderThickness == 0) {
+            m_windowVisibleFrameBorderThickness = GetWindowVisibleFrameBorderThickness2();
+        }
+        return m_windowVisibleFrameBorderThickness;
+    } break;
+    case WindowMetrics::CaptionHeight: {
+        if (m_captionHeight == 0) {
+            m_captionHeight = GetSystemMetricsForDpi(SM_CYCAPTION, m_dpi);
+        }
+        return m_captionHeight;
+    } break;
+    case WindowMetrics::WindowIconWidth: {
+        if (m_windowIconWidth == 0) {
+            m_windowIconWidth = GetSystemMetricsForDpi(SM_CXICON, m_dpi);
+        }
+        return m_windowIconWidth;
+    } break;
+    case WindowMetrics::WindowIconHeight: {
+        if (m_windowIconHeight == 0) {
+            m_windowIconHeight = GetSystemMetricsForDpi(SM_CYICON, m_dpi);
+        }
+        return m_windowIconHeight;
+    } break;
+    case WindowMetrics::WindowSmallIconWidth: {
+        if (m_windowSmallIconWidth == 0) {
+            m_windowSmallIconWidth = GetSystemMetricsForDpi(SM_CXSMICON, m_dpi);
+        }
+        return m_windowSmallIconWidth;
+    } break;
+    case WindowMetrics::WindowSmallIconHeight: {
+        if (m_windowSmallIconHeight == 0) {
+            m_windowSmallIconHeight = GetSystemMetricsForDpi(SM_CYSMICON, m_dpi);
+        }
+        return m_windowSmallIconHeight;
+    } break;
     }
+    return 0;
 }
 
 void WindowPrivate::TitleChangeHandler(const StrChangeHandlerCallback &cb) noexcept
@@ -1443,44 +1131,37 @@ void WindowPrivate::WindowMessageFilter(const WindowMessageFilterCallback &cb) n
 
 LRESULT CALLBACK WindowPrivate::WindowProc(const HWND hWnd, const UINT message, const WPARAM wParam, const LPARAM lParam) noexcept
 {
-    USER32_API(SetWindowLongPtrW);
-    USER32_API(DefWindowProcW);
-    if (SetWindowLongPtrW_API && DefWindowProcW_API) {
-        if (message == WM_NCCREATE) {
-            const auto cs = reinterpret_cast<LPCREATESTRUCT>(lParam);
-            const auto that = static_cast<WindowPrivate *>(cs->lpCreateParams);
-            // SetWindowLongPtrW() won't modify the Last Error state on success
-            // and it's return value is the previous data so we have to judge
-            // the actual operation result from the Last Error state manually.
-            SetLastError(ERROR_SUCCESS);
-            const LONG_PTR result = SetWindowLongPtrW_API(hWnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(that));
-            PRINT_WIN32_ERROR_MESSAGE(SetWindowLongPtrW, L"Failed to set the extra data to the window.")
-            if (result != 0) {
-                Utils::DisplayErrorDialog(L"The extra data of this window has been overwritten.");
-            }
-        } else if (message == WM_NCDESTROY) {
-            // See the above comments.
-            SetLastError(ERROR_SUCCESS);
-            const LONG_PTR result = SetWindowLongPtrW_API(hWnd, GWLP_USERDATA, 0);
-            PRINT_WIN32_ERROR_MESSAGE(SetWindowLongPtrW, L"Failed to clear the extra data of the window.")
-            if (result == 0) {
-                Utils::DisplayErrorDialog(L"This window doesn't contain any extra data.");
-            }
+    if (message == WM_NCCREATE) {
+        const auto cs = reinterpret_cast<LPCREATESTRUCT>(lParam);
+        const auto that = static_cast<WindowPrivate *>(cs->lpCreateParams);
+        // SetWindowLongPtrW() won't modify the Last Error state on success
+        // and it's return value is the previous data so we have to judge
+        // the actual operation result from the Last Error state manually.
+        SetLastError(ERROR_SUCCESS);
+        const LONG_PTR result = SetWindowLongPtrW(hWnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(that));
+        PRINT_WIN32_ERROR_MESSAGE(SetWindowLongPtrW, L"Failed to set the extra data to the window.")
+        if (result != 0) {
+            Utils::DisplayErrorDialog(L"The extra data of this window has been overwritten.");
         }
-        if (const auto that = GetThisFromHandle<WindowPrivate>(hWnd)) {
-            LRESULT result = 0;
-            if (that->CustomMessageHandler(message, wParam, lParam, &result)) {
-                return result;
-            }
-            if (that->InternalMessageHandler(message, wParam, lParam, &result)) {
-                return result;
-            }
+    } else if (message == WM_NCDESTROY) {
+        // See the above comments.
+        SetLastError(ERROR_SUCCESS);
+        const LONG_PTR result = SetWindowLongPtrW(hWnd, GWLP_USERDATA, 0);
+        PRINT_WIN32_ERROR_MESSAGE(SetWindowLongPtrW, L"Failed to clear the extra data of the window.")
+        if (result == 0) {
+            Utils::DisplayErrorDialog(L"This window doesn't contain any extra data.");
         }
-        return DefWindowProcW_API(hWnd, message, wParam, lParam);
-    } else {
-        Utils::DisplayErrorDialog(L"Failed to continue the WindowProc function due to SetWindowLongPtrW() and DefWindowProcW() are not available.");
-        return 0;
     }
+    if (const auto that = GetThisFromHandle<WindowPrivate>(hWnd)) {
+        LRESULT result = 0;
+        if (that->CustomMessageHandler(message, wParam, lParam, &result)) {
+            return result;
+        }
+        if (that->InternalMessageHandler(message, wParam, lParam, &result)) {
+            return result;
+        }
+    }
+    return DefWindowProcW(hWnd, message, wParam, lParam);
 }
 
 bool WindowPrivate::InternalMessageHandler(const UINT message, const WPARAM wParam, const LPARAM lParam, LRESULT *result) noexcept
@@ -1537,7 +1218,9 @@ bool WindowPrivate::InternalMessageHandler(const UINT message, const WPARAM wPar
         // wParam == 1: System-wide setting change
         // ### TODO: how to detect high contrast theme here
         if (((wParam == 0) || (wParam == 1)) && (_wcsicmp(reinterpret_cast<LPCWSTR>(lParam), L"ImmersiveColorSet") == 0)) {
+            m_colorizationArea = GetGlobalColorizationArea2();
             m_theme = GetGlobalApplicationTheme2();
+            ColorizationAreaChangeHandler();
             ThemeChangeHandler();
             if (!RefreshWindowTheme2()) {
                 Utils::DisplayErrorDialog(L"Failed to refresh the window theme.");
@@ -1571,74 +1254,63 @@ bool WindowPrivate::InternalMessageHandler(const UINT message, const WPARAM wPar
             Utils::DisplayErrorDialog(L"Can't paint the window when the window background brush and/or the title bar background brush is null.");
             return false;
         }
-        USER32_API(BeginPaint);
-        USER32_API(FillRect);
-        USER32_API(EndPaint);
-        UXTHEME_API(BeginBufferedPaint);
-        UXTHEME_API(BufferedPaintSetAlpha);
-        UXTHEME_API(EndBufferedPaint);
-        if (BeginPaint_API && FillRect_API && EndPaint_API && BeginBufferedPaint_API && BufferedPaintSetAlpha_API && EndBufferedPaint_API) {
-            PAINTSTRUCT ps;
-            SecureZeroMemory(&ps, sizeof(ps));
-            const HDC hDC = BeginPaint_API(m_window, &ps);
-            if (!hDC) {
-                PRINT_WIN32_ERROR_MESSAGE(BeginPaint, L"Failed to start painting.")
-                return false;
-            }
-            const LONG topBorderHeight = ((m_visibility == WindowState::Maximized) ? 0 : GetWindowVisibleFrameBorderThickness2());
-            if (ps.rcPaint.top < topBorderHeight) {
-                RECT rcTopBorder = ps.rcPaint;
-                rcTopBorder.bottom = topBorderHeight;
-                // To show the original top border, we have to paint on top of it with
-                // the alpha component set to 0. This page recommends to paint the area
-                // in black using the stock BLACK_BRUSH to do this:
-                // https://docs.microsoft.com/en-us/windows/win32/dwm/customframe#extending-the-client-frame
-                if (FillRect_API(hDC, &rcTopBorder, m_windowBackgroundBrush) == 0) {
-                    PRINT_WIN32_ERROR_MESSAGE(FillRect, L"Failed to paint the window background.")
-                    return false;
-                }
-            }
-            if (ps.rcPaint.bottom > topBorderHeight) {
-                RECT rcRest = ps.rcPaint;
-                rcRest.top = topBorderHeight;
-                // To hide the original title bar, we have to paint on top of it with
-                // the alpha component set to 255. This is a hack to do it with GDI.
-                // See UpdateWindowFrameMargins2() for more information.
-                HDC opaqueDc = nullptr;
-                BP_PAINTPARAMS params;
-                SecureZeroMemory(&params, sizeof(params));
-                params.cbSize = sizeof(params);
-                params.dwFlags = (BPPF_NOCLIP | BPPF_ERASE);
-                const HPAINTBUFFER buf = BeginBufferedPaint_API(hDC, &rcRest, BPBF_TOPDOWNDIB, &params, &opaqueDc);
-                if (!buf || !opaqueDc) {
-                    PRINT_WIN32_ERROR_MESSAGE(BeginBufferedPaint, L"Failed to begin the buffered paint.")
-                    return false;
-                }
-                if (FillRect_API(opaqueDc, &rcRest, m_titleBarBackgroundBrush) == 0) {
-                    PRINT_WIN32_ERROR_MESSAGE(FillRect, L"Failed to paint the window background.")
-                    return false;
-                }
-                HRESULT hr = BufferedPaintSetAlpha_API(buf, nullptr, 255);
-                if (FAILED(hr)) {
-                    PRINT_HR_ERROR_MESSAGE(BufferedPaintSetAlpha, hr, L"Failed to change alpha of the buffered paint.")
-                    return false;
-                }
-                hr = EndBufferedPaint_API(buf, TRUE);
-                if (FAILED(hr)) {
-                    PRINT_HR_ERROR_MESSAGE(EndBufferedPaint, hr, L"Failed to finish the buffered paint.")
-                    return false;
-                }
-            }
-            if (EndPaint_API(m_window, &ps) == FALSE) {
-                PRINT_WIN32_ERROR_MESSAGE(EndPaint, L"Failed to end painting.")
-                return false;
-            }
-            *result = 0;
-            return true;
-        } else {
-            Utils::DisplayErrorDialog(L"Can't paint the window due to BeginPaint(), FillRect(), EndPaint(), BeginBufferedPaint(), BufferedPaintSetAlpha() and EndBufferedPaint() are not available.");
+        PAINTSTRUCT ps;
+        SecureZeroMemory(&ps, sizeof(ps));
+        const HDC hDC = BeginPaint(m_window, &ps);
+        if (!hDC) {
+            PRINT_WIN32_ERROR_MESSAGE(BeginPaint, L"Failed to start painting.")
             return false;
         }
+        const LONG topBorderHeight = ((m_visibility == WindowState::Maximized) ? 0 : GetWindowVisibleFrameBorderThickness2());
+        if (ps.rcPaint.top < topBorderHeight) {
+            RECT rcTopBorder = ps.rcPaint;
+            rcTopBorder.bottom = topBorderHeight;
+            // To show the original top border, we have to paint on top of it with
+            // the alpha component set to 0. This page recommends to paint the area
+            // in black using the stock BLACK_BRUSH to do this:
+            // https://docs.microsoft.com/en-us/windows/win32/dwm/customframe#extending-the-client-frame
+            if (FillRect(hDC, &rcTopBorder, m_windowBackgroundBrush) == 0) {
+                PRINT_WIN32_ERROR_MESSAGE(FillRect, L"Failed to paint the window background.")
+                return false;
+            }
+        }
+        if (ps.rcPaint.bottom > topBorderHeight) {
+            RECT rcRest = ps.rcPaint;
+            rcRest.top = topBorderHeight;
+            // To hide the original title bar, we have to paint on top of it with
+            // the alpha component set to 255. This is a hack to do it with GDI.
+            // See UpdateWindowFrameMargins2() for more information.
+            HDC opaqueDc = nullptr;
+            BP_PAINTPARAMS params;
+            SecureZeroMemory(&params, sizeof(params));
+            params.cbSize = sizeof(params);
+            params.dwFlags = (BPPF_NOCLIP | BPPF_ERASE);
+            const HPAINTBUFFER buf = BeginBufferedPaint(hDC, &rcRest, BPBF_TOPDOWNDIB, &params, &opaqueDc);
+            if (!buf || !opaqueDc) {
+                PRINT_WIN32_ERROR_MESSAGE(BeginBufferedPaint, L"Failed to begin the buffered paint.")
+                return false;
+            }
+            if (FillRect(opaqueDc, &rcRest, m_titleBarBackgroundBrush) == 0) {
+                PRINT_WIN32_ERROR_MESSAGE(FillRect, L"Failed to paint the window background.")
+                return false;
+            }
+            HRESULT hr = BufferedPaintSetAlpha(buf, nullptr, 255);
+            if (FAILED(hr)) {
+                PRINT_HR_ERROR_MESSAGE(BufferedPaintSetAlpha, hr, L"Failed to change alpha of the buffered paint.")
+                return false;
+            }
+            hr = EndBufferedPaint(buf, TRUE);
+            if (FAILED(hr)) {
+                PRINT_HR_ERROR_MESSAGE(EndBufferedPaint, hr, L"Failed to finish the buffered paint.")
+                return false;
+            }
+        }
+        if (EndPaint(m_window, &ps) == FALSE) {
+            PRINT_WIN32_ERROR_MESSAGE(EndPaint, L"Failed to end painting.")
+            return false;
+        }
+        *result = 0;
+        return true;
     } break;
     case WM_SETTEXT: {
         const auto title = reinterpret_cast<LPCWSTR>(lParam);
@@ -1661,24 +1333,13 @@ bool WindowPrivate::InternalMessageHandler(const UINT message, const WPARAM wPar
         }
     } break;
     case WM_DESTROY: {
-        USER32_API(PostQuitMessage);
-        if (PostQuitMessage_API) {
-            PostQuitMessage_API(0);
-            *result = 0;
-            return true;
-        } else {
-            Utils::DisplayErrorDialog(L"Can't quit application due to PostQuitMessage() is not available.");
-            return false;
-        }
+        PostQuitMessage(0);
+        *result = 0;
+        return true;
     } break;
     case WM_NCCREATE: {
-        USER32_API(EnableNonClientDpiScaling);
-        if (EnableNonClientDpiScaling_API) {
-            if (EnableNonClientDpiScaling_API(m_window) == FALSE) {
-                PRINT_WIN32_ERROR_MESSAGE(EnableNonClientDpiScaling, L"Failed to enable window non-client area automatic DPI scaling.")
-            }
-        } else {
-            Utils::DisplayErrorDialog(L"Can't enable window non-client area automatic DPI scaling due to EnableNonClientDpiScaling() is not available.");
+        if (EnableNonClientDpiScaling(m_window) == FALSE) {
+            PRINT_WIN32_ERROR_MESSAGE(EnableNonClientDpiScaling, L"Failed to enable window non-client area automatic DPI scaling.")
         }
     } break;
     case WM_NCCALCSIZE: {
@@ -1687,22 +1348,16 @@ bool WindowPrivate::InternalMessageHandler(const UINT message, const WPARAM wPar
             return true;
         }
         const auto clientRect = &(reinterpret_cast<LPNCCALCSIZE_PARAMS>(lParam)->rgrc[0]);
-        USER32_API(DefWindowProcW);
-        if (DefWindowProcW_API) {
-            // Store the original top before the default window proc applies the default frame.
-            const LONG originalTop = clientRect->top;
-            // Apply the default frame
-            const LRESULT ret = DefWindowProcW_API(m_window, WM_NCCALCSIZE, TRUE, lParam);
-            if (ret != 0) {
-                *result = ret;
-                return true;
-            }
-            // Re-apply the original top from before the size of the default frame was applied.
-            clientRect->top = originalTop;
-        } else {
-            Utils::DisplayErrorDialog(L"Error occurred when processing WM_NCCALCSIZE due to DefWindowProcW() is not available.");
-            return false;
+        // Store the original top before the default window proc applies the default frame.
+        const LONG originalTop = clientRect->top;
+        // Apply the default frame
+        const LRESULT ret = DefWindowProcW(m_window, WM_NCCALCSIZE, TRUE, lParam);
+        if (ret != 0) {
+            *result = ret;
+            return true;
         }
+        // Re-apply the original top from before the size of the default frame was applied.
+        clientRect->top = originalTop;
         bool nonClientAreaExists = false;
         const bool max = (m_visibility == WindowState::Maximized);
         const bool full = false; // ### TODO
@@ -1726,75 +1381,62 @@ bool WindowPrivate::InternalMessageHandler(const UINT message, const WPARAM wPar
         // Make sure to use MONITOR_DEFAULTTONEAREST, so that this will
         // still find the right monitor even when we're restoring from
         // minimized.
-        SHELL32_API(SHAppBarMessage);
-        if (SHAppBarMessage_API) {
-            if (max || full) {
-                APPBARDATA abd;
-                SecureZeroMemory(&abd, sizeof(abd));
-                abd.cbSize = sizeof(abd);
-                // First, check if we have an auto-hide taskbar at all:
-                if (SHAppBarMessage_API(ABM_GETSTATE, &abd) & ABS_AUTOHIDE) {
-                    USER32_API(MonitorFromWindow);
-                    USER32_API(GetMonitorInfoW);
-                    if (MonitorFromWindow_API && GetMonitorInfoW_API) {
-                        const HMONITOR mon = MonitorFromWindow_API(m_window, MONITOR_DEFAULTTONEAREST);
-                        if (mon) {
-                            MONITORINFO mi;
-                            SecureZeroMemory(&mi, sizeof(mi));
-                            mi.cbSize = sizeof(mi);
-                            if (GetMonitorInfoW_API(mon, &mi) == FALSE) {
-                                PRINT_WIN32_ERROR_MESSAGE(GetMonitorInfoW, L"Failed to retrieve the screen information.")
-                                return false;
-                            }
-                            const RECT screenRect = mi.rcMonitor;
-                            // This helper can be used to determine if there's a
-                            // auto-hide taskbar on the given edge of the monitor
-                            // we're currently on.
-                            const auto hasAutohideTaskbar = [&screenRect](const UINT edge) -> bool {
-                                APPBARDATA abd2;
-                                SecureZeroMemory(&abd2, sizeof(abd2));
-                                abd2.cbSize = sizeof(abd2);
-                                abd2.uEdge = edge;
-                                abd2.rc = screenRect;
-                                return (reinterpret_cast<HWND>(SHAppBarMessage_API(ABM_GETAUTOHIDEBAREX, &abd2)) != nullptr);
-                            };
-                            // If there's a taskbar on any side of the monitor, reduce
-                            // our size a little bit on that edge.
-                            // Note to future code archeologists:
-                            // This doesn't seem to work for fullscreen on the primary
-                            // display. However, testing a bunch of other apps with
-                            // fullscreen modes and an auto-hiding taskbar has
-                            // shown that _none_ of them reveal the taskbar from
-                            // fullscreen mode. This includes Edge, Firefox, Chrome,
-                            // Sublime Text, PowerPoint - none seemed to support this.
-                            // This does however work fine for maximized.
-                            if (hasAutohideTaskbar(ABE_TOP)) {
-                                // Peculiarly, when we're fullscreen,
-                                clientRect->top += DefaultAutoHideTaskBarThicknessY;
-                                nonClientAreaExists = true;
-                            } else if (hasAutohideTaskbar(ABE_BOTTOM)) {
-                                clientRect->bottom -= DefaultAutoHideTaskBarThicknessY;
-                                nonClientAreaExists = true;
-                            } else if (hasAutohideTaskbar(ABE_LEFT)) {
-                                clientRect->left += DefaultAutoHideTaskBarThicknessX;
-                                nonClientAreaExists = true;
-                            } else if (hasAutohideTaskbar(ABE_RIGHT)) {
-                                clientRect->right -= DefaultAutoHideTaskBarThicknessX;
-                                nonClientAreaExists = true;
-                            }
-                        } else {
-                            PRINT_WIN32_ERROR_MESSAGE(MonitorFromWindow, L"Failed to retrieve the corresponding screen.")
-                            return false;
-                        }
-                    } else {
-                        Utils::DisplayErrorDialog(L"Error occurred when processing WM_NCCALCSIZE due to MonitorFromWindow() and GetMonitorInfoW() are not available.");
+        if (max || full) {
+            APPBARDATA abd;
+            SecureZeroMemory(&abd, sizeof(abd));
+            abd.cbSize = sizeof(abd);
+            // First, check if we have an auto-hide taskbar at all:
+            if (SHAppBarMessage(ABM_GETSTATE, &abd) & ABS_AUTOHIDE) {
+                const HMONITOR mon = MonitorFromWindow(m_window, MONITOR_DEFAULTTONEAREST);
+                if (mon) {
+                    MONITORINFO mi;
+                    SecureZeroMemory(&mi, sizeof(mi));
+                    mi.cbSize = sizeof(mi);
+                    if (GetMonitorInfoW(mon, &mi) == FALSE) {
+                        PRINT_WIN32_ERROR_MESSAGE(GetMonitorInfoW, L"Failed to retrieve the screen information.")
                         return false;
                     }
+                    const RECT screenRect = mi.rcMonitor;
+                    // This helper can be used to determine if there's a
+                    // auto-hide taskbar on the given edge of the monitor
+                    // we're currently on.
+                    const auto hasAutohideTaskbar = [&screenRect](const UINT edge) -> bool {
+                        APPBARDATA abd2;
+                        SecureZeroMemory(&abd2, sizeof(abd2));
+                        abd2.cbSize = sizeof(abd2);
+                        abd2.uEdge = edge;
+                        abd2.rc = screenRect;
+                        return (reinterpret_cast<HWND>(SHAppBarMessage(ABM_GETAUTOHIDEBAREX, &abd2)) != nullptr);
+                    };
+                    // If there's a taskbar on any side of the monitor, reduce
+                    // our size a little bit on that edge.
+                    // Note to future code archeologists:
+                    // This doesn't seem to work for fullscreen on the primary
+                    // display. However, testing a bunch of other apps with
+                    // fullscreen modes and an auto-hiding taskbar has
+                    // shown that _none_ of them reveal the taskbar from
+                    // fullscreen mode. This includes Edge, Firefox, Chrome,
+                    // Sublime Text, PowerPoint - none seemed to support this.
+                    // This does however work fine for maximized.
+                    if (hasAutohideTaskbar(ABE_TOP)) {
+                        // Peculiarly, when we're fullscreen,
+                        clientRect->top += DefaultAutoHideTaskBarThicknessY;
+                        nonClientAreaExists = true;
+                    } else if (hasAutohideTaskbar(ABE_BOTTOM)) {
+                        clientRect->bottom -= DefaultAutoHideTaskBarThicknessY;
+                        nonClientAreaExists = true;
+                    } else if (hasAutohideTaskbar(ABE_LEFT)) {
+                        clientRect->left += DefaultAutoHideTaskBarThicknessX;
+                        nonClientAreaExists = true;
+                    } else if (hasAutohideTaskbar(ABE_RIGHT)) {
+                        clientRect->right -= DefaultAutoHideTaskBarThicknessX;
+                        nonClientAreaExists = true;
+                    }
+                } else {
+                    PRINT_WIN32_ERROR_MESSAGE(MonitorFromWindow, L"Failed to retrieve the corresponding screen.")
+                    return false;
                 }
             }
-        } else {
-            Utils::DisplayErrorDialog(L"Error occurred when processing WM_NCCALCSIZE due to SHAppBarMessage() is not available.");
-            return false;
         }
         // If the window bounds change, we're going to relayout and repaint
         // anyway. Returning WVR_REDRAW avoids an extra paint before that of
@@ -1812,14 +1454,8 @@ bool WindowPrivate::InternalMessageHandler(const UINT message, const WPARAM wPar
     case WM_NCHITTEST: {
         const POINT globalPos = {GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)};
         POINT localPos = globalPos;
-        USER32_API(ScreenToClient);
-        if (ScreenToClient_API) {
-            if (ScreenToClient_API(m_window, &localPos) == FALSE) {
-                PRINT_WIN32_ERROR_MESSAGE(ScreenToClient, L"Failed to translate from screen coordinate to window coordinate.")
-                return false;
-            }
-        } else {
-            Utils::DisplayErrorDialog(L"Error occurred when processing WM_NCHITTEST due to ScreenToClient() is not available.");
+        if (ScreenToClient(m_window, &localPos) == FALSE) {
+            PRINT_WIN32_ERROR_MESSAGE(ScreenToClient, L"Failed to translate from screen coordinate to window coordinate.")
             return false;
         }
         const auto resizeBorderThicknessY = static_cast<LONG>(GetWindowMetrics2(WindowMetrics::ResizeBorderThicknessY));
@@ -1827,34 +1463,28 @@ bool WindowPrivate::InternalMessageHandler(const UINT message, const WPARAM wPar
         const LONG titleBarHeight = ((m_visibility == WindowState::Hidden) ? 0 : ((m_visibility == WindowState::Maximized) ? captionHeight : (captionHeight + resizeBorderThicknessY)));
         const bool isTitleBar = (((m_visibility == WindowState::Windowed) || (m_visibility == WindowState::Maximized)) ? (localPos.y <= titleBarHeight) : false);
         const bool isTop = ((m_visibility == WindowState::Windowed) ? (localPos.y <= resizeBorderThicknessY) : false);
-        USER32_API(DefWindowProcW);
-        if (DefWindowProcW_API) {
-            // This will handle the left, right and bottom parts of the frame
-            // because we didn't change them.
-            const LRESULT originalRet = DefWindowProcW_API(m_window, WM_NCHITTEST, 0, lParam);
-            if (originalRet != HTCLIENT) {
-                *result = originalRet;
-                return true;
-            }
-            // At this point, we know that the cursor is inside the client area
-            // so it has to be either the little border at the top of our custom
-            // title bar or the drag bar. Apparently, it must be the drag bar or
-            // the little border at the top which the user can use to move or
-            // resize the window.
-            if (isTop) {
-                *result = HTTOP;
-                return true;
-            }
-            if (isTitleBar) {
-                *result = HTCAPTION;
-                return true;
-            }
-            *result = HTCLIENT;
+        // This will handle the left, right and bottom parts of the frame
+        // because we didn't change them.
+        const LRESULT originalRet = DefWindowProcW(m_window, WM_NCHITTEST, 0, lParam);
+        if (originalRet != HTCLIENT) {
+            *result = originalRet;
             return true;
-        } else {
-            Utils::DisplayErrorDialog(L"Error occurred when processing WM_NCHITTEST due to DefWindowProcW() is not available.");
-            return false;
         }
+        // At this point, we know that the cursor is inside the client area
+        // so it has to be either the little border at the top of our custom
+        // title bar or the drag bar. Apparently, it must be the drag bar or
+        // the little border at the top which the user can use to move or
+        // resize the window.
+        if (isTop) {
+            *result = HTTOP;
+            return true;
+        }
+        if (isTitleBar) {
+            *result = HTCAPTION;
+            return true;
+        }
+        *result = HTCLIENT;
+        return true;
     } break;
     case WM_NCRBUTTONUP: {
         if (wParam == HTCAPTION) {
@@ -1876,64 +1506,34 @@ bool WindowPrivate::InternalMessageHandler(const UINT message, const WPARAM wPar
 
 bool WindowPrivate::UpdateWindowFrameMargins2() noexcept
 {
-    DWM_API(DwmExtendFrameIntoClientArea);
-    if (DwmExtendFrameIntoClientArea_API) {
-        if (!m_window) {
-            Utils::DisplayErrorDialog(L"Failed to update the window frame margins due to the window has not been created yet.");
-            return false;
-        }
-        // We removed the whole top part of the frame (see handling of
-        // WM_NCCALCSIZE) so the top border is missing now. We add it back here.
-        // Note #1: You might wonder why we don't remove just the title bar instead
-        //  of removing the whole top part of the frame and then adding the little
-        //  top border back. I tried to do this but it didn't work: DWM drew the
-        //  whole title bar anyways on top of the window. It seems that DWM only
-        //  wants to draw either nothing or the whole top part of the frame.
-        // Note #2: For some reason if you try to set the top margin to just the
-        //  top border height (what we want to do), then there is a transparency
-        //  bug when the window is inactive, so I've decided to add the whole top
-        //  part of the frame instead and then we will hide everything that we
-        //  don't need (that is, the whole thing but the little 1 pixel wide border
-        //  at the top) in the WM_PAINT handler. This eliminates the transparency
-        //  bug and it's what a lot of Win32 apps that customize the title bar do
-        //  so it should work fine.
-        const UINT titleBarHeight = (GetWindowMetrics2(WindowMetrics::ResizeBorderThicknessY) + GetWindowMetrics2(WindowMetrics::CaptionHeight));
-        const UINT topFrameMargin = ((m_visibility == WindowState::Maximized) ? 0 : titleBarHeight);
-        const MARGINS margins = {0, 0, static_cast<int>(topFrameMargin), 0};
-        const HRESULT hr = DwmExtendFrameIntoClientArea_API(m_window, &margins);
-        if (FAILED(hr)) {
-            PRINT_HR_ERROR_MESSAGE(DwmExtendFrameIntoClientArea, hr, L"Failed to update the window frame margins for the window.")
-            return false;
-        }
-        return true;
-    } else {
-        Utils::DisplayErrorDialog(L"Failed to update the window frame margins due to DwmExtendFrameIntoClientArea() is not available.");
+    if (!m_window) {
+        Utils::DisplayErrorDialog(L"Failed to update the window frame margins due to the window has not been created yet.");
         return false;
     }
-}
-
-bool WindowPrivate::EnsureNonClientAreaRendering2() const noexcept
-{
-    DWM_API(DwmSetWindowAttribute);
-    if (DwmSetWindowAttribute_API) {
-        if (!m_window) {
-            Utils::DisplayErrorDialog(L"Can't enable window non-client area rendering due to the window has not been created yet.");
-            return false;
-        }
-        // Don't use "DWMWA_NCRENDERING_ENABLED" because it's used for querying values only.
-        const DWMNCRENDERINGPOLICY ncrp = DWMNCRP_ENABLED;
-        // Don't use "DWMWA_ALLOW_NCPAINT" because it will make the window look weird.
-        const HRESULT hr = DwmSetWindowAttribute_API(m_window, DWMWA_NCRENDERING_POLICY, &ncrp, sizeof(ncrp));
-        if (FAILED(hr)) {
-            PRINT_HR_ERROR_MESSAGE(DwmSetWindowAttribute, hr, L"Failed to enable window non-client area rendering.")
-            return false;
-        } else {
-            return true;
-        }
-    } else {
-        Utils::DisplayErrorDialog(L"Can't enable window non-client area rendering due to DwmSetWindowAttribute() is not available.");
+    // We removed the whole top part of the frame (see handling of
+    // WM_NCCALCSIZE) so the top border is missing now. We add it back here.
+    // Note #1: You might wonder why we don't remove just the title bar instead
+    //  of removing the whole top part of the frame and then adding the little
+    //  top border back. I tried to do this but it didn't work: DWM drew the
+    //  whole title bar anyways on top of the window. It seems that DWM only
+    //  wants to draw either nothing or the whole top part of the frame.
+    // Note #2: For some reason if you try to set the top margin to just the
+    //  top border height (what we want to do), then there is a transparency
+    //  bug when the window is inactive, so I've decided to add the whole top
+    //  part of the frame instead and then we will hide everything that we
+    //  don't need (that is, the whole thing but the little 1 pixel wide border
+    //  at the top) in the WM_PAINT handler. This eliminates the transparency
+    //  bug and it's what a lot of Win32 apps that customize the title bar do
+    //  so it should work fine.
+    const UINT titleBarHeight = (GetWindowMetrics2(WindowMetrics::ResizeBorderThicknessY) + GetWindowMetrics2(WindowMetrics::CaptionHeight));
+    const UINT topFrameMargin = ((m_visibility == WindowState::Maximized) ? 0 : titleBarHeight);
+    const MARGINS margins = {0, 0, static_cast<int>(topFrameMargin), 0};
+    const HRESULT hr = DwmExtendFrameIntoClientArea(m_window, &margins);
+    if (FAILED(hr)) {
+        PRINT_HR_ERROR_MESSAGE(DwmExtendFrameIntoClientArea, hr, L"Failed to update the window frame margins for the window.")
         return false;
     }
+    return true;
 }
 
 void WindowPrivate::TitleChangeHandler() const noexcept

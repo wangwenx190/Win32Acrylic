@@ -25,9 +25,10 @@
 #include <SDKDDKVer.h>
 #include <Windows.h>
 #include "WindowsVersion.h"
-#include "SystemLibrary.h"
 #include "OperationResult.h"
 #include "Utils.h"
+#include "Definitions.h"
+#include "SystemLibrary.h"
 
 const VersionNumber &WindowsVersion::CurrentVersion() noexcept
 {
@@ -36,7 +37,7 @@ const VersionNumber &WindowsVersion::CurrentVersion() noexcept
     if (version.Empty()) {
         if (!tried) {
             tried = true;
-            static const auto RtlGetVersion_API = reinterpret_cast<NTSTATUS(WINAPI *)(PRTL_OSVERSIONINFOW)>(SystemLibrary::GetSymbol(L"NTDll.dll", L"RtlGetVersion"));
+            static const auto RtlGetVersion_API = reinterpret_cast<NTSTATUS(WINAPI *)(PRTL_OSVERSIONINFOW)>(SystemLibrary::GetSymbolNoCache(L"ntdll.dll", L"RtlGetVersion"));
             if (RtlGetVersion_API) {
                 RTL_OSVERSIONINFOEXW osvi;
                 SecureZeroMemory(&osvi, sizeof(osvi));
@@ -75,8 +76,8 @@ bool WindowsVersion::IsGreaterOrEqual(const VersionNumber &version) noexcept
 std::wstring WindowsVersion::ToHumanReadableString(const VersionNumber &version) noexcept
 {
     std::wstring humanReadableString = {};
-    if (version >= Windows10_21Half2) {
-        humanReadableString = L"Windows 11"; // ### TODO
+    if (version >= Windows11) {
+        humanReadableString = L"Windows 11";
     } else if (version >= Windows10_21Half1) {
         humanReadableString = L"Windows 10 Version 21H1 (May 2021 Update)";
     } else if (version >= Windows10_20Half2) {

@@ -24,7 +24,6 @@
 
 #include "pch.h"
 #include "XamlWindow.h"
-#include "SystemLibraryManager.h"
 #include "OperationResult.h"
 #include "Utils.h"
 
@@ -102,12 +101,6 @@ private:
     [[nodiscard]] bool InitializeDragBarWindow() noexcept;
 
     [[nodiscard]] bool CreateXamlContents() noexcept;
-    [[nodiscard]] bool UpdateSystemButtonStyle() noexcept;
-    [[nodiscard]] bool UpdateTitleBarStyle() noexcept;
-
-    void OnSystemButtonEntered(winrt::Windows::Foundation::IInspectable const &sender, winrt::Windows::UI::Xaml::Input::PointerRoutedEventArgs const &e) noexcept;
-    void OnSystemButtonLeaved(winrt::Windows::Foundation::IInspectable const &sender, winrt::Windows::UI::Xaml::Input::PointerRoutedEventArgs const &e) noexcept;
-    void OnSystemButtonClicked(winrt::Windows::Foundation::IInspectable const &sender, winrt::Windows::UI::Xaml::RoutedEventArgs const &e) noexcept;
 
     [[nodiscard]] static bool SetWindowState(const HWND hWnd, const DWORD extraFlags) noexcept;
 
@@ -128,14 +121,6 @@ private:
     winrt::Windows::UI::Xaml::Hosting::DesktopWindowXamlSource m_xamlSource = nullptr;
     winrt::Windows::UI::Xaml::Controls::Grid m_rootGrid = nullptr;
     winrt::Windows::UI::Xaml::Media::AcrylicBrush m_acrylicBrush = nullptr;
-    winrt::Windows::UI::Xaml::Controls::Button m_windowIconButton = nullptr;
-    winrt::Windows::UI::Xaml::Controls::Button m_minimizeButton = nullptr;
-    winrt::Windows::UI::Xaml::Controls::Button m_maximizeButton = nullptr;
-    winrt::Windows::UI::Xaml::Controls::Button m_closeButton = nullptr;
-    winrt::Windows::UI::Xaml::Controls::StackPanel m_systemButtonControl = nullptr;
-    winrt::Windows::UI::Xaml::Controls::Grid m_titleBarControl = nullptr;
-    winrt::Windows::UI::Xaml::Controls::TextBlock m_windowTitleLabel = nullptr;
-    //winrt::Windows::UI::Xaml::Controls::Button::Click_revoker m_systemButtonClickRevoker;
 };
 
 XamlWindowPrivate::XamlWindowPrivate(XamlWindow *q) noexcept
@@ -254,42 +239,34 @@ winrt::Windows::Foundation::Size XamlWindowPrivate::GetLogicalSize() const noexc
 
 LRESULT CALLBACK XamlWindowPrivate::DragBarWindowProc(const HWND hWnd, const UINT message, const WPARAM wParam, const LPARAM lParam) noexcept
 {
-    USER32_API(SetWindowLongPtrW);
-    USER32_API(GetWindowLongPtrW);
-    USER32_API(DefWindowProcW);
-    if (SetWindowLongPtrW_API && GetWindowLongPtrW_API && DefWindowProcW_API) {
-        if (message == WM_NCCREATE) {
-            const auto cs = reinterpret_cast<LPCREATESTRUCT>(lParam);
-            const auto that = static_cast<XamlWindowPrivate *>(cs->lpCreateParams);
-            // SetWindowLongPtrW() won't modify the Last Error state on success
-            // and it's return value is the previous data so we have to judge
-            // the actual operation result from the Last Error state manually.
-            SetLastError(ERROR_SUCCESS);
-            const LONG_PTR result = SetWindowLongPtrW_API(hWnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(that));
-            PRINT_WIN32_ERROR_MESSAGE(SetWindowLongPtrW, L"Failed to set the extra data to the drag bar window.")
-            if (result != 0) {
-                Utils::DisplayErrorDialog(L"The extra data of the drag bar window has been overwritten.");
-            }
-        } else if (message == WM_NCDESTROY) {
-            // See the above comments.
-            SetLastError(ERROR_SUCCESS);
-            const LONG_PTR result = SetWindowLongPtrW_API(hWnd, GWLP_USERDATA, 0);
-            PRINT_WIN32_ERROR_MESSAGE(SetWindowLongPtrW, L"Failed to clear the extra data of the drag bar window.")
-            if (result == 0) {
-                Utils::DisplayErrorDialog(L"The drag bar window doesn't contain any extra data.");
-            }
+    if (message == WM_NCCREATE) {
+        const auto cs = reinterpret_cast<LPCREATESTRUCT>(lParam);
+        const auto that = static_cast<XamlWindowPrivate *>(cs->lpCreateParams);
+        // SetWindowLongPtrW() won't modify the Last Error state on success
+        // and it's return value is the previous data so we have to judge
+        // the actual operation result from the Last Error state manually.
+        SetLastError(ERROR_SUCCESS);
+        const LONG_PTR result = SetWindowLongPtrW(hWnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(that));
+        PRINT_WIN32_ERROR_MESSAGE(SetWindowLongPtrW, L"Failed to set the extra data to the drag bar window.")
+        if (result != 0) {
+            Utils::DisplayErrorDialog(L"The extra data of the drag bar window has been overwritten.");
         }
-        if (const auto that = reinterpret_cast<XamlWindowPrivate *>(GetWindowLongPtrW_API(hWnd, GWLP_USERDATA))) {
-            LRESULT result = 0;
-            if (that->DragBarMessageHandler(message, wParam, lParam, &result)) {
-                return result;
-            }
+    } else if (message == WM_NCDESTROY) {
+        // See the above comments.
+        SetLastError(ERROR_SUCCESS);
+        const LONG_PTR result = SetWindowLongPtrW(hWnd, GWLP_USERDATA, 0);
+        PRINT_WIN32_ERROR_MESSAGE(SetWindowLongPtrW, L"Failed to clear the extra data of the drag bar window.")
+        if (result == 0) {
+            Utils::DisplayErrorDialog(L"The drag bar window doesn't contain any extra data.");
         }
-        return DefWindowProcW_API(hWnd, message, wParam, lParam);
-    } else {
-        Utils::DisplayErrorDialog(L"Failed to continue the WindowProc function of the drag bar window due to SetWindowLongPtrW(), GetWindowLongPtrW() and DefWindowProcW() are not available.");
-        return 0;
     }
+    if (const auto that = reinterpret_cast<XamlWindowPrivate *>(GetWindowLongPtrW(hWnd, GWLP_USERDATA))) {
+        LRESULT result = 0;
+        if (that->DragBarMessageHandler(message, wParam, lParam, &result)) {
+            return result;
+        }
+    }
+    return DefWindowProcW(hWnd, message, wParam, lParam);
 }
 
 bool XamlWindowPrivate::DragBarMessageHandler(const UINT message, const WPARAM wParam, const LPARAM lParam, LRESULT *result) const noexcept
@@ -352,25 +329,18 @@ bool XamlWindowPrivate::DragBarMessageHandler(const UINT message, const WPARAM w
     }
     const HWND mainWindowHandle = q_ptr->WindowHandle();
     if (nonClientMessage.has_value() && mainWindowHandle) {
-        USER32_API(ClientToScreen);
-        USER32_API(SendMessageW);
-        if (ClientToScreen_API && SendMessageW_API) {
-            POINT pos = {GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)};
-            if (ClientToScreen_API(m_dragBarWindow, &pos) == FALSE) {
-                PRINT_WIN32_ERROR_MESSAGE(ClientToScreen, L"Failed to translate from window coordinate to screen coordinate.")
-                return false;
-            }
-            const LPARAM newLParam = MAKELPARAM(pos.x, pos.y);
-            // Hit test the parent window at the screen coordinates the user clicked in the drag input sink window,
-            // then pass that click through as an NC click in that location.
-            const LRESULT hitTestResult = SendMessageW_API(mainWindowHandle, WM_NCHITTEST, 0, newLParam);
-            SendMessageW_API(mainWindowHandle, nonClientMessage.value(), hitTestResult, newLParam);
-            *result = 0;
-            return true;
-        } else {
-            Utils::DisplayErrorDialog(L"Failed to send hit test message to the main window due to ClientToScreen() and SendMessageW() are not available.");
+        POINT pos = {GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)};
+        if (ClientToScreen(m_dragBarWindow, &pos) == FALSE) {
+            PRINT_WIN32_ERROR_MESSAGE(ClientToScreen, L"Failed to translate from window coordinate to screen coordinate.")
             return false;
         }
+        const LPARAM newLParam = MAKELPARAM(pos.x, pos.y);
+        // Hit test the parent window at the screen coordinates the user clicked in the drag input sink window,
+        // then pass that click through as an NC click in that location.
+        const LRESULT hitTestResult = SendMessageW(mainWindowHandle, WM_NCHITTEST, 0, newLParam);
+        SendMessageW(mainWindowHandle, nonClientMessage.value(), hitTestResult, newLParam);
+        *result = 0;
+        return true;
     }
     return false;
 }
@@ -440,14 +410,8 @@ bool XamlWindowPrivate::InitializeDragBarWindow() noexcept
         return false;
     }
     // Layered window won't be visible until we call SetLayeredWindowAttributes() or UpdateLayeredWindow().
-    USER32_API(SetLayeredWindowAttributes);
-    if (SetLayeredWindowAttributes_API) {
-        if (SetLayeredWindowAttributes_API(m_dragBarWindow, 0, 255, LWA_ALPHA) == FALSE) {
-            PRINT_WIN32_ERROR_MESSAGE(SetLayeredWindowAttributes, L"Failed to update the drag bar window.")
-            return false;
-        }
-    } else {
-        Utils::DisplayErrorDialog(L"Failed to update the drag bar window due to SetLayeredWindowAttributes() is not available.");
+    if (SetLayeredWindowAttributes(m_dragBarWindow, 0, 255, LWA_ALPHA) == FALSE) {
+        PRINT_WIN32_ERROR_MESSAGE(SetLayeredWindowAttributes, L"Failed to update the drag bar window.")
         return false;
     }
     if (!SyncDragBarWindowGeometry()) {
@@ -472,106 +436,7 @@ UINT XamlWindowPrivate::GetTopFrameMargin() const noexcept
 
 bool XamlWindowPrivate::CreateXamlContents() noexcept
 {
-    // System buttons
-    m_minimizeButton = winrt::Windows::UI::Xaml::Controls::Button();
-    m_minimizeButton.Name(L"MinimizeButton");
-    m_minimizeButton.AddHandler(
-        winrt::Windows::UI::Xaml::UIElement::PointerEnteredEvent(),
-        winrt::box_value(winrt::Windows::UI::Xaml::Input::PointerEventHandler(this, &XamlWindowPrivate::OnSystemButtonEntered)),
-        true);
-    m_minimizeButton.AddHandler(
-        winrt::Windows::UI::Xaml::UIElement::PointerExitedEvent(),
-        winrt::box_value(winrt::Windows::UI::Xaml::Input::PointerEventHandler(this, &XamlWindowPrivate::OnSystemButtonLeaved)),
-        true);
-    const auto revoker1 = m_minimizeButton.Click(winrt::auto_revoke, { this, &XamlWindowPrivate::OnSystemButtonClicked });
-    UNREFERENCED_PARAMETER(revoker1);
-
-    m_maximizeButton = winrt::Windows::UI::Xaml::Controls::Button();
-    m_maximizeButton.Name(L"MaximizeButton");
-    m_maximizeButton.AddHandler(
-        winrt::Windows::UI::Xaml::UIElement::PointerEnteredEvent(),
-        winrt::box_value(winrt::Windows::UI::Xaml::Input::PointerEventHandler(this, &XamlWindowPrivate::OnSystemButtonEntered)),
-        true);
-    m_maximizeButton.AddHandler(
-        winrt::Windows::UI::Xaml::UIElement::PointerExitedEvent(),
-        winrt::box_value(winrt::Windows::UI::Xaml::Input::PointerEventHandler(this, &XamlWindowPrivate::OnSystemButtonLeaved)),
-        true);
-    const auto revoker2 = m_maximizeButton.Click(winrt::auto_revoke, { this, &XamlWindowPrivate::OnSystemButtonClicked });
-    UNREFERENCED_PARAMETER(revoker2);
-
-    m_closeButton = winrt::Windows::UI::Xaml::Controls::Button();
-    m_closeButton.Name(L"CloseButton");
-    m_closeButton.AddHandler(
-        winrt::Windows::UI::Xaml::UIElement::PointerEnteredEvent(),
-        winrt::box_value(winrt::Windows::UI::Xaml::Input::PointerEventHandler(this, &XamlWindowPrivate::OnSystemButtonEntered)),
-        true);
-    m_closeButton.AddHandler(
-        winrt::Windows::UI::Xaml::UIElement::PointerExitedEvent(),
-        winrt::box_value(winrt::Windows::UI::Xaml::Input::PointerEventHandler(this, &XamlWindowPrivate::OnSystemButtonLeaved)),
-        true);
-    const auto revoker3 = m_closeButton.Click(winrt::auto_revoke, { this, &XamlWindowPrivate::OnSystemButtonClicked });
-    UNREFERENCED_PARAMETER(revoker3);
-
-    m_systemButtonControl = winrt::Windows::UI::Xaml::Controls::StackPanel();
-    m_systemButtonControl.HorizontalAlignment(winrt::Windows::UI::Xaml::HorizontalAlignment::Right);
-    m_systemButtonControl.VerticalAlignment(winrt::Windows::UI::Xaml::VerticalAlignment::Top);
-
-    m_systemButtonControl.Children().Clear();
-    m_systemButtonControl.Children().Append(m_minimizeButton);
-    m_systemButtonControl.Children().Append(m_maximizeButton);
-    m_systemButtonControl.Children().Append(m_closeButton);
-
-    // Title bar
-    m_windowIconButton = winrt::Windows::UI::Xaml::Controls::Button();
-
-    m_windowTitleLabel = winrt::Windows::UI::Xaml::Controls::TextBlock();
-    m_windowTitleLabel.HorizontalAlignment(winrt::Windows::UI::Xaml::HorizontalAlignment::Stretch);
-    m_windowTitleLabel.VerticalAlignment(winrt::Windows::UI::Xaml::VerticalAlignment::Center); // ### TODO: Or Stretch?
-    m_windowTitleLabel.HorizontalTextAlignment(winrt::Windows::UI::Xaml::TextAlignment::Center);
-
-    m_titleBarControl = winrt::Windows::UI::Xaml::Controls::Grid();
-    m_titleBarControl.HorizontalAlignment(winrt::Windows::UI::Xaml::HorizontalAlignment::Stretch);
-    m_titleBarControl.VerticalAlignment(winrt::Windows::UI::Xaml::VerticalAlignment::Top);
-
-    auto windowIconColumn = winrt::Windows::UI::Xaml::Controls::ColumnDefinition();
-    auto windowTitleColumn = winrt::Windows::UI::Xaml::Controls::ColumnDefinition();
-    auto systemButtonsColumn = winrt::Windows::UI::Xaml::Controls::ColumnDefinition();
-
-    windowIconColumn.Width(winrt::Windows::UI::Xaml::GridLengthHelper::FromPixels(30));
-    windowTitleColumn.Width(winrt::Windows::UI::Xaml::GridLengthHelper::FromValueAndType(1.0, winrt::Windows::UI::Xaml::GridUnitType::Star));
-    systemButtonsColumn.Width(winrt::Windows::UI::Xaml::GridLengthHelper::Auto());
-
-    m_titleBarControl.ColumnDefinitions().Append(windowIconColumn);
-    m_titleBarControl.ColumnDefinitions().Append(windowTitleColumn);
-    m_titleBarControl.ColumnDefinitions().Append(systemButtonsColumn);
-
-    m_titleBarControl.Children().Clear();
-    m_titleBarControl.Children().Append(m_windowIconButton);
-    m_titleBarControl.Children().Append(m_windowTitleLabel);
-    m_titleBarControl.Children().Append(m_systemButtonControl);
-
-    winrt::Windows::UI::Xaml::Controls::Grid::SetColumn(m_windowIconButton, 0);
-    winrt::Windows::UI::Xaml::Controls::Grid::SetColumn(m_windowTitleLabel, 1);
-    winrt::Windows::UI::Xaml::Controls::Grid::SetColumn(m_systemButtonControl, 2);
-
-    // Window
     m_rootGrid = winrt::Windows::UI::Xaml::Controls::Grid();
-    m_rootGrid.HorizontalAlignment(winrt::Windows::UI::Xaml::HorizontalAlignment::Stretch);
-    m_rootGrid.VerticalAlignment(winrt::Windows::UI::Xaml::VerticalAlignment::Stretch);
-
-    auto titleBarRow = winrt::Windows::UI::Xaml::Controls::RowDefinition();
-    auto windowContentRow = winrt::Windows::UI::Xaml::Controls::RowDefinition();
-
-    titleBarRow.Height(winrt::Windows::UI::Xaml::GridLengthHelper::FromPixels(30));
-    windowContentRow.Height(winrt::Windows::UI::Xaml::GridLengthHelper::FromValueAndType(1.0, winrt::Windows::UI::Xaml::GridUnitType::Star));
-
-    m_rootGrid.RowDefinitions().Append(titleBarRow);
-    m_rootGrid.RowDefinitions().Append(windowContentRow);
-
-    m_rootGrid.Children().Clear();
-    m_rootGrid.Children().Append(m_titleBarControl);
-
-    winrt::Windows::UI::Xaml::Controls::Grid::SetRow(m_titleBarControl, 0);
 
     m_acrylicBrush = winrt::Windows::UI::Xaml::Media::AcrylicBrush();
     m_acrylicBrush.BackgroundSource(winrt::Windows::UI::Xaml::Media::AcrylicBackgroundSource::HostBackdrop);
@@ -582,75 +447,38 @@ bool XamlWindowPrivate::CreateXamlContents() noexcept
 
     m_rootGrid.Background(m_acrylicBrush);
 
-    if (!UpdateSystemButtonStyle()) {
-        Utils::DisplayErrorDialog(L"Failed to update the system button style.");
-        return false;
-    }
-
-    return true;
-}
-
-bool XamlWindowPrivate::UpdateSystemButtonStyle() noexcept
-{
-    if ((m_minimizeButton == nullptr) || (m_maximizeButton == nullptr) || (m_closeButton == nullptr)) {
-        Utils::DisplayErrorDialog(L"Can't update the system button style due to they have not been created yet.");
-        return false;
-    }
-    const LONG systemButtonPhysicalHeight = GetTitleBarHeight();
-    const auto systemButtonPhysicalWidth = static_cast<LONG>(std::round(static_cast<double>(systemButtonPhysicalHeight) * 1.5));
-    const auto systemButtonLogicalSize = GetLogicalSize({systemButtonPhysicalWidth, systemButtonPhysicalHeight});
-    m_minimizeButton.Width(systemButtonLogicalSize.Width);
-    m_minimizeButton.Height(systemButtonLogicalSize.Height);
-    m_maximizeButton.Width(systemButtonLogicalSize.Width);
-    m_maximizeButton.Height(systemButtonLogicalSize.Height);
-    m_closeButton.Width(systemButtonLogicalSize.Width);
-    m_closeButton.Height(systemButtonLogicalSize.Height);
-    return true;
-}
-
-bool XamlWindowPrivate::UpdateTitleBarStyle() noexcept
-{
-    // ### TODO
     return true;
 }
 
 bool XamlWindowPrivate::SetWindowState(const HWND hWnd, const DWORD extraFlags) noexcept
 {
-    USER32_API(GetCursorPos);
-    USER32_API(GetWindowPlacement);
-    USER32_API(PostMessageW);
-    if (GetCursorPos_API && GetWindowPlacement_API && PostMessageW_API) {
-        if (!hWnd) {
-            return false;
-        }
-        POINT pos = {};
-        if (GetCursorPos_API(&pos) == FALSE) {
-            PRINT_WIN32_ERROR_MESSAGE(GetCursorPos, L"")
-            return false;
-        }
-        const LPARAM lParam = MAKELPARAM(pos.x, pos.y);
-        WINDOWPLACEMENT wp;
-        SecureZeroMemory(&wp, sizeof(wp));
-        wp.length = sizeof(wp);
-        if (GetWindowPlacement_API(hWnd, &wp) == FALSE) {
-            PRINT_WIN32_ERROR_MESSAGE(GetWindowPlacement, L"")
-            return false;
-        }
-        DWORD flags = extraFlags;
-        if ((wp.showCmd == SW_NORMAL) || (wp.showCmd == SW_RESTORE)) {
-            flags |= SC_MAXIMIZE;
-        } else if (wp.showCmd == SW_MAXIMIZE) {
-            flags |= SC_RESTORE;
-        }
-        if (PostMessageW_API(hWnd, WM_SYSCOMMAND, static_cast<WPARAM>(flags), lParam) == FALSE) {
-            PRINT_WIN32_ERROR_MESSAGE(PostMessageW, L"")
-            return false;
-        }
-        return true;
-    } else {
-        Utils::DisplayErrorDialog(L"Can't respond to user click due to GetCursorPos() and PostMessageW() are not available.");
+    if (!hWnd) {
         return false;
     }
+    POINT pos = {};
+    if (GetCursorPos(&pos) == FALSE) {
+        PRINT_WIN32_ERROR_MESSAGE(GetCursorPos, L"Failed to retrieve the cursor position.")
+        return false;
+    }
+    const LPARAM lParam = MAKELPARAM(pos.x, pos.y);
+    WINDOWPLACEMENT wp;
+    SecureZeroMemory(&wp, sizeof(wp));
+    wp.length = sizeof(wp);
+    if (GetWindowPlacement(hWnd, &wp) == FALSE) {
+        PRINT_WIN32_ERROR_MESSAGE(GetWindowPlacement, L"Failed to retrieve the window placement.")
+        return false;
+    }
+    DWORD flags = extraFlags;
+    if ((wp.showCmd == SW_NORMAL) || (wp.showCmd == SW_RESTORE)) {
+        flags |= SC_MAXIMIZE;
+    } else if (wp.showCmd == SW_MAXIMIZE) {
+        flags |= SC_RESTORE;
+    }
+    if (PostMessageW(hWnd, WM_SYSCOMMAND, static_cast<WPARAM>(flags), lParam) == FALSE) {
+        PRINT_WIN32_ERROR_MESSAGE(PostMessageW, L"Failed to post message to the window.")
+        return false;
+    }
+    return true;
 }
 
 bool XamlWindowPrivate::RefreshWindowBackgroundBrush() noexcept
@@ -714,16 +542,10 @@ bool XamlWindowPrivate::SyncXamlIslandWindowGeometry() const noexcept
         Utils::DisplayErrorDialog(L"Can't sync the XAML Island window geometry due to it has not been created yet.");
         return false;
     }
-    USER32_API(SetWindowPos);
-    if (SetWindowPos_API) {
-        const UINT topFrameMargin = GetTopFrameMargin();
-        const UINT actualHeight = (q_ptr->Height() - topFrameMargin);
-        if (SetWindowPos_API(m_xamlIslandWindow, HWND_BOTTOM, 0, topFrameMargin, q_ptr->Width(), actualHeight, (SWP_SHOWWINDOW | SWP_NOACTIVATE | SWP_NOOWNERZORDER)) == FALSE) {
-            PRINT_WIN32_ERROR_MESSAGE(SetWindowPos, L"Failed to sync the XAML Island window geometry.")
-            return false;
-        }
-    } else {
-        Utils::DisplayErrorDialog(L"Failed to sync the XAML Island window geometry due to SetWindowPos() is not available.");
+    const UINT topFrameMargin = GetTopFrameMargin();
+    const UINT actualHeight = (q_ptr->Height() - topFrameMargin);
+    if (SetWindowPos(m_xamlIslandWindow, HWND_BOTTOM, 0, topFrameMargin, q_ptr->Width(), actualHeight, (SWP_SHOWWINDOW | SWP_NOACTIVATE | SWP_NOOWNERZORDER)) == FALSE) {
+        PRINT_WIN32_ERROR_MESSAGE(SetWindowPos, L"Failed to sync the XAML Island window geometry.")
         return false;
     }
     if (m_rootGrid != nullptr) {
@@ -744,18 +566,12 @@ bool XamlWindowPrivate::SyncDragBarWindowGeometry() const noexcept
         Utils::DisplayErrorDialog(L"Can't sync the drag bar window geometry due to it has not been created yet.");
         return false;
     }
-    USER32_API(SetWindowPos);
-    if (SetWindowPos_API) {
-        const UINT titleBarHeight = GetTitleBarHeight();
-        if (SetWindowPos_API(m_dragBarWindow, HWND_TOP, 0, 0, q_ptr->Width(), titleBarHeight, (SWP_SHOWWINDOW | SWP_NOACTIVATE | SWP_NOOWNERZORDER)) == FALSE) {
-            PRINT_WIN32_ERROR_MESSAGE(SetWindowPos, L"Failed to sync the drag bar window geometry.")
-            return false;
-        } else {
-            return true;
-        }
-    } else {
-        Utils::DisplayErrorDialog(L"Failed to sync the drag bar window geometry due to SetWindowPos() is not available.");
+    const UINT titleBarHeight = GetTitleBarHeight();
+    if (SetWindowPos(m_dragBarWindow, HWND_TOP, 0, 0, q_ptr->Width(), titleBarHeight, (SWP_SHOWWINDOW | SWP_NOACTIVATE | SWP_NOOWNERZORDER)) == FALSE) {
+        PRINT_WIN32_ERROR_MESSAGE(SetWindowPos, L"Failed to sync the drag bar window geometry.")
         return false;
+    } else {
+        return true;
     }
 }
 
@@ -814,58 +630,43 @@ bool XamlWindowPrivate::MainWindowMessageHandler(const UINT message, const WPARA
     switch (message) {
     case WM_SETFOCUS: {
         if (m_xamlIslandWindow) {
-            USER32_API(SetFocus);
-            if (SetFocus_API) {
-                // Send focus to the XAML Island child window.
-                if (SetFocus_API(m_xamlIslandWindow) == nullptr) {
-                    PRINT_WIN32_ERROR_MESSAGE(SetFocus, L"Failed to send focus to the XAML Island window.")
-                    return false;
-                } else {
-                    *result = 0;
-                    return true;
-                }
-            } else {
-                Utils::DisplayErrorDialog(L"Can't send focus to the XAML Island window due to SetFocus() is not available.");
+            // Send focus to the XAML Island child window.
+            if (SetFocus(m_xamlIslandWindow) == nullptr) {
+                PRINT_WIN32_ERROR_MESSAGE(SetFocus, L"Failed to send focus to the XAML Island window.")
                 return false;
+            } else {
+                *result = 0;
+                return true;
             }
         }
     } break;
     case WM_SETCURSOR: {
         if (q_ptr && q_ptr->WindowHandle()) {
             if (LOWORD(lParam) == HTCLIENT) {
-                USER32_API(SendMessageW);
-                USER32_API(GetMessagePos);
-                USER32_API(SetCursor);
-                USER32_API(LoadCursorW);
-                if (SendMessageW_API && GetMessagePos_API && SetCursor_API && LoadCursorW_API) {
-                    // Get the cursor position from the _last message_ and not from
-                    // `GetCursorPos` (which returns the cursor position _at the
-                    // moment_) because if we're lagging behind the cursor's position,
-                    // we still want to get the cursor position that was associated
-                    // with that message at the time it was sent to handle the message
-                    // correctly.
-                    const LRESULT hitTestResult = SendMessageW_API(q_ptr->WindowHandle(), WM_NCHITTEST, 0, GetMessagePos_API());
-                    if (hitTestResult == HTTOP) {
-                        // We have to set the vertical resize cursor manually on
-                        // the top resize handle because Windows thinks that the
-                        // cursor is on the client area because it asked the asked
-                        // the drag window with `WM_NCHITTEST` and it returned
-                        // `HTCLIENT`.
-                        // We don't want to modify the drag window's `WM_NCHITTEST`
-                        // handling to return `HTTOP` because otherwise, the system
-                        // would resize the drag window instead of the top level
-                        // window!
-                        SetCursor_API(LoadCursorW_API(nullptr, IDC_SIZENS));
-                    } else {
-                        // Reset cursor
-                        SetCursor_API(LoadCursorW_API(nullptr, IDC_ARROW));
-                    }
-                    *result = TRUE;
-                    return true;
+                // Get the cursor position from the _last message_ and not from
+                // `GetCursorPos` (which returns the cursor position _at the
+                // moment_) because if we're lagging behind the cursor's position,
+                // we still want to get the cursor position that was associated
+                // with that message at the time it was sent to handle the message
+                // correctly.
+                const LRESULT hitTestResult = SendMessageW(q_ptr->WindowHandle(), WM_NCHITTEST, 0, GetMessagePos());
+                if (hitTestResult == HTTOP) {
+                    // We have to set the vertical resize cursor manually on
+                    // the top resize handle because Windows thinks that the
+                    // cursor is on the client area because it asked the asked
+                    // the drag window with `WM_NCHITTEST` and it returned
+                    // `HTCLIENT`.
+                    // We don't want to modify the drag window's `WM_NCHITTEST`
+                    // handling to return `HTTOP` because otherwise, the system
+                    // would resize the drag window instead of the top level
+                    // window!
+                    SetCursor(LoadCursorW(nullptr, IDC_SIZENS));
                 } else {
-                    Utils::DisplayErrorDialog(L"Can't update the cursor shape due to SendMessageW(), GetMessagePos(), SetCursor() and LoadCursorW() are not available.");
-                    return false;
+                    // Reset cursor
+                    SetCursor(LoadCursorW(nullptr, IDC_ARROW));
                 }
+                *result = TRUE;
+                return true;
             }
         }
     } break;

@@ -24,6 +24,7 @@
 
 #include "OperationResult.h"
 #include "Utils.h"
+#include "Definitions.h"
 
 class OperationResultPrivate
 {

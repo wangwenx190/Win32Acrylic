@@ -22,24 +22,22 @@
  * SOFTWARE.
  */
 
-#include <SDKDDKVer.h>
-#include <Windows.h>
-#include "Utils.h"
+#ifndef _OLE32_
+#define _OLE32_
+#endif // _OLE32_
 
-static constexpr const wchar_t __NEW_LINE[] = L"\r\n";
+#ifndef _COMBASEAPI_
+#define _COMBASEAPI_
+#endif // _COMBASEAPI_
 
-void Utils::DisplayErrorDialog(const std::wstring &text) noexcept
-{
-    if (!text.empty()) {
-        const std::wstring textWithNewLine = text + std::wstring(__NEW_LINE);
-        OutputDebugStringW(textWithNewLine.c_str());
-        MessageBoxW(nullptr, text.c_str(), L"Error", MB_ICONERROR | MB_OK);
-    }
-}
+#include "WindowsAPIThunks.h"
+#include "SystemLibraryManager.h"
 
-std::wstring Utils::IntegerToString(const int num, const int radix) noexcept
-{
-    wchar_t buf[MAX_PATH] = { L'\0' };
-    _itow(num, buf, radix);
-    return buf;
-}
+#include <ComBaseApi.h>
+
+#ifndef __OLE32_DLL_FILENAME
+#define __OLE32_DLL_FILENAME ole32.dll
+#endif // __OLE32_DLL_FILENAME
+
+__THUNK_API(__OLE32_DLL_FILENAME, CoCreateGuid, HRESULT, DEFAULT_HRESULT, (GUID FAR *arg1), (arg1))
+__THUNK_API(__OLE32_DLL_FILENAME, StringFromGUID2, int, DEFAULT_INT, (REFGUID arg1, LPOLESTR arg2, int arg3), (arg1, arg2, arg3))

@@ -30,8 +30,32 @@ if(NOT DEFINED CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE "Release" CACHE STRING "" FORCE)
 endif()
 
+if(NOT DEFINED CMAKE_DEBUG_POSTFIX)
+    set(CMAKE_DEBUG_POSTFIX "d" CACHE STRING "" FORCE)
+endif()
+
+set(CMAKE_INTERPROCEDURAL_OPTIMIZATION_RELEASE ON CACHE BOOL "" FORCE)
+
+set(CMAKE_CXX_STANDARD "20" CACHE STRING "" FORCE)
+set(CMAKE_CXX_STANDARD_REQUIRED ON CACHE BOOL "" FORCE)
+set(CMAKE_CXX_EXTENSIONS OFF CACHE BOOL "" FORCE)
+
+# Don't link to any libraries by default.
 set(CMAKE_C_STANDARD_LIBRARIES "" CACHE STRING "" FORCE)
 set(CMAKE_CXX_STANDARD_LIBRARIES "" CACHE STRING "" FORCE)
+
+# To make use of VC-LTL we have to use "/MT(d)" unconditionally.
+set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>" CACHE STRING "" FORCE)
+
+string(REGEX REPLACE "[-|/]EHs-c-" "" CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS})
+string(REGEX REPLACE "[-|/]GR" "" CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS})
+string(REGEX REPLACE "[-|/]O[d|1|2|3|i]" "" CMAKE_CXX_FLAGS_RELEASE ${CMAKE_CXX_FLAGS_RELEASE})
+string(REGEX REPLACE "[-|/]Ob[0|1|2|3]" "" CMAKE_CXX_FLAGS_RELEASE ${CMAKE_CXX_FLAGS_RELEASE})
+
+string(APPEND CMAKE_RC_FLAGS " -c65001 /nologo ")
+string(APPEND CMAKE_CXX_FLAGS " /await:strict /bigobj /EHsc /GR- /MP /utf-8 /W4 /WX /permissive- /Zc:char8_t,__cplusplus,externConstexpr,hiddenFriend,lambda,referenceBinding,rvalueCast,strictStrings,ternary,throwingNew,trigraphs ")
+string(APPEND CMAKE_CXX_FLAGS_RELEASE " /O1 /Ob1 /Gw /Gy /Zc:inline ")
+string(APPEND CMAKE_EXE_LINKER_FLAGS_RELEASE " /HIGHENTROPYVA /LARGEADDRESSAWARE /OPT:REF /OPT:ICF /WX ")
 
 include(VC-LTL.cmake)
 
@@ -42,13 +66,15 @@ set(SOURCES
     pch.h pch.cpp
     Color.hpp
     VersionNumber.hpp
-    RuntimeObject.cpp
     OperationResult.h OperationResult.cpp
     WindowsVersion.h WindowsVersion.cpp
     Utils.h Utils.cpp
     SystemLibrary.h SystemLibrary.cpp
     SystemLibraryManager.h SystemLibraryManager.cpp
     WindowsAPIThunks.h WindowsAPIThunks.cpp
+    RuntimeObject_Thunk.cpp User32_Thunk.cpp Gdi32_Thunk.cpp
+    UxTheme_Thunk.cpp AdvApi32_Thunk.cpp Ole32_Thunk.cpp
+    DwmApi_Thunk.cpp Shell32_Thunk.cpp
     Window.h Window.cpp
     XamlWindow.h XamlWindow.cpp
     XamlApplication.h XamlApplication.cpp
@@ -57,8 +83,17 @@ set(SOURCES
 
 add_executable(${PROJECT_NAME} WIN32 ${SOURCES})
 
+target_compile_definitions(${PROJECT_NAME} PRIVATE
+    _CRT_NON_CONFORMING_SWPRINTFS _CRT_SECURE_NO_WARNINGS
+    NOMINMAX
+    UNICODE _UNICODE
+    WIN32_LEAN_AND_MEAN WINRT_LEAN_AND_MEAN
+    _KERNEL32_ _USER32_ _SHELL32_ _GDI32_ _OLE32_ _OLEAUT32_
+    _ADVAPI32_ _COMBASEAPI_ _DWMAPI_ _UXTHEME_ _ROAPI_
+)
+
 target_link_libraries(${PROJECT_NAME} PRIVATE
-    kernel32.lib
+    Kernel32.lib
 )
 
 set(_target_arch_suffix "32")

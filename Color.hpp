@@ -52,7 +52,7 @@ public:
         m_b = (static_cast<double>(GetBValue(color)) / denominator);
         m_a = denominator;
     }
-    inline constexpr explicit Color() noexcept {}
+    inline constexpr explicit Color() noexcept = default;
     inline ~Color() noexcept = default;
 
     [[nodiscard]] inline constexpr double RedF() const noexcept {

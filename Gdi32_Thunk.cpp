@@ -22,24 +22,19 @@
  * SOFTWARE.
  */
 
-#include <SDKDDKVer.h>
-#include <Windows.h>
-#include "Utils.h"
+#ifndef _GDI32_
+#define _GDI32_
+#endif // _GDI32_
 
-static constexpr const wchar_t __NEW_LINE[] = L"\r\n";
+#include "WindowsAPIThunks.h"
+#include "SystemLibraryManager.h"
 
-void Utils::DisplayErrorDialog(const std::wstring &text) noexcept
-{
-    if (!text.empty()) {
-        const std::wstring textWithNewLine = text + std::wstring(__NEW_LINE);
-        OutputDebugStringW(textWithNewLine.c_str());
-        MessageBoxW(nullptr, text.c_str(), L"Error", MB_ICONERROR | MB_OK);
-    }
-}
+#include <WinGdi.h>
 
-std::wstring Utils::IntegerToString(const int num, const int radix) noexcept
-{
-    wchar_t buf[MAX_PATH] = { L'\0' };
-    _itow(num, buf, radix);
-    return buf;
-}
+#ifndef __GDI32_DLL_FILENAME
+#define __GDI32_DLL_FILENAME gdi32.dll
+#endif // __GDI32_DLL_FILENAME
+
+__THUNK_API(__GDI32_DLL_FILENAME, GetStockObject, HGDIOBJ, DEFAULT_PTR, (int arg1), (arg1))
+__THUNK_API(__GDI32_DLL_FILENAME, DeleteObject, BOOL, DEFAULT_BOOL, (HGDIOBJ arg1), (arg1))
+__THUNK_API(__GDI32_DLL_FILENAME, CreateSolidBrush, HBRUSH, DEFAULT_PTR, (COLORREF arg1), (arg1))

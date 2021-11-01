@@ -22,24 +22,20 @@
  * SOFTWARE.
  */
 
-#include <SDKDDKVer.h>
-#include <Windows.h>
-#include "Utils.h"
+#ifndef _DWMAPI_
+#define _DWMAPI_
+#endif // _DWMAPI_
 
-static constexpr const wchar_t __NEW_LINE[] = L"\r\n";
+#include "WindowsAPIThunks.h"
+#include "SystemLibraryManager.h"
 
-void Utils::DisplayErrorDialog(const std::wstring &text) noexcept
-{
-    if (!text.empty()) {
-        const std::wstring textWithNewLine = text + std::wstring(__NEW_LINE);
-        OutputDebugStringW(textWithNewLine.c_str());
-        MessageBoxW(nullptr, text.c_str(), L"Error", MB_ICONERROR | MB_OK);
-    }
-}
+#include <DwmApi.h>
 
-std::wstring Utils::IntegerToString(const int num, const int radix) noexcept
-{
-    wchar_t buf[MAX_PATH] = { L'\0' };
-    _itow(num, buf, radix);
-    return buf;
-}
+#ifndef __DWMAPI_DLL_FILENAME
+#define __DWMAPI_DLL_FILENAME dwmapi.dll
+#endif // __DWMAPI_DLL_FILENAME
+
+__THUNK_API(__DWMAPI_DLL_FILENAME, DwmGetColorizationColor, HRESULT, DEFAULT_HRESULT, (DWORD *arg1, BOOL *arg2), (arg1, arg2))
+__THUNK_API(__DWMAPI_DLL_FILENAME, DwmSetWindowAttribute, HRESULT, DEFAULT_HRESULT, (HWND arg1, DWORD arg2, LPCVOID arg3, DWORD arg4), (arg1, arg2, arg3, arg4))
+__THUNK_API(__DWMAPI_DLL_FILENAME, DwmGetWindowAttribute, HRESULT, DEFAULT_HRESULT, (HWND arg1, DWORD arg2, PVOID arg3, DWORD arg4), (arg1, arg2, arg3, arg4))
+__THUNK_API(__DWMAPI_DLL_FILENAME, DwmExtendFrameIntoClientArea, HRESULT, DEFAULT_HRESULT, (HWND arg1, const MARGINS *arg2), (arg1, arg2))

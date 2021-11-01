@@ -22,24 +22,19 @@
  * SOFTWARE.
  */
 
-#include <SDKDDKVer.h>
-#include <Windows.h>
-#include "Utils.h"
+#ifndef _ADVAPI32_
+#define _ADVAPI32_
+#endif // _ADVAPI32_
 
-static constexpr const wchar_t __NEW_LINE[] = L"\r\n";
+#include "WindowsAPIThunks.h"
+#include "SystemLibraryManager.h"
 
-void Utils::DisplayErrorDialog(const std::wstring &text) noexcept
-{
-    if (!text.empty()) {
-        const std::wstring textWithNewLine = text + std::wstring(__NEW_LINE);
-        OutputDebugStringW(textWithNewLine.c_str());
-        MessageBoxW(nullptr, text.c_str(), L"Error", MB_ICONERROR | MB_OK);
-    }
-}
+#include <WinReg.h>
 
-std::wstring Utils::IntegerToString(const int num, const int radix) noexcept
-{
-    wchar_t buf[MAX_PATH] = { L'\0' };
-    _itow(num, buf, radix);
-    return buf;
-}
+#ifndef __ADVAPI32_DLL_FILENAME
+#define __ADVAPI32_DLL_FILENAME advapi32.dll
+#endif // __ADVAPI32_DLL_FILENAME
+
+__THUNK_API(__ADVAPI32_DLL_FILENAME, RegOpenKeyExW, LSTATUS, DEFAULT_INT, (HKEY arg1, LPCWSTR arg2, DWORD arg3, REGSAM arg4, PHKEY arg5), (arg1, arg2, arg3, arg4, arg5))
+__THUNK_API(__ADVAPI32_DLL_FILENAME, RegQueryValueExW, LSTATUS, DEFAULT_INT, (HKEY arg1, LPCWSTR arg2, LPDWORD arg3, LPDWORD arg4, LPBYTE arg5, LPDWORD arg6), (arg1, arg2, arg3, arg4, arg5, arg6))
+__THUNK_API(__ADVAPI32_DLL_FILENAME, RegCloseKey, LSTATUS, DEFAULT_INT, (HKEY arg1), (arg1))

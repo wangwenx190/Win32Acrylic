@@ -4,9 +4,9 @@ This demo is based on the XAML Island technology and thus it can only be run on 
 
 ## Screenshots
 
-[!Light](/Screenshots/Light.png)
+![Light Theme](/Screenshots/Light.png "Light Theme")
 
-[!Dark](/Screenshots/Dark.png)
+![Dark Theme](/Screenshots/Dark.png "Dark Theme")
 
 ## Build
 

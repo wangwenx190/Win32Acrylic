@@ -1,25 +1,34 @@
-# Use the official Acrylic brush in Win32 C++ applications
+# Using the Official Acrylic Brush in Win32 Applications
 
-This simple demo application shows how to use the official acrylic brush in native Win32 C++ applications. It uses **XAML Islands** to embed native UWP controls into pure C++ applications.
+This demo is based on the XAML Island technology and thus it can only be run on Windows 10 19H1 (Win10 1903, 10.0.18362) and onwards. This is the limitation of XAML Island itself, I really can't do anything about it. And you don't need to download any runtime libraries seperately because this demo only uses very limited features of WinRT so it can use the runtime which is shipped by Windows itself. Due to this demo uses the official acrylic brush from UWP, their appearance and behavior should be exactly the same. This demo also has official support for Windows 11.
 
 ## Screenshots
 
-![Screenshot](/screenshot.png)
+![Light Theme](/Screenshots/Light.png "Light Theme")
+
+![Dark Theme](/Screenshots/Dark.png "Dark Theme")
 
 ## Build
 
 ### Prerequisites
 
-- The latest version of Visual Studio 2019
-- The C++ toolset, including the latest version of Windows SDK
-- The latest version of C++/WinRT nuget package
+1. Visual Studio 2017 or later
+2. C++ workload for desktop
+3. Windows 10 SDK, as new as possible
+4. CMake, as new as possible
+5. Any make tool. Ninja is recommended. MSBuild is also fine.
+
+Don't need any NuGet packages.
+
+Don't need the XAML toolchain.
+
+Don't need the UWP workload.
 
 ### Compilation
 
-```bash
-cmake .
-cmake --build .
-cmake --install .
+```bat
+cmake -DCMAKE_BUILD_TYPE=Release -GNinja .
+cmake --build . --config Release --target all --parallel
 ```
 
 ## License
@@ -46,4 +55,5 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
 ```

@@ -78,6 +78,8 @@ std::wstring WindowsVersion::ToHumanReadableString(const VersionNumber &version)
     std::wstring humanReadableString = {};
     if (version >= Windows11) {
         humanReadableString = L"Windows 11";
+    } else if (version >= Windows10_21Half2) {
+        humanReadableString = L"Windows 10 Version 21H2 (November 2021 Update)";
     } else if (version >= Windows10_21Half1) {
         humanReadableString = L"Windows 10 Version 21H1 (May 2021 Update)";
     } else if (version >= Windows10_20Half2) {

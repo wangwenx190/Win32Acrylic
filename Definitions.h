@@ -29,52 +29,52 @@
 
 #ifndef STATUS_SUCCESS
 #define STATUS_SUCCESS (static_cast<NTSTATUS>(0x00000000L))
-#endif
+#endif // STATUS_SUCCESS
 
 #ifndef HINST_THISCOMPONENT
 EXTERN_C IMAGE_DOS_HEADER __ImageBase;
 #define HINST_THISCOMPONENT (reinterpret_cast<HINSTANCE>(&__ImageBase))
-#endif
+#endif // HINST_THISCOMPONENT
 
 #ifndef USER_DEFAULT_SCREEN_DPI
 #define USER_DEFAULT_SCREEN_DPI (96)
-#endif
+#endif // USER_DEFAULT_SCREEN_DPI
 
 #ifndef SM_CXPADDEDBORDER
 #define SM_CXPADDEDBORDER (92)
-#endif
+#endif // SM_CXPADDEDBORDER
 
 #ifndef SM_CYPADDEDBORDER
 #define SM_CYPADDEDBORDER (SM_CXPADDEDBORDER)
-#endif
+#endif // SM_CYPADDEDBORDER
 
 #ifndef WM_DWMCOLORIZATIONCOLORCHANGED
 #define WM_DWMCOLORIZATIONCOLORCHANGED (0x0320)
-#endif
+#endif // WM_DWMCOLORIZATIONCOLORCHANGED
 
 #ifndef WM_DPICHANGED
 #define WM_DPICHANGED (0x02E0)
-#endif
+#endif // WM_DPICHANGED
 
 #ifndef CODE_FROM_HRESULT
 #define CODE_FROM_HRESULT(hr) (static_cast<DWORD>(HRESULT_CODE(hr)))
-#endif
+#endif // CODE_FROM_HRESULT
 
 #ifndef GET_X_LPARAM
 #define GET_X_LPARAM(lParam) (static_cast<int>(static_cast<short>(LOWORD(lParam))))
-#endif
+#endif // GET_X_LPARAM
 
 #ifndef GET_Y_LPARAM
 #define GET_Y_LPARAM(lParam) (static_cast<int>(static_cast<short>(HIWORD(lParam))))
-#endif
+#endif // GET_Y_LPARAM
 
 #ifndef RECT_WIDTH
 #define RECT_WIDTH(rect) (std::abs((rect).right - (rect).left))
-#endif
+#endif // RECT_WIDTH
 
 #ifndef RECT_HEIGHT
 #define RECT_HEIGHT(rect) (std::abs((rect).bottom - (rect).top))
-#endif
+#endif // RECT_HEIGHT
 
 using NTSTATUS = LONG;
 
@@ -89,9 +89,7 @@ using NTSTATUS = LONG;
 [[maybe_unused]] constexpr const DWORD _DWMWA_VISIBLE_FRAME_BORDER_THICKNESS = 37;
 
 [[maybe_unused]] constexpr const int DPI_AWARENESS_PER_MONITOR_AWARE_V2 = 3;
-[[maybe_unused]] constexpr const int PROCESS_PER_MONITOR_DPI_AWARE_V2 = 3;
 [[maybe_unused]] constexpr const int DPI_AWARENESS_UNAWARE_GDISCALED = 4;
-[[maybe_unused]] constexpr const int PROCESS_DPI_UNAWARE_GDISCALED = 4;
 
 [[maybe_unused]] constexpr const wchar_t DwmRegistryKeyPath[] = LR"(Software\Microsoft\Windows\DWM)";
 [[maybe_unused]] constexpr const wchar_t PersonalizeRegistryKeyPath[] = LR"(Software\Microsoft\Windows\CurrentVersion\Themes\Personalize)";

@@ -36,6 +36,8 @@
 #define ABM_GETAUTOHIDEBAREX (0x0000000b)
 #endif
 
+static constexpr const wchar_t __NEW_LINE[] = L"\r\n";
+
 [[nodiscard]] static inline std::wstring GenerateGUID() noexcept
 {
     GUID guid = {};
@@ -643,7 +645,7 @@ UINT WindowPrivate::GetWindowVisibleFrameBorderThickness2() const noexcept
         return value;
     } else {
         // We just eat this error because this enumeration value is only available
-        // on Windows 10 21H2 and onwards, so querying it's value will always result in
+        // on Windows 11 and onwards, so querying it's value will always result in
         // a "parameter error" (error code: 87) on older systems.
         const auto dpr = (static_cast<double>(m_dpi) / static_cast<double>(USER_DEFAULT_SCREEN_DPI));
         return static_cast<UINT>(std::round(static_cast<double>(DefaultWindowVisibleFrameBorderThickness) * dpr));
@@ -657,7 +659,7 @@ bool WindowPrivate::Initialize() noexcept
         return false;
     }
     m_dpi = GetWindowDPI2();
-    const std::wstring dpiDbgMsg = L"Current window's dots-per-inch (DPI): " + Utils::IntegerToString(m_dpi, 10);
+    const std::wstring dpiDbgMsg = std::wstring(L"Current window's dots-per-inch (DPI): ") + std::to_wstring(m_dpi) + std::wstring(__NEW_LINE);
     OutputDebugStringW(dpiDbgMsg.c_str());
     if (!UpdateWindowFrameMargins2()) {
         Utils::DisplayErrorDialog(L"Failed to update the window frame margins.");
@@ -1234,7 +1236,7 @@ bool WindowPrivate::InternalMessageHandler(const UINT message, const WPARAM wPar
         const UINT dpiY = HIWORD(wParam);
         m_dpi = static_cast<UINT>(std::round(static_cast<double>(dpiX + dpiY) / 2.0));
         DotsPerInchChangeHandler();
-        const std::wstring dpiDbgMsg = L"Current window's dots-per-inch (DPI) has changed from " + Utils::IntegerToString(oldDPI, 10) + L" to " + Utils::IntegerToString(m_dpi, 10) + L".";
+        const std::wstring dpiDbgMsg = std::wstring(L"Current window's dots-per-inch (DPI) has changed from ") + std::to_wstring(oldDPI) + std::wstring(L" to ") + std::to_wstring(m_dpi) + std::wstring(L".") + std::wstring(__NEW_LINE);
         OutputDebugStringW(dpiDbgMsg.c_str());
         const auto prcNewWindow = reinterpret_cast<LPRECT>(lParam);
         if (SetGeometry(prcNewWindow->left, prcNewWindow->top, RECT_WIDTH(*prcNewWindow), RECT_HEIGHT(*prcNewWindow))) {

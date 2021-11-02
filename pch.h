@@ -26,31 +26,51 @@
 
 #ifndef _CRT_NON_CONFORMING_SWPRINTFS
 #define _CRT_NON_CONFORMING_SWPRINTFS
-#endif
+#endif // _CRT_NON_CONFORMING_SWPRINTFS
 
 #ifndef _CRT_SECURE_NO_WARNINGS
 #define _CRT_SECURE_NO_WARNINGS
-#endif
+#endif // _CRT_SECURE_NO_WARNINGS
+
+#ifndef _ENABLE_EXTENDED_ALIGNED_STORAGE
+#define _ENABLE_EXTENDED_ALIGNED_STORAGE
+#endif // _ENABLE_EXTENDED_ALIGNED_STORAGE
 
 #ifndef NOMINMAX
 #define NOMINMAX
-#endif
+#endif // NOMINMAX
 
 #ifndef UNICODE
 #define UNICODE
-#endif
+#endif // UNICODE
 
 #ifndef _UNICODE
 #define _UNICODE
-#endif
+#endif // _UNICODE
 
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
-#endif
+#endif // WIN32_LEAN_AND_MEAN
 
 #ifndef WINRT_LEAN_AND_MEAN
 #define WINRT_LEAN_AND_MEAN
-#endif
+#endif // WINRT_LEAN_AND_MEAN
+
+#ifndef _WIN32_WINNT
+#define _WIN32_WINNT (0x0A00) // _WIN32_WINNT_WIN10
+#endif // _WIN32_WINNT
+
+#ifndef _WIN32_IE
+#define _WIN32_IE (0x0A00)
+#endif // _WIN32_IE
+
+#ifndef WINVER
+#define WINVER (0x0A00)
+#endif // WINVER
+
+#ifndef NTDDI_VERSION
+#define NTDDI_VERSION (0x0A00000B) // NTDDI_WIN10_CO
+#endif // NTDDI_VERSION
 
 #include <SDKDDKVer.h>
 #include <Windows.h>
@@ -69,7 +89,7 @@
 // https://github.com/microsoft/Windows.UI.Composition-Win32-Samples/issues/47
 namespace winrt::impl
 {
-    template <typename Async>
+    template<typename Async>
     auto wait_for(Async const& async, Windows::Foundation::TimeSpan const& timeout);
 }
 

@@ -29,5 +29,4 @@
 namespace Utils
 {
     void DisplayErrorDialog(const std::wstring &text) noexcept;
-    [[nodiscard]] std::wstring IntegerToString(const int num, const int radix) noexcept;
 } // namespace Utils

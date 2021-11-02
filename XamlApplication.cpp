@@ -28,7 +28,8 @@
 #include "WindowsVersion.h"
 #include "Utils.h"
 #include "OperationResult.h"
-#include <ShellScalingApi.h>
+
+static constexpr const wchar_t __NEW_LINE[] = L"\r\n";
 
 [[nodiscard]] static inline ProcessDPIAwareness GetProcessDPIAwareness() noexcept
 {
@@ -66,27 +67,21 @@
 [[nodiscard]] static inline bool SetProcessDPIAwareness(const ProcessDPIAwareness dpiAwareness) noexcept
 {
     DPI_AWARENESS_CONTEXT dac = DPI_AWARENESS_CONTEXT_UNAWARE;
-    PROCESS_DPI_AWARENESS pda = PROCESS_DPI_UNAWARE;
     switch (dpiAwareness) {
     case ProcessDPIAwareness::PerMonitorVersion2: {
         dac = DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2;
-        pda = static_cast<PROCESS_DPI_AWARENESS>(PROCESS_PER_MONITOR_DPI_AWARE_V2);
     } break;
     case ProcessDPIAwareness::PerMonitor: {
         dac = DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE;
-        pda = PROCESS_PER_MONITOR_DPI_AWARE;
     } break;
     case ProcessDPIAwareness::System: {
         dac = DPI_AWARENESS_CONTEXT_SYSTEM_AWARE;
-        pda = PROCESS_SYSTEM_DPI_AWARE;
     } break;
     case ProcessDPIAwareness::GdiScaled: {
         dac = DPI_AWARENESS_CONTEXT_UNAWARE_GDISCALED;
-        pda = static_cast<PROCESS_DPI_AWARENESS>(PROCESS_DPI_UNAWARE_GDISCALED);
     } break;
     case ProcessDPIAwareness::Unaware: {
         dac = DPI_AWARENESS_CONTEXT_UNAWARE;
-        pda = PROCESS_DPI_UNAWARE;
     } break;
     }
     if (SetProcessDpiAwarenessContext(dac) == FALSE) {
@@ -171,7 +166,7 @@ XamlApplicationPrivate::~XamlApplicationPrivate() noexcept
 bool XamlApplicationPrivate::Initialize() noexcept
 {
     const VersionNumber &curOsVer = WindowsVersion::CurrentVersion();
-    const std::wstring osVerDbgMsg = L"Current operating system version: " + WindowsVersion::ToHumanReadableString(curOsVer);
+    const std::wstring osVerDbgMsg = std::wstring(L"Current operating system version: ") + WindowsVersion::ToHumanReadableString(curOsVer) + std::wstring(__NEW_LINE);
     OutputDebugStringW(osVerDbgMsg.c_str());
     if (curOsVer < WindowsVersion::Windows10_19Half1) {
         Utils::DisplayErrorDialog(L"This application only supports running on Windows 10 19H1 and onwards.");
@@ -201,7 +196,7 @@ bool XamlApplicationPrivate::Initialize() noexcept
         }
     }
     const ProcessDPIAwareness curPcDPIAwareness = GetProcessDPIAwareness();
-    const std::wstring curPcDPIAwarenessDbgMsg = L"Current process's DPI awareness: " + DPIAwarenessToString(curPcDPIAwareness);
+    const std::wstring curPcDPIAwarenessDbgMsg = std::wstring(L"Current process's DPI awareness: ") + DPIAwarenessToString(curPcDPIAwareness) + std::wstring(__NEW_LINE);
     OutputDebugStringW(curPcDPIAwarenessDbgMsg.c_str());
     m_window = std::make_unique<XamlWindow>();
     m_window->StartupLocation(WindowStartupLocation::ScreenCenter);

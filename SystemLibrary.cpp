@@ -23,7 +23,7 @@
  */
 
 #include "SystemLibrary.h"
-#include <VersionHelpers.h>
+#include "WindowsVersion.h"
 #include <unordered_map>
 
 static constexpr const wchar_t __NEW_LINE[] = L"\r\n";
@@ -47,7 +47,7 @@ static bool g_bLoadFromSystem32Available = false;
     return UTF8String;
 }
 
-[[nodiscard]] static inline std::wstring UTF8ToUTF16(const std::string &UTF8String) noexcept
+[[maybe_unused]] [[nodiscard]] static inline std::wstring UTF8ToUTF16(const std::string &UTF8String) noexcept
 {
     if (UTF8String.empty()) {
         return {};
@@ -99,7 +99,7 @@ SystemLibraryPrivate::SystemLibraryPrivate(SystemLibrary *q) noexcept
     q_ptr = q;
     if (!g_bSystemEnvironmentDetected) {
         g_bSystemEnvironmentDetected = true;
-        if (IsWindows8OrGreater()) {
+        if (WindowsVersion::CurrentVersion() >= WindowsVersion::Windows_8) {
             g_bLoadFromSystem32Available = true;
         } else {
             g_bLoadFromSystem32Available = (GetSymbolNoCache(L"kernel32.dll", L"AddDllDirectory") != nullptr);

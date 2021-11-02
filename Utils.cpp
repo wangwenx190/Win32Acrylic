@@ -36,10 +36,3 @@ void Utils::DisplayErrorDialog(const std::wstring &text) noexcept
         MessageBoxW(nullptr, text.c_str(), L"Error", MB_ICONERROR | MB_OK);
     }
 }
-
-std::wstring Utils::IntegerToString(const int num, const int radix) noexcept
-{
-    wchar_t buf[MAX_PATH] = { L'\0' };
-    _itow(num, buf, radix);
-    return buf;
-}

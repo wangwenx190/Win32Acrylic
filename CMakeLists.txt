@@ -59,7 +59,7 @@ string(APPEND CMAKE_EXE_LINKER_FLAGS_RELEASE " /HIGHENTROPYVA /LARGEADDRESSAWARE
 
 include(VC-LTL.cmake)
 
-set(SOURCES
+set(SOURCES_COMMON
     Win32AcrylicHelper.rc Win32AcrylicHelper.manifest
     Resource.h
     Definitions.h
@@ -76,16 +76,25 @@ set(SOURCES
     UxTheme_Thunk.cpp AdvApi32_Thunk.cpp Ole32_Thunk.cpp
     DwmApi_Thunk.cpp Shell32_Thunk.cpp
     Window.h Window.cpp
-    XamlWindow.h XamlWindow.cpp
-    XamlApplication.h XamlApplication.cpp
-    main.cpp
 )
 
-add_executable(${PROJECT_NAME} WIN32 ${SOURCES})
+set(SOURCES_Xaml
+    ${SOURCES_COMMON}
+    XamlWindow.h XamlWindow.cpp
+    XamlApplication.h XamlApplication.cpp
+    main_Xaml.cpp
+)
+
+set(SOURCES_Composition
+    ${SOURCES_COMMON}
+    CompositionWindow.h CompositionWindow.cpp
+    CompositionApplication.h CompositionApplication.cpp
+    main_Composition.cpp
+)
 
 set(_WIN32_WINNT_WIN10 0x0A00)
 set(NTDDI_WIN10_CO 0x0A00000B)
-target_compile_definitions(${PROJECT_NAME} PRIVATE
+set(_target_extra_definitions
     _CRT_NON_CONFORMING_SWPRINTFS _CRT_SECURE_NO_WARNINGS
     _ENABLE_EXTENDED_ALIGNED_STORAGE
     NOMINMAX
@@ -96,18 +105,26 @@ target_compile_definitions(${PROJECT_NAME} PRIVATE
     _KERNEL32_ _USER32_ _SHELL32_ _GDI32_ _OLE32_ _OLEAUT32_
     _ADVAPI32_ _COMBASEAPI_ _DWMAPI_ _UXTHEME_ _ROAPI_
 )
-unset(_WIN32_WINNT_WIN10)
-unset(NTDDI_WIN10_CO)
-
-target_link_libraries(${PROJECT_NAME} PRIVATE
-    Kernel32.lib
-)
 
 set(_target_arch_suffix "32")
-if("${CMAKE_SIZEOF_VOID_P}" STREQUAL "8")
+if("x${CMAKE_SIZEOF_VOID_P}" STREQUAL "x8")
     set(_target_arch_suffix "64")
 endif()
-set_target_properties(${PROJECT_NAME} PROPERTIES
-    OUTPUT_NAME ${PROJECT_NAME}${CMAKE_BUILD_TYPE}${_target_arch_suffix}
-)
-unset(_target_arch_suffix)
+set(_target_full_suffix ${CMAKE_BUILD_TYPE}${_target_arch_suffix})
+
+set(_demo_types Xaml Composition)
+foreach(_type IN LISTS _demo_types)
+    set(_current_subproject_name Demo_${_type})
+    add_executable(${_current_subproject_name} WIN32
+        ${SOURCES_${_type}}
+    )
+    target_compile_definitions(${_current_subproject_name} PRIVATE
+        ${_target_extra_definitions}
+    )
+    target_link_libraries(${_current_subproject_name} PRIVATE
+        Kernel32.lib
+    )
+    set_target_properties(${_current_subproject_name} PROPERTIES
+        OUTPUT_NAME ${_current_subproject_name}${_target_full_suffix}
+    )
+endforeach()

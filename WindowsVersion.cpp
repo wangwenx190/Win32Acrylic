@@ -27,7 +27,6 @@
 #include "WindowsVersion.h"
 #include "OperationResult.h"
 #include "Utils.h"
-#include "Definitions.h"
 #include "SystemLibrary.h"
 
 const VersionNumber &WindowsVersion::CurrentVersion() noexcept

@@ -22,4 +22,104 @@
  * SOFTWARE.
  */
 
+#include "pch.h"
 #include "CompositionApplication.h"
+#include "CompositionWindow.h"
+#include "Utils.h"
+#include "WindowsVersion.h"
+
+static constexpr const wchar_t __NEW_LINE[] = L"\r\n";
+
+class CompositionApplicationPrivate
+{
+public:
+    explicit CompositionApplicationPrivate(CompositionApplication *q) noexcept;
+    ~CompositionApplicationPrivate() noexcept;
+
+    [[nodiscard]] bool Initialize() noexcept;
+    [[nodiscard]] int Run() const noexcept;
+
+private:
+    CompositionApplicationPrivate(const CompositionApplicationPrivate &) = delete;
+    CompositionApplicationPrivate &operator=(const CompositionApplicationPrivate &) = delete;
+    CompositionApplicationPrivate(CompositionApplicationPrivate &&) = delete;
+    CompositionApplicationPrivate &operator=(CompositionApplicationPrivate &&) = delete;
+
+private:
+    CompositionApplication *q_ptr = nullptr;
+    static inline bool m_comInitialized = false;
+    std::unique_ptr<CompositionWindow> m_window;
+};
+
+CompositionApplicationPrivate::CompositionApplicationPrivate(CompositionApplication *q) noexcept
+{
+    if (!q) {
+        Utils::DisplayErrorDialog(L"CompositionApplicationPrivate's q is null.");
+        std::exit(-1);
+    }
+    q_ptr = q;
+    if (!Initialize()) {
+        Utils::DisplayErrorDialog(L"Failed to initialize the Windows.UI.Composition application.");
+        std::exit(-1);
+    }
+}
+
+CompositionApplicationPrivate::~CompositionApplicationPrivate() noexcept = default;
+
+bool CompositionApplicationPrivate::Initialize() noexcept
+{
+    const VersionNumber &curOsVer = WindowsVersion::CurrentVersion();
+    const std::wstring osVerDbgMsg = std::wstring(L"Current operating system version: ") + WindowsVersion::ToHumanReadableString(curOsVer) + std::wstring(__NEW_LINE);
+    OutputDebugStringW(osVerDbgMsg.c_str());
+    if (curOsVer < WindowsVersion::Windows10_ThresHold1) {
+        Utils::DisplayErrorDialog(L"This application only supports running on Windows 10 and onwards.");
+        return false;
+    }
+    if (!m_comInitialized) {
+        // The call to winrt::init_apartment() initializes COM. By default, in a multi-threaded apartment.
+        winrt::init_apartment(winrt::apartment_type::single_threaded);
+        m_comInitialized = true;
+    }
+    if (!Utils::SetProcessDPIAwareness(ProcessDPIAwareness::PerMonitorVersion2)) {
+        if (!Utils::SetProcessDPIAwareness(ProcessDPIAwareness::PerMonitor)) {
+            if (!Utils::SetProcessDPIAwareness(ProcessDPIAwareness::System)) {
+                if (!Utils::SetProcessDPIAwareness(ProcessDPIAwareness::GdiScaled)) {
+                    Utils::DisplayErrorDialog(L"Failed to enable high DPI scaling for the current process.");
+                    return false;
+                }
+            }
+        }
+    }
+    const ProcessDPIAwareness curPcDPIAwareness = Utils::GetProcessDPIAwareness();
+    const std::wstring curPcDPIAwarenessDbgMsg = std::wstring(L"Current process's DPI awareness: ") + Utils::DPIAwarenessToString(curPcDPIAwareness) + std::wstring(__NEW_LINE);
+    OutputDebugStringW(curPcDPIAwarenessDbgMsg.c_str());
+    m_window = std::make_unique<CompositionWindow>();
+    m_window->StartupLocation(WindowStartupLocation::ScreenCenter);
+    m_window->Visibility(WindowState::Windowed);
+    return true;
+}
+
+int CompositionApplicationPrivate::Run() const noexcept
+{
+    if (!q_ptr) {
+        Utils::DisplayErrorDialog(L"Can't run the Windows.UI.Composition application due to the q_ptr is null.");
+        return -1;
+    }
+    if (!m_window) {
+        Utils::DisplayErrorDialog(L"Can't run the Windows.UI.Composition application due to the XAML window has not been created yet.");
+        return -1;
+    }
+    return CompositionWindow::MessageLoop();
+}
+
+CompositionApplication::CompositionApplication() noexcept
+{
+    d_ptr = std::make_unique<CompositionApplicationPrivate>(this);
+}
+
+CompositionApplication::~CompositionApplication() noexcept = default;
+
+int CompositionApplication::Run() const noexcept
+{
+    return d_ptr->Run();
+}

@@ -23,3 +23,25 @@
  */
 
 #pragma once
+
+#include <memory>
+
+class CompositionApplicationPrivate;
+
+class CompositionApplication
+{
+public:
+    explicit CompositionApplication() noexcept;
+    ~CompositionApplication() noexcept;
+
+    [[nodiscard]] int Run() const noexcept;
+
+private:
+    CompositionApplication(const CompositionApplication &) = delete;
+    CompositionApplication &operator=(const CompositionApplication &) = delete;
+    CompositionApplication(CompositionApplication &&) = delete;
+    CompositionApplication &operator=(CompositionApplication &&) = delete;
+
+private:
+    std::unique_ptr<CompositionApplicationPrivate> d_ptr;
+};

@@ -31,96 +31,6 @@
 
 static constexpr const wchar_t __NEW_LINE[] = L"\r\n";
 
-[[nodiscard]] static inline ProcessDPIAwareness GetProcessDPIAwareness() noexcept
-{
-    const DPI_AWARENESS_CONTEXT context = GetThreadDpiAwarenessContext();
-    if (context) {
-        const auto awareness = static_cast<int>(GetAwarenessFromDpiAwarenessContext(context));
-        switch (awareness) {
-        case DPI_AWARENESS_PER_MONITOR_AWARE_V2: {
-            return ProcessDPIAwareness::PerMonitorVersion2;
-        } break;
-        case DPI_AWARENESS_PER_MONITOR_AWARE: {
-            return ProcessDPIAwareness::PerMonitor;
-        } break;
-        case DPI_AWARENESS_SYSTEM_AWARE: {
-            return ProcessDPIAwareness::System;
-        } break;
-        case DPI_AWARENESS_UNAWARE_GDISCALED: {
-            return ProcessDPIAwareness::GdiScaled;
-        } break;
-        case DPI_AWARENESS_UNAWARE: {
-            return ProcessDPIAwareness::Unaware;
-        } break;
-        case DPI_AWARENESS_INVALID: {
-            PRINT_WIN32_ERROR_MESSAGE(GetAwarenessFromDpiAwarenessContext, L"Failed to extract the DPI awareness from the context.")
-            return ProcessDPIAwareness::Unaware;
-        } break;
-        }
-        return ProcessDPIAwareness::Unaware;
-    } else {
-        PRINT_WIN32_ERROR_MESSAGE(GetThreadDpiAwarenessContext, L"Failed to retrieve the DPI awareness context of the current thread.")
-        return ProcessDPIAwareness::Unaware;
-    }
-}
-
-[[nodiscard]] static inline bool SetProcessDPIAwareness(const ProcessDPIAwareness dpiAwareness) noexcept
-{
-    DPI_AWARENESS_CONTEXT dac = DPI_AWARENESS_CONTEXT_UNAWARE;
-    switch (dpiAwareness) {
-    case ProcessDPIAwareness::PerMonitorVersion2: {
-        dac = DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2;
-    } break;
-    case ProcessDPIAwareness::PerMonitor: {
-        dac = DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE;
-    } break;
-    case ProcessDPIAwareness::System: {
-        dac = DPI_AWARENESS_CONTEXT_SYSTEM_AWARE;
-    } break;
-    case ProcessDPIAwareness::GdiScaled: {
-        dac = DPI_AWARENESS_CONTEXT_UNAWARE_GDISCALED;
-    } break;
-    case ProcessDPIAwareness::Unaware: {
-        dac = DPI_AWARENESS_CONTEXT_UNAWARE;
-    } break;
-    }
-    if (SetProcessDpiAwarenessContext(dac) == FALSE) {
-        const DWORD dwError = GetLastError();
-        if (dwError == ERROR_ACCESS_DENIED) {
-            // ERROR_ACCESS_DENIED means set externally (MSVC manifest or external application loading our library).
-            // We assume it's the most appropriate DPI awareness.
-            return true;
-        } else {
-            PRINT_WIN32_ERROR_MESSAGE(SetProcessDpiAwarenessContext, L"Failed to set DPI awareness for the process: SetProcessDpiAwarenessContext() returned FALSE.")
-            return false;
-        }
-    } else {
-        return true;
-    }
-}
-
-[[nodiscard]] static inline std::wstring DPIAwarenessToString(const ProcessDPIAwareness value) noexcept
-{
-    switch (value) {
-    case ProcessDPIAwareness::PerMonitorVersion2: {
-        return L"Per Monitor Version 2";
-    } break;
-    case ProcessDPIAwareness::PerMonitor: {
-        return L"Per Monitor";
-    } break;
-    case ProcessDPIAwareness::System: {
-        return L"System";
-    } break;
-    case ProcessDPIAwareness::GdiScaled: {
-        return L"Unaware (GDI Scaled)";
-    } break;
-    case ProcessDPIAwareness::Unaware: {
-        return L"Unaware";
-    } break;
-    }
-    return L"Unknown";
-}
-
 class XamlApplicationPrivate
 {
 public:
@@ -150,6 +60,10 @@ XamlApplicationPrivate::XamlApplicationPrivate(XamlApplication *q) noexcept
         std::exit(-1);
     }
     q_ptr = q;
+    if (!Initialize()) {
+        Utils::DisplayErrorDialog(L"Failed to initialize the XAML application.");
+        std::exit(-1);
+    }
 }
 
 XamlApplicationPrivate::~XamlApplicationPrivate() noexcept
@@ -185,18 +99,18 @@ bool XamlApplicationPrivate::Initialize() noexcept
             return false;
         }
     }
-    if (!SetProcessDPIAwareness(ProcessDPIAwareness::PerMonitorVersion2)) {
-        if (!SetProcessDPIAwareness(ProcessDPIAwareness::PerMonitor)) {
-            if (!SetProcessDPIAwareness(ProcessDPIAwareness::System)) {
-                if (!SetProcessDPIAwareness(ProcessDPIAwareness::GdiScaled)) {
+    if (!Utils::SetProcessDPIAwareness(ProcessDPIAwareness::PerMonitorVersion2)) {
+        if (!Utils::SetProcessDPIAwareness(ProcessDPIAwareness::PerMonitor)) {
+            if (!Utils::SetProcessDPIAwareness(ProcessDPIAwareness::System)) {
+                if (!Utils::SetProcessDPIAwareness(ProcessDPIAwareness::GdiScaled)) {
                     Utils::DisplayErrorDialog(L"Failed to enable high DPI scaling for the current process.");
                     return false;
                 }
             }
         }
     }
-    const ProcessDPIAwareness curPcDPIAwareness = GetProcessDPIAwareness();
-    const std::wstring curPcDPIAwarenessDbgMsg = std::wstring(L"Current process's DPI awareness: ") + DPIAwarenessToString(curPcDPIAwareness) + std::wstring(__NEW_LINE);
+    const ProcessDPIAwareness curPcDPIAwareness = Utils::GetProcessDPIAwareness();
+    const std::wstring curPcDPIAwarenessDbgMsg = std::wstring(L"Current process's DPI awareness: ") + Utils::DPIAwarenessToString(curPcDPIAwareness) + std::wstring(__NEW_LINE);
     OutputDebugStringW(curPcDPIAwarenessDbgMsg.c_str());
     m_window = std::make_unique<XamlWindow>();
     m_window->StartupLocation(WindowStartupLocation::ScreenCenter);
@@ -220,10 +134,6 @@ int XamlApplicationPrivate::Run() const noexcept
 XamlApplication::XamlApplication() noexcept
 {
     d_ptr = std::make_unique<XamlApplicationPrivate>(this);
-    if (!d_ptr->Initialize()) {
-        Utils::DisplayErrorDialog(L"Failed to initialize the XAML application.");
-        std::exit(-1);
-    }
 }
 
 XamlApplication::~XamlApplication() noexcept = default;

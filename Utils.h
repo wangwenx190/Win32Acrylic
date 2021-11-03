@@ -24,9 +24,13 @@
 
 #pragma once
 
+#include "Definitions.h"
 #include <string>
 
 namespace Utils
 {
     void DisplayErrorDialog(const std::wstring &text) noexcept;
+    [[nodiscard]] ProcessDPIAwareness GetProcessDPIAwareness() noexcept;
+    [[nodiscard]] bool SetProcessDPIAwareness(const ProcessDPIAwareness dpiAwareness) noexcept;
+    [[nodiscard]] std::wstring DPIAwarenessToString(const ProcessDPIAwareness value) noexcept;
 } // namespace Utils

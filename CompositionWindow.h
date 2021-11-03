@@ -23,3 +23,17 @@
  */
 
 #pragma once
+
+#include "Window.h"
+
+class CompositionWindowPrivate;
+
+class CompositionWindow : public Window
+{
+public:
+    explicit CompositionWindow() noexcept;
+    ~CompositionWindow() noexcept;
+
+private:
+    std::unique_ptr<CompositionWindowPrivate> d_ptr;
+};

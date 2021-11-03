@@ -60,7 +60,7 @@ string(APPEND CMAKE_EXE_LINKER_FLAGS_RELEASE " /HIGHENTROPYVA /LARGEADDRESSAWARE
 include(VC-LTL.cmake)
 
 set(SOURCES_COMMON
-    Win32AcrylicHelper.rc Win32AcrylicHelper.manifest
+    #Win32AcrylicHelper.rc Win32AcrylicHelper.manifest
     Resource.h
     Definitions.h
     pch.h pch.cpp
@@ -78,23 +78,12 @@ set(SOURCES_COMMON
     Window.h Window.cpp
 )
 
-set(SOURCES_Xaml
-    ${SOURCES_COMMON}
-    XamlWindow.h XamlWindow.cpp
-    XamlApplication.h XamlApplication.cpp
-    main_Xaml.cpp
-)
-
-set(SOURCES_Composition
-    ${SOURCES_COMMON}
-    CompositionWindow.h CompositionWindow.cpp
-    CompositionApplication.h CompositionApplication.cpp
-    main_Composition.cpp
-)
+add_library(${PROJECT_NAME} STATIC ${SOURCES_COMMON})
+add_library(wangwenx190::${PROJECT_NAME} ALIAS ${PROJECT_NAME})
 
 set(_WIN32_WINNT_WIN10 0x0A00)
 set(NTDDI_WIN10_CO 0x0A00000B)
-set(_target_extra_definitions
+target_compile_definitions(${PROJECT_NAME} PUBLIC
     _CRT_NON_CONFORMING_SWPRINTFS _CRT_SECURE_NO_WARNINGS
     _ENABLE_EXTENDED_ALIGNED_STORAGE
     NOMINMAX
@@ -104,6 +93,24 @@ set(_target_extra_definitions
     _WIN32_IE=${_WIN32_WINNT_WIN10} NTDDI_VERSION=${NTDDI_WIN10_CO}
     _KERNEL32_ _USER32_ _SHELL32_ _GDI32_ _OLE32_ _OLEAUT32_
     _ADVAPI32_ _COMBASEAPI_ _DWMAPI_ _UXTHEME_ _ROAPI_
+)
+unset(_WIN32_WINNT_WIN10)
+unset(NTDDI_WIN10_CO)
+
+target_link_libraries(${PROJECT_NAME} PUBLIC
+    Kernel32.lib
+)
+
+set(SOURCES_Xaml
+    XamlWindow.h XamlWindow.cpp
+    XamlApplication.h XamlApplication.cpp
+    main_Xaml.cpp
+)
+
+set(SOURCES_Composition
+    CompositionWindow.h CompositionWindow.cpp
+    CompositionApplication.h CompositionApplication.cpp
+    main_Composition.cpp
 )
 
 set(_target_arch_suffix "32")
@@ -116,13 +123,11 @@ set(_demo_types Xaml Composition)
 foreach(_type IN LISTS _demo_types)
     set(_current_subproject_name Demo_${_type})
     add_executable(${_current_subproject_name} WIN32
+        Win32AcrylicHelper.rc Win32AcrylicHelper.manifest
         ${SOURCES_${_type}}
     )
-    target_compile_definitions(${_current_subproject_name} PRIVATE
-        ${_target_extra_definitions}
-    )
     target_link_libraries(${_current_subproject_name} PRIVATE
-        Kernel32.lib
+        wangwenx190::${PROJECT_NAME}
     )
     set_target_properties(${_current_subproject_name} PROPERTIES
         OUTPUT_NAME ${_current_subproject_name}${_target_full_suffix}

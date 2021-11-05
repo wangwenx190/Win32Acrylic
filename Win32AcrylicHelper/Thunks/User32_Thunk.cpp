@@ -27,7 +27,6 @@
 #endif // _USER32_
 
 #include "WindowsAPIThunks.h"
-#include "SystemLibraryManager.h"
 
 #include <WinUser.h>
 

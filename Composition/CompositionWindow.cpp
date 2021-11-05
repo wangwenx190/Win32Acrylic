@@ -25,6 +25,7 @@
 #include "pch.h"
 #include "CompositionWindow.h"
 #include "Utils.h"
+#include "OperationResult.h"
 #include "DispatcherQueue_Thunk.h"
 
 class CompositionWindowPrivate
@@ -164,13 +165,14 @@ bool CompositionWindowPrivate::CreateCompositionContents() noexcept
         Utils::DisplayErrorDialog(L"Can't create any contents due to the desktop window target has not been create yet.");
         return false;
     }
-    m_rootVisual = m_compositor.CreateSpriteVisual();
-    if (m_rootVisual == nullptr) {
+    auto visual = m_compositor.CreateSpriteVisual();
+    if (visual == nullptr) {
         Utils::DisplayErrorDialog(L"Failed to create the sprite visual.");
         return false;
     }
-    m_rootVisual.RelativeSizeAdjustment({ 1.0f, 1.0f });
-    m_rootVisual.Brush(m_compositor.CreateHostBackdropBrush());
+    visual.RelativeSizeAdjustment({ 1.0f, 1.0f });
+    visual.Brush(m_compositor.CreateHostBackdropBrush());
+    m_rootVisual = visual;
     return true;
 }
 

@@ -31,7 +31,6 @@
 #endif // _COMBASEAPI_
 
 #include "WindowsAPIThunks.h"
-#include "SystemLibraryManager.h"
 
 #include <ComBaseApi.h>
 

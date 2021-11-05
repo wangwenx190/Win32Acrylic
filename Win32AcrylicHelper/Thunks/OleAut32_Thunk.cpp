@@ -27,7 +27,6 @@
 #endif // _OLEAUT32_
 
 #include "WindowsAPIThunks.h"
-#include "SystemLibraryManager.h"
 
 #include <OleAuto.h>
 

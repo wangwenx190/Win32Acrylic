@@ -23,7 +23,6 @@
  */
 
 #include "WindowsAPIThunks.h"
-#include "SystemLibraryManager.h"
 
 #include "DispatcherQueue_Thunk.h"
 

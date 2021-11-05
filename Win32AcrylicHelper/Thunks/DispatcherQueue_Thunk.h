@@ -29,20 +29,20 @@
 using PDISPATCHERQUEUE = ABI::Windows::System::IDispatcherQueue *;
 using PDISPATCHERQUEUECONTROLLER = ABI::Windows::System::IDispatcherQueueController *;
 
-enum DISPATCHERQUEUE_THREAD_APARTMENTTYPE
+using DISPATCHERQUEUE_THREAD_APARTMENTTYPE = enum _DISPATCHERQUEUE_THREAD_APARTMENTTYPE
 {
     DQTAT_COM_NONE = 0,
     DQTAT_COM_ASTA = 1,
     DQTAT_COM_STA = 2
 };
 
-enum DISPATCHERQUEUE_THREAD_TYPE
+using DISPATCHERQUEUE_THREAD_TYPE = enum _DISPATCHERQUEUE_THREAD_TYPE
 {
     DQTYPE_THREAD_DEDICATED = 1,
     DQTYPE_THREAD_CURRENT = 2,
 };
 
-struct DispatcherQueueOptions
+using DispatcherQueueOptions = struct _DispatcherQueueOptions
 {
     DWORD                                dwSize;        // Size of the struct
     DISPATCHERQUEUE_THREAD_TYPE          threadType;    // Thread affinity on which DispatcherQueueController is created.

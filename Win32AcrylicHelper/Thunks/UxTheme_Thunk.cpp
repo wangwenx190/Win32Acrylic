@@ -27,7 +27,6 @@
 #endif // _UXTHEME_
 
 #include "WindowsAPIThunks.h"
-#include "SystemLibraryManager.h"
 
 #include <UxTheme.h>
 

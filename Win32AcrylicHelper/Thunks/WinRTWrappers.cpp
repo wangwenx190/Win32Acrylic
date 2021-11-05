@@ -35,7 +35,7 @@
 #endif // _OLEAUT32_
 
 #include <ComBaseApi.h>
-#include <OleAut.h>
+#include <OleAuto.h>
 
 #ifdef __cplusplus
 EXTERN_C_START

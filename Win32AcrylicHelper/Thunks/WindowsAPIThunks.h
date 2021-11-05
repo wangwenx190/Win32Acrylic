@@ -74,7 +74,7 @@ EXTERN_C __declspec(selectany) void const * const _LCRT_DEFINE_IAT_SYMBOL_MAKE_N
 #endif // _LCRT_DEFINE_IAT_SYMBOL
 
 #ifndef __RESOLVE_API_INTERNAL
-#define __RESOLVE_API_INTERNAL(library, symbol) ( reinterpret_cast< decltype( & ::symbol ) >( SystemLibraryManager::instance().GetSymbol( L#library , L#symbol ) ) )
+#define __RESOLVE_API_INTERNAL(library, symbol) ( reinterpret_cast< decltype( & ::symbol ) >( GetWindowsAPIByName( L#library , L#symbol ) ) )
 #endif // __RESOLVE_API_INTERNAL
 
 #ifndef __RESOLVE_API
@@ -83,7 +83,9 @@ EXTERN_C __declspec(selectany) void const * const _LCRT_DEFINE_IAT_SYMBOL_MAKE_N
 
 #ifndef __THUNK_API
 #define __THUNK_API(library, symbol, result_type, default_result, argument_signature, argument_list) \
-EXTERN_C result_type WINAPI symbol argument_signature \
+EXTERN_C result_type WINAPI \
+symbol \
+argument_signature \
 { \
     __RESOLVE_API( library , symbol ); \
     return ( ( symbol ## _API ) ? ( symbol ## _API argument_list ) : ( default_result ) ); \
@@ -91,4 +93,8 @@ EXTERN_C result_type WINAPI symbol argument_signature \
 _LCRT_DEFINE_IAT_SYMBOL( symbol , 0 );
 #endif // __THUNK_API
 
-EXTERN_C FARPROC WINAPI GetWindowsAPIByName(LPCWSTR library, LPCWSTR symbol) noexcept;
+EXTERN_C FARPROC WINAPI
+GetWindowsAPIByName(
+    _In_ LPCWSTR library,
+    _In_ LPCWSTR symbol
+) noexcept;

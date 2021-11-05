@@ -27,7 +27,6 @@
 #endif // _DWMAPI_
 
 #include "WindowsAPIThunks.h"
-#include "SystemLibraryManager.h"
 
 #include <DwmApi.h>
 

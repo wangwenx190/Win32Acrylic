@@ -27,7 +27,6 @@
 #endif // _ROAPI_
 
 #include "WindowsAPIThunks.h"
-#include "SystemLibraryManager.h"
 
 #include <RoApi.h>
 #include <RoErrorApi.h>

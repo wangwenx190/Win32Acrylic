@@ -27,7 +27,6 @@
 #endif // _SHELL32_
 
 #include "WindowsAPIThunks.h"
-#include "SystemLibraryManager.h"
 
 #include <ShellApi.h>
 

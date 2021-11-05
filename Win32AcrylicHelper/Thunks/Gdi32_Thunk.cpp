@@ -27,7 +27,6 @@
 #endif // _GDI32_
 
 #include "WindowsAPIThunks.h"
-#include "SystemLibraryManager.h"
 
 #include <WinGdi.h>
 

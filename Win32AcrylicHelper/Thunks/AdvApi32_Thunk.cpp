@@ -27,7 +27,6 @@
 #endif // _ADVAPI32_
 
 #include "WindowsAPIThunks.h"
-#include "SystemLibraryManager.h"
 
 #include <WinReg.h>
 

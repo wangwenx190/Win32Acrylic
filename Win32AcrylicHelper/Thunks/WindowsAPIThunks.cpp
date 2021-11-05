@@ -25,7 +25,11 @@
 #include "WindowsAPIThunks.h"
 #include "SystemLibraryManager.h"
 
-EXTERN_C FARPROC WINAPI GetWindowsAPIByName(LPCWSTR library, LPCWSTR symbol) noexcept
+EXTERN_C FARPROC WINAPI
+GetWindowsAPIByName(
+    _In_ LPCWSTR library,
+    _In_ LPCWSTR symbol
+) noexcept
 {
     if (!library || !symbol) {
         // Construct a std::(w)string from null pointer will result in application crash.

@@ -100,7 +100,6 @@ namespace winrt::impl
 #include <WinRT\Windows.UI.Composition.Desktop.h>
 #include <Windows.UI.Composition.Interop.h>
 #include <Windows.UI.Xaml.Hosting.DesktopWindowXamlSource.h>
-#include <DispatcherQueue.h>
 
 // Restore the macros from Win32 headers.
 #pragma pop_macro("TRY")

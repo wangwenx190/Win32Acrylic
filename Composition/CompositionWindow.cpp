@@ -25,6 +25,41 @@
 #include "pch.h"
 #include "CompositionWindow.h"
 #include "Utils.h"
+#include "WindowsAPIThunks.h"
+#include <Windows.System.h>
+
+using PDISPATCHERQUEUE = ABI::Windows::System::IDispatcherQueue *;
+using PDISPATCHERQUEUECONTROLLER = ABI::Windows::System::IDispatcherQueueController *;
+
+enum DISPATCHERQUEUE_THREAD_APARTMENTTYPE
+{
+    DQTAT_COM_NONE = 0,
+    DQTAT_COM_ASTA = 1,
+    DQTAT_COM_STA = 2
+};
+
+enum DISPATCHERQUEUE_THREAD_TYPE
+{
+    DQTYPE_THREAD_DEDICATED = 1,
+    DQTYPE_THREAD_CURRENT = 2,
+};
+
+struct DispatcherQueueOptions
+{
+    DWORD                                dwSize;        // Size of the struct
+    DISPATCHERQUEUE_THREAD_TYPE          threadType;    // Thread affinity on which DispatcherQueueController is created.
+    DISPATCHERQUEUE_THREAD_APARTMENTTYPE apartmentType; // Initialize COM apartment on the new thread as ASTA or STA. Only relevant if threadType is DQTYPE_THREAD_DEDICATED
+};
+
+EXTERN_C HRESULT WINAPI
+CreateDispatcherQueueController(
+    DispatcherQueueOptions     options,
+    PDISPATCHERQUEUECONTROLLER *dispatcherQueueController
+)
+{
+    const auto function = reinterpret_cast<decltype(&::CreateDispatcherQueueController)>(GetWindowsAPIByName(L"coremessaging.dll", L"CreateDispatcherQueueController"));
+    return (function ? function(options, dispatcherQueueController) : DEFAULT_HRESULT);
+}
 
 class CompositionWindowPrivate
 {

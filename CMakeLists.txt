@@ -64,7 +64,6 @@ string(APPEND CMAKE_EXE_LINKER_FLAGS_RELEASE " /CETCOMPAT /GUARD:CF /GUARD:EHCON
 include(VC-LTL.cmake)
 
 # Win32AcrylicHelper
-
 set(SOURCES_Win32AcrylicHelper
     Win32AcrylicHelper/Resource.h
     Win32AcrylicHelper/Definitions.h
@@ -110,7 +109,6 @@ unset(_WIN32_WINNT_WIN10)
 unset(NTDDI_WIN10_CO)
 
 # Demo applications
-
 set(SOURCES_Xaml
     Xaml/XamlWindow.h Xaml/XamlWindow.cpp
     Xaml/XamlApplication.h Xaml/XamlApplication.cpp

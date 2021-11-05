@@ -35,5 +35,6 @@ public:
     ~CompositionWindow() noexcept;
 
 private:
+    friend class CompositionWindowPrivate;
     std::unique_ptr<CompositionWindowPrivate> d_ptr;
 };

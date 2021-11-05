@@ -22,25 +22,21 @@
  * SOFTWARE.
  */
 
-#ifndef _OLE32_
-#define _OLE32_
-#endif // _OLE32_
-
-#ifndef _COMBASEAPI_
-#define _COMBASEAPI_
-#endif // _COMBASEAPI_
+#ifndef _OLEAUT32_
+#define _OLEAUT32_
+#endif // _OLEAUT32_
 
 #include "WindowsAPIThunks.h"
 #include "SystemLibraryManager.h"
 
-#include <ComBaseApi.h>
+#include <OleAuto.h>
 
-#ifndef __OLE32_DLL_FILENAME
-#define __OLE32_DLL_FILENAME ole32.dll
-#endif // __OLE32_DLL_FILENAME
+#ifndef __OLEAUT32_DLL_FILENAME
+#define __OLEAUT32_DLL_FILENAME oleaut32.dll
+#endif // __OLEAUT32_DLL_FILENAME
 
-__THUNK_API(__OLE32_DLL_FILENAME, CoCreateGuid, HRESULT, DEFAULT_HRESULT, (GUID FAR *arg1), (arg1))
-__THUNK_API(__OLE32_DLL_FILENAME, StringFromGUID2, int, DEFAULT_INT, (REFGUID arg1, LPOLESTR arg2, int arg3), (arg1, arg2, arg3))
-__THUNK_API(__OLE32_DLL_FILENAME, IIDFromString, HRESULT, DEFAULT_HRESULT, (LPCOLESTR arg1, LPIID arg2), (arg1, arg2))
-__THUNK_API(__OLE32_DLL_FILENAME, CoIncrementMTAUsage, HRESULT, DEFAULT_HRESULT, (CO_MTA_USAGE_COOKIE *arg1), (arg1))
-__THUNK_API(__OLE32_DLL_FILENAME, CoInitializeEx, HRESULT, DEFAULT_HRESULT, (LPVOID arg1, DWORD arg2), (arg1, arg2))
+__THUNK_API(__OLEAUT32_DLL_FILENAME, SysFreeString, void, DEFAULT_VOID, (BSTR arg1), (arg1))
+__THUNK_API(__OLEAUT32_DLL_FILENAME, SetErrorInfo, HRESULT, DEFAULT_HRESULT, (ULONG arg1, IErrorInfo *arg2), (arg1, arg2))
+__THUNK_API(__OLEAUT32_DLL_FILENAME, GetErrorInfo, HRESULT, DEFAULT_HRESULT, (ULONG arg1, IErrorInfo **arg2), (arg1, arg2))
+__THUNK_API(__OLEAUT32_DLL_FILENAME, SysAllocString, BSTR, DEFAULT_PTR, (const OLECHAR *arg1), (arg1))
+__THUNK_API(__OLEAUT32_DLL_FILENAME, SysStringLen, UINT, DEFAULT_UINT, (BSTR arg1), (arg1))

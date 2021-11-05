@@ -30,17 +30,76 @@
 #define _COMBASEAPI_
 #endif // _COMBASEAPI_
 
-#include "WindowsAPIThunks.h"
-#include "SystemLibraryManager.h"
+#ifndef _OLEAUT32_
+#define _OLEAUT32_
+#endif // _OLEAUT32_
 
 #include <ComBaseApi.h>
+#include <OleAut.h>
 
-#ifndef __OLE32_DLL_FILENAME
-#define __OLE32_DLL_FILENAME ole32.dll
-#endif // __OLE32_DLL_FILENAME
+#ifdef __cplusplus
+EXTERN_C_START
+#endif // __cplusplus
 
-__THUNK_API(__OLE32_DLL_FILENAME, CoCreateGuid, HRESULT, DEFAULT_HRESULT, (GUID FAR *arg1), (arg1))
-__THUNK_API(__OLE32_DLL_FILENAME, StringFromGUID2, int, DEFAULT_INT, (REFGUID arg1, LPOLESTR arg2, int arg3), (arg1, arg2, arg3))
-__THUNK_API(__OLE32_DLL_FILENAME, IIDFromString, HRESULT, DEFAULT_HRESULT, (LPCOLESTR arg1, LPIID arg2), (arg1, arg2))
-__THUNK_API(__OLE32_DLL_FILENAME, CoIncrementMTAUsage, HRESULT, DEFAULT_HRESULT, (CO_MTA_USAGE_COOKIE *arg1), (arg1))
-__THUNK_API(__OLE32_DLL_FILENAME, CoInitializeEx, HRESULT, DEFAULT_HRESULT, (LPVOID arg1, DWORD arg2), (arg1, arg2))
+void WINAPI
+WINRT_SysFreeString(
+    BSTR bstrString
+)
+{
+    SysFreeString(bstrString);
+}
+
+HRESULT WINAPI
+WINRT_IIDFromString(
+    LPCOLESTR lpsz,
+    LPIID     lpiid
+)
+{
+    return IIDFromString(lpsz, lpiid);
+}
+
+HRESULT WINAPI
+WINRT_CoIncrementMTAUsage(
+    CO_MTA_USAGE_COOKIE *pCookie
+)
+{
+    return CoIncrementMTAUsage(pCookie);
+}
+
+HRESULT WINAPI
+WINRT_SetErrorInfo(
+    ULONG      dwReserved,
+    IErrorInfo *perrinfo
+)
+{
+    return SetErrorInfo(dwReserved, perrinfo);
+}
+
+HRESULT WINAPI
+WINRT_GetErrorInfo(
+    ULONG      dwReserved,
+    IErrorInfo **pperrinfo
+)
+{
+    return GetErrorInfo(dwReserved, pperrinfo);
+}
+
+BSTR WINAPI
+WINRT_SysAllocString(
+    const OLECHAR *psz
+)
+{
+    return SysAllocString(psz);
+}
+
+UINT WINAPI
+WINRT_SysStringLen(
+    BSTR pbstr
+)
+{
+    return SysStringLen(pbstr);
+}
+
+#ifdef __cplusplus
+EXTERN_C_END
+#endif // __cplusplus

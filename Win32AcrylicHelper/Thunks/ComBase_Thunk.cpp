@@ -22,18 +22,6 @@
  * SOFTWARE.
  */
 
-#ifndef _OLE32_
-#define _OLE32_
-#endif // _OLE32_
-
-#ifndef _OLEAUT32_
-#define _OLEAUT32_
-#endif // _OLEAUT32_
-
-#ifndef _COMBASEAPI_
-#define _COMBASEAPI_
-#endif // _COMBASEAPI_
-
 #ifndef _ROAPI_
 #define _ROAPI_
 #endif // _ROAPI_
@@ -50,20 +38,6 @@
 #ifndef __COMBASE_DLL_FILENAME
 #define __COMBASE_DLL_FILENAME combase.dll
 #endif // __COMBASE_DLL_FILENAME
-
-#ifndef __OLE32_DLL_FILENAME
-#define __OLE32_DLL_FILENAME ole32.dll
-#endif // __OLE32_DLL_FILENAME
-
-#ifndef __OLEAUT32_DLL_FILENAME
-#define __OLEAUT32_DLL_FILENAME oleaut32.dll
-#endif // __OLEAUT32_DLL_FILENAME
-
-#ifdef __cplusplus
-EXTERN_C_START
-#endif // __cplusplus
-
-// RuntimeObject
 
 __THUNK_API(__COMBASE_DLL_FILENAME, RoActivateInstance, HRESULT, DEFAULT_HRESULT, (HSTRING arg1, IInspectable **arg2), (arg1, arg2))
 __THUNK_API(__COMBASE_DLL_FILENAME, RoGetActivationFactory, HRESULT, DEFAULT_HRESULT, (HSTRING arg1, REFIID arg2, void **arg3), (arg1, arg2, arg3))
@@ -129,82 +103,3 @@ __THUNK_API(__COMBASE_DLL_FILENAME, RoParameterizedTypeExtraGetTypeSignature, PC
 __THUNK_API(__COMBASE_DLL_FILENAME, RoGetMetaDataFile, HRESULT, DEFAULT_HRESULT, (const HSTRING arg1, IMetaDataDispenserEx *arg2, HSTRING *arg3, IMetaDataImport2 **arg4, mdTypeDef *arg5), (arg1, arg2, arg3, arg4, arg5))
 __THUNK_API(__COMBASE_DLL_FILENAME, RoParseTypeName, HRESULT, DEFAULT_HRESULT, (HSTRING arg1, DWORD *arg2, HSTRING **arg3), (arg1, arg2, arg3))
 __THUNK_API(__COMBASE_DLL_FILENAME, RoResolveNamespace, HRESULT, DEFAULT_HRESULT, (const HSTRING arg1, const HSTRING arg2, const DWORD arg3, const HSTRING *arg4, DWORD *arg5, HSTRING **arg6, DWORD *arg7, HSTRING **arg8), (arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8))
-
-// ComBaseApi
-
-__THUNK_API(__OLE32_DLL_FILENAME, IIDFromString, HRESULT, DEFAULT_HRESULT, (LPCOLESTR arg1, LPIID arg2), (arg1, arg2))
-__THUNK_API(__OLE32_DLL_FILENAME, CoIncrementMTAUsage, HRESULT, DEFAULT_HRESULT, (CO_MTA_USAGE_COOKIE *arg1), (arg1))
-__THUNK_API(__OLE32_DLL_FILENAME, CoInitializeEx, HRESULT, DEFAULT_HRESULT, (LPVOID arg1, DWORD arg2), (arg1, arg2))
-
-// COM Automation
-
-__THUNK_API(__OLEAUT32_DLL_FILENAME, SysFreeString, void, DEFAULT_VOID, (BSTR arg1), (arg1))
-__THUNK_API(__OLEAUT32_DLL_FILENAME, SetErrorInfo, HRESULT, DEFAULT_HRESULT, (ULONG arg1, IErrorInfo *arg2), (arg1, arg2))
-__THUNK_API(__OLEAUT32_DLL_FILENAME, GetErrorInfo, HRESULT, DEFAULT_HRESULT, (ULONG arg1, IErrorInfo **arg2), (arg1, arg2))
-__THUNK_API(__OLEAUT32_DLL_FILENAME, SysAllocString, BSTR, DEFAULT_PTR, (const OLECHAR *arg1), (arg1))
-__THUNK_API(__OLEAUT32_DLL_FILENAME, SysStringLen, UINT, DEFAULT_UINT, (BSTR arg1), (arg1))
-
-// Wrappers
-
-void WINAPI
-WINRT_SysFreeString(
-    BSTR bstrString
-)
-{
-    SysFreeString(bstrString);
-}
-
-HRESULT WINAPI
-WINRT_IIDFromString(
-    LPCOLESTR lpsz,
-    LPIID     lpiid
-)
-{
-    return IIDFromString(lpsz, lpiid);
-}
-
-HRESULT WINAPI
-WINRT_CoIncrementMTAUsage(
-    CO_MTA_USAGE_COOKIE *pCookie
-)
-{
-    return CoIncrementMTAUsage(pCookie);
-}
-
-HRESULT WINAPI
-WINRT_SetErrorInfo(
-    ULONG      dwReserved,
-    IErrorInfo *perrinfo
-)
-{
-    return SetErrorInfo(dwReserved, perrinfo);
-}
-
-HRESULT WINAPI
-WINRT_GetErrorInfo(
-    ULONG      dwReserved,
-    IErrorInfo **pperrinfo
-)
-{
-    return GetErrorInfo(dwReserved, pperrinfo);
-}
-
-BSTR WINAPI
-WINRT_SysAllocString(
-    const OLECHAR *psz
-)
-{
-    return SysAllocString(psz);
-}
-
-UINT WINAPI
-WINRT_SysStringLen(
-    BSTR pbstr
-)
-{
-    return SysStringLen(pbstr);
-}
-
-#ifdef __cplusplus
-EXTERN_C_END
-#endif // __cplusplus

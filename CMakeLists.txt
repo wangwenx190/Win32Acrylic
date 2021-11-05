@@ -77,10 +77,12 @@ set(SOURCES_Win32AcrylicHelper
     Win32AcrylicHelper/Thunks/SystemLibrary.h Win32AcrylicHelper/Thunks/SystemLibrary.cpp
     Win32AcrylicHelper/Thunks/SystemLibraryManager.h Win32AcrylicHelper/Thunks/SystemLibraryManager.cpp
     Win32AcrylicHelper/Thunks/WindowsAPIThunks.h Win32AcrylicHelper/Thunks/WindowsAPIThunks.cpp
-    Win32AcrylicHelper/Thunks/RuntimeObject_Thunk.cpp Win32AcrylicHelper/Thunks/User32_Thunk.cpp
+    Win32AcrylicHelper/Thunks/ComBase_Thunk.cpp Win32AcrylicHelper/Thunks/User32_Thunk.cpp
     Win32AcrylicHelper/Thunks/Gdi32_Thunk.cpp Win32AcrylicHelper/Thunks/UxTheme_Thunk.cpp
     Win32AcrylicHelper/Thunks/AdvApi32_Thunk.cpp Win32AcrylicHelper/Thunks/Ole32_Thunk.cpp
     Win32AcrylicHelper/Thunks/DwmApi_Thunk.cpp Win32AcrylicHelper/Thunks/Shell32_Thunk.cpp
+    Win32AcrylicHelper/Thunks/OleAut32_Thunk.cpp Win32AcrylicHelper/Thunks/DispatcherQueue_Thunk.h
+    Win32AcrylicHelper/Thunks/CoreMessaging_Thunk.cpp Win32AcrylicHelper/Thunks/WinRTWrappers.cpp
 )
 add_library(${PROJECT_NAME} STATIC ${SOURCES_Win32AcrylicHelper})
 add_library(wangwenx190::${PROJECT_NAME} ALIAS ${PROJECT_NAME})

@@ -25,41 +25,7 @@
 #include "pch.h"
 #include "CompositionWindow.h"
 #include "Utils.h"
-#include "WindowsAPIThunks.h"
-#include <Windows.System.h>
-
-using PDISPATCHERQUEUE = ABI::Windows::System::IDispatcherQueue *;
-using PDISPATCHERQUEUECONTROLLER = ABI::Windows::System::IDispatcherQueueController *;
-
-enum DISPATCHERQUEUE_THREAD_APARTMENTTYPE
-{
-    DQTAT_COM_NONE = 0,
-    DQTAT_COM_ASTA = 1,
-    DQTAT_COM_STA = 2
-};
-
-enum DISPATCHERQUEUE_THREAD_TYPE
-{
-    DQTYPE_THREAD_DEDICATED = 1,
-    DQTYPE_THREAD_CURRENT = 2,
-};
-
-struct DispatcherQueueOptions
-{
-    DWORD                                dwSize;        // Size of the struct
-    DISPATCHERQUEUE_THREAD_TYPE          threadType;    // Thread affinity on which DispatcherQueueController is created.
-    DISPATCHERQUEUE_THREAD_APARTMENTTYPE apartmentType; // Initialize COM apartment on the new thread as ASTA or STA. Only relevant if threadType is DQTYPE_THREAD_DEDICATED
-};
-
-EXTERN_C HRESULT WINAPI
-CreateDispatcherQueueController(
-    DispatcherQueueOptions     options,
-    PDISPATCHERQUEUECONTROLLER *dispatcherQueueController
-)
-{
-    const auto function = reinterpret_cast<decltype(&::CreateDispatcherQueueController)>(GetWindowsAPIByName(L"coremessaging.dll", L"CreateDispatcherQueueController"));
-    return (function ? function(options, dispatcherQueueController) : DEFAULT_HRESULT);
-}
+#include "DispatcherQueue_Thunk.h"
 
 class CompositionWindowPrivate
 {
@@ -94,7 +60,7 @@ private:
     winrt::Windows::UI::Composition::Compositor m_compositor = nullptr;
     winrt::Windows::UI::Composition::Desktop::DesktopWindowTarget m_target = nullptr;
     winrt::Windows::System::DispatcherQueueController m_dispatcherQueueController = nullptr;
-    winrt::Windows::UI::Composition::ContainerVisual m_rootContainer = nullptr;
+    winrt::Windows::UI::Composition::SpriteVisual m_rootVisual = nullptr;
 };
 
 CompositionWindowPrivate::CompositionWindowPrivate(CompositionWindow *q) noexcept
@@ -124,18 +90,23 @@ bool CompositionWindowPrivate::Initialize(const HWND hWnd) noexcept
         return false;
     }
     if (!EnsureDispatcherQueue()) {
+        Utils::DisplayErrorDialog(L"Failed to create the dispatcher queue.");
         return false;
     }
     m_compositor = winrt::Windows::UI::Composition::Compositor();
     if (m_compositor == nullptr) {
+        Utils::DisplayErrorDialog(L"Failed to create the compositor.");
         return false;
     }
     if (!CreateDesktopWindowTarget(hWnd)) {
+        Utils::DisplayErrorDialog(L"Failed to create the desktop window target.");
         return false;
     }
     if (!CreateCompositionContents()) {
+        Utils::DisplayErrorDialog(L"Failed to create the Windows.UI.Composition contents.");
         return false;
     }
+    m_target.Root(m_rootVisual);
     return true;
 }
 
@@ -145,15 +116,18 @@ bool CompositionWindowPrivate::CreateDesktopWindowTarget(const HWND hWnd) noexce
         return false;
     }
     if (m_compositor == nullptr) {
+        Utils::DisplayErrorDialog(L"Can't create the desktop window target due to the compositor has not been created yet.");
         return false;
     }
     const auto interop = m_compositor.as<ABI::Windows::UI::Composition::Desktop::ICompositorDesktopInterop>();
     if (!interop) {
+        Utils::DisplayErrorDialog(L"Failed to retrieve the native window of the compositor.");
         return false;
     }
     winrt::Windows::UI::Composition::Desktop::DesktopWindowTarget target = nullptr;
     const HRESULT hr = interop->CreateDesktopWindowTarget(hWnd, false, reinterpret_cast<ABI::Windows::UI::Composition::Desktop::IDesktopWindowTarget **>(winrt::put_abi(target)));
     if (FAILED(hr)) {
+        PRINT_HR_ERROR_MESSAGE(CreateDesktopWindowTarget, hr, L"Failed to create the desktop window target.")
         return false;
     }
     m_target = target;
@@ -169,10 +143,11 @@ bool CompositionWindowPrivate::EnsureDispatcherQueue() noexcept
     SecureZeroMemory(&options, sizeof(options));
     options.dwSize = sizeof(options);
     options.threadType = DQTYPE_THREAD_CURRENT;
-    options.apartmentType = DQTAT_COM_NONE;
+    options.apartmentType = DQTAT_COM_NONE; // This member is not needed when the thread type is "DQTYPE_THREAD_CURRENT".
     winrt::Windows::System::DispatcherQueueController controller = nullptr;
     const HRESULT hr = CreateDispatcherQueueController(options, reinterpret_cast<ABI::Windows::System::IDispatcherQueueController **>(winrt::put_abi(controller)));
     if (FAILED(hr)) {
+        PRINT_HR_ERROR_MESSAGE(CreateDispatcherQueueController, hr, L"Failed to create the dispatcher queue controller.")
         return false;
     }
     m_dispatcherQueueController = controller;
@@ -182,23 +157,20 @@ bool CompositionWindowPrivate::EnsureDispatcherQueue() noexcept
 bool CompositionWindowPrivate::CreateCompositionContents() noexcept
 {
     if (m_compositor == nullptr) {
+        Utils::DisplayErrorDialog(L"Can't create any contents due to the compositor has not been create yet.");
         return false;
     }
     if (m_target == nullptr) {
+        Utils::DisplayErrorDialog(L"Can't create any contents due to the desktop window target has not been create yet.");
         return false;
     }
-    m_rootContainer = m_compositor.CreateContainerVisual();
-    if (m_rootContainer == nullptr) {
+    m_rootVisual = m_compositor.CreateSpriteVisual();
+    if (m_rootVisual == nullptr) {
+        Utils::DisplayErrorDialog(L"Failed to create the sprite visual.");
         return false;
     }
-    m_rootContainer.RelativeSizeAdjustment({ 1.0f, 1.0f });
-    auto visual = m_compositor.CreateSpriteVisual();
-    if (visual == nullptr) {
-        return false;
-    }
-    visual.Brush(m_compositor.CreateHostBackdropBrush());
-    m_rootContainer.Children().InsertAtTop(visual);
-    m_target.Root(m_rootContainer);
+    m_rootVisual.RelativeSizeAdjustment({ 1.0f, 1.0f });
+    m_rootVisual.Brush(m_compositor.CreateHostBackdropBrush());
     return true;
 }
 
@@ -256,11 +228,11 @@ void CompositionWindowPrivate::OnDotsPerInchChanged(const UINT arg) noexcept
     if (arg == 0) {
         return;
     }
-    if (m_rootContainer == nullptr) {
+    if (m_rootVisual == nullptr) {
         return;
     }
     const auto scaleFactor = (static_cast<float>(arg) / 100.0f);
-    m_rootContainer.Scale({ scaleFactor, scaleFactor, 1.0f });
+    m_rootVisual.Scale({ scaleFactor, scaleFactor, 1.0f });
 }
 
 CompositionWindow::CompositionWindow() noexcept

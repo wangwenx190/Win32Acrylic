@@ -354,6 +354,10 @@ bool XamlWindowPrivate::InitializeXamlIsland() noexcept
     // This DesktopWindowXamlSource is the object that enables a non-UWP desktop application
     // to host WinRT XAML controls in any UI element that is associated with a window handle (HWND).
     m_xamlSource = winrt::Windows::UI::Xaml::Hosting::DesktopWindowXamlSource();
+    if (m_xamlSource == nullptr) {
+        Utils::DisplayErrorDialog(L"Failed to create the DesktopWindowXamlSource object.");
+        return false;
+    }
     // Get handle to the core window.
     const auto interop = m_xamlSource.as<IDesktopWindowXamlSourceNative2>();
     if (!interop) {
@@ -437,8 +441,16 @@ UINT XamlWindowPrivate::GetTopFrameMargin() const noexcept
 bool XamlWindowPrivate::CreateXamlContents() noexcept
 {
     m_rootGrid = winrt::Windows::UI::Xaml::Controls::Grid();
+    if (m_rootGrid == nullptr) {
+        Utils::DisplayErrorDialog(L"Failed to create the root Grid.");
+        return false;
+    }
 
     m_acrylicBrush = winrt::Windows::UI::Xaml::Media::AcrylicBrush();
+    if (m_acrylicBrush == nullptr) {
+        Utils::DisplayErrorDialog(L"Failed to create the AcrylicBrush.");
+        return false;
+    }
     m_acrylicBrush.BackgroundSource(winrt::Windows::UI::Xaml::Media::AcrylicBackgroundSource::HostBackdrop);
     if (!RefreshWindowBackgroundBrush()) {
         Utils::DisplayErrorDialog(L"Failed to refresh the window background brush.");

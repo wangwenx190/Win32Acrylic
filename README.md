@@ -1,12 +1,32 @@
-# Using the Official Acrylic Brush in Win32 Applications
+# Acrylic Demo Applications
 
-This demo is based on the XAML Island technology and thus it can only be run on Windows 10 19H1 (Win10 1903, 10.0.18362) and onwards. This is the limitation of XAML Island itself, I really can't do anything about it. And you don't need to download any runtime libraries seperately because this demo only uses very limited features of WinRT so it can use the runtime which is shipped by Windows itself. Due to this demo uses the official acrylic brush from UWP, their appearance and behavior should be exactly the same. This demo also has official support for Windows 11.
+Acrylic demo applications based on different technology stack.
 
 ## Screenshots
 
-![Light Theme](/Screenshots/Light.png "Light Theme")
+### UWP
 
-![Dark Theme](/Screenshots/Dark.png "Dark Theme")
+![Light Theme](/Screenshots/Light/UWP.png "Light Theme")
+
+![Dark Theme](/Screenshots/Dark/UWP.png "Dark Theme")
+
+### Windows.UI.Composition
+
+![Light Theme](/Screenshots/Light/Windows.UI.Composition.png "Light Theme")
+
+![Dark Theme](/Screenshots/Dark/Windows.UI.Composition.png "Dark Theme")
+
+### Direct Composition
+
+![Light Theme](/Screenshots/Light/DirectComposition.png "Light Theme")
+
+![Dark Theme](/Screenshots/Dark/DirectComposition.png "Dark Theme")
+
+### Direct2D
+
+![Light Theme](/Screenshots/Light/Direct2D.png "Light Theme")
+
+![Dark Theme](/Screenshots/Dark/Direct2D.png "Dark Theme")
 
 ## Build
 
@@ -14,7 +34,7 @@ This demo is based on the XAML Island technology and thus it can only be run on 
 
 1. Visual Studio 2017 or later
 2. C++ workload for desktop
-3. Windows 10 SDK, as new as possible
+3. Windows 10/11 SDK, as new as possible
 4. CMake, as new as possible
 5. Any make tool. Ninja is recommended. MSBuild is also fine.
 

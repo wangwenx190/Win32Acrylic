@@ -22,23 +22,19 @@
  * SOFTWARE.
  */
 
-#include <SDKDDKVer.h>
-#include <Windows.h>
-#include "CompositionApplication.h"
+#pragma once
 
-EXTERN_C int APIENTRY
-wWinMain(
-    _In_     HINSTANCE hInstance,
-    _In_opt_ HINSTANCE hPrevInstance,
-    _In_     LPWSTR    lpCmdLine,
-    _In_     int       nCmdShow
-)
+#include "Window.h"
+
+class MainWindowPrivate;
+
+class MainWindow : public Window
 {
-    UNREFERENCED_PARAMETER(hInstance);
-    UNREFERENCED_PARAMETER(hPrevInstance);
-    UNREFERENCED_PARAMETER(lpCmdLine);
-    UNREFERENCED_PARAMETER(nCmdShow);
+public:
+    explicit MainWindow() noexcept;
+    ~MainWindow() noexcept;
 
-    CompositionApplication application;
-    return application.Run();
-}
+private:
+    friend class MainWindowPrivate;
+    std::unique_ptr<MainWindowPrivate> d_ptr;
+};

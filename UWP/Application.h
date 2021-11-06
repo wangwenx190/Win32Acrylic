@@ -26,22 +26,22 @@
 
 #include <memory>
 
-class CompositionApplicationPrivate;
+class ApplicationPrivate;
 
-class CompositionApplication
+class Application
 {
 public:
-    explicit CompositionApplication() noexcept;
-    ~CompositionApplication() noexcept;
+    explicit Application() noexcept;
+    ~Application() noexcept;
 
     [[nodiscard]] int Run() const noexcept;
 
 private:
-    CompositionApplication(const CompositionApplication &) = delete;
-    CompositionApplication &operator=(const CompositionApplication &) = delete;
-    CompositionApplication(CompositionApplication &&) = delete;
-    CompositionApplication &operator=(CompositionApplication &&) = delete;
+    Application(const Application &) = delete;
+    Application &operator=(const Application &) = delete;
+    Application(Application &&) = delete;
+    Application &operator=(Application &&) = delete;
 
 private:
-    std::unique_ptr<CompositionApplicationPrivate> d_ptr;
+    std::unique_ptr<ApplicationPrivate> d_ptr;
 };

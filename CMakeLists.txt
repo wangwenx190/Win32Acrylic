@@ -30,7 +30,7 @@ option(BUILD_UWP_DEMO "Build the UWP demo application." ON)
 option(BUILD_Windows.UI.Composition_DEMO "Build the Windows.UI.Composition demo application." ON)
 option(BUILD_DirectComposition_DEMO "Build the Direct Composition demo application." ON)
 option(BUILD_Direct2D_DEMO "Build the Direct2D demo application." ON)
-option(FULL_OPTIMIZE "Enable as much optimization as possible." OFF)
+option(OPTIMIZE_FOR_SPEED "Enable as much optimization as possible." OFF)
 
 if(DEFINED CMAKE_BUILD_TYPE)
     if("x${CMAKE_BUILD_TYPE}" STREQUAL "xMinSizeRel")
@@ -44,8 +44,8 @@ else()
     set(CMAKE_BUILD_TYPE "Release" CACHE STRING "" FORCE)
 endif()
 
-# Enable link time optimization for release builds if the user requests for full optimization.
-set(CMAKE_INTERPROCEDURAL_OPTIMIZATION_RELEASE ${FULL_OPTIMIZE} CACHE BOOL "" FORCE)
+# Enable link time optimization for release builds.
+set(CMAKE_INTERPROCEDURAL_OPTIMIZATION_RELEASE ON CACHE BOOL "" FORCE)
 
 # Request C++20.
 set(CMAKE_CXX_STANDARD "20" CACHE STRING "" FORCE)
@@ -77,7 +77,7 @@ string(APPEND CMAKE_CXX_FLAGS " /await:strict /bigobj /EHsc /d2FH4 /GR- /MP /utf
 string(APPEND CMAKE_CXX_FLAGS_DEBUG " /JMC ")
 
 set(_optimization_flags)
-if(FULL_OPTIMIZE)
+if(OPTIMIZE_FOR_SPEED)
     # Don't use "/GA" for DLLs, it will cause bad code generation.
     set(_optimization_flags "/O2 /Ob3 /Oi /GA /GT")
 else()
@@ -137,15 +137,21 @@ target_compile_definitions(${PROJECT_NAME} PUBLIC
 
 # Demo applications
 set(SOURCES_UWP
-    UWP/UWPWindow.h UWP/UWPWindow.cpp
-    UWP/UWPApplication.h UWP/UWPApplication.cpp
-    UWP/main_UWP.cpp
+    UWP/MainWindow.h UWP/MainWindow.cpp
+    UWP/Application.h UWP/Application.cpp
+    UWP/main.cpp
 )
 
-set(SOURCES_Composition
-    Composition/CompositionWindow.h Composition/CompositionWindow.cpp
-    Composition/CompositionApplication.h Composition/CompositionApplication.cpp
-    Composition/main_Composition.cpp
+set(SOURCES_Windows.UI.Composition
+    Windows.UI.Composition/MainWindow.h Windows.UI.Composition/MainWindow.cpp
+    Windows.UI.Composition/Application.h Windows.UI.Composition/Application.cpp
+    Windows.UI.Composition/main.cpp
+)
+
+set(SOURCES_DirectComposition
+    DirectComposition/MainWindow.h DirectComposition/MainWindow.cpp
+    DirectComposition/Application.h DirectComposition/Application.cpp
+    DirectComposition/main.cpp
 )
 
 set(_target_arch "32")
@@ -154,7 +160,7 @@ if("x${CMAKE_SIZEOF_VOID_P}" STREQUAL "x8")
 endif()
 set(_target_filename_suffix ${CMAKE_BUILD_TYPE}_${_target_arch}-bit)
 
-set(_demo_types UWP Composition)
+set(_demo_types UWP Windows.UI.Composition DirectComposition)
 foreach(_type IN LISTS _demo_types)
     if(BUILD_${_type}_DEMO)
         set(_current_subproject_name Demo_${_type})

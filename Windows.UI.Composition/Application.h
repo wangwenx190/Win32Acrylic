@@ -26,22 +26,22 @@
 
 #include <memory>
 
-class UWPApplicationPrivate;
+class ApplicationPrivate;
 
-class UWPApplication
+class Application
 {
 public:
-    explicit UWPApplication() noexcept;
-    ~UWPApplication() noexcept;
+    explicit Application() noexcept;
+    ~Application() noexcept;
 
     [[nodiscard]] int Run() const noexcept;
 
 private:
-    UWPApplication(const UWPApplication &) = delete;
-    UWPApplication &operator=(const UWPApplication &) = delete;
-    UWPApplication(UWPApplication &&) = delete;
-    UWPApplication &operator=(UWPApplication &&) = delete;
+    Application(const Application &) = delete;
+    Application &operator=(const Application &) = delete;
+    Application(Application &&) = delete;
+    Application &operator=(Application &&) = delete;
 
 private:
-    std::unique_ptr<UWPApplicationPrivate> d_ptr;
+    std::unique_ptr<ApplicationPrivate> d_ptr;
 };

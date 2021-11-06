@@ -23,81 +23,63 @@
  */
 
 #include "pch.h"
-#include "UWPApplication.h"
-#include "UWPWindow.h"
-#include "WindowsVersion.h"
+#include "Application.h"
+#include "MainWindow.h"
 #include "Utils.h"
-#include "OperationResult.h"
+#include "WindowsVersion.h"
 
 static constexpr const wchar_t __NEW_LINE[] = L"\r\n";
 
-class UWPApplicationPrivate
+class ApplicationPrivate
 {
 public:
-    explicit UWPApplicationPrivate(UWPApplication *q) noexcept;
-    ~UWPApplicationPrivate() noexcept;
+    explicit ApplicationPrivate(Application *q) noexcept;
+    ~ApplicationPrivate() noexcept;
 
     [[nodiscard]] bool Initialize() noexcept;
     [[nodiscard]] int Run() const noexcept;
 
 private:
-    UWPApplicationPrivate(const UWPApplicationPrivate &) = delete;
-    UWPApplicationPrivate &operator=(const UWPApplicationPrivate &) = delete;
-    UWPApplicationPrivate(UWPApplicationPrivate &&) = delete;
-    UWPApplicationPrivate &operator=(UWPApplicationPrivate &&) = delete;
+    ApplicationPrivate(const ApplicationPrivate &) = delete;
+    ApplicationPrivate &operator=(const ApplicationPrivate &) = delete;
+    ApplicationPrivate(ApplicationPrivate &&) = delete;
+    ApplicationPrivate &operator=(ApplicationPrivate &&) = delete;
 
 private:
-    UWPApplication *q_ptr = nullptr;
+    Application *q_ptr = nullptr;
     static inline bool m_comInitialized = false;
-    static inline winrt::Windows::UI::Xaml::Hosting::WindowsXamlManager m_xamlManager = nullptr;
-    std::unique_ptr<UWPWindow> m_window;
+    std::unique_ptr<MainWindow> m_window;
 };
 
-UWPApplicationPrivate::UWPApplicationPrivate(UWPApplication *q) noexcept
+ApplicationPrivate::ApplicationPrivate(Application *q) noexcept
 {
     if (!q) {
-        Utils::DisplayErrorDialog(L"UWPApplicationPrivate's q is null.");
+        Utils::DisplayErrorDialog(L"ApplicationPrivate's q is null.");
         std::exit(-1);
     }
     q_ptr = q;
     if (!Initialize()) {
-        Utils::DisplayErrorDialog(L"Failed to initialize the UWP application.");
+        Utils::DisplayErrorDialog(L"Failed to initialize the Windows.UI.Composition application.");
         std::exit(-1);
     }
 }
 
-UWPApplicationPrivate::~UWPApplicationPrivate() noexcept
-{
-    if (m_window) {
-        m_window.release();
-    }
-    if (m_xamlManager != nullptr) {
-        m_xamlManager.Close();
-        m_xamlManager = nullptr;
-    }
-}
+ApplicationPrivate::~ApplicationPrivate() noexcept = default;
 
-bool UWPApplicationPrivate::Initialize() noexcept
+bool ApplicationPrivate::Initialize() noexcept
 {
     const VersionNumber &curOsVer = WindowsVersion::CurrentVersion();
     const std::wstring osVerDbgMsg = std::wstring(L"Current operating system version: ") + WindowsVersion::ToHumanReadableString(curOsVer) + std::wstring(__NEW_LINE);
     OutputDebugStringW(osVerDbgMsg.c_str());
-    if (curOsVer < WindowsVersion::Windows10_19Half1) {
-        Utils::DisplayErrorDialog(L"This application only supports running on Windows 10 19H1 and onwards.");
+    // ### FIXME: Check the exact minimum supported version.
+    if (curOsVer < WindowsVersion::Windows10_ThresHold1) {
+        Utils::DisplayErrorDialog(L"This application only supports running on Windows 10 and onwards.");
         return false;
     }
     if (!m_comInitialized) {
         // The call to winrt::init_apartment() initializes COM. By default, in a multi-threaded apartment.
         winrt::init_apartment(winrt::apartment_type::single_threaded);
         m_comInitialized = true;
-    }
-    if (m_xamlManager == nullptr) {
-        // Initialize the XAML framework's core window for the current thread.
-        m_xamlManager = winrt::Windows::UI::Xaml::Hosting::WindowsXamlManager::InitializeForCurrentThread();
-        if (m_xamlManager == nullptr) {
-            Utils::DisplayErrorDialog(L"Failed to initialize the XAML framework.");
-            return false;
-        }
     }
     if (!Utils::SetProcessDPIAwareness(ProcessDPIAwareness::PerMonitorVersion2)) {
         if (!Utils::SetProcessDPIAwareness(ProcessDPIAwareness::PerMonitor)) {
@@ -112,33 +94,33 @@ bool UWPApplicationPrivate::Initialize() noexcept
     const ProcessDPIAwareness curPcDPIAwareness = Utils::GetProcessDPIAwareness();
     const std::wstring curPcDPIAwarenessDbgMsg = std::wstring(L"Current process's DPI awareness: ") + Utils::DPIAwarenessToString(curPcDPIAwareness) + std::wstring(__NEW_LINE);
     OutputDebugStringW(curPcDPIAwarenessDbgMsg.c_str());
-    m_window = std::make_unique<UWPWindow>();
+    m_window = std::make_unique<MainWindow>();
     m_window->StartupLocation(WindowStartupLocation::ScreenCenter);
     m_window->Visibility(WindowState::Windowed);
     return true;
 }
 
-int UWPApplicationPrivate::Run() const noexcept
+int ApplicationPrivate::Run() const noexcept
 {
     if (!q_ptr) {
-        Utils::DisplayErrorDialog(L"Can't run the UWP application due to the q_ptr is null.");
+        Utils::DisplayErrorDialog(L"Can't run the Windows.UI.Composition application due to the q_ptr is null.");
         return -1;
     }
     if (!m_window) {
-        Utils::DisplayErrorDialog(L"Can't run the UWP application due to the UWP window has not been created yet.");
+        Utils::DisplayErrorDialog(L"Can't run the Windows.UI.Composition application due to the main window has not been created yet.");
         return -1;
     }
-    return UWPWindow::MessageLoop();
+    return MainWindow::MessageLoop();
 }
 
-UWPApplication::UWPApplication() noexcept
+Application::Application() noexcept
 {
-    d_ptr = std::make_unique<UWPApplicationPrivate>(this);
+    d_ptr = std::make_unique<ApplicationPrivate>(this);
 }
 
-UWPApplication::~UWPApplication() noexcept = default;
+Application::~Application() noexcept = default;
 
-int UWPApplication::Run() const noexcept
+int Application::Run() const noexcept
 {
     return d_ptr->Run();
 }

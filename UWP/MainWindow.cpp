@@ -23,7 +23,7 @@
  */
 
 #include "pch.h"
-#include "UWPWindow.h"
+#include "MainWindow.h"
 #include "OperationResult.h"
 #include "Utils.h"
 
@@ -55,11 +55,11 @@ namespace HighContrast {
     return Color::FromRgba(value.R, value.G, value.B, value.A);
 }
 
-class UWPWindowPrivate
+class MainWindowPrivate
 {
 public:
-    explicit UWPWindowPrivate(UWPWindow *q) noexcept;
-    ~UWPWindowPrivate() noexcept;
+    explicit MainWindowPrivate(MainWindow *q) noexcept;
+    ~MainWindowPrivate() noexcept;
 
     [[nodiscard]] const Color &TintColor() const noexcept;
     void TintColor(const Color &value) noexcept;
@@ -105,13 +105,13 @@ private:
     [[nodiscard]] static bool SetWindowState(const HWND hWnd, const DWORD extraFlags) noexcept;
 
 private:
-    UWPWindowPrivate(const UWPWindowPrivate &) = delete;
-    UWPWindowPrivate &operator=(const UWPWindowPrivate &) = delete;
-    UWPWindowPrivate(UWPWindowPrivate &&) = delete;
-    UWPWindowPrivate &operator=(UWPWindowPrivate &&) = delete;
+    MainWindowPrivate(const MainWindowPrivate &) = delete;
+    MainWindowPrivate &operator=(const MainWindowPrivate &) = delete;
+    MainWindowPrivate(MainWindowPrivate &&) = delete;
+    MainWindowPrivate &operator=(MainWindowPrivate &&) = delete;
 
 private:
-    UWPWindow *q_ptr = nullptr;
+    MainWindow *q_ptr = nullptr;
     HWND m_dragBarWindow = nullptr;
     HWND m_xamlIslandWindow = nullptr;
     std::optional<Color> m_tintColor = std::nullopt;
@@ -123,21 +123,21 @@ private:
     winrt::Windows::UI::Xaml::Media::AcrylicBrush m_acrylicBrush = nullptr;
 };
 
-UWPWindowPrivate::UWPWindowPrivate(UWPWindow *q) noexcept
+MainWindowPrivate::MainWindowPrivate(MainWindow *q) noexcept
 {
     if (!q) {
-        Utils::DisplayErrorDialog(L"UWPWindowPrivate's q is null.");
+        Utils::DisplayErrorDialog(L"MainWindowPrivate's q is null.");
         std::exit(-1);
     }
     q_ptr = q;
     if (InitializeXamlIsland()) {
         if (InitializeDragBarWindow()) {
-            q_ptr->CustomMessageHandler(std::bind(&UWPWindowPrivate::MainWindowMessageHandler, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, std::placeholders::_4));
-            q_ptr->WindowMessageFilter(std::bind(&UWPWindowPrivate::MainWindowMessageFilter, this, std::placeholders::_1));
-            q_ptr->WidthChangeHandler(std::bind(&UWPWindowPrivate::OnWidthChanged, this, std::placeholders::_1));
-            q_ptr->HeightChangeHandler(std::bind(&UWPWindowPrivate::OnHeightChanged, this, std::placeholders::_1));
-            q_ptr->VisibilityChangeHandler(std::bind(&UWPWindowPrivate::OnVisibilityChanged, this, std::placeholders::_1));
-            q_ptr->ThemeChangeHandler(std::bind(&UWPWindowPrivate::OnThemeChanged, this, std::placeholders::_1));
+            q_ptr->CustomMessageHandler(std::bind(&MainWindowPrivate::MainWindowMessageHandler, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, std::placeholders::_4));
+            q_ptr->WindowMessageFilter(std::bind(&MainWindowPrivate::MainWindowMessageFilter, this, std::placeholders::_1));
+            q_ptr->WidthChangeHandler(std::bind(&MainWindowPrivate::OnWidthChanged, this, std::placeholders::_1));
+            q_ptr->HeightChangeHandler(std::bind(&MainWindowPrivate::OnHeightChanged, this, std::placeholders::_1));
+            q_ptr->VisibilityChangeHandler(std::bind(&MainWindowPrivate::OnVisibilityChanged, this, std::placeholders::_1));
+            q_ptr->ThemeChangeHandler(std::bind(&MainWindowPrivate::OnThemeChanged, this, std::placeholders::_1));
         } else {
             Utils::DisplayErrorDialog(L"Failed to initialize the drag bar window.");
             std::exit(-1);
@@ -148,7 +148,7 @@ UWPWindowPrivate::UWPWindowPrivate(UWPWindow *q) noexcept
     }
 }
 
-UWPWindowPrivate::~UWPWindowPrivate() noexcept
+MainWindowPrivate::~MainWindowPrivate() noexcept
 {
     if (m_xamlSource != nullptr) {
         m_xamlSource.Close();
@@ -156,55 +156,55 @@ UWPWindowPrivate::~UWPWindowPrivate() noexcept
     }
 }
 
-const Color &UWPWindowPrivate::TintColor() const noexcept
+const Color &MainWindowPrivate::TintColor() const noexcept
 {
     return m_tintColor.value();
 }
 
-void UWPWindowPrivate::TintColor(const Color &value) noexcept
+void MainWindowPrivate::TintColor(const Color &value) noexcept
 {
     if (m_tintColor.value() != value) {
         m_tintColor = value;
     }
 }
 
-double UWPWindowPrivate::TintOpacity() const noexcept
+double MainWindowPrivate::TintOpacity() const noexcept
 {
     return m_tintOpacity.value();
 }
 
-void UWPWindowPrivate::TintOpacity(const double value) noexcept
+void MainWindowPrivate::TintOpacity(const double value) noexcept
 {
     if (m_tintOpacity.value() != value) {
         m_tintOpacity = value;
     }
 }
 
-double UWPWindowPrivate::LuminosityOpacity() const noexcept
+double MainWindowPrivate::LuminosityOpacity() const noexcept
 {
     return m_luminosityOpacity.value();
 }
 
-void UWPWindowPrivate::LuminosityOpacity(const double value) noexcept
+void MainWindowPrivate::LuminosityOpacity(const double value) noexcept
 {
     if (m_luminosityOpacity.value() != value) {
         m_luminosityOpacity = value;
     }
 }
 
-const Color &UWPWindowPrivate::FallbackColor() const noexcept
+const Color &MainWindowPrivate::FallbackColor() const noexcept
 {
     return m_fallbackColor.value();
 }
 
-void UWPWindowPrivate::FallbackColor(const Color &value) noexcept
+void MainWindowPrivate::FallbackColor(const Color &value) noexcept
 {
     if (m_fallbackColor.value() != value) {
         m_fallbackColor = value;
     }
 }
 
-double UWPWindowPrivate::GetDevicePixelRatio() const noexcept
+double MainWindowPrivate::GetDevicePixelRatio() const noexcept
 {
     if (!q_ptr) {
         Utils::DisplayErrorDialog(L"Can't retrieve the device pixel ratio of the window due to q_ptr is null.");
@@ -213,7 +213,7 @@ double UWPWindowPrivate::GetDevicePixelRatio() const noexcept
     return (static_cast<double>(q_ptr->DotsPerInch()) / static_cast<double>(USER_DEFAULT_SCREEN_DPI));
 }
 
-SIZE UWPWindowPrivate::GetPhysicalSize() const noexcept
+SIZE MainWindowPrivate::GetPhysicalSize() const noexcept
 {
     if (!q_ptr) {
         Utils::DisplayErrorDialog(L"Can't retrieve the physical size of the window due to q_ptr is null.");
@@ -223,7 +223,7 @@ SIZE UWPWindowPrivate::GetPhysicalSize() const noexcept
     return {static_cast<LONG>(q_ptr->Width()), static_cast<LONG>(q_ptr->Height() - topFrameMargin)};
 }
 
-winrt::Windows::Foundation::Size UWPWindowPrivate::GetLogicalSize(const SIZE physicalSize) const noexcept
+winrt::Windows::Foundation::Size MainWindowPrivate::GetLogicalSize(const SIZE physicalSize) const noexcept
 {
     const double scale = GetDevicePixelRatio();
     // 0.5 is to ensure that we pixel snap correctly at the edges, this is necessary with odd DPIs like 1.25, 1.5, 1, .75
@@ -232,16 +232,16 @@ winrt::Windows::Foundation::Size UWPWindowPrivate::GetLogicalSize(const SIZE phy
     return {static_cast<float>(logicalWidth), static_cast<float>(logicalHeight)};
 }
 
-winrt::Windows::Foundation::Size UWPWindowPrivate::GetLogicalSize() const noexcept
+winrt::Windows::Foundation::Size MainWindowPrivate::GetLogicalSize() const noexcept
 {
     return GetLogicalSize(GetPhysicalSize());
 }
 
-LRESULT CALLBACK UWPWindowPrivate::DragBarWindowProc(const HWND hWnd, const UINT message, const WPARAM wParam, const LPARAM lParam) noexcept
+LRESULT CALLBACK MainWindowPrivate::DragBarWindowProc(const HWND hWnd, const UINT message, const WPARAM wParam, const LPARAM lParam) noexcept
 {
     if (message == WM_NCCREATE) {
         const auto cs = reinterpret_cast<LPCREATESTRUCT>(lParam);
-        const auto that = static_cast<UWPWindowPrivate *>(cs->lpCreateParams);
+        const auto that = static_cast<MainWindowPrivate *>(cs->lpCreateParams);
         // SetWindowLongPtrW() won't modify the Last Error state on success
         // and it's return value is the previous data so we have to judge
         // the actual operation result from the Last Error state manually.
@@ -260,7 +260,7 @@ LRESULT CALLBACK UWPWindowPrivate::DragBarWindowProc(const HWND hWnd, const UINT
             Utils::DisplayErrorDialog(L"The drag bar window doesn't contain any extra data.");
         }
     }
-    if (const auto that = reinterpret_cast<UWPWindowPrivate *>(GetWindowLongPtrW(hWnd, GWLP_USERDATA))) {
+    if (const auto that = reinterpret_cast<MainWindowPrivate *>(GetWindowLongPtrW(hWnd, GWLP_USERDATA))) {
         LRESULT result = 0;
         if (that->DragBarMessageHandler(message, wParam, lParam, &result)) {
             return result;
@@ -269,7 +269,7 @@ LRESULT CALLBACK UWPWindowPrivate::DragBarWindowProc(const HWND hWnd, const UINT
     return DefWindowProcW(hWnd, message, wParam, lParam);
 }
 
-bool UWPWindowPrivate::DragBarMessageHandler(const UINT message, const WPARAM wParam, const LPARAM lParam, LRESULT *result) const noexcept
+bool MainWindowPrivate::DragBarMessageHandler(const UINT message, const WPARAM wParam, const LPARAM lParam, LRESULT *result) const noexcept
 {
     UNREFERENCED_PARAMETER(wParam); // ### TODO: remove
     if (!result) {
@@ -345,7 +345,7 @@ bool UWPWindowPrivate::DragBarMessageHandler(const UINT message, const WPARAM wP
     return false;
 }
 
-bool UWPWindowPrivate::InitializeXamlIsland() noexcept
+bool MainWindowPrivate::InitializeXamlIsland() noexcept
 {
     if (!q_ptr) {
         Utils::DisplayErrorDialog(L"Can't initialize the XAML Island due to the q_ptr is null.");
@@ -394,7 +394,7 @@ bool UWPWindowPrivate::InitializeXamlIsland() noexcept
     return true;
 }
 
-bool UWPWindowPrivate::InitializeDragBarWindow() noexcept
+bool MainWindowPrivate::InitializeDragBarWindow() noexcept
 {
     // The drag bar window is a child window of the top level window that is put
     // right on top of the drag bar. The XAML island window "steals" our mouse
@@ -408,7 +408,7 @@ bool UWPWindowPrivate::InitializeDragBarWindow() noexcept
         Utils::DisplayErrorDialog(L"Can't initialize the drag bar window due to the q_ptr is null.");
         return false;
     }
-    m_dragBarWindow = q_ptr->CreateChildWindow(WS_CHILD, (WS_EX_LAYERED | WS_EX_NOREDIRECTIONBITMAP), DragBarWindowProc, this, sizeof(UWPWindowPrivate *));
+    m_dragBarWindow = q_ptr->CreateChildWindow(WS_CHILD, (WS_EX_LAYERED | WS_EX_NOREDIRECTIONBITMAP), DragBarWindowProc, this, sizeof(MainWindowPrivate *));
     if (!m_dragBarWindow) {
         Utils::DisplayErrorDialog(L"Failed to create the drag bar window.");
         return false;
@@ -425,7 +425,7 @@ bool UWPWindowPrivate::InitializeDragBarWindow() noexcept
     return true;
 }
 
-UINT UWPWindowPrivate::GetTopFrameMargin() const noexcept
+UINT MainWindowPrivate::GetTopFrameMargin() const noexcept
 {
     if (!q_ptr) {
         Utils::DisplayErrorDialog(L"Can't retrieve the top frame margin due to q_ptr is null.");
@@ -438,7 +438,7 @@ UINT UWPWindowPrivate::GetTopFrameMargin() const noexcept
     }
 }
 
-bool UWPWindowPrivate::CreateUWPContents() noexcept
+bool MainWindowPrivate::CreateUWPContents() noexcept
 {
     m_rootGrid = winrt::Windows::UI::Xaml::Controls::Grid();
     if (m_rootGrid == nullptr) {
@@ -462,7 +462,7 @@ bool UWPWindowPrivate::CreateUWPContents() noexcept
     return true;
 }
 
-bool UWPWindowPrivate::SetWindowState(const HWND hWnd, const DWORD extraFlags) noexcept
+bool MainWindowPrivate::SetWindowState(const HWND hWnd, const DWORD extraFlags) noexcept
 {
     if (!hWnd) {
         return false;
@@ -493,7 +493,7 @@ bool UWPWindowPrivate::SetWindowState(const HWND hWnd, const DWORD extraFlags) n
     return true;
 }
 
-bool UWPWindowPrivate::RefreshWindowBackgroundBrush() noexcept
+bool MainWindowPrivate::RefreshWindowBackgroundBrush() noexcept
 {
     if (!q_ptr) {
         Utils::DisplayErrorDialog(L"Can't refresh the window background brush due to the q_ptr is null.");
@@ -544,7 +544,7 @@ bool UWPWindowPrivate::RefreshWindowBackgroundBrush() noexcept
     return true;
 }
 
-bool UWPWindowPrivate::SyncXamlIslandWindowGeometry() const noexcept
+bool MainWindowPrivate::SyncXamlIslandWindowGeometry() const noexcept
 {
     if (!q_ptr) {
         Utils::DisplayErrorDialog(L"Can't sync the XAML Island window geometry due to the q_ptr is null.");
@@ -568,7 +568,7 @@ bool UWPWindowPrivate::SyncXamlIslandWindowGeometry() const noexcept
     return true;
 }
 
-bool UWPWindowPrivate::SyncDragBarWindowGeometry() const noexcept
+bool MainWindowPrivate::SyncDragBarWindowGeometry() const noexcept
 {
     if (!q_ptr) {
         Utils::DisplayErrorDialog(L"Can't sync the drag bar window geometry due to the q_ptr is null.");
@@ -587,7 +587,7 @@ bool UWPWindowPrivate::SyncDragBarWindowGeometry() const noexcept
     }
 }
 
-bool UWPWindowPrivate::SyncInternalWindowsGeometry() const noexcept
+bool MainWindowPrivate::SyncInternalWindowsGeometry() const noexcept
 {
     if (!q_ptr) {
         Utils::DisplayErrorDialog(L"Can't sync the internal windows geometry due to the q_ptr is null.");
@@ -620,7 +620,7 @@ bool UWPWindowPrivate::SyncInternalWindowsGeometry() const noexcept
     return true;
 }
 
-UINT UWPWindowPrivate::GetTitleBarHeight() const noexcept
+UINT MainWindowPrivate::GetTitleBarHeight() const noexcept
 {
     if (!q_ptr) {
         Utils::DisplayErrorDialog(L"Can't retrieve the title bar height due to the q_ptr is null.");
@@ -632,11 +632,11 @@ UINT UWPWindowPrivate::GetTitleBarHeight() const noexcept
     return titleBarHeight;
 }
 
-bool UWPWindowPrivate::MainWindowMessageHandler(const UINT message, const WPARAM wParam, const LPARAM lParam, LRESULT *result) const noexcept
+bool MainWindowPrivate::MainWindowMessageHandler(const UINT message, const WPARAM wParam, const LPARAM lParam, LRESULT *result) const noexcept
 {
     UNREFERENCED_PARAMETER(wParam); // ### TODO: remove
     if (!result) {
-        Utils::DisplayErrorDialog(L"UWPWindowPrivate::MessageHandler: the pointer to the result of the WindowProc function is null.");
+        Utils::DisplayErrorDialog(L"MainWindowPrivate::MessageHandler: the pointer to the result of the WindowProc function is null.");
         return false;
     }
     switch (message) {
@@ -691,7 +691,7 @@ bool UWPWindowPrivate::MainWindowMessageHandler(const UINT message, const WPARAM
     return false;
 }
 
-bool UWPWindowPrivate::MainWindowMessageFilter(const MSG *message) const noexcept
+bool MainWindowPrivate::MainWindowMessageFilter(const MSG *message) const noexcept
 {
     if (m_xamlSource == nullptr) {
         return false;
@@ -713,7 +713,7 @@ bool UWPWindowPrivate::MainWindowMessageFilter(const MSG *message) const noexcep
     return (filtered != FALSE);
 }
 
-void UWPWindowPrivate::OnWidthChanged(const UINT arg) const noexcept
+void MainWindowPrivate::OnWidthChanged(const UINT arg) const noexcept
 {
     UNREFERENCED_PARAMETER(arg);
     if (!SyncInternalWindowsGeometry()) {
@@ -721,7 +721,7 @@ void UWPWindowPrivate::OnWidthChanged(const UINT arg) const noexcept
     }
 }
 
-void UWPWindowPrivate::OnHeightChanged(const UINT arg) const noexcept
+void MainWindowPrivate::OnHeightChanged(const UINT arg) const noexcept
 {
     UNREFERENCED_PARAMETER(arg);
     if (!SyncInternalWindowsGeometry()) {
@@ -729,7 +729,7 @@ void UWPWindowPrivate::OnHeightChanged(const UINT arg) const noexcept
     }
 }
 
-void UWPWindowPrivate::OnVisibilityChanged(const WindowState arg) const noexcept
+void MainWindowPrivate::OnVisibilityChanged(const WindowState arg) const noexcept
 {
     UNREFERENCED_PARAMETER(arg);
     if (!SyncInternalWindowsGeometry()) {
@@ -737,7 +737,7 @@ void UWPWindowPrivate::OnVisibilityChanged(const WindowState arg) const noexcept
     }
 }
 
-void UWPWindowPrivate::OnThemeChanged(const WindowTheme arg) noexcept
+void MainWindowPrivate::OnThemeChanged(const WindowTheme arg) noexcept
 {
     UNREFERENCED_PARAMETER(arg);
     if (!RefreshWindowBackgroundBrush()) {
@@ -745,49 +745,49 @@ void UWPWindowPrivate::OnThemeChanged(const WindowTheme arg) noexcept
     }
 }
 
-UWPWindow::UWPWindow() noexcept
+MainWindow::MainWindow() noexcept
 {
-    d_ptr = std::make_unique<UWPWindowPrivate>(this);
+    d_ptr = std::make_unique<MainWindowPrivate>(this);
 }
 
-UWPWindow::~UWPWindow() noexcept = default;
+MainWindow::~MainWindow() noexcept = default;
 
-const Color &UWPWindow::TintColor() const noexcept
+const Color &MainWindow::TintColor() const noexcept
 {
     return d_ptr->TintColor();
 }
 
-void UWPWindow::TintColor(const Color &value) noexcept
+void MainWindow::TintColor(const Color &value) noexcept
 {
     d_ptr->TintColor(value);
 }
 
-double UWPWindow::TintOpacity() const noexcept
+double MainWindow::TintOpacity() const noexcept
 {
     return d_ptr->TintOpacity();
 }
 
-void UWPWindow::TintOpacity(const double value) noexcept
+void MainWindow::TintOpacity(const double value) noexcept
 {
     d_ptr->TintOpacity(value);
 }
 
-double UWPWindow::LuminosityOpacity() const noexcept
+double MainWindow::LuminosityOpacity() const noexcept
 {
     return d_ptr->LuminosityOpacity();
 }
 
-void UWPWindow::LuminosityOpacity(const double value) noexcept
+void MainWindow::LuminosityOpacity(const double value) noexcept
 {
     d_ptr->LuminosityOpacity(value);
 }
 
-const Color &UWPWindow::FallbackColor() const noexcept
+const Color &MainWindow::FallbackColor() const noexcept
 {
     return d_ptr->FallbackColor();
 }
 
-void UWPWindow::FallbackColor(const Color &value) noexcept
+void MainWindow::FallbackColor(const Color &value) noexcept
 {
     d_ptr->FallbackColor(value);
 }

@@ -22,38 +22,23 @@
  * SOFTWARE.
  */
 
-#pragma once
+#include <SDKDDKVer.h>
+#include <Windows.h>
+#include "Application.h"
 
-#include "Window.h"
-#include "Color.hpp"
-
-class UWPWindowPrivate;
-
-class UWPWindow final : public Window
+EXTERN_C int APIENTRY
+wWinMain(
+    _In_     HINSTANCE hInstance,
+    _In_opt_ HINSTANCE hPrevInstance,
+    _In_     LPWSTR    lpCmdLine,
+    _In_     int       nCmdShow
+)
 {
-public:
-    explicit UWPWindow() noexcept;
-    ~UWPWindow() noexcept;
+    UNREFERENCED_PARAMETER(hInstance);
+    UNREFERENCED_PARAMETER(hPrevInstance);
+    UNREFERENCED_PARAMETER(lpCmdLine);
+    UNREFERENCED_PARAMETER(nCmdShow);
 
-    [[nodiscard]] const Color &TintColor() const noexcept;
-    void TintColor(const Color &value) noexcept;
-
-    [[nodiscard]] double TintOpacity() const noexcept;
-    void TintOpacity(const double value) noexcept;
-
-    [[nodiscard]] double LuminosityOpacity() const noexcept;
-    void LuminosityOpacity(const double value) noexcept;
-
-    [[nodiscard]] const Color &FallbackColor() const noexcept;
-    void FallbackColor(const Color &value) noexcept;
-
-private:
-    UWPWindow(const UWPWindow &) = delete;
-    UWPWindow &operator=(const UWPWindow &) = delete;
-    UWPWindow(UWPWindow &&) = delete;
-    UWPWindow &operator=(UWPWindow &&) = delete;
-
-private:
-    friend class UWPWindowPrivate;
-    std::unique_ptr<UWPWindowPrivate> d_ptr;
-};
+    Application application;
+    return application.Run();
+}

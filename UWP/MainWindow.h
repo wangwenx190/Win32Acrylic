@@ -25,16 +25,35 @@
 #pragma once
 
 #include "Window.h"
+#include "Color.hpp"
 
-class CompositionWindowPrivate;
+class MainWindowPrivate;
 
-class CompositionWindow : public Window
+class MainWindow final : public Window
 {
 public:
-    explicit CompositionWindow() noexcept;
-    ~CompositionWindow() noexcept;
+    explicit MainWindow() noexcept;
+    ~MainWindow() noexcept;
+
+    [[nodiscard]] const Color &TintColor() const noexcept;
+    void TintColor(const Color &value) noexcept;
+
+    [[nodiscard]] double TintOpacity() const noexcept;
+    void TintOpacity(const double value) noexcept;
+
+    [[nodiscard]] double LuminosityOpacity() const noexcept;
+    void LuminosityOpacity(const double value) noexcept;
+
+    [[nodiscard]] const Color &FallbackColor() const noexcept;
+    void FallbackColor(const Color &value) noexcept;
 
 private:
-    friend class CompositionWindowPrivate;
-    std::unique_ptr<CompositionWindowPrivate> d_ptr;
+    MainWindow(const MainWindow &) = delete;
+    MainWindow &operator=(const MainWindow &) = delete;
+    MainWindow(MainWindow &&) = delete;
+    MainWindow &operator=(MainWindow &&) = delete;
+
+private:
+    friend class MainWindowPrivate;
+    std::unique_ptr<MainWindowPrivate> d_ptr;
 };

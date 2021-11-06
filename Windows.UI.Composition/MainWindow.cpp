@@ -23,16 +23,16 @@
  */
 
 #include "pch.h"
-#include "CompositionWindow.h"
+#include "MainWindow.h"
 #include "Utils.h"
 #include "OperationResult.h"
 #include "DispatcherQueue_Thunk.h"
 
-class CompositionWindowPrivate
+class MainWindowPrivate
 {
 public:
-    explicit CompositionWindowPrivate(CompositionWindow *q) noexcept;
-    ~CompositionWindowPrivate() noexcept;
+    explicit MainWindowPrivate(MainWindow *q) noexcept;
+    ~MainWindowPrivate() noexcept;
 
     [[nodiscard]] bool Initialize(const HWND hWnd) noexcept;
 
@@ -51,41 +51,41 @@ private:
     void OnDotsPerInchChanged(const UINT arg) noexcept;
 
 private:
-    CompositionWindowPrivate(const CompositionWindowPrivate &) = delete;
-    CompositionWindowPrivate &operator=(const CompositionWindowPrivate &) = delete;
-    CompositionWindowPrivate(CompositionWindowPrivate &&) = delete;
-    CompositionWindowPrivate &operator=(CompositionWindowPrivate &&) = delete;
+    MainWindowPrivate(const MainWindowPrivate &) = delete;
+    MainWindowPrivate &operator=(const MainWindowPrivate &) = delete;
+    MainWindowPrivate(MainWindowPrivate &&) = delete;
+    MainWindowPrivate &operator=(MainWindowPrivate &&) = delete;
 
 private:
-    CompositionWindow *q_ptr = nullptr;
+    MainWindow *q_ptr = nullptr;
     winrt::Windows::UI::Composition::Compositor m_compositor = nullptr;
     winrt::Windows::UI::Composition::Desktop::DesktopWindowTarget m_target = nullptr;
     winrt::Windows::System::DispatcherQueueController m_dispatcherQueueController = nullptr;
     winrt::Windows::UI::Composition::SpriteVisual m_rootVisual = nullptr;
 };
 
-CompositionWindowPrivate::CompositionWindowPrivate(CompositionWindow *q) noexcept
+MainWindowPrivate::MainWindowPrivate(MainWindow *q) noexcept
 {
     if (!q) {
-        Utils::DisplayErrorDialog(L"CompositionWindowPrivate's q is null.");
+        Utils::DisplayErrorDialog(L"MainWindowPrivate's q is null.");
         std::exit(-1);
     }
     q_ptr = q;
     if (Initialize(q_ptr->WindowHandle())) {
-        q_ptr->WidthChangeHandler(std::bind(&CompositionWindowPrivate::OnWidthChanged, this, std::placeholders::_1));
-        q_ptr->HeightChangeHandler(std::bind(&CompositionWindowPrivate::OnHeightChanged, this, std::placeholders::_1));
-        q_ptr->VisibilityChangeHandler(std::bind(&CompositionWindowPrivate::OnVisibilityChanged, this, std::placeholders::_1));
-        q_ptr->ThemeChangeHandler(std::bind(&CompositionWindowPrivate::OnThemeChanged, this, std::placeholders::_1));
-        q_ptr->DotsPerInchChangeHandler(std::bind(&CompositionWindowPrivate::OnDotsPerInchChanged, this, std::placeholders::_1));
+        q_ptr->WidthChangeHandler(std::bind(&MainWindowPrivate::OnWidthChanged, this, std::placeholders::_1));
+        q_ptr->HeightChangeHandler(std::bind(&MainWindowPrivate::OnHeightChanged, this, std::placeholders::_1));
+        q_ptr->VisibilityChangeHandler(std::bind(&MainWindowPrivate::OnVisibilityChanged, this, std::placeholders::_1));
+        q_ptr->ThemeChangeHandler(std::bind(&MainWindowPrivate::OnThemeChanged, this, std::placeholders::_1));
+        q_ptr->DotsPerInchChangeHandler(std::bind(&MainWindowPrivate::OnDotsPerInchChanged, this, std::placeholders::_1));
     } else {
-        Utils::DisplayErrorDialog(L"Failed to initialize CompositionWindowPrivate.");
+        Utils::DisplayErrorDialog(L"Failed to initialize MainWindowPrivate.");
         std::exit(-1);
     }
 }
 
-CompositionWindowPrivate::~CompositionWindowPrivate() noexcept = default;
+MainWindowPrivate::~MainWindowPrivate() noexcept = default;
 
-bool CompositionWindowPrivate::Initialize(const HWND hWnd) noexcept
+bool MainWindowPrivate::Initialize(const HWND hWnd) noexcept
 {
     if (!hWnd) {
         return false;
@@ -111,7 +111,7 @@ bool CompositionWindowPrivate::Initialize(const HWND hWnd) noexcept
     return true;
 }
 
-bool CompositionWindowPrivate::CreateDesktopWindowTarget(const HWND hWnd) noexcept
+bool MainWindowPrivate::CreateDesktopWindowTarget(const HWND hWnd) noexcept
 {
     if (!hWnd) {
         return false;
@@ -135,7 +135,7 @@ bool CompositionWindowPrivate::CreateDesktopWindowTarget(const HWND hWnd) noexce
     return (m_target != nullptr);
 }
 
-bool CompositionWindowPrivate::EnsureDispatcherQueue() noexcept
+bool MainWindowPrivate::EnsureDispatcherQueue() noexcept
 {
     if (m_dispatcherQueueController != nullptr) {
         return true;
@@ -155,7 +155,7 @@ bool CompositionWindowPrivate::EnsureDispatcherQueue() noexcept
     return (m_dispatcherQueueController != nullptr);
 }
 
-bool CompositionWindowPrivate::CreateCompositionContents() noexcept
+bool MainWindowPrivate::CreateCompositionContents() noexcept
 {
     if (m_compositor == nullptr) {
         Utils::DisplayErrorDialog(L"Can't create any contents due to the compositor has not been create yet.");
@@ -176,7 +176,7 @@ bool CompositionWindowPrivate::CreateCompositionContents() noexcept
     return true;
 }
 
-UINT CompositionWindowPrivate::GetTitleBarHeight() const noexcept
+UINT MainWindowPrivate::GetTitleBarHeight() const noexcept
 {
     if (!q_ptr) {
         Utils::DisplayErrorDialog(L"Can't retrieve the title bar height due to the q_ptr is null.");
@@ -188,7 +188,7 @@ UINT CompositionWindowPrivate::GetTitleBarHeight() const noexcept
     return titleBarHeight;
 }
 
-UINT CompositionWindowPrivate::GetTopFrameMargin() const noexcept
+UINT MainWindowPrivate::GetTopFrameMargin() const noexcept
 {
     if (!q_ptr) {
         Utils::DisplayErrorDialog(L"Can't retrieve the top frame margin due to q_ptr is null.");
@@ -201,31 +201,31 @@ UINT CompositionWindowPrivate::GetTopFrameMargin() const noexcept
     }
 }
 
-void CompositionWindowPrivate::OnWidthChanged(const UINT arg) const noexcept
+void MainWindowPrivate::OnWidthChanged(const UINT arg) const noexcept
 {
     // ### TODO
     UNREFERENCED_PARAMETER(arg);
 }
 
-void CompositionWindowPrivate::OnHeightChanged(const UINT arg) const noexcept
+void MainWindowPrivate::OnHeightChanged(const UINT arg) const noexcept
 {
     // ### TODO
     UNREFERENCED_PARAMETER(arg);
 }
 
-void CompositionWindowPrivate::OnVisibilityChanged(const WindowState arg) const noexcept
+void MainWindowPrivate::OnVisibilityChanged(const WindowState arg) const noexcept
 {
     // ### TODO
     UNREFERENCED_PARAMETER(arg);
 }
 
-void CompositionWindowPrivate::OnThemeChanged(const WindowTheme arg) noexcept
+void MainWindowPrivate::OnThemeChanged(const WindowTheme arg) noexcept
 {
     // ### TODO
     UNREFERENCED_PARAMETER(arg);
 }
 
-void CompositionWindowPrivate::OnDotsPerInchChanged(const UINT arg) noexcept
+void MainWindowPrivate::OnDotsPerInchChanged(const UINT arg) noexcept
 {
     if (arg == 0) {
         return;
@@ -237,9 +237,9 @@ void CompositionWindowPrivate::OnDotsPerInchChanged(const UINT arg) noexcept
     m_rootVisual.Scale({ scaleFactor, scaleFactor, 1.0f });
 }
 
-CompositionWindow::CompositionWindow() noexcept
+MainWindow::MainWindow() noexcept
 {
-    d_ptr = std::make_unique<CompositionWindowPrivate>(this);
+    d_ptr = std::make_unique<MainWindowPrivate>(this);
 }
 
-CompositionWindow::~CompositionWindow() noexcept = default;
+MainWindow::~MainWindow() noexcept = default;

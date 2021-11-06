@@ -79,9 +79,9 @@ string(APPEND CMAKE_CXX_FLAGS_DEBUG " /JMC ")
 set(_optimization_flags)
 if(FULL_OPTIMIZE)
     # Don't use "/GA" for DLLs, it will cause bad code generation.
-    set(_optimization_flags /O2 /Ob3 /Oi /GA /GT)
+    set(_optimization_flags "/O2 /Ob3 /Oi /GA /GT")
 else()
-    set(_optimization_flags /O1 /Ob1)
+    set(_optimization_flags "/O1 /Ob1")
 endif()
 string(APPEND CMAKE_CXX_FLAGS_RELEASE " ${_optimization_flags} /guard:cf /guard:ehcont /Gw /Gy /Zc:inline ")
 
@@ -166,7 +166,7 @@ foreach(_type IN LISTS _demo_types)
             wangwenx190::${PROJECT_NAME}
         )
         set_target_properties(${_current_subproject_name} PROPERTIES
-            OUTPUT_NAME ${_current_subproject_name}${_target_filename_suffix}
+            OUTPUT_NAME ${_current_subproject_name}_${_target_filename_suffix}
         )
     endif()
 endforeach()

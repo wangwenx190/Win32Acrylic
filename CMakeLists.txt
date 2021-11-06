@@ -132,7 +132,7 @@ set(_target_arch "32")
 if("x${CMAKE_SIZEOF_VOID_P}" STREQUAL "x8")
     set(_target_arch "64")
 endif()
-set(_target_filename_suffix ${CMAKE_BUILD_TYPE}${_target_arch})
+set(_target_filename_suffix ${CMAKE_BUILD_TYPE}_${_target_arch}-bit)
 
 set(_demo_types UWP Composition)
 foreach(_type IN LISTS _demo_types)

@@ -26,6 +26,12 @@ cmake_minimum_required(VERSION 3.22 FATAL_ERROR)
 
 project(Win32AcrylicHelper VERSION 1.0.0.0 LANGUAGES CXX RC)
 
+option(BUILD_UWP_DEMO "Build the UWP demo application." ON)
+option(BUILD_Windows.UI.Composition_DEMO "Build the Windows.UI.Composition demo application." ON)
+option(BUILD_DirectComposition_DEMO "Build the Direct Composition demo application." ON)
+option(BUILD_Direct2D_DEMO "Build the Direct2D demo application." ON)
+option(FULL_OPTIMIZE "Enable as much optimization as possible." OFF)
+
 if(DEFINED CMAKE_BUILD_TYPE)
     if("x${CMAKE_BUILD_TYPE}" STREQUAL "xMinSizeRel")
         message(FATAL_ERROR "This project doesn't support the MinSizeRel configuration.")
@@ -38,8 +44,8 @@ else()
     set(CMAKE_BUILD_TYPE "Release" CACHE STRING "" FORCE)
 endif()
 
-# Enable link time optimization for release builds.
-set(CMAKE_INTERPROCEDURAL_OPTIMIZATION_RELEASE ON CACHE BOOL "" FORCE)
+# Enable link time optimization for release builds if the user requests for full optimization.
+set(CMAKE_INTERPROCEDURAL_OPTIMIZATION_RELEASE ${FULL_OPTIMIZE} CACHE BOOL "" FORCE)
 
 # Request C++20.
 set(CMAKE_CXX_STANDARD "20" CACHE STRING "" FORCE)
@@ -57,15 +63,29 @@ set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>" CACHE STR
 string(REGEX REPLACE "[-|/]EHs-c-" "" CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS})
 # Disable runtime type information (RTTI) generation. We don't need it.
 string(REGEX REPLACE "[-|/]GR" "" CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS})
-# We use "/O1 /Ob1" for release builds, so remove related parameters first.
+# We don't use the default optimization for release builds, so remove related parameters first.
 string(REGEX REPLACE "[-|/]O[d|1|2|3|i]" "" CMAKE_CXX_FLAGS_RELEASE ${CMAKE_CXX_FLAGS_RELEASE})
 string(REGEX REPLACE "[-|/]Ob[0|1|2|3]" "" CMAKE_CXX_FLAGS_RELEASE ${CMAKE_CXX_FLAGS_RELEASE})
 
 # Change code page to UTF-8 (65001) and suppress the copyright messages.
 string(APPEND CMAKE_RC_FLAGS " -c65001 /nologo ")
+
+# "/d2FH4" can significantly reduce the binary size if your application makes heavy use of exception handling.
 string(APPEND CMAKE_CXX_FLAGS " /await:strict /bigobj /EHsc /d2FH4 /GR- /MP /utf-8 /W4 /WX /permissive- /Zc:char8_t,__cplusplus,externConstexpr,hiddenFriend,lambda,referenceBinding,rvalueCast,strictStrings,ternary,throwingNew,trigraphs ")
-string(APPEND CMAKE_CXX_FLAGS_RELEASE " /O1 /Ob1 /guard:cf /guard:ehcont /Gw /Gy /Zc:inline ")
-string(APPEND CMAKE_EXE_LINKER_FLAGS_RELEASE " /CETCOMPAT /GUARD:CF /GUARD:EHCONT /HIGHENTROPYVA /LARGEADDRESSAWARE /OPT:REF /OPT:ICF /WX ")
+
+# Enable "Just My Code debugging" for debug builds.
+string(APPEND CMAKE_CXX_FLAGS_DEBUG " /JMC ")
+
+set(_optimization_flags)
+if(FULL_OPTIMIZE)
+    # Don't use "/GA" for DLLs, it will cause bad code generation.
+    set(_optimization_flags /O2 /Ob3 /Oi /GA /GT)
+else()
+    set(_optimization_flags /O1 /Ob1)
+endif()
+string(APPEND CMAKE_CXX_FLAGS_RELEASE " ${_optimization_flags} /guard:cf /guard:ehcont /Gw /Gy /Zc:inline ")
+
+string(APPEND CMAKE_EXE_LINKER_FLAGS_RELEASE " /CETCOMPAT /DYNAMICBASE /GUARD:CF /GUARD:EHCONT /HIGHENTROPYVA /LARGEADDRESSAWARE /NXCOMPAT /OPT:REF /OPT:ICF /TSAWARE /WX ")
 
 # Include VC-LTL helper script.
 include(VC-LTL.cmake)
@@ -136,15 +156,17 @@ set(_target_filename_suffix ${CMAKE_BUILD_TYPE}_${_target_arch}-bit)
 
 set(_demo_types UWP Composition)
 foreach(_type IN LISTS _demo_types)
-    set(_current_subproject_name Demo_${_type})
-    add_executable(${_current_subproject_name} WIN32
-        Win32AcrylicHelper/Win32AcrylicHelper.rc Win32AcrylicHelper/Win32AcrylicHelper.manifest
-        ${SOURCES_${_type}}
-    )
-    target_link_libraries(${_current_subproject_name} PRIVATE
-        wangwenx190::${PROJECT_NAME}
-    )
-    set_target_properties(${_current_subproject_name} PROPERTIES
-        OUTPUT_NAME ${_current_subproject_name}${_target_filename_suffix}
-    )
+    if(BUILD_${_type}_DEMO)
+        set(_current_subproject_name Demo_${_type})
+        add_executable(${_current_subproject_name} WIN32
+            Win32AcrylicHelper/Win32AcrylicHelper.rc Win32AcrylicHelper/Win32AcrylicHelper.manifest
+            ${SOURCES_${_type}}
+        )
+        target_link_libraries(${_current_subproject_name} PRIVATE
+            wangwenx190::${PROJECT_NAME}
+        )
+        set_target_properties(${_current_subproject_name} PROPERTIES
+            OUTPUT_NAME ${_current_subproject_name}${_target_filename_suffix}
+        )
+    endif()
 endforeach()

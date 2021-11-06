@@ -26,6 +26,13 @@ cmake_minimum_required(VERSION 3.22 FATAL_ERROR)
 
 project(Win32AcrylicHelper VERSION 1.0.0.0 LANGUAGES CXX RC)
 
+if("x${CMAKE_BUILD_TYPE}" STREQUAL "xMinSizeRel")
+    message(FATAL_ERROR "This project doesn't support the MinSizeRel configuration.")
+endif()
+if("x${CMAKE_BUILD_TYPE}" STREQUAL "xRelWithDebInfo")
+    message(FATAL_ERROR "This project doesn't support the RelWithDebInfo configuration.")
+endif()
+
 # Defaults to release builds if not set by the user.
 if(NOT DEFINED CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE "Release" CACHE STRING "" FORCE)
@@ -107,9 +114,6 @@ target_compile_definitions(${PROJECT_NAME} PUBLIC
     _KERNEL32_ _USER32_ _SHELL32_ _GDI32_ _OLE32_ _OLEAUT32_
     _ADVAPI32_ _COMBASEAPI_ _DWMAPI_ _UXTHEME_ _ROAPI_
 )
-unset(SOURCES_Win32AcrylicHelper)
-unset(_WIN32_WINNT_WIN10)
-unset(NTDDI_WIN10_CO)
 
 # Demo applications
 set(SOURCES_Xaml
@@ -143,11 +147,4 @@ foreach(_type IN LISTS _demo_types)
     set_target_properties(${_current_subproject_name} PROPERTIES
         OUTPUT_NAME ${_current_subproject_name}${_target_filename_suffix}
     )
-    unset(_current_subproject_name)
 endforeach()
-
-unset(SOURCES_Xaml)
-unset(SOURCES_Composition)
-unset(_demo_types)
-unset(_target_filename_suffix)
-unset(_target_arch)

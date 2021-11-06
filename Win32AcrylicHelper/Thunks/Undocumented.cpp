@@ -25,197 +25,57 @@
 #include "Undocumented.h"
 #include "WindowsAPIThunks.h"
 
+#ifndef __RESOLVE_UNDOC_API_INTERNAL
+#define __RESOLVE_UNDOC_API_INTERNAL(library, symbol, ordinal) ( reinterpret_cast< decltype( & ::symbol ) >( GetWindowsAPIByName( L#library , MAKEINTRESOURCEW( ordinal ) ) ) )
+#endif // __RESOLVE_UNDOC_API_INTERNAL
+
+#ifndef __RESOLVE_UNDOC_API
+#define __RESOLVE_UNDOC_API(library, symbol, ordinal) static const auto symbol ## _API = __RESOLVE_UNDOC_API_INTERNAL( library , symbol , ordinal )
+#endif // __RESOLVE_UNDOC_API
+
+#ifndef __THUNK_UNDOC_API
+#define __THUNK_UNDOC_API(library, symbol, ordinal, result_type, default_result, argument_signature, argument_list) \
+EXTERN_C result_type WINAPI \
+symbol \
+argument_signature \
+{ \
+    __RESOLVE_UNDOC_API( library , symbol , ordinal ); \
+    return ( ( symbol ## _API ) ? ( symbol ## _API argument_list ) : ( default_result ) ); \
+} \
+_LCRT_DEFINE_IAT_SYMBOL( symbol , 0 );
+#endif // __THUNK_UNDOC_API
+
 #ifndef __USER32_DLL_FILENAME
 #define __USER32_DLL_FILENAME user32.dll
 #endif // __USER32_DLL_FILENAME
 
-static constexpr const wchar_t __UXTHEME_DLL_FILENAME[] = L"uxtheme.dll";
-static constexpr const wchar_t __DWMAPI_DLL_FILENAME[] = L"dwmapi.dll";
+#ifndef __UXTHEME_DLL_FILENAME
+#define __UXTHEME_DLL_FILENAME uxtheme.dll
+#endif // __UXTHEME_DLL_FILENAME
+
+#ifndef __DWMAPI_DLL_FILENAME
+#define __DWMAPI_DLL_FILENAME dwmapi.dll
+#endif // __DWMAPI_DLL_FILENAME
 
 // User32
 __THUNK_API(__USER32_DLL_FILENAME, SetWindowCompositionAttribute, BOOL, DEFAULT_BOOL, (HWND arg1, PWINDOWCOMPOSITIONATTRIBDATA arg2), (arg1, arg2))
 
-#ifdef __cplusplus
-EXTERN_C_START
-#endif // __cplusplus
-
 // UxTheme
-BOOL WINAPI
-ShouldAppsUseDarkMode(
-    VOID
-)
-{
-    static const auto function = reinterpret_cast<decltype(&::ShouldAppsUseDarkMode)>(GetWindowsAPIByName(__UXTHEME_DLL_FILENAME, MAKEINTRESOURCEW(132)));
-    return (function ? function() : DEFAULT_BOOL);
-}
-
-BOOL WINAPI
-AllowDarkModeForWindow(
-    _In_ HWND hWnd,
-    _In_ BOOL allow
-)
-{
-    static const auto function = reinterpret_cast<decltype(&::AllowDarkModeForWindow)>(GetWindowsAPIByName(__UXTHEME_DLL_FILENAME, MAKEINTRESOURCEW(133)));
-    return (function ? function(hWnd, allow) : DEFAULT_BOOL);
-}
-
-BOOL WINAPI
-AllowDarkModeForApp(
-    _In_ BOOL allow
-)
-{
-    static const auto function = reinterpret_cast<decltype(&::AllowDarkModeForApp)>(GetWindowsAPIByName(__UXTHEME_DLL_FILENAME, MAKEINTRESOURCEW(135)));
-    return (function ? function(allow) : DEFAULT_BOOL);
-}
-
-VOID WINAPI
-FlushMenuThemes(
-    VOID
-)
-{
-    static const auto function = reinterpret_cast<decltype(&::FlushMenuThemes)>(GetWindowsAPIByName(__UXTHEME_DLL_FILENAME, MAKEINTRESOURCEW(136)));
-    if (function) {
-        function();
-    }
-}
-
-VOID WINAPI
-RefreshImmersiveColorPolicyState(
-    VOID
-)
-{
-    static const auto function = reinterpret_cast<decltype(&::RefreshImmersiveColorPolicyState)>(GetWindowsAPIByName(__UXTHEME_DLL_FILENAME, MAKEINTRESOURCEW(104)));
-    if (function) {
-        function();
-    }
-}
-
-BOOL WINAPI
-IsDarkModeAllowedForWindow(
-    _In_ HWND hWnd
-)
-{
-    static const auto function = reinterpret_cast<decltype(&::IsDarkModeAllowedForWindow)>(GetWindowsAPIByName(__UXTHEME_DLL_FILENAME, MAKEINTRESOURCEW(137)));
-    return (function ? function(hWnd) : DEFAULT_BOOL);
-}
-
-BOOL WINAPI
-GetIsImmersiveColorUsingHighContrast(
-    _In_ IMMERSIVE_HC_CACHE_MODE mode
-)
-{
-    static const auto function = reinterpret_cast<decltype(&::GetIsImmersiveColorUsingHighContrast)>(GetWindowsAPIByName(__UXTHEME_DLL_FILENAME, MAKEINTRESOURCEW(106)));
-    return (function ? function(mode) : DEFAULT_BOOL);
-}
-
-HTHEME WINAPI
-OpenNcThemeData(
-    _In_ HWND hWnd,
-    _In_ LPCWSTR pszClassList
-)
-{
-    static const auto function = reinterpret_cast<decltype(&::OpenNcThemeData)>(GetWindowsAPIByName(__UXTHEME_DLL_FILENAME, MAKEINTRESOURCEW(49)));
-    return (function ? function(hWnd, pszClassList) : DEFAULT_PTR);
-}
-
-BOOL WINAPI
-ShouldSystemUseDarkMode(
-    VOID
-)
-{
-    static const auto function = reinterpret_cast<decltype(&::ShouldSystemUseDarkMode)>(GetWindowsAPIByName(__UXTHEME_DLL_FILENAME, MAKEINTRESOURCEW(138)));
-    return (function ? function() : DEFAULT_BOOL);
-}
-
-PREFERRED_APP_MODE WINAPI
-SetPreferredAppMode(
-    _In_ PREFERRED_APP_MODE appMode
-)
-{
-    static const auto function = reinterpret_cast<decltype(&::SetPreferredAppMode)>(GetWindowsAPIByName(__UXTHEME_DLL_FILENAME, MAKEINTRESOURCEW(135)));
-    return (function ? function(appMode) : PAM_DEFAULT);
-}
-
-BOOL WINAPI
-IsDarkModeAllowedForApp(
-    VOID
-)
-{
-    static const auto function = reinterpret_cast<decltype(&::IsDarkModeAllowedForApp)>(GetWindowsAPIByName(__UXTHEME_DLL_FILENAME, MAKEINTRESOURCEW(139)));
-    return (function ? function() : DEFAULT_BOOL);
-}
+__THUNK_UNDOC_API(__UXTHEME_DLL_FILENAME, ShouldAppsUseDarkMode, 132, BOOL, DEFAULT_BOOL, (VOID), ())
+__THUNK_UNDOC_API(__UXTHEME_DLL_FILENAME, AllowDarkModeForWindow, 133, BOOL, DEFAULT_BOOL, (HWND arg1, BOOL arg2), (arg1, arg2))
+__THUNK_UNDOC_API(__UXTHEME_DLL_FILENAME, AllowDarkModeForApp, 135, BOOL, DEFAULT_BOOL, (BOOL arg1), (arg1))
+__THUNK_UNDOC_API(__UXTHEME_DLL_FILENAME, FlushMenuThemes, 136, VOID, DEFAULT_VOID, (VOID), ())
+__THUNK_UNDOC_API(__UXTHEME_DLL_FILENAME, RefreshImmersiveColorPolicyState, 104, VOID, DEFAULT_VOID, (VOID), ())
+__THUNK_UNDOC_API(__UXTHEME_DLL_FILENAME, IsDarkModeAllowedForWindow, 137, BOOL, DEFAULT_BOOL, (HWND arg1), (arg1))
+__THUNK_UNDOC_API(__UXTHEME_DLL_FILENAME, GetIsImmersiveColorUsingHighContrast, 106, BOOL, DEFAULT_BOOL, (IMMERSIVE_HC_CACHE_MODE arg1), (arg1))
+__THUNK_UNDOC_API(__UXTHEME_DLL_FILENAME, OpenNcThemeData, 49, HTHEME, DEFAULT_PTR, (HWND arg1, LPCWSTR arg2), (arg1, arg2))
+__THUNK_UNDOC_API(__UXTHEME_DLL_FILENAME, ShouldSystemUseDarkMode, 138, BOOL, DEFAULT_BOOL, (VOID), ())
+__THUNK_UNDOC_API(__UXTHEME_DLL_FILENAME, SetPreferredAppMode, 135, PREFERRED_APP_MODE, PAM_DEFAULT, (PREFERRED_APP_MODE arg1), (arg1))
+__THUNK_UNDOC_API(__UXTHEME_DLL_FILENAME, IsDarkModeAllowedForApp, 139, BOOL, DEFAULT_BOOL, (VOID), ())
 
 // DwmApi
-HRESULT WINAPI
-DwmpCreateSharedThumbnailVisual(
-    IN HWND hwndDestination,
-    IN HWND hwndSource,
-    IN DWORD dwThumbnailFlags,
-    IN PDWM_THUMBNAIL_PROPERTIES pThumbnailProperties,
-    IN PVOID pDCompDevice,
-    OUT VOID** ppVisual,
-    OUT PHTHUMBNAIL phThumbnailId
-)
-{
-    static const auto function = reinterpret_cast<decltype(&::DwmpCreateSharedThumbnailVisual)>(GetWindowsAPIByName(__DWMAPI_DLL_FILENAME, MAKEINTRESOURCEW(147)));
-    return (function ? function(hwndDestination, hwndSource, dwThumbnailFlags, pThumbnailProperties, pDCompDevice, ppVisual, phThumbnailId) : DEFAULT_HRESULT);
-}
-
-HRESULT WINAPI
-DwmpCreateSharedMultiWindowVisual(
-    IN HWND hwndDestination,
-    IN PVOID pDCompDevice,
-    OUT VOID** ppVisual,
-    OUT PHTHUMBNAIL phThumbnailId
-)
-{
-    static const auto function = reinterpret_cast<decltype(&::DwmpCreateSharedMultiWindowVisual)>(GetWindowsAPIByName(__DWMAPI_DLL_FILENAME, MAKEINTRESOURCEW(163)));
-    return (function ? function(hwndDestination, pDCompDevice, ppVisual, phThumbnailId) : DEFAULT_HRESULT);
-}
-
-HRESULT WINAPI
-DwmpUpdateSharedMultiWindowVisual(
-    IN HTHUMBNAIL hThumbnailId,
-    IN HWND* phwndsInclude,
-    IN DWORD chwndsInclude,
-    IN HWND* phwndsExclude,
-    IN DWORD chwndsExclude,
-    OUT PRECT prcSource,
-    OUT PSIZE pDestinationSize,
-    IN DWORD dwFlags
-)
-{
-    static const auto function = reinterpret_cast<decltype(&::DwmpUpdateSharedMultiWindowVisual)>(GetWindowsAPIByName(__DWMAPI_DLL_FILENAME, MAKEINTRESOURCEW(164)));
-    return (function ? function(hThumbnailId, phwndsInclude, chwndsInclude, phwndsExclude, chwndsExclude, prcSource, pDestinationSize, dwFlags) : DEFAULT_HRESULT);
-}
-
-HRESULT WINAPI
-DwmpCreateSharedVirtualDesktopVisual(
-    IN HWND hwndDestination,
-    IN PVOID pDCompDevice,
-    OUT VOID** ppVisual,
-    OUT PHTHUMBNAIL phThumbnailId
-)
-{
-    static const auto function = reinterpret_cast<decltype(&::DwmpCreateSharedVirtualDesktopVisual)>(GetWindowsAPIByName(__DWMAPI_DLL_FILENAME, MAKEINTRESOURCEW(163)));
-    return (function ? function(hwndDestination, pDCompDevice, ppVisual, phThumbnailId) : DEFAULT_HRESULT);
-}
-
-HRESULT WINAPI
-DwmpUpdateSharedVirtualDesktopVisual(
-    IN HTHUMBNAIL hThumbnailId,
-    IN HWND* phwndsInclude,
-    IN DWORD chwndsInclude,
-    IN HWND* phwndsExclude,
-    IN DWORD chwndsExclude,
-    OUT PRECT prcSource,
-    OUT PSIZE pDestinationSize
-)
-{
-    static const auto function = reinterpret_cast<decltype(&::DwmpUpdateSharedVirtualDesktopVisual)>(GetWindowsAPIByName(__DWMAPI_DLL_FILENAME, MAKEINTRESOURCEW(164)));
-    return (function ? function(hThumbnailId, phwndsInclude, chwndsInclude, phwndsExclude, chwndsExclude, prcSource, pDestinationSize) : DEFAULT_HRESULT);
-}
-
-#ifdef __cplusplus
-EXTERN_C_END
-#endif // __cplusplus
+__THUNK_UNDOC_API(__DWMAPI_DLL_FILENAME, DwmpCreateSharedThumbnailVisual, 147, HRESULT, DEFAULT_HRESULT, (HWND arg1, HWND arg2, DWORD arg3, PDWM_THUMBNAIL_PROPERTIES arg4, PVOID arg5, VOID **arg6, PHTHUMBNAIL arg7), (arg1, arg2, arg3, arg4, arg5, arg6, arg7))
+__THUNK_UNDOC_API(__DWMAPI_DLL_FILENAME, DwmpCreateSharedMultiWindowVisual, 163, HRESULT, DEFAULT_HRESULT, (HWND arg1, PVOID arg2, VOID **arg3, PHTHUMBNAIL arg4), (arg1, arg2, arg3, arg4))
+__THUNK_UNDOC_API(__DWMAPI_DLL_FILENAME, DwmpUpdateSharedMultiWindowVisual, 164, HRESULT, DEFAULT_HRESULT, (HTHUMBNAIL arg1, HWND *arg2, DWORD arg3, HWND *arg4, DWORD arg5, PRECT arg6, PSIZE arg7, DWORD arg8), (arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8))
+__THUNK_UNDOC_API(__DWMAPI_DLL_FILENAME, DwmpCreateSharedVirtualDesktopVisual, 163, HRESULT, DEFAULT_HRESULT, (HWND arg1, PVOID arg2, VOID **arg3, PHTHUMBNAIL arg4), (arg1, arg2, arg3, arg4))
+__THUNK_UNDOC_API(__DWMAPI_DLL_FILENAME, DwmpUpdateSharedVirtualDesktopVisual, 164, HRESULT, DEFAULT_HRESULT, (HTHUMBNAIL arg1, HWND *arg2, DWORD arg3, HWND *arg4, DWORD arg5, PRECT arg6, PSIZE arg7), (arg1, arg2, arg3, arg4, arg5, arg6, arg7))

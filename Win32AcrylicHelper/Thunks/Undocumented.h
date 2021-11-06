@@ -174,52 +174,52 @@ IsDarkModeAllowedForApp(
 // DwmApi
 HRESULT WINAPI
 DwmpCreateSharedThumbnailVisual(
-    IN HWND hwndDestination,
-    IN HWND hwndSource,
-    IN DWORD dwThumbnailFlags,
-    IN PDWM_THUMBNAIL_PROPERTIES pThumbnailProperties,
-    IN PVOID pDCompDevice,
-    OUT VOID** ppVisual,
-    OUT PHTHUMBNAIL phThumbnailId
+    _In_ HWND hwndDestination,
+    _In_ HWND hwndSource,
+    _In_ DWORD dwThumbnailFlags,
+    _In_ PDWM_THUMBNAIL_PROPERTIES pThumbnailProperties,
+    _In_ PVOID pDCompDevice,
+    _Out_ VOID **ppVisual,
+    _Out_ PHTHUMBNAIL phThumbnailId
 );
 
 HRESULT WINAPI
 DwmpCreateSharedMultiWindowVisual(
-    IN HWND hwndDestination,
-    IN PVOID pDCompDevice,
-    OUT VOID** ppVisual,
-    OUT PHTHUMBNAIL phThumbnailId
+    _In_ HWND hwndDestination,
+    _In_ PVOID pDCompDevice,
+    _Out_ VOID **ppVisual,
+    _Out_ PHTHUMBNAIL phThumbnailId
 );
 
 HRESULT WINAPI
 DwmpUpdateSharedMultiWindowVisual(
-    IN HTHUMBNAIL hThumbnailId,
-    IN HWND* phwndsInclude,
-    IN DWORD chwndsInclude,
-    IN HWND* phwndsExclude,
-    IN DWORD chwndsExclude,
-    OUT PRECT prcSource,
-    OUT PSIZE pDestinationSize,
-    IN DWORD dwFlags
+    _In_ HTHUMBNAIL hThumbnailId,
+    _In_ HWND *phwndsInclude,
+    _In_ DWORD chwndsInclude,
+    _In_ HWND *phwndsExclude,
+    _In_ DWORD chwndsExclude,
+    _Out_ PRECT prcSource,
+    _Out_ PSIZE pDestinationSize,
+    _In_ DWORD dwFlags
 );
 
 HRESULT WINAPI
 DwmpCreateSharedVirtualDesktopVisual(
-    IN HWND hwndDestination,
-    IN PVOID pDCompDevice,
-    OUT VOID** ppVisual,
-    OUT PHTHUMBNAIL phThumbnailId
+    _In_ HWND hwndDestination,
+    _In_ PVOID pDCompDevice,
+    _Out_ VOID **ppVisual,
+    _Out_ PHTHUMBNAIL phThumbnailId
 );
 
 HRESULT WINAPI
 DwmpUpdateSharedVirtualDesktopVisual(
-    IN HTHUMBNAIL hThumbnailId,
-    IN HWND* phwndsInclude,
-    IN DWORD chwndsInclude,
-    IN HWND* phwndsExclude,
-    IN DWORD chwndsExclude,
-    OUT PRECT prcSource,
-    OUT PSIZE pDestinationSize
+    _In_ HTHUMBNAIL hThumbnailId,
+    _In_ HWND *phwndsInclude,
+    _In_ DWORD chwndsInclude,
+    _In_ HWND *phwndsExclude,
+    _In_ DWORD chwndsExclude,
+    _Out_ PRECT prcSource,
+    _Out_ PSIZE pDestinationSize
 );
 
 #ifdef __cplusplus

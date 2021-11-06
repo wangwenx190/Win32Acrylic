@@ -24,7 +24,7 @@
 
 #include <SDKDDKVer.h>
 #include <Windows.h>
-#include "XamlApplication.h"
+#include "UWPApplication.h"
 
 EXTERN_C int APIENTRY
 wWinMain(
@@ -39,6 +39,6 @@ wWinMain(
     UNREFERENCED_PARAMETER(lpCmdLine);
     UNREFERENCED_PARAMETER(nCmdShow);
 
-    XamlApplication application;
+    UWPApplication application;
     return application.Run();
 }

@@ -27,13 +27,13 @@
 #include "Window.h"
 #include "Color.hpp"
 
-class XamlWindowPrivate;
+class UWPWindowPrivate;
 
-class XamlWindow final : public Window
+class UWPWindow final : public Window
 {
 public:
-    explicit XamlWindow() noexcept;
-    ~XamlWindow() noexcept;
+    explicit UWPWindow() noexcept;
+    ~UWPWindow() noexcept;
 
     [[nodiscard]] const Color &TintColor() const noexcept;
     void TintColor(const Color &value) noexcept;
@@ -48,12 +48,12 @@ public:
     void FallbackColor(const Color &value) noexcept;
 
 private:
-    XamlWindow(const XamlWindow &) = delete;
-    XamlWindow &operator=(const XamlWindow &) = delete;
-    XamlWindow(XamlWindow &&) = delete;
-    XamlWindow &operator=(XamlWindow &&) = delete;
+    UWPWindow(const UWPWindow &) = delete;
+    UWPWindow &operator=(const UWPWindow &) = delete;
+    UWPWindow(UWPWindow &&) = delete;
+    UWPWindow &operator=(UWPWindow &&) = delete;
 
 private:
-    friend class XamlWindowPrivate;
-    std::unique_ptr<XamlWindowPrivate> d_ptr;
+    friend class UWPWindowPrivate;
+    std::unique_ptr<UWPWindowPrivate> d_ptr;
 };

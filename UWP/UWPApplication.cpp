@@ -23,50 +23,50 @@
  */
 
 #include "pch.h"
-#include "XamlApplication.h"
-#include "XamlWindow.h"
+#include "UWPApplication.h"
+#include "UWPWindow.h"
 #include "WindowsVersion.h"
 #include "Utils.h"
 #include "OperationResult.h"
 
 static constexpr const wchar_t __NEW_LINE[] = L"\r\n";
 
-class XamlApplicationPrivate
+class UWPApplicationPrivate
 {
 public:
-    explicit XamlApplicationPrivate(XamlApplication *q) noexcept;
-    ~XamlApplicationPrivate() noexcept;
+    explicit UWPApplicationPrivate(UWPApplication *q) noexcept;
+    ~UWPApplicationPrivate() noexcept;
 
     [[nodiscard]] bool Initialize() noexcept;
     [[nodiscard]] int Run() const noexcept;
 
 private:
-    XamlApplicationPrivate(const XamlApplicationPrivate &) = delete;
-    XamlApplicationPrivate &operator=(const XamlApplicationPrivate &) = delete;
-    XamlApplicationPrivate(XamlApplicationPrivate &&) = delete;
-    XamlApplicationPrivate &operator=(XamlApplicationPrivate &&) = delete;
+    UWPApplicationPrivate(const UWPApplicationPrivate &) = delete;
+    UWPApplicationPrivate &operator=(const UWPApplicationPrivate &) = delete;
+    UWPApplicationPrivate(UWPApplicationPrivate &&) = delete;
+    UWPApplicationPrivate &operator=(UWPApplicationPrivate &&) = delete;
 
 private:
-    XamlApplication *q_ptr = nullptr;
+    UWPApplication *q_ptr = nullptr;
     static inline bool m_comInitialized = false;
     static inline winrt::Windows::UI::Xaml::Hosting::WindowsXamlManager m_xamlManager = nullptr;
-    std::unique_ptr<XamlWindow> m_window;
+    std::unique_ptr<UWPWindow> m_window;
 };
 
-XamlApplicationPrivate::XamlApplicationPrivate(XamlApplication *q) noexcept
+UWPApplicationPrivate::UWPApplicationPrivate(UWPApplication *q) noexcept
 {
     if (!q) {
-        Utils::DisplayErrorDialog(L"XamlApplicationPrivate's q is null.");
+        Utils::DisplayErrorDialog(L"UWPApplicationPrivate's q is null.");
         std::exit(-1);
     }
     q_ptr = q;
     if (!Initialize()) {
-        Utils::DisplayErrorDialog(L"Failed to initialize the XAML application.");
+        Utils::DisplayErrorDialog(L"Failed to initialize the UWP application.");
         std::exit(-1);
     }
 }
 
-XamlApplicationPrivate::~XamlApplicationPrivate() noexcept
+UWPApplicationPrivate::~UWPApplicationPrivate() noexcept
 {
     if (m_window) {
         m_window.release();
@@ -77,7 +77,7 @@ XamlApplicationPrivate::~XamlApplicationPrivate() noexcept
     }
 }
 
-bool XamlApplicationPrivate::Initialize() noexcept
+bool UWPApplicationPrivate::Initialize() noexcept
 {
     const VersionNumber &curOsVer = WindowsVersion::CurrentVersion();
     const std::wstring osVerDbgMsg = std::wstring(L"Current operating system version: ") + WindowsVersion::ToHumanReadableString(curOsVer) + std::wstring(__NEW_LINE);
@@ -112,33 +112,33 @@ bool XamlApplicationPrivate::Initialize() noexcept
     const ProcessDPIAwareness curPcDPIAwareness = Utils::GetProcessDPIAwareness();
     const std::wstring curPcDPIAwarenessDbgMsg = std::wstring(L"Current process's DPI awareness: ") + Utils::DPIAwarenessToString(curPcDPIAwareness) + std::wstring(__NEW_LINE);
     OutputDebugStringW(curPcDPIAwarenessDbgMsg.c_str());
-    m_window = std::make_unique<XamlWindow>();
+    m_window = std::make_unique<UWPWindow>();
     m_window->StartupLocation(WindowStartupLocation::ScreenCenter);
     m_window->Visibility(WindowState::Windowed);
     return true;
 }
 
-int XamlApplicationPrivate::Run() const noexcept
+int UWPApplicationPrivate::Run() const noexcept
 {
     if (!q_ptr) {
-        Utils::DisplayErrorDialog(L"Can't run the XAML application due to the q_ptr is null.");
+        Utils::DisplayErrorDialog(L"Can't run the UWP application due to the q_ptr is null.");
         return -1;
     }
     if (!m_window) {
-        Utils::DisplayErrorDialog(L"Can't run the XAML application due to the XAML window has not been created yet.");
+        Utils::DisplayErrorDialog(L"Can't run the UWP application due to the UWP window has not been created yet.");
         return -1;
     }
-    return XamlWindow::MessageLoop();
+    return UWPWindow::MessageLoop();
 }
 
-XamlApplication::XamlApplication() noexcept
+UWPApplication::UWPApplication() noexcept
 {
-    d_ptr = std::make_unique<XamlApplicationPrivate>(this);
+    d_ptr = std::make_unique<UWPApplicationPrivate>(this);
 }
 
-XamlApplication::~XamlApplication() noexcept = default;
+UWPApplication::~UWPApplication() noexcept = default;
 
-int XamlApplication::Run() const noexcept
+int UWPApplication::Run() const noexcept
 {
     return d_ptr->Run();
 }

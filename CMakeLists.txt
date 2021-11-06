@@ -26,15 +26,15 @@ cmake_minimum_required(VERSION 3.22 FATAL_ERROR)
 
 project(Win32AcrylicHelper VERSION 1.0.0.0 LANGUAGES CXX RC)
 
-if("x${CMAKE_BUILD_TYPE}" STREQUAL "xMinSizeRel")
-    message(FATAL_ERROR "This project doesn't support the MinSizeRel configuration.")
-endif()
-if("x${CMAKE_BUILD_TYPE}" STREQUAL "xRelWithDebInfo")
-    message(FATAL_ERROR "This project doesn't support the RelWithDebInfo configuration.")
-endif()
-
-# Defaults to release builds if not set by the user.
-if(NOT DEFINED CMAKE_BUILD_TYPE)
+if(DEFINED CMAKE_BUILD_TYPE)
+    if("x${CMAKE_BUILD_TYPE}" STREQUAL "xMinSizeRel")
+        message(FATAL_ERROR "This project doesn't support the MinSizeRel configuration.")
+    endif()
+    if("x${CMAKE_BUILD_TYPE}" STREQUAL "xRelWithDebInfo")
+        message(FATAL_ERROR "This project doesn't support the RelWithDebInfo configuration.")
+    endif()
+else()
+    # Defaults to release builds if not set by the user.
     set(CMAKE_BUILD_TYPE "Release" CACHE STRING "" FORCE)
 endif()
 
@@ -116,10 +116,10 @@ target_compile_definitions(${PROJECT_NAME} PUBLIC
 )
 
 # Demo applications
-set(SOURCES_Xaml
-    Xaml/XamlWindow.h Xaml/XamlWindow.cpp
-    Xaml/XamlApplication.h Xaml/XamlApplication.cpp
-    Xaml/main_Xaml.cpp
+set(SOURCES_UWP
+    UWP/UWPWindow.h UWP/UWPWindow.cpp
+    UWP/UWPApplication.h UWP/UWPApplication.cpp
+    UWP/main_UWP.cpp
 )
 
 set(SOURCES_Composition
@@ -134,7 +134,7 @@ if("x${CMAKE_SIZEOF_VOID_P}" STREQUAL "x8")
 endif()
 set(_target_filename_suffix ${CMAKE_BUILD_TYPE}${_target_arch})
 
-set(_demo_types Xaml Composition)
+set(_demo_types UWP Composition)
 foreach(_type IN LISTS _demo_types)
     set(_current_subproject_name Demo_${_type})
     add_executable(${_current_subproject_name} WIN32

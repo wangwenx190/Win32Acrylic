@@ -26,22 +26,22 @@
 
 #include <memory>
 
-class XamlApplicationPrivate;
+class UWPApplicationPrivate;
 
-class XamlApplication
+class UWPApplication
 {
 public:
-    explicit XamlApplication() noexcept;
-    ~XamlApplication() noexcept;
+    explicit UWPApplication() noexcept;
+    ~UWPApplication() noexcept;
 
     [[nodiscard]] int Run() const noexcept;
 
 private:
-    XamlApplication(const XamlApplication &) = delete;
-    XamlApplication &operator=(const XamlApplication &) = delete;
-    XamlApplication(XamlApplication &&) = delete;
-    XamlApplication &operator=(XamlApplication &&) = delete;
+    UWPApplication(const UWPApplication &) = delete;
+    UWPApplication &operator=(const UWPApplication &) = delete;
+    UWPApplication(UWPApplication &&) = delete;
+    UWPApplication &operator=(UWPApplication &&) = delete;
 
 private:
-    std::unique_ptr<XamlApplicationPrivate> d_ptr;
+    std::unique_ptr<UWPApplicationPrivate> d_ptr;
 };

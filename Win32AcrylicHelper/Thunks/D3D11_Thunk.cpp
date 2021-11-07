@@ -22,20 +22,12 @@
  * SOFTWARE.
  */
 
-#ifndef _DWMAPI_
-#define _DWMAPI_
-#endif // _DWMAPI_
-
 #include "WindowsAPIThunks.h"
 
-#include <DwmApi.h>
+#include <D3D11.h>
 
-#ifndef __DWMAPI_DLL_FILENAME
-#define __DWMAPI_DLL_FILENAME dwmapi.dll
-#endif // __DWMAPI_DLL_FILENAME
+#ifndef __D3D11_DLL_FILENAME
+#define __D3D11_DLL_FILENAME d3d11.dll
+#endif // __D3D11_DLL_FILENAME
 
-__THUNK_API(__DWMAPI_DLL_FILENAME, DwmGetColorizationColor, HRESULT, DEFAULT_HRESULT, (DWORD *arg1, BOOL *arg2), (arg1, arg2))
-__THUNK_API(__DWMAPI_DLL_FILENAME, DwmSetWindowAttribute, HRESULT, DEFAULT_HRESULT, (HWND arg1, DWORD arg2, LPCVOID arg3, DWORD arg4), (arg1, arg2, arg3, arg4))
-__THUNK_API(__DWMAPI_DLL_FILENAME, DwmGetWindowAttribute, HRESULT, DEFAULT_HRESULT, (HWND arg1, DWORD arg2, PVOID arg3, DWORD arg4), (arg1, arg2, arg3, arg4))
-__THUNK_API(__DWMAPI_DLL_FILENAME, DwmExtendFrameIntoClientArea, HRESULT, DEFAULT_HRESULT, (HWND arg1, const MARGINS *arg2), (arg1, arg2))
-__THUNK_API(__DWMAPI_DLL_FILENAME, DwmFlush, HRESULT, DEFAULT_HRESULT, (VOID), ())
+__THUNK_API(__D3D11_DLL_FILENAME, D3D11CreateDevice, HRESULT, DEFAULT_HRESULT, (IDXGIAdapter *arg1, D3D_DRIVER_TYPE arg2, HMODULE arg3, UINT arg4, CONST D3D_FEATURE_LEVEL *arg5, UINT arg6, UINT arg7, ID3D11Device **arg8, D3D_FEATURE_LEVEL *arg9, ID3D11DeviceContext **arg10), (arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10))

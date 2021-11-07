@@ -108,16 +108,23 @@ set(SOURCES_Win32AcrylicHelper
     Win32AcrylicHelper/Thunks/Gdi32_Thunk.cpp Win32AcrylicHelper/Thunks/UxTheme_Thunk.cpp
     Win32AcrylicHelper/Thunks/AdvApi32_Thunk.cpp Win32AcrylicHelper/Thunks/Ole32_Thunk.cpp
     Win32AcrylicHelper/Thunks/DwmApi_Thunk.cpp Win32AcrylicHelper/Thunks/Shell32_Thunk.cpp
+    Win32AcrylicHelper/Thunks/D3D11_Thunk.cpp Win32AcrylicHelper/Thunks/DComp_Thunk.cpp
     Win32AcrylicHelper/Thunks/OleAut32_Thunk.cpp Win32AcrylicHelper/Thunks/DispatcherQueue_Thunk.h
     Win32AcrylicHelper/Thunks/CoreMessaging_Thunk.cpp Win32AcrylicHelper/Thunks/WinRTWrappers.cpp
     Win32AcrylicHelper/Thunks/Undocumented.h Win32AcrylicHelper/Thunks/Undocumented.cpp
 )
 add_library(${PROJECT_NAME} STATIC ${SOURCES_Win32AcrylicHelper})
 add_library(wangwenx190::${PROJECT_NAME} ALIAS ${PROJECT_NAME})
+# No need to enable link time optimization for static libraries.
+#set_target_properties(${PROJECT_NAME} PROPERTIES
+#    INTERPROCEDURAL_OPTIMIZATION OFF
+#    INTERPROCEDURAL_OPTIMIZATION_RELEASE OFF
+#)
 target_include_directories(${PROJECT_NAME} PUBLIC
     Win32AcrylicHelper
     Win32AcrylicHelper/Thunks
 )
+# The only third party dependency is "Kernel32".
 target_link_libraries(${PROJECT_NAME} PUBLIC
     Kernel32.lib
 )

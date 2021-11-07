@@ -24,6 +24,10 @@
 
 #pragma once
 
+#ifndef _DWMAPI_
+#define _DWMAPI_
+#endif // _DWMAPI_
+
 #include <SDKDDKVer.h>
 #include <Windows.h>
 #include <DwmApi.h>

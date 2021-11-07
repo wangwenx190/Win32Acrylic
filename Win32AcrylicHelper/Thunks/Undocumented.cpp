@@ -39,7 +39,15 @@ EXTERN_C result_type WINAPI \
 symbol \
 argument_signature \
 { \
-    __RESOLVE_UNDOC_API( library , symbol , ordinal ); \
+    static bool tried = false; \
+    static decltype (& :: symbol) symbol ## _API = nullptr; \
+    if (!tried) { \
+        tried = true; \
+        const HMODULE dll = LoadLibraryExW(L#library , nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32); \
+        if (dll) { \
+            symbol ## _API = reinterpret_cast<decltype (& :: symbol)>(GetProcAddress(dll, MAKEINTRESOURCEA( ordinal ))); \
+        } \
+    } \
     return ( ( symbol ## _API ) ? ( symbol ## _API argument_list ) : ( default_result ) ); \
 } \
 _LCRT_DEFINE_IAT_SYMBOL( symbol , 0 );
@@ -52,10 +60,6 @@ _LCRT_DEFINE_IAT_SYMBOL( symbol , 0 );
 #ifndef __UXTHEME_DLL_FILENAME
 #define __UXTHEME_DLL_FILENAME uxtheme.dll
 #endif // __UXTHEME_DLL_FILENAME
-
-#ifndef __DWMAPI_DLL_FILENAME
-#define __DWMAPI_DLL_FILENAME dwmapi.dll
-#endif // __DWMAPI_DLL_FILENAME
 
 // User32
 __THUNK_API(__USER32_DLL_FILENAME, SetWindowCompositionAttribute, BOOL, DEFAULT_BOOL, (HWND arg1, PWINDOWCOMPOSITIONATTRIBDATA arg2), (arg1, arg2))
@@ -74,8 +78,8 @@ __THUNK_UNDOC_API(__UXTHEME_DLL_FILENAME, SetPreferredAppMode, 135, PREFERRED_AP
 __THUNK_UNDOC_API(__UXTHEME_DLL_FILENAME, IsDarkModeAllowedForApp, 139, BOOL, DEFAULT_BOOL, (VOID), ())
 
 // DwmApi
-__THUNK_UNDOC_API(__DWMAPI_DLL_FILENAME, DwmpCreateSharedThumbnailVisual, 147, HRESULT, DEFAULT_HRESULT, (HWND arg1, HWND arg2, DWORD arg3, PDWM_THUMBNAIL_PROPERTIES arg4, PVOID arg5, VOID **arg6, PHTHUMBNAIL arg7), (arg1, arg2, arg3, arg4, arg5, arg6, arg7))
-__THUNK_UNDOC_API(__DWMAPI_DLL_FILENAME, DwmpCreateSharedMultiWindowVisual, 163, HRESULT, DEFAULT_HRESULT, (HWND arg1, PVOID arg2, VOID **arg3, PHTHUMBNAIL arg4), (arg1, arg2, arg3, arg4))
-__THUNK_UNDOC_API(__DWMAPI_DLL_FILENAME, DwmpUpdateSharedMultiWindowVisual, 164, HRESULT, DEFAULT_HRESULT, (HTHUMBNAIL arg1, HWND *arg2, DWORD arg3, HWND *arg4, DWORD arg5, PRECT arg6, PSIZE arg7, DWORD arg8), (arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8))
-__THUNK_UNDOC_API(__DWMAPI_DLL_FILENAME, DwmpCreateSharedVirtualDesktopVisual, 163, HRESULT, DEFAULT_HRESULT, (HWND arg1, PVOID arg2, VOID **arg3, PHTHUMBNAIL arg4), (arg1, arg2, arg3, arg4))
-__THUNK_UNDOC_API(__DWMAPI_DLL_FILENAME, DwmpUpdateSharedVirtualDesktopVisual, 164, HRESULT, DEFAULT_HRESULT, (HTHUMBNAIL arg1, HWND *arg2, DWORD arg3, HWND *arg4, DWORD arg5, PRECT arg6, PSIZE arg7), (arg1, arg2, arg3, arg4, arg5, arg6, arg7))
+__THUNK_UNDOC_API(dwmapi.dll, DwmpCreateSharedThumbnailVisual, 147, HRESULT, DEFAULT_HRESULT, (HWND arg1, HWND arg2, DWORD arg3, PDWM_THUMBNAIL_PROPERTIES arg4, PVOID arg5, VOID **arg6, PHTHUMBNAIL arg7), (arg1, arg2, arg3, arg4, arg5, arg6, arg7))
+__THUNK_UNDOC_API(dwmapi.dll, DwmpCreateSharedMultiWindowVisual, 163, HRESULT, DEFAULT_HRESULT, (HWND arg1, PVOID arg2, VOID **arg3, PHTHUMBNAIL arg4), (arg1, arg2, arg3, arg4))
+__THUNK_UNDOC_API(dwmapi.dll, DwmpUpdateSharedMultiWindowVisual, 164, HRESULT, DEFAULT_HRESULT, (HTHUMBNAIL arg1, HWND *arg2, DWORD arg3, HWND *arg4, DWORD arg5, PRECT arg6, PSIZE arg7, DWORD arg8), (arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8))
+__THUNK_UNDOC_API(dwmapi.dll, DwmpCreateSharedVirtualDesktopVisual, 163, HRESULT, DEFAULT_HRESULT, (HWND arg1, PVOID arg2, VOID **arg3, PHTHUMBNAIL arg4), (arg1, arg2, arg3, arg4))
+__THUNK_UNDOC_API(dwmapi.dll, DwmpUpdateSharedVirtualDesktopVisual, 164, HRESULT, DEFAULT_HRESULT, (HTHUMBNAIL arg1, HWND *arg2, DWORD arg3, HWND *arg4, DWORD arg5, PRECT arg6, PSIZE arg7), (arg1, arg2, arg3, arg4, arg5, arg6, arg7))

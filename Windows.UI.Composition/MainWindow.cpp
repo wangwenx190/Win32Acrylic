@@ -34,10 +34,10 @@ public:
     explicit MainWindowPrivate(MainWindow *q) noexcept;
     ~MainWindowPrivate() noexcept;
 
-    [[nodiscard]] bool Initialize(const HWND hWnd) noexcept;
+    [[nodiscard]] bool Initialize() noexcept;
 
 private:
-    [[nodiscard]] bool CreateDesktopWindowTarget(const HWND hWnd) noexcept;
+    [[nodiscard]] bool CreateDesktopWindowTarget() noexcept;
     [[nodiscard]] bool EnsureDispatcherQueue() noexcept;
     [[nodiscard]] bool CreateCompositionContents() noexcept;
 
@@ -71,7 +71,7 @@ MainWindowPrivate::MainWindowPrivate(MainWindow *q) noexcept
         std::exit(-1);
     }
     q_ptr = q;
-    if (Initialize(q_ptr->WindowHandle())) {
+    if (Initialize()) {
         q_ptr->WidthChangeHandler(std::bind(&MainWindowPrivate::OnWidthChanged, this, std::placeholders::_1));
         q_ptr->HeightChangeHandler(std::bind(&MainWindowPrivate::OnHeightChanged, this, std::placeholders::_1));
         q_ptr->VisibilityChangeHandler(std::bind(&MainWindowPrivate::OnVisibilityChanged, this, std::placeholders::_1));
@@ -85,11 +85,8 @@ MainWindowPrivate::MainWindowPrivate(MainWindow *q) noexcept
 
 MainWindowPrivate::~MainWindowPrivate() noexcept = default;
 
-bool MainWindowPrivate::Initialize(const HWND hWnd) noexcept
+bool MainWindowPrivate::Initialize() noexcept
 {
-    if (!hWnd) {
-        return false;
-    }
     if (!EnsureDispatcherQueue()) {
         Utils::DisplayErrorDialog(L"Failed to create the dispatcher queue.");
         return false;
@@ -99,7 +96,7 @@ bool MainWindowPrivate::Initialize(const HWND hWnd) noexcept
         Utils::DisplayErrorDialog(L"Failed to create the compositor.");
         return false;
     }
-    if (!CreateDesktopWindowTarget(hWnd)) {
+    if (!CreateDesktopWindowTarget()) {
         Utils::DisplayErrorDialog(L"Failed to create the desktop window target.");
         return false;
     }
@@ -111,11 +108,8 @@ bool MainWindowPrivate::Initialize(const HWND hWnd) noexcept
     return true;
 }
 
-bool MainWindowPrivate::CreateDesktopWindowTarget(const HWND hWnd) noexcept
+bool MainWindowPrivate::CreateDesktopWindowTarget() noexcept
 {
-    if (!hWnd) {
-        return false;
-    }
     if (m_compositor == nullptr) {
         Utils::DisplayErrorDialog(L"Can't create the desktop window target due to the compositor has not been created yet.");
         return false;
@@ -126,7 +120,7 @@ bool MainWindowPrivate::CreateDesktopWindowTarget(const HWND hWnd) noexcept
         return false;
     }
     winrt::Windows::UI::Composition::Desktop::DesktopWindowTarget target = nullptr;
-    const HRESULT hr = interop->CreateDesktopWindowTarget(hWnd, false, reinterpret_cast<ABI::Windows::UI::Composition::Desktop::IDesktopWindowTarget **>(winrt::put_abi(target)));
+    const HRESULT hr = interop->CreateDesktopWindowTarget(q_ptr->WindowHandle(), false, reinterpret_cast<ABI::Windows::UI::Composition::Desktop::IDesktopWindowTarget **>(winrt::put_abi(target)));
     if (FAILED(hr)) {
         PRINT_HR_ERROR_MESSAGE(CreateDesktopWindowTarget, hr, L"Failed to create the desktop window target.")
         return false;

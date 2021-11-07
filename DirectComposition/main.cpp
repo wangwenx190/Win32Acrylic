@@ -22,20 +22,23 @@
  * SOFTWARE.
  */
 
-#ifndef _DWMAPI_
-#define _DWMAPI_
-#endif // _DWMAPI_
+#include <SDKDDKVer.h>
+#include <Windows.h>
+#include "Application.h"
 
-#include "WindowsAPIThunks.h"
+EXTERN_C int APIENTRY
+wWinMain(
+    _In_     HINSTANCE hInstance,
+    _In_opt_ HINSTANCE hPrevInstance,
+    _In_     LPWSTR    lpCmdLine,
+    _In_     int       nCmdShow
+)
+{
+    UNREFERENCED_PARAMETER(hInstance);
+    UNREFERENCED_PARAMETER(hPrevInstance);
+    UNREFERENCED_PARAMETER(lpCmdLine);
+    UNREFERENCED_PARAMETER(nCmdShow);
 
-#include <DwmApi.h>
-
-#ifndef __DWMAPI_DLL_FILENAME
-#define __DWMAPI_DLL_FILENAME dwmapi.dll
-#endif // __DWMAPI_DLL_FILENAME
-
-__THUNK_API(__DWMAPI_DLL_FILENAME, DwmGetColorizationColor, HRESULT, DEFAULT_HRESULT, (DWORD *arg1, BOOL *arg2), (arg1, arg2))
-__THUNK_API(__DWMAPI_DLL_FILENAME, DwmSetWindowAttribute, HRESULT, DEFAULT_HRESULT, (HWND arg1, DWORD arg2, LPCVOID arg3, DWORD arg4), (arg1, arg2, arg3, arg4))
-__THUNK_API(__DWMAPI_DLL_FILENAME, DwmGetWindowAttribute, HRESULT, DEFAULT_HRESULT, (HWND arg1, DWORD arg2, PVOID arg3, DWORD arg4), (arg1, arg2, arg3, arg4))
-__THUNK_API(__DWMAPI_DLL_FILENAME, DwmExtendFrameIntoClientArea, HRESULT, DEFAULT_HRESULT, (HWND arg1, const MARGINS *arg2), (arg1, arg2))
-__THUNK_API(__DWMAPI_DLL_FILENAME, DwmFlush, HRESULT, DEFAULT_HRESULT, (VOID), ())
+    Application application;
+    return application.Run();
+}

@@ -22,20 +22,19 @@
  * SOFTWARE.
  */
 
-#ifndef _DWMAPI_
-#define _DWMAPI_
-#endif // _DWMAPI_
+#pragma once
 
-#include "WindowsAPIThunks.h"
+#include "Window.h"
 
-#include <DwmApi.h>
+class MainWindowPrivate;
 
-#ifndef __DWMAPI_DLL_FILENAME
-#define __DWMAPI_DLL_FILENAME dwmapi.dll
-#endif // __DWMAPI_DLL_FILENAME
+class MainWindow : public Window
+{
+public:
+    explicit MainWindow() noexcept;
+    ~MainWindow() noexcept;
 
-__THUNK_API(__DWMAPI_DLL_FILENAME, DwmGetColorizationColor, HRESULT, DEFAULT_HRESULT, (DWORD *arg1, BOOL *arg2), (arg1, arg2))
-__THUNK_API(__DWMAPI_DLL_FILENAME, DwmSetWindowAttribute, HRESULT, DEFAULT_HRESULT, (HWND arg1, DWORD arg2, LPCVOID arg3, DWORD arg4), (arg1, arg2, arg3, arg4))
-__THUNK_API(__DWMAPI_DLL_FILENAME, DwmGetWindowAttribute, HRESULT, DEFAULT_HRESULT, (HWND arg1, DWORD arg2, PVOID arg3, DWORD arg4), (arg1, arg2, arg3, arg4))
-__THUNK_API(__DWMAPI_DLL_FILENAME, DwmExtendFrameIntoClientArea, HRESULT, DEFAULT_HRESULT, (HWND arg1, const MARGINS *arg2), (arg1, arg2))
-__THUNK_API(__DWMAPI_DLL_FILENAME, DwmFlush, HRESULT, DEFAULT_HRESULT, (VOID), ())
+private:
+    friend class MainWindowPrivate;
+    std::unique_ptr<MainWindowPrivate> d_ptr;
+};

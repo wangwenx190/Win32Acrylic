@@ -96,6 +96,17 @@ using ACCENT_STATE = enum _ACCENT_STATE
     ACCENT_INVALID_STATE = 6
 };
 
+using ACCENT_POLICY = struct _ACCENT_POLICY
+{
+    ACCENT_STATE State;
+    DWORD Flags;
+    DWORD GradientColor;
+    DWORD AnimationId;
+};
+
+using PACCENT_POLICY = ACCENT_POLICY *;
+using LPACCENT_POLICY = ACCENT_POLICY *;
+
 using WINDOWCOMPOSITIONATTRIBDATA = struct _WINDOWCOMPOSITIONATTRIBDATA
 {
     WINDOWCOMPOSITIONATTRIB Attrib;
@@ -105,6 +116,18 @@ using WINDOWCOMPOSITIONATTRIBDATA = struct _WINDOWCOMPOSITIONATTRIBDATA
 
 using PWINDOWCOMPOSITIONATTRIBDATA = WINDOWCOMPOSITIONATTRIBDATA *;
 using LPWINDOWCOMPOSITIONATTRIBDATA = WINDOWCOMPOSITIONATTRIBDATA *;
+
+using THUMBNAIL_TYPE = enum _THUMBNAIL_TYPE
+{
+    TT_DEFAULT = 0x0,
+    TT_SNAPSHOT = 0x1,
+    TT_ICONIC = 0x2,
+    TT_BITMAPPENDING = 0x3,
+    TT_BITMAP = 0x4
+};
+
+using PTHUMBNAIL_TYPE = THUMBNAIL_TYPE *;
+using LPTHUMBNAIL_TYPE = THUMBNAIL_TYPE *;
 
 #ifdef __cplusplus
 EXTERN_C_START
@@ -176,6 +199,19 @@ IsDarkModeAllowedForApp(
 );
 
 // DwmApi
+HRESULT WINAPI
+DwmpQueryThumbnailType(
+    _In_ HTHUMBNAIL hThumbnailId,
+    _Out_ PTHUMBNAIL_TYPE thumbType
+);
+
+HRESULT WINAPI
+DwmpQueryWindowThumbnailSourceSize(
+    _In_ HWND hwndSource,
+    _In_ BOOL fSourceClientAreaOnly,
+    _Out_ PSIZE pSize
+);
+
 HRESULT WINAPI
 DwmpCreateSharedThumbnailVisual(
     _In_ HWND hwndDestination,

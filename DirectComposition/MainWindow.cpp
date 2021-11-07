@@ -59,6 +59,8 @@ private:
     [[nodiscard]] bool Flush() noexcept;
     [[nodiscard]] bool Commit() noexcept;
 
+    [[nodiscard]] bool MainWindowMessageHandler(const UINT message, const WPARAM wParam, const LPARAM lParam, LRESULT *result) noexcept;
+
     [[nodiscard]] UINT GetTitleBarHeight() const noexcept;
     [[nodiscard]] UINT GetTopFrameMargin() const noexcept;
 
@@ -122,6 +124,7 @@ MainWindowPrivate::MainWindowPrivate(MainWindow *q) noexcept
     }
     q_ptr = q;
     if (Initialize()) {
+        q_ptr->CustomMessageHandler(std::bind(&MainWindowPrivate::MainWindowMessageHandler, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, std::placeholders::_4));
         q_ptr->XChangeHandler(std::bind(&MainWindowPrivate::OnXChanged, this, std::placeholders::_1));
         q_ptr->YChangeHandler(std::bind(&MainWindowPrivate::OnYChanged, this, std::placeholders::_1));
         q_ptr->WidthChangeHandler(std::bind(&MainWindowPrivate::OnWidthChanged, this, std::placeholders::_1));
@@ -145,6 +148,18 @@ MainWindowPrivate::~MainWindowPrivate() noexcept
 
 bool MainWindowPrivate::Initialize() noexcept
 {
+    const int screenWidth = GetSystemMetrics(SM_CXSCREEN);
+    if (screenWidth <= 0) {
+        PRINT_WIN32_ERROR_MESSAGE(GetSystemMetrics, L"Failed to retrieve the screen width.")
+        return false;
+    }
+    const int screenHeight = GetSystemMetrics(SM_CYSCREEN);
+    if (screenHeight <= 0) {
+        PRINT_WIN32_ERROR_MESSAGE(GetSystemMetrics, L"Failed to retrieve the screen height.")
+        return false;
+    }
+    sourceRect = {0, 0, screenWidth, screenHeight};
+    destinationSize = {screenWidth, screenHeight};
     if (!tried) {
         tried = true;
         shouldUseNewAPI = (WindowsVersion::CurrentVersion() >= WindowsVersion::Windows11);
@@ -216,13 +231,27 @@ bool MainWindowPrivate::Initialize() noexcept
         PRINT_HR_ERROR_MESSAGE(SetEffect, hr, L"Failed to set the effect.")
         return false;
     }
-    if (!Commit()) {
-        return false;
-    }
     if (!SyncCoordinates()) {
         return false;
     }
     return true;
+}
+
+bool MainWindowPrivate::MainWindowMessageHandler(const UINT message, const WPARAM wParam, const LPARAM lParam, LRESULT *result) noexcept
+{
+    UNREFERENCED_PARAMETER(wParam);
+    UNREFERENCED_PARAMETER(lParam);
+    UNREFERENCED_PARAMETER(result);
+    switch (message) {
+    case WM_ACTIVATE: {
+        if (!Flush()) {
+            Utils::DisplayErrorDialog(L"Failed to flush the window contents.");
+        }
+    } break;
+    default:
+        break;
+    }
+    return false;
 }
 
 UINT MainWindowPrivate::GetTitleBarHeight() const noexcept
@@ -442,18 +471,8 @@ bool MainWindowPrivate::CreateBackdrop(const BackdropSource source) noexcept
         hwndExclusionList = new HWND[1];
         hwndExclusionList[0] = static_cast<HWND>(0x0);
 
-        if (shouldUseNewAPI) {
-            hr = DwmpUpdateSharedMultiWindowVisual(topLevelWindowThumbnail, nullptr, 0, hwndExclusionList, 1, &sourceRect, &destinationSize, 1);
-            if (FAILED(hr)) {
-                PRINT_HR_ERROR_MESSAGE(DwmpUpdateSharedMultiWindowVisual, hr, L"Failed to update the window visual.")
-                //return false;
-            }
-        } else {
-            hr = DwmpUpdateSharedVirtualDesktopVisual(topLevelWindowThumbnail, nullptr, 0, hwndExclusionList, 1, &sourceRect, &destinationSize);
-            if (FAILED(hr)) {
-                PRINT_HR_ERROR_MESSAGE(DwmpUpdateSharedVirtualDesktopVisual, hr, L"Failed to update the desktop visual.")
-                //return false;
-            }
+        if (!Flush()) {
+            return false;
         }
     }
 
@@ -537,9 +556,7 @@ bool MainWindowPrivate::SyncCoordinates() noexcept
     if (!Commit()) {
         return false;
     }
-    hr = DwmFlush();
-    if (FAILED(hr)) {
-        PRINT_HR_ERROR_MESSAGE(DwmFlush, hr, L"Failed to flush.")
+    if (!Flush()) {
         return false;
     }
     return true;
@@ -553,13 +570,13 @@ bool MainWindowPrivate::Flush() noexcept
             hr = DwmpUpdateSharedMultiWindowVisual(topLevelWindowThumbnail, nullptr, 0, hwndExclusionList, 1, &sourceRect, &destinationSize, 1);
             if (FAILED(hr)) {
                 PRINT_HR_ERROR_MESSAGE(DwmpUpdateSharedMultiWindowVisual, hr, L"Failed to update window visual.")
-                //return false;
+                return false;
             }
         } else {
             hr = DwmpUpdateSharedVirtualDesktopVisual(topLevelWindowThumbnail, nullptr, 0, hwndExclusionList, 1, &sourceRect, &destinationSize);
             if (FAILED(hr)) {
                 PRINT_HR_ERROR_MESSAGE(DwmpUpdateSharedVirtualDesktopVisual, hr, L"Failed to update desktop visual.")
-                //return false;
+                return false;
             }
         }
         hr = DwmFlush();

@@ -78,6 +78,8 @@ __THUNK_UNDOC_API(__UXTHEME_DLL_FILENAME, SetPreferredAppMode, 135, PREFERRED_AP
 __THUNK_UNDOC_API(__UXTHEME_DLL_FILENAME, IsDarkModeAllowedForApp, 139, BOOL, DEFAULT_BOOL, (VOID), ())
 
 // DwmApi
+__THUNK_UNDOC_API(dwmapi.dll, DwmpQueryThumbnailType, 114, HRESULT, DEFAULT_HRESULT, (HTHUMBNAIL arg1, PTHUMBNAIL_TYPE arg2), (arg1, arg2))
+__THUNK_UNDOC_API(dwmapi.dll, DwmpQueryWindowThumbnailSourceSize, 162, HRESULT, DEFAULT_HRESULT, (HWND arg1, BOOL arg2, PSIZE arg3), (arg1, arg2, arg3))
 __THUNK_UNDOC_API(dwmapi.dll, DwmpCreateSharedThumbnailVisual, 147, HRESULT, DEFAULT_HRESULT, (HWND arg1, HWND arg2, DWORD arg3, PDWM_THUMBNAIL_PROPERTIES arg4, PVOID arg5, VOID **arg6, PHTHUMBNAIL arg7), (arg1, arg2, arg3, arg4, arg5, arg6, arg7))
 __THUNK_UNDOC_API(dwmapi.dll, DwmpCreateSharedMultiWindowVisual, 163, HRESULT, DEFAULT_HRESULT, (HWND arg1, PVOID arg2, VOID **arg3, PHTHUMBNAIL arg4), (arg1, arg2, arg3, arg4))
 __THUNK_UNDOC_API(dwmapi.dll, DwmpUpdateSharedMultiWindowVisual, 164, HRESULT, DEFAULT_HRESULT, (HTHUMBNAIL arg1, HWND *arg2, DWORD arg3, HWND *arg4, DWORD arg5, PRECT arg6, PSIZE arg7, DWORD arg8), (arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8))

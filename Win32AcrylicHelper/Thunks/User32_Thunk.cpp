@@ -86,3 +86,4 @@ __THUNK_API(__USER32_DLL_FILENAME, GetMessagePos, DWORD, DEFAULT_UINT, (VOID), (
 __THUNK_API(__USER32_DLL_FILENAME, SetLayeredWindowAttributes, BOOL, DEFAULT_BOOL, (HWND arg1, COLORREF arg2, BYTE arg3, DWORD arg4), (arg1, arg2, arg3, arg4))
 __THUNK_API(__USER32_DLL_FILENAME, MessageBoxW, int, DEFAULT_INT, (HWND arg1, LPCWSTR arg2, LPCWSTR arg3, UINT arg4), (arg1, arg2, arg3, arg4))
 __THUNK_API(__USER32_DLL_FILENAME, FindWindowW, HWND, DEFAULT_PTR, (LPCWSTR arg1, LPCWSTR arg2), (arg1, arg2))
+__THUNK_API(__USER32_DLL_FILENAME, GetSystemMetrics, int, DEFAULT_INT, (int arg1), (arg1))

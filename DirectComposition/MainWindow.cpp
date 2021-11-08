@@ -607,7 +607,7 @@ bool MainWindowPrivate::Commit() noexcept
     return true;
 }
 
-MainWindow::MainWindow() noexcept
+MainWindow::MainWindow() noexcept : Window(true)
 {
     d_ptr = std::make_unique<MainWindowPrivate>(this);
 }

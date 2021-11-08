@@ -297,7 +297,7 @@ static constexpr const wchar_t __NEW_LINE[] = L"\r\n";
 class WindowPrivate
 {
 public:
-    explicit WindowPrivate(Window *q) noexcept;
+    explicit WindowPrivate(Window *q, const bool NoRedirectionBitmap) noexcept;
     ~WindowPrivate() noexcept;
 
     template<typename T>
@@ -450,6 +450,7 @@ private:
     WindowColorizationAreaChangeHandlerCallback m_colorizationAreaChangeHandlerCallback = nullptr;
     WindowMessageHandlerCallback m_customMessageHandlerCallback = nullptr;
     WindowMessageFilterCallback m_windowMessageFilterCallback = nullptr;
+    bool m_bNoRedirectionBitmap = false;
 };
 
 template<typename T>
@@ -705,22 +706,25 @@ bool WindowPrivate::Initialize() noexcept
     return true;
 }
 
-WindowPrivate::WindowPrivate(Window *q) noexcept
+WindowPrivate::WindowPrivate(Window *q, const bool NoRedirectionBitmap) noexcept
 {
     if (!q) {
         Utils::DisplayErrorDialog(L"WindowPrivate's q pointer is null.");
         std::exit(-1);
     }
     q_ptr = q;
-    // We need this window background brush in WM_PAINT, so create it early.
-    m_windowBackgroundBrush = static_cast<HBRUSH>(GetStockObject(BLACK_BRUSH));
-    if (!m_windowBackgroundBrush) {
-        PRINT_WIN32_ERROR_MESSAGE(GetStockObject, L"Failed to retrieve the black brush.")
-        std::exit(-1);
+    m_bNoRedirectionBitmap = NoRedirectionBitmap;
+    if (!m_bNoRedirectionBitmap) {
+        // We need this window background brush in WM_PAINT, so create it early.
+        m_windowBackgroundBrush = static_cast<HBRUSH>(GetStockObject(BLACK_BRUSH));
+        if (!m_windowBackgroundBrush) {
+            PRINT_WIN32_ERROR_MESSAGE(GetStockObject, L"Failed to retrieve the black brush.")
+            std::exit(-1);
+        }
+        // Create the title bar background brush early, we'll need it in WM_PAINT.
+        TitleBarBackgroundColor(Color::FromRgba(0, 0, 0));
     }
-    // Create the title bar background brush early, we'll need it in WM_PAINT.
-    TitleBarBackgroundColor(Color::FromRgba(0, 0, 0));
-    m_window = CreateWindow2(WS_OVERLAPPEDWINDOW, 0L, nullptr, this, sizeof(WindowPrivate *), m_windowBackgroundBrush, WindowProc);
+    m_window = CreateWindow2(WS_OVERLAPPEDWINDOW, (m_bNoRedirectionBitmap ? WS_EX_NOREDIRECTIONBITMAP : 0L), nullptr, this, sizeof(WindowPrivate *), m_windowBackgroundBrush, WindowProc);
     if (m_window) {
         if (!Initialize()) {
             Utils::DisplayErrorDialog(L"Failed to initialize WindowPrivate.");
@@ -1287,6 +1291,9 @@ bool WindowPrivate::InternalMessageHandler(const UINT message, const WPARAM wPar
         ColorizationColorChangeHandler();
     } break;
     case WM_PAINT: {
+        if (m_bNoRedirectionBitmap) {
+            break;
+        }
         if (!m_windowBackgroundBrush || !m_titleBarBackgroundBrush) {
             Utils::DisplayErrorDialog(L"Can't paint the window when the window background brush and/or the title bar background brush is null.");
             return false;
@@ -1539,6 +1546,12 @@ bool WindowPrivate::InternalMessageHandler(const UINT message, const WPARAM wPar
         m_active = ((wParam == WA_ACTIVE) || (wParam == WA_CLICKACTIVE));
         ActiveChangeHandler();
     } break;
+    case WM_WINDOWPOSCHANGING: {
+        // Tell Windows to discard the entire contents of the client area, as re-using
+        // parts of the client area would lead to jitter during resize.
+        const auto windowPos = reinterpret_cast<LPWINDOWPOS>(lParam);
+        windowPos->flags |= SWP_NOCOPYBITS;
+    } break;
     default:
         break;
     }
@@ -1566,8 +1579,9 @@ bool WindowPrivate::UpdateWindowFrameMargins2() noexcept
     //  at the top) in the WM_PAINT handler. This eliminates the transparency
     //  bug and it's what a lot of Win32 apps that customize the title bar do
     //  so it should work fine.
+    const UINT frameBorderThickness = GetWindowMetrics2(WindowMetrics::WindowVisibleFrameBorderThickness);
     const UINT titleBarHeight = (GetWindowMetrics2(WindowMetrics::ResizeBorderThicknessY) + GetWindowMetrics2(WindowMetrics::CaptionHeight));
-    const UINT topFrameMargin = ((m_visibility == WindowState::Maximized) ? 0 : titleBarHeight);
+    const UINT topFrameMargin = ((m_visibility == WindowState::Maximized) ? 0 : (m_bNoRedirectionBitmap ? frameBorderThickness : titleBarHeight));
     const MARGINS margins = {0, 0, static_cast<int>(topFrameMargin), 0};
     const HRESULT hr = DwmExtendFrameIntoClientArea(m_window, &margins);
     if (FAILED(hr)) {
@@ -1675,9 +1689,9 @@ void WindowPrivate::ColorizationAreaChangeHandler() const noexcept
     }
 }
 
-Window::Window() noexcept
+Window::Window(const bool NoRedirectionBitmap) noexcept
 {
-    d_ptr = std::make_unique<WindowPrivate>(this);
+    d_ptr = std::make_unique<WindowPrivate>(this, NoRedirectionBitmap);
 }
 
 Window::~Window() noexcept = default;

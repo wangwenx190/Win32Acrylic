@@ -50,7 +50,7 @@ class WindowPrivate;
 class Window
 {
 public:
-    explicit Window() noexcept;
+    explicit Window(const bool NoRedirectionBitmap = false) noexcept;
     ~Window() noexcept;
 
     [[nodiscard]] static int MessageLoop() noexcept;

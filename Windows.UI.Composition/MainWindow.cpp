@@ -231,7 +231,7 @@ void MainWindowPrivate::OnDotsPerInchChanged(const UINT arg) noexcept
     m_rootVisual.Scale({ scaleFactor, scaleFactor, 1.0f });
 }
 
-MainWindow::MainWindow() noexcept
+MainWindow::MainWindow() noexcept : Window(true)
 {
     d_ptr = std::make_unique<MainWindowPrivate>(this);
 }

@@ -333,9 +333,9 @@ bool MainWindowPrivate::CreateCompositionDevice() noexcept
     // description. All apps are assumed to support 9.1 unless otherwise stated.
     static constexpr const D3D_FEATURE_LEVEL featureLevels[] =
     {
-        D3D_FEATURE_LEVEL_12_2,
-        D3D_FEATURE_LEVEL_12_1,
-        D3D_FEATURE_LEVEL_12_0,
+        //D3D_FEATURE_LEVEL_12_2,
+        //D3D_FEATURE_LEVEL_12_1,
+        //D3D_FEATURE_LEVEL_12_0,
         D3D_FEATURE_LEVEL_11_1,
         D3D_FEATURE_LEVEL_11_0,
         D3D_FEATURE_LEVEL_10_1,

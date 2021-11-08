@@ -26,16 +26,28 @@ cmake_minimum_required(VERSION 3.22 FATAL_ERROR)
 
 project(Win32AcrylicHelper VERSION 1.0.0.0 LANGUAGES CXX RC)
 
-if(NOT DEFINED CMAKE_BUILD_TYPE)
+option(BUILD_UWP_DEMO "Build the UWP demo application." ON)
+option(BUILD_Windows.UI.Composition_DEMO "Build the Windows.UI.Composition demo application." ON)
+option(BUILD_DirectComposition_DEMO "Build the Direct Composition demo application." ON)
+option(BUILD_Direct2D_DEMO "Build the Direct2D demo application." ON)
+option(OPTIMIZE_FOR_SPEED "Enable as much optimization as possible." OFF)
+
+if(DEFINED CMAKE_BUILD_TYPE)
+    if("x${CMAKE_BUILD_TYPE}" STREQUAL "xMinSizeRel")
+        message(FATAL_ERROR "This project doesn't support the MinSizeRel configuration.")
+    endif()
+    if("x${CMAKE_BUILD_TYPE}" STREQUAL "xRelWithDebInfo")
+        message(FATAL_ERROR "This project doesn't support the RelWithDebInfo configuration.")
+    endif()
+else()
+    # Defaults to release builds if not set by the user.
     set(CMAKE_BUILD_TYPE "Release" CACHE STRING "" FORCE)
 endif()
 
-if(NOT DEFINED CMAKE_DEBUG_POSTFIX)
-    set(CMAKE_DEBUG_POSTFIX "d" CACHE STRING "" FORCE)
-endif()
-
+# Enable link time optimization for release builds.
 set(CMAKE_INTERPROCEDURAL_OPTIMIZATION_RELEASE ON CACHE BOOL "" FORCE)
 
+# Request C++20.
 set(CMAKE_CXX_STANDARD "20" CACHE STRING "" FORCE)
 set(CMAKE_CXX_STANDARD_REQUIRED ON CACHE BOOL "" FORCE)
 set(CMAKE_CXX_EXTENSIONS OFF CACHE BOOL "" FORCE)
@@ -47,45 +59,78 @@ set(CMAKE_CXX_STANDARD_LIBRARIES "" CACHE STRING "" FORCE)
 # To make use of VC-LTL we have to use "/MT(d)" unconditionally.
 set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>" CACHE STRING "" FORCE)
 
+# Remove parameters that disable exception handling. WinRT needs it.
 string(REGEX REPLACE "[-|/]EHs-c-" "" CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS})
+# Disable runtime type information (RTTI) generation. We don't need it.
 string(REGEX REPLACE "[-|/]GR" "" CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS})
+# We don't use the default optimization for release builds, so remove related parameters first.
 string(REGEX REPLACE "[-|/]O[d|1|2|3|i]" "" CMAKE_CXX_FLAGS_RELEASE ${CMAKE_CXX_FLAGS_RELEASE})
 string(REGEX REPLACE "[-|/]Ob[0|1|2|3]" "" CMAKE_CXX_FLAGS_RELEASE ${CMAKE_CXX_FLAGS_RELEASE})
 
+# Change code page to UTF-8 (65001) and suppress the copyright messages.
 string(APPEND CMAKE_RC_FLAGS " -c65001 /nologo ")
-string(APPEND CMAKE_CXX_FLAGS " /await:strict /bigobj /EHsc /GR- /MP /utf-8 /W4 /WX /permissive- /Zc:char8_t,__cplusplus,externConstexpr,hiddenFriend,lambda,referenceBinding,rvalueCast,strictStrings,ternary,throwingNew,trigraphs ")
-string(APPEND CMAKE_CXX_FLAGS_RELEASE " /O1 /Ob1 /Gw /Gy /Zc:inline ")
-string(APPEND CMAKE_EXE_LINKER_FLAGS_RELEASE " /HIGHENTROPYVA /LARGEADDRESSAWARE /OPT:REF /OPT:ICF /WX ")
 
+# "/d2FH4" can significantly reduce the binary size if your application makes heavy use of exception handling.
+string(APPEND CMAKE_CXX_FLAGS " /await:strict /bigobj /EHsc /d2FH4 /GR- /MP /utf-8 /W4 /WX /permissive- /Zc:char8_t,__cplusplus,externConstexpr,hiddenFriend,lambda,referenceBinding,rvalueCast,strictStrings,ternary,throwingNew,trigraphs ")
+
+# Enable "Just My Code debugging" for debug builds.
+string(APPEND CMAKE_CXX_FLAGS_DEBUG " /JMC ")
+
+set(_optimization_flags)
+if(OPTIMIZE_FOR_SPEED)
+    # Don't use "/GA" for DLLs, it will cause bad code generation.
+    set(_optimization_flags "/O2 /Ob3 /Oi /GA /GT")
+else()
+    set(_optimization_flags "/O1 /Ob1")
+endif()
+string(APPEND CMAKE_CXX_FLAGS_RELEASE " ${_optimization_flags} /guard:cf /guard:ehcont /Gw /Gy /Zc:inline ")
+
+string(APPEND CMAKE_EXE_LINKER_FLAGS_RELEASE " /CETCOMPAT /DYNAMICBASE /GUARD:CF /GUARD:EHCONT /HIGHENTROPYVA /LARGEADDRESSAWARE /NXCOMPAT /OPT:REF /OPT:ICF /TSAWARE /WX ")
+
+# Include VC-LTL helper script.
 include(VC-LTL.cmake)
 
-set(SOURCES
-    Win32AcrylicHelper.rc Win32AcrylicHelper.manifest
-    Resource.h
-    Definitions.h
-    pch.h pch.cpp
-    Color.hpp
-    VersionNumber.hpp
-    OperationResult.h OperationResult.cpp
-    WindowsVersion.h WindowsVersion.cpp
-    Utils.h Utils.cpp
-    SystemLibrary.h SystemLibrary.cpp
-    SystemLibraryManager.h SystemLibraryManager.cpp
-    WindowsAPIThunks.h WindowsAPIThunks.cpp
-    RuntimeObject_Thunk.cpp User32_Thunk.cpp Gdi32_Thunk.cpp
-    UxTheme_Thunk.cpp AdvApi32_Thunk.cpp Ole32_Thunk.cpp
-    DwmApi_Thunk.cpp Shell32_Thunk.cpp
-    Window.h Window.cpp
-    XamlWindow.h XamlWindow.cpp
-    XamlApplication.h XamlApplication.cpp
-    main.cpp
+# Win32AcrylicHelper
+set(SOURCES_Win32AcrylicHelper
+    Win32AcrylicHelper/Resource.h
+    Win32AcrylicHelper/Definitions.h
+    Win32AcrylicHelper/pch.h Win32AcrylicHelper/pch.cpp
+    Win32AcrylicHelper/Color.hpp
+    Win32AcrylicHelper/VersionNumber.hpp
+    Win32AcrylicHelper/OperationResult.h Win32AcrylicHelper/OperationResult.cpp
+    Win32AcrylicHelper/WindowsVersion.h Win32AcrylicHelper/WindowsVersion.cpp
+    Win32AcrylicHelper/Utils.h Win32AcrylicHelper/Utils.cpp
+    Win32AcrylicHelper/Window.h Win32AcrylicHelper/Window.cpp
+    Win32AcrylicHelper/Thunks/SystemLibrary.h Win32AcrylicHelper/Thunks/SystemLibrary.cpp
+    Win32AcrylicHelper/Thunks/SystemLibraryManager.h Win32AcrylicHelper/Thunks/SystemLibraryManager.cpp
+    Win32AcrylicHelper/Thunks/WindowsAPIThunks.h Win32AcrylicHelper/Thunks/WindowsAPIThunks.cpp
+    Win32AcrylicHelper/Thunks/ComBase_Thunk.cpp Win32AcrylicHelper/Thunks/User32_Thunk.cpp
+    Win32AcrylicHelper/Thunks/Gdi32_Thunk.cpp Win32AcrylicHelper/Thunks/UxTheme_Thunk.cpp
+    Win32AcrylicHelper/Thunks/AdvApi32_Thunk.cpp Win32AcrylicHelper/Thunks/Ole32_Thunk.cpp
+    Win32AcrylicHelper/Thunks/DwmApi_Thunk.cpp Win32AcrylicHelper/Thunks/Shell32_Thunk.cpp
+    Win32AcrylicHelper/Thunks/D3D11_Thunk.cpp Win32AcrylicHelper/Thunks/DComp_Thunk.cpp
+    Win32AcrylicHelper/Thunks/OleAut32_Thunk.cpp Win32AcrylicHelper/Thunks/DispatcherQueue_Thunk.h
+    Win32AcrylicHelper/Thunks/CoreMessaging_Thunk.cpp Win32AcrylicHelper/Thunks/WinRTWrappers.cpp
+    Win32AcrylicHelper/Thunks/Undocumented.h Win32AcrylicHelper/Thunks/Undocumented.cpp
 )
-
-add_executable(${PROJECT_NAME} WIN32 ${SOURCES})
-
+add_library(${PROJECT_NAME} STATIC ${SOURCES_Win32AcrylicHelper})
+add_library(wangwenx190::${PROJECT_NAME} ALIAS ${PROJECT_NAME})
+# No need to enable link time optimization for static libraries.
+#set_target_properties(${PROJECT_NAME} PROPERTIES
+#    INTERPROCEDURAL_OPTIMIZATION OFF
+#    INTERPROCEDURAL_OPTIMIZATION_RELEASE OFF
+#)
+target_include_directories(${PROJECT_NAME} PUBLIC
+    Win32AcrylicHelper
+    Win32AcrylicHelper/Thunks
+)
+# The only third party dependency is "Kernel32".
+target_link_libraries(${PROJECT_NAME} PUBLIC
+    Kernel32.lib
+)
 set(_WIN32_WINNT_WIN10 0x0A00)
 set(NTDDI_WIN10_CO 0x0A00000B)
-target_compile_definitions(${PROJECT_NAME} PRIVATE
+target_compile_definitions(${PROJECT_NAME} PUBLIC
     _CRT_NON_CONFORMING_SWPRINTFS _CRT_SECURE_NO_WARNINGS
     _ENABLE_EXTENDED_ALIGNED_STORAGE
     NOMINMAX
@@ -96,18 +141,45 @@ target_compile_definitions(${PROJECT_NAME} PRIVATE
     _KERNEL32_ _USER32_ _SHELL32_ _GDI32_ _OLE32_ _OLEAUT32_
     _ADVAPI32_ _COMBASEAPI_ _DWMAPI_ _UXTHEME_ _ROAPI_
 )
-unset(_WIN32_WINNT_WIN10)
-unset(NTDDI_WIN10_CO)
 
-target_link_libraries(${PROJECT_NAME} PRIVATE
-    Kernel32.lib
+# Demo applications
+set(SOURCES_UWP
+    UWP/MainWindow.h UWP/MainWindow.cpp
+    UWP/Application.h UWP/Application.cpp
+    UWP/main.cpp
 )
 
-set(_target_arch_suffix "32")
-if("${CMAKE_SIZEOF_VOID_P}" STREQUAL "8")
-    set(_target_arch_suffix "64")
+set(SOURCES_Windows.UI.Composition
+    Windows.UI.Composition/MainWindow.h Windows.UI.Composition/MainWindow.cpp
+    Windows.UI.Composition/Application.h Windows.UI.Composition/Application.cpp
+    Windows.UI.Composition/main.cpp
+)
+
+set(SOURCES_DirectComposition
+    DirectComposition/MainWindow.h DirectComposition/MainWindow.cpp
+    DirectComposition/Application.h DirectComposition/Application.cpp
+    DirectComposition/main.cpp
+)
+
+set(_target_arch "32")
+if("x${CMAKE_SIZEOF_VOID_P}" STREQUAL "x8")
+    set(_target_arch "64")
 endif()
-set_target_properties(${PROJECT_NAME} PROPERTIES
-    OUTPUT_NAME ${PROJECT_NAME}${CMAKE_BUILD_TYPE}${_target_arch_suffix}
-)
-unset(_target_arch_suffix)
+set(_target_filename_suffix ${CMAKE_BUILD_TYPE}_${_target_arch}-bit)
+
+set(_demo_types UWP Windows.UI.Composition DirectComposition)
+foreach(_type IN LISTS _demo_types)
+    if(BUILD_${_type}_DEMO)
+        set(_current_subproject_name Demo_${_type})
+        add_executable(${_current_subproject_name} WIN32
+            Win32AcrylicHelper/Win32AcrylicHelper.rc Win32AcrylicHelper/Win32AcrylicHelper.manifest
+            ${SOURCES_${_type}}
+        )
+        target_link_libraries(${_current_subproject_name} PRIVATE
+            wangwenx190::${PROJECT_NAME}
+        )
+        set_target_properties(${_current_subproject_name} PROPERTIES
+            OUTPUT_NAME ${_current_subproject_name}_${_target_filename_suffix}
+        )
+    endif()
+endforeach()

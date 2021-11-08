@@ -59,8 +59,6 @@ private:
     [[nodiscard]] bool Flush() noexcept;
     [[nodiscard]] bool Commit() noexcept;
 
-    [[nodiscard]] bool MainWindowMessageHandler(const UINT message, const WPARAM wParam, const LPARAM lParam, LRESULT *result) noexcept;
-
     [[nodiscard]] UINT GetTitleBarHeight() const noexcept;
     [[nodiscard]] UINT GetTopFrameMargin() const noexcept;
 
@@ -69,6 +67,7 @@ private:
     void OnWidthChanged(const UINT arg) noexcept;
     void OnHeightChanged(const UINT arg) noexcept;
     void OnVisibilityChanged(const WindowState arg) noexcept;
+    void OnActiveChanged(const bool arg) noexcept;
     void OnThemeChanged(const WindowTheme arg) noexcept;
     void OnDotsPerInchChanged(const UINT arg) noexcept;
 
@@ -81,7 +80,7 @@ private:
 private:
     MainWindow *q_ptr = nullptr;
 
-    static inline bool tried = false;
+    static inline bool newAPIDetected = false;
     static inline bool shouldUseNewAPI = false;
 
     D3D_FEATURE_LEVEL d3dFeatureLevel = D3D_FEATURE_LEVEL_1_0_CORE;
@@ -124,12 +123,12 @@ MainWindowPrivate::MainWindowPrivate(MainWindow *q) noexcept
     }
     q_ptr = q;
     if (Initialize()) {
-        q_ptr->CustomMessageHandler(std::bind(&MainWindowPrivate::MainWindowMessageHandler, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, std::placeholders::_4));
         q_ptr->XChangeHandler(std::bind(&MainWindowPrivate::OnXChanged, this, std::placeholders::_1));
         q_ptr->YChangeHandler(std::bind(&MainWindowPrivate::OnYChanged, this, std::placeholders::_1));
         q_ptr->WidthChangeHandler(std::bind(&MainWindowPrivate::OnWidthChanged, this, std::placeholders::_1));
         q_ptr->HeightChangeHandler(std::bind(&MainWindowPrivate::OnHeightChanged, this, std::placeholders::_1));
         q_ptr->VisibilityChangeHandler(std::bind(&MainWindowPrivate::OnVisibilityChanged, this, std::placeholders::_1));
+        q_ptr->ActiveChangeHandler(std::bind(&MainWindowPrivate::OnActiveChanged, this, std::placeholders::_1));
         q_ptr->ThemeChangeHandler(std::bind(&MainWindowPrivate::OnThemeChanged, this, std::placeholders::_1));
         q_ptr->DotsPerInchChangeHandler(std::bind(&MainWindowPrivate::OnDotsPerInchChanged, this, std::placeholders::_1));
     } else {
@@ -160,25 +159,30 @@ bool MainWindowPrivate::Initialize() noexcept
     }
     sourceRect = {0, 0, screenWidth, screenHeight};
     destinationSize = {screenWidth, screenHeight};
-    if (!tried) {
-        tried = true;
+    if (!newAPIDetected) {
+        newAPIDetected = true;
         shouldUseNewAPI = (WindowsVersion::CurrentVersion() >= WindowsVersion::Windows11);
     }
     if (!CreateCompositionDevice()) {
+        Utils::DisplayErrorDialog(L"Failed to create the composition device.");
         return false;
     }
     if (!CreateEffectGraph()) {
+        Utils::DisplayErrorDialog(L"Failed to create the effect graph.");
         return false;
     }
     const BOOL excludeFromLivePreview = TRUE;
     HRESULT hr = DwmSetWindowAttribute(q_ptr->WindowHandle(), DWMWA_EXCLUDED_FROM_PEEK, &excludeFromLivePreview, sizeof(excludeFromLivePreview));
     if (FAILED(hr)) {
         PRINT_HR_ERROR_MESSAGE(DwmSetWindowAttribute, hr, L"Failed to exclude the window from live preview.")
+        return false;
     }
     if (!CreateBackdrop(BackdropSource::Host)) {
+        Utils::DisplayErrorDialog(L"Failed to create the host backdrop.");
         return false;
     }
     if (!CreateCompositionVisual()) {
+        Utils::DisplayErrorDialog(L"Failed to create the composition visuals.");
         return false;
     }
     hr = rootVisual->RemoveAllVisuals();
@@ -232,26 +236,10 @@ bool MainWindowPrivate::Initialize() noexcept
         return false;
     }
     if (!SyncCoordinates()) {
+        Utils::DisplayErrorDialog(L"Failed to sync the geometry of the visuals.");
         return false;
     }
     return true;
-}
-
-bool MainWindowPrivate::MainWindowMessageHandler(const UINT message, const WPARAM wParam, const LPARAM lParam, LRESULT *result) noexcept
-{
-    UNREFERENCED_PARAMETER(wParam);
-    UNREFERENCED_PARAMETER(lParam);
-    UNREFERENCED_PARAMETER(result);
-    switch (message) {
-    case WM_ACTIVATE: {
-        if (!Flush()) {
-            Utils::DisplayErrorDialog(L"Failed to flush the window contents.");
-        }
-    } break;
-    default:
-        break;
-    }
-    return false;
 }
 
 UINT MainWindowPrivate::GetTitleBarHeight() const noexcept
@@ -283,7 +271,7 @@ void MainWindowPrivate::OnXChanged(const int arg) noexcept
 {
     UNREFERENCED_PARAMETER(arg);
     if (!SyncCoordinates()) {
-        //
+        Utils::DisplayErrorDialog(L"Failed to sync the geometry of the visuals.");
     }
 }
 
@@ -291,7 +279,7 @@ void MainWindowPrivate::OnYChanged(const int arg) noexcept
 {
     UNREFERENCED_PARAMETER(arg);
     if (!SyncCoordinates()) {
-        //
+        Utils::DisplayErrorDialog(L"Failed to sync the geometry of the visuals.");
     }
 }
 
@@ -299,7 +287,7 @@ void MainWindowPrivate::OnWidthChanged(const UINT arg) noexcept
 {
     UNREFERENCED_PARAMETER(arg);
     if (!SyncCoordinates()) {
-        //
+        Utils::DisplayErrorDialog(L"Failed to sync the geometry of the visuals.");
     }
 }
 
@@ -307,7 +295,7 @@ void MainWindowPrivate::OnHeightChanged(const UINT arg) noexcept
 {
     UNREFERENCED_PARAMETER(arg);
     if (!SyncCoordinates()) {
-        //
+        Utils::DisplayErrorDialog(L"Failed to sync the geometry of the visuals.");
     }
 }
 
@@ -315,6 +303,14 @@ void MainWindowPrivate::OnVisibilityChanged(const WindowState arg) noexcept
 {
     // ### TODO
     UNREFERENCED_PARAMETER(arg);
+}
+
+void MainWindowPrivate::OnActiveChanged(const bool arg) noexcept
+{
+    UNREFERENCED_PARAMETER(arg);
+    if (!Flush()) {
+        Utils::DisplayErrorDialog(L"Failed to flush the visuals.");
+    }
 }
 
 void MainWindowPrivate::OnThemeChanged(const WindowTheme arg) noexcept
@@ -378,6 +374,7 @@ bool MainWindowPrivate::CreateCompositionDevice() noexcept
 bool MainWindowPrivate::CreateCompositionVisual() noexcept
 {
     if (!dcompDevice3) {
+        Utils::DisplayErrorDialog(L"Can't create the composition visuals due to the composition device has not been created yet.");
         return false;
     }
 
@@ -388,6 +385,7 @@ bool MainWindowPrivate::CreateCompositionVisual() noexcept
     }
 
     if (!CreateCompositionTarget()) {
+        Utils::DisplayErrorDialog(L"Failed to create the composition target.");
         return false;
     }
 
@@ -403,6 +401,7 @@ bool MainWindowPrivate::CreateCompositionVisual() noexcept
 bool MainWindowPrivate::CreateCompositionTarget() noexcept
 {
     if (!dcompDevice) {
+        Utils::DisplayErrorDialog(L"Can't create the composition target due to the composition device has not been created yet.");
         return false;
     }
 
@@ -418,6 +417,7 @@ bool MainWindowPrivate::CreateCompositionTarget() noexcept
 bool MainWindowPrivate::CreateBackdrop(const BackdropSource source) noexcept
 {
     if (!dcompDevice) {
+        Utils::DisplayErrorDialog(L"Can't create the backdrop due to the composition device has not been created yet.");
         return false;
     }
 
@@ -465,6 +465,7 @@ bool MainWindowPrivate::CreateBackdrop(const BackdropSource source) noexcept
         }
 
         if (!CreateBackdrop(BackdropSource::Desktop)) {
+            Utils::DisplayErrorDialog(L"Failed to create the desktop backdrop.");
             return false;
         }
 
@@ -472,6 +473,7 @@ bool MainWindowPrivate::CreateBackdrop(const BackdropSource source) noexcept
         hwndExclusionList[0] = static_cast<HWND>(0x0);
 
         if (!Flush()) {
+            Utils::DisplayErrorDialog(L"Failed to flush the visuals.");
             return false;
         }
     }
@@ -482,6 +484,7 @@ bool MainWindowPrivate::CreateBackdrop(const BackdropSource source) noexcept
 bool MainWindowPrivate::CreateEffectGraph() noexcept
 {
     if (!dcompDevice3) {
+        Utils::DisplayErrorDialog(L"Can't create the effect graph due to the composition device has not been created yet.");
         return false;
     }
     HRESULT hr = dcompDevice3->CreateGaussianBlurEffect(blurEffect.GetAddressOf());
@@ -554,9 +557,11 @@ bool MainWindowPrivate::SyncCoordinates() noexcept
         return false;
     }
     if (!Commit()) {
+        Utils::DisplayErrorDialog(L"Failed to commit the visuals.");
         return false;
     }
     if (!Flush()) {
+        Utils::DisplayErrorDialog(L"Failed to flush the visuals.");
         return false;
     }
     return true;
@@ -591,6 +596,7 @@ bool MainWindowPrivate::Flush() noexcept
 bool MainWindowPrivate::Commit() noexcept
 {
     if (!dcompDevice) {
+        Utils::DisplayErrorDialog(L"Can't commit due to the composition device has not been created yet.");
         return false;
     }
     const HRESULT hr = dcompDevice->Commit();

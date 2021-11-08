@@ -87,3 +87,7 @@ __THUNK_API(__USER32_DLL_FILENAME, SetLayeredWindowAttributes, BOOL, DEFAULT_BOO
 __THUNK_API(__USER32_DLL_FILENAME, MessageBoxW, int, DEFAULT_INT, (HWND arg1, LPCWSTR arg2, LPCWSTR arg3, UINT arg4), (arg1, arg2, arg3, arg4))
 __THUNK_API(__USER32_DLL_FILENAME, FindWindowW, HWND, DEFAULT_PTR, (LPCWSTR arg1, LPCWSTR arg2), (arg1, arg2))
 __THUNK_API(__USER32_DLL_FILENAME, GetSystemMetrics, int, DEFAULT_INT, (int arg1), (arg1))
+__THUNK_API(__USER32_DLL_FILENAME, AttachThreadInput, BOOL, DEFAULT_BOOL, (DWORD arg1, DWORD arg2, BOOL arg3), (arg1, arg2, arg3))
+__THUNK_API(__USER32_DLL_FILENAME, GetForegroundWindow, HWND, DEFAULT_PTR, (VOID), ())
+__THUNK_API(__USER32_DLL_FILENAME, GetWindowThreadProcessId, DWORD, DEFAULT_UINT, (HWND arg1, LPDWORD arg2), (arg1, arg2))
+__THUNK_API(__USER32_DLL_FILENAME, SetForegroundWindow, BOOL, DEFAULT_BOOL, (HWND arg1), (arg1))

@@ -115,6 +115,7 @@ bool ApplicationPrivate::Initialize() noexcept
     m_window = std::make_unique<MainWindow>();
     m_window->StartupLocation(WindowStartupLocation::ScreenCenter);
     m_window->Visibility(WindowState::Windowed);
+    m_window->Active(true);
     return true;
 }
 

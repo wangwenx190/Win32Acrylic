@@ -32,6 +32,7 @@
 #include "Definitions.h"
 #include "Color.hpp"
 
+using BoolChangeHandlerCallback = std::function<void (const bool)>;
 using StrChangeHandlerCallback = std::function<void (const std::wstring &)>;
 using IntChangeHandlerCallback = std::function<void (const int)>;
 using UIntChangeHandlerCallback = std::function<void (const UINT)>;
@@ -72,6 +73,9 @@ public:
     [[nodiscard]] WindowState Visibility() const noexcept;
     void Visibility(const WindowState value) noexcept;
 
+    [[nodiscard]] bool Active() const noexcept;
+    void Active(const bool value) noexcept;
+
     [[nodiscard]] WindowFrameCorner FrameCorner() const noexcept;
     void FrameCorner(const WindowFrameCorner value) noexcept;
 
@@ -109,6 +113,7 @@ protected:
     void WidthChangeHandler(const UIntChangeHandlerCallback &cb) noexcept;
     void HeightChangeHandler(const UIntChangeHandlerCallback &cb) noexcept;
     void VisibilityChangeHandler(const WindowStateChangeHandlerCallback &cb) noexcept;
+    void ActiveChangeHandler(const BoolChangeHandlerCallback &cb) noexcept;
     void FrameCornerChangeHandler(const WindowFrameCornerChangeHandlerCallback &cb) noexcept;
     void StartupLocationChangeHandler(const WindowStartupLocationChangeHandlerCallback &cb) noexcept;
     void TitleBarBackgroundColorChangeHandler(const ColorChangeHandlerCallback &cb) noexcept;

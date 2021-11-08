@@ -93,45 +93,6 @@ static constexpr const wchar_t __NEW_LINE[] = L"\r\n";
     return rect;
 }
 
-[[maybe_unused]] [[nodiscard]] static inline bool IsVisible(const HWND hWnd) noexcept
-{
-    if (!hWnd) {
-        return false;
-    }
-    return (IsWindowVisible(hWnd) != FALSE);
-}
-
-[[maybe_unused]] [[nodiscard]] static inline bool IsMinimized(const HWND hWnd) noexcept
-{
-    if (!hWnd) {
-        return false;
-    }
-    return (IsIconic(hWnd) != FALSE);
-}
-
-[[maybe_unused]] [[nodiscard]] static inline bool IsMaximized(const HWND hWnd) noexcept
-{
-    if (!hWnd) {
-        return false;
-    }
-    return (IsZoomed(hWnd) != FALSE);
-}
-
-[[maybe_unused]] [[nodiscard]] static inline bool IsWindowed(const HWND hWnd) noexcept
-{
-    if (!hWnd) {
-        return false;
-    }
-    WINDOWPLACEMENT wp;
-    SecureZeroMemory(&wp, sizeof(wp));
-    wp.length = sizeof(wp);
-    if (GetWindowPlacement(hWnd, &wp) == FALSE) {
-        PRINT_WIN32_ERROR_MESSAGE(GetWindowPlacement, L"Failed to retrieve the window state.")
-        return false;
-    }
-    return ((wp.showCmd == SW_NORMAL) || (wp.showCmd == SW_RESTORE));
-}
-
 [[nodiscard]] static inline bool IsHighContrastModeEnabled() noexcept
 {
     HIGHCONTRASTW hc;
@@ -208,6 +169,53 @@ static constexpr const wchar_t __NEW_LINE[] = L"\r\n";
         return {};
     }
     return (includeTaskBar ? mi.rcMonitor : mi.rcWork);
+}
+
+[[nodiscard]] static inline bool ActivateWindow2(const HWND hWnd) noexcept
+{
+    if (!hWnd) {
+        return false;
+    }
+    const HWND hForegroundWnd = GetForegroundWindow();
+    if (!hForegroundWnd) {
+        PRINT_WIN32_ERROR_MESSAGE(GetForegroundWindow, L"Failed to retrieve the window handle of the foreground window.")
+        return false;
+    }
+    const DWORD dwForegroundPID = GetWindowThreadProcessId(hForegroundWnd, nullptr);
+    if (dwForegroundPID == 0) {
+        PRINT_WIN32_ERROR_MESSAGE(GetWindowThreadProcessId, L"Failed to retrieve the foreground process ID.")
+        return false;
+    }
+    const DWORD dwCurrentPID = GetCurrentThreadId();
+    if (dwCurrentPID == 0) {
+        PRINT_WIN32_ERROR_MESSAGE(GetCurrentThreadId, L"Failed to retrieve the current process ID.")
+        return false;
+    }
+    if (IsWindowVisible(hWnd) == FALSE) {
+        SetLastError(ERROR_SUCCESS);
+        const BOOL ret = ShowWindow(hWnd, SW_SHOW);
+        UNREFERENCED_PARAMETER(ret);
+        PRINT_WIN32_ERROR_MESSAGE(ShowWindow, L"Failed to change the window state.")
+    }
+    if (IsIconic(hWnd) != FALSE) {
+        SetLastError(ERROR_SUCCESS);
+        const BOOL ret = ShowWindow(hWnd, SW_RESTORE);
+        UNREFERENCED_PARAMETER(ret);
+        PRINT_WIN32_ERROR_MESSAGE(ShowWindow, L"Failed to change the window state.")
+    }
+    if (AttachThreadInput(dwCurrentPID, dwForegroundPID, TRUE) == FALSE) {
+        PRINT_WIN32_ERROR_MESSAGE(AttachThreadInput, L"Failed to attach thread input.")
+        return false;
+    }
+    if (SetForegroundWindow(hWnd) == FALSE) {
+        PRINT_WIN32_ERROR_MESSAGE(SetForegroundWindow, L"Failed to set the window as the foreground window.")
+        return false;
+    }
+    if (AttachThreadInput(dwCurrentPID, dwForegroundPID, FALSE) == FALSE) {
+        PRINT_WIN32_ERROR_MESSAGE(AttachThreadInput, L"Failed to detach thread input.")
+        return false;
+    }
+    return true;
 }
 
 [[nodiscard]] static inline HWND CreateWindow2(const DWORD style, const DWORD extendedStyle, const HWND parentWindow, void *extraData, const UINT extraDataSize, const HBRUSH backgroundBrush, const WNDPROC wndProc) noexcept
@@ -315,6 +323,9 @@ public:
     [[nodiscard]] WindowState Visibility() const noexcept;
     void Visibility(const WindowState value) noexcept;
 
+    [[nodiscard]] bool Active() const noexcept;
+    void Active(const bool value) noexcept;
+
     [[nodiscard]] WindowFrameCorner FrameCorner() const noexcept;
     void FrameCorner(const WindowFrameCorner value) noexcept;
 
@@ -346,6 +357,7 @@ public:
     void WidthChangeHandler(const UIntChangeHandlerCallback &cb) noexcept;
     void HeightChangeHandler(const UIntChangeHandlerCallback &cb) noexcept;
     void VisibilityChangeHandler(const WindowStateChangeHandlerCallback &cb) noexcept;
+    void ActiveChangeHandler(const BoolChangeHandlerCallback &cb) noexcept;
     void FrameCornerChangeHandler(const WindowFrameCornerChangeHandlerCallback &cb) noexcept;
     void StartupLocationChangeHandler(const WindowStartupLocationChangeHandlerCallback &cb) noexcept;
     void TitleBarBackgroundColorChangeHandler(const ColorChangeHandlerCallback &cb) noexcept;
@@ -385,6 +397,7 @@ private:
     void WidthChangeHandler() const noexcept;
     void HeightChangeHandler() const noexcept;
     void VisibilityChangeHandler() const noexcept;
+    void ActiveChangeHandler() const noexcept;
     void FrameCornerChangeHandler() const noexcept;
     void StartupLocationChangeHandler() const noexcept;
     void TitleBarBackgroundColorChangeHandler() const noexcept;
@@ -402,6 +415,7 @@ private:
     UINT m_width = 0;
     UINT m_height = 0;
     WindowState m_visibility = WindowState::Hidden;
+    bool m_active = false;
     WindowFrameCorner m_frameCorner = WindowFrameCorner::Square;
     WindowStartupLocation m_startupLocation = WindowStartupLocation::Default;
     Color m_titleBarBackgroundColor = Color();
@@ -426,6 +440,7 @@ private:
     UIntChangeHandlerCallback m_widthChangeHandlerCallback = nullptr;
     UIntChangeHandlerCallback m_heightChangeHandlerCallback = nullptr;
     WindowStateChangeHandlerCallback m_visibilityChangeHandlerCallback = nullptr;
+    BoolChangeHandlerCallback m_activeChangeHandlerCallback = nullptr;
     WindowFrameCornerChangeHandlerCallback m_frameCornerChangeHandlerCallback = nullptr;
     WindowStartupLocationChangeHandlerCallback m_startupLocationChangeHandlerCallback = nullptr;
     ColorChangeHandlerCallback m_titleBarBackgroundColorChangeHandlerCallback = nullptr;
@@ -677,6 +692,7 @@ bool WindowPrivate::Initialize() noexcept
     m_colorizationColor = Color(GetGlobalColorizationColor2());
     m_colorizationArea = GetGlobalColorizationArea2();
     m_visibility = WindowState::Hidden;
+    m_active = false;
     const POINT windowPosition = GetWindowPosition2();
     const SIZE windowSize = GetWindowSize2();
     m_x = windowPosition.x;
@@ -839,6 +855,20 @@ void WindowPrivate::Visibility(const WindowState value) noexcept
     if (m_visibility != value) {
         if (!SetWindowState2(value)) {
             Utils::DisplayErrorDialog(L"Failed to update the Visibility property of this window.");
+        }
+    }
+}
+
+bool WindowPrivate::Active() const noexcept
+{
+    return m_active;
+}
+
+void WindowPrivate::Active(const bool value) noexcept
+{
+    if (m_active != value) {
+        if (!ActivateWindow2(m_window)) {
+            Utils::DisplayErrorDialog(L"Failed to activate this window.");
         }
     }
 }
@@ -1074,6 +1104,11 @@ void WindowPrivate::HeightChangeHandler(const UIntChangeHandlerCallback &cb) noe
 void WindowPrivate::VisibilityChangeHandler(const WindowStateChangeHandlerCallback &cb) noexcept
 {
     m_visibilityChangeHandlerCallback = cb;
+}
+
+void WindowPrivate::ActiveChangeHandler(const BoolChangeHandlerCallback &cb) noexcept
+{
+    m_activeChangeHandlerCallback = cb;
 }
 
 void WindowPrivate::FrameCornerChangeHandler(const WindowFrameCornerChangeHandlerCallback &cb) noexcept
@@ -1500,6 +1535,10 @@ bool WindowPrivate::InternalMessageHandler(const UINT message, const WPARAM wPar
             }
         }
     } break;
+    case WM_ACTIVATE: {
+        m_active = ((wParam == WA_ACTIVE) || (wParam == WA_CLICKACTIVE));
+        ActiveChangeHandler();
+    } break;
     default:
         break;
     }
@@ -1577,6 +1616,13 @@ void WindowPrivate::VisibilityChangeHandler() const noexcept
 {
     if (m_visibilityChangeHandlerCallback) {
         m_visibilityChangeHandlerCallback(m_visibility);
+    }
+}
+
+void WindowPrivate::ActiveChangeHandler() const noexcept
+{
+    if (m_activeChangeHandlerCallback) {
+        m_activeChangeHandlerCallback(m_active);
     }
 }
 
@@ -1701,6 +1747,16 @@ void Window::Visibility(const WindowState value) noexcept
     d_ptr->Visibility(value);
 }
 
+bool Window::Active() const noexcept
+{
+    return d_ptr->Active();
+}
+
+void Window::Active(const bool value) noexcept
+{
+    d_ptr->Active(value);
+}
+
 WindowFrameCorner Window::FrameCorner() const noexcept
 {
     return d_ptr->FrameCorner();
@@ -1804,6 +1860,11 @@ void Window::HeightChangeHandler(const UIntChangeHandlerCallback &cb) noexcept
 void Window::VisibilityChangeHandler(const WindowStateChangeHandlerCallback &cb) noexcept
 {
     d_ptr->VisibilityChangeHandler(cb);
+}
+
+void Window::ActiveChangeHandler(const BoolChangeHandlerCallback &cb) noexcept
+{
+    d_ptr->ActiveChangeHandler(cb);
 }
 
 void Window::FrameCornerChangeHandler(const WindowFrameCornerChangeHandlerCallback &cb) noexcept

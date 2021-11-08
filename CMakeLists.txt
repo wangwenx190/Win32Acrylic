@@ -30,6 +30,7 @@ option(BUILD_UWP_DEMO "Build the UWP demo application." ON)
 option(BUILD_Windows.UI.Composition_DEMO "Build the Windows.UI.Composition demo application." ON)
 option(BUILD_DirectComposition_DEMO "Build the Direct Composition demo application." ON)
 option(BUILD_Direct2D_DEMO "Build the Direct2D demo application." ON)
+option(BUILD_Win32_DEMO "Build the Win32 demo application." ON)
 option(OPTIMIZE_FOR_SPEED "Enable as much optimization as possible." OFF)
 
 if(DEFINED CMAKE_BUILD_TYPE)
@@ -161,13 +162,21 @@ set(SOURCES_DirectComposition
     DirectComposition/main.cpp
 )
 
+set(SOURCES_Win32
+    Win32/MainWindow.h Win32/MainWindow.cpp
+    Win32/Application.h Win32/Application.cpp
+    Win32/main.cpp
+)
+
 set(_target_arch "32")
 if("x${CMAKE_SIZEOF_VOID_P}" STREQUAL "x8")
     set(_target_arch "64")
 endif()
 set(_target_filename_suffix ${CMAKE_BUILD_TYPE}_${_target_arch}-bit)
 
-set(_demo_types UWP Windows.UI.Composition DirectComposition)
+set(_demo_types
+    UWP Windows.UI.Composition DirectComposition Win32
+)
 foreach(_type IN LISTS _demo_types)
     if(BUILD_${_type}_DEMO)
         set(_current_subproject_name Demo_${_type})

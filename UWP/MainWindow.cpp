@@ -745,7 +745,7 @@ void MainWindowPrivate::OnThemeChanged(const WindowTheme arg) noexcept
     }
 }
 
-MainWindow::MainWindow() noexcept
+MainWindow::MainWindow() noexcept : Window(false)
 {
     d_ptr = std::make_unique<MainWindowPrivate>(this);
 }

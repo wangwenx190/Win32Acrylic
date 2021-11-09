@@ -5,3 +5,6 @@
 - 点击窗口左上角窗口图标位置，弹出系统菜单
 - Win11 自动使用 MICA 材质 而不是 亚克力
 - SetWindowRgn
+- SetProcessDPIAwareness()以及GetProcessDPIAwareness()添加旧系统支持
+- WM_NCCALCSIZE支持旧系统
+- 可以在运行时设置是否显示窗口边框

@@ -113,6 +113,7 @@ set(SOURCES_Win32AcrylicHelper
     Win32AcrylicHelper/Thunks/OleAut32_Thunk.cpp Win32AcrylicHelper/Thunks/DispatcherQueue_Thunk.h
     Win32AcrylicHelper/Thunks/CoreMessaging_Thunk.cpp Win32AcrylicHelper/Thunks/WinRTWrappers.cpp
     Win32AcrylicHelper/Thunks/Undocumented.h Win32AcrylicHelper/Thunks/Undocumented.cpp
+    Win32AcrylicHelper/Thunks/SHCore_Thunk.cpp
 )
 add_library(${PROJECT_NAME} STATIC ${SOURCES_Win32AcrylicHelper})
 add_library(wangwenx190::${PROJECT_NAME} ALIAS ${PROJECT_NAME})

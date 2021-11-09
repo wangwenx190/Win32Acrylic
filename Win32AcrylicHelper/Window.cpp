@@ -644,7 +644,43 @@ bool WindowPrivate::SetWindowState2(const WindowState state) noexcept
 
 UINT WindowPrivate::GetWindowDPI2() const noexcept
 {
-    return (m_window ? GetDpiForWindow(m_window) : USER_DEFAULT_SCREEN_DPI);
+    if (!m_window) {
+        return USER_DEFAULT_SCREEN_DPI;
+    }
+    UINT result = GetDpiForWindow(m_window);
+    if (result > 0) {
+        return result;
+    }
+    const HANDLE hCurrentProcess = GetCurrentProcess();
+    if (hCurrentProcess) {
+        result = GetSystemDpiForProcess(hCurrentProcess);
+        if (result > 0) {
+            return result;
+        }
+    }
+    result = GetDpiForSystem();
+    if (result > 0) {
+        return result;
+    }
+    const HMONITOR hCurrentScreen = MonitorFromWindow(m_window, MONITOR_DEFAULTTONEAREST);
+    if (hCurrentScreen) {
+        UINT dpiX = 0;
+        UINT dpiY = 0;
+        const HRESULT hr = GetDpiForMonitor(hCurrentScreen, MDT_EFFECTIVE_DPI, &dpiX, &dpiY);
+        if (SUCCEEDED(hr)) {
+            return static_cast<UINT>(std::round(static_cast<double>(dpiX + dpiY) / 2.0));
+        }
+    }
+    const HDC hDesktopDC = GetDC(nullptr);
+    if (hDesktopDC) {
+        const int dpiX = GetDeviceCaps(hDesktopDC, LOGPIXELSX);
+        const int dpiY = GetDeviceCaps(hDesktopDC, LOGPIXELSY);
+        ReleaseDC(nullptr, hDesktopDC);
+        if ((dpiX > 0) && (dpiY > 0)) {
+            return static_cast<UINT>(std::round(static_cast<double>(dpiX + dpiY) / 2.0));
+        }
+    }
+    return USER_DEFAULT_SCREEN_DPI;
 }
 
 UINT WindowPrivate::GetWindowVisibleFrameBorderThickness2() const noexcept
@@ -1023,19 +1059,26 @@ UINT WindowPrivate::GetWindowMetrics2(const WindowMetrics metrics) noexcept
         Utils::DisplayErrorDialog(L"Failed to retrieve the window metrics due to the window has not been created yet.");
         return 0;
     }
+    const auto GetSystemMetricsForDpi2 = [](const int nIndex, const UINT dpi) -> int {
+        if (dpi == 0) {
+            return 0;
+        }
+        static const bool dpiAvailable = (WindowsVersion::CurrentVersion() >= WindowsVersion::Windows10_RedStone1); // Win10 1607
+        return (dpiAvailable ? GetSystemMetricsForDpi(nIndex, dpi) : GetSystemMetrics(nIndex));
+    };
     switch (metrics) {
     case WindowMetrics::ResizeBorderThicknessX: {
         if (m_resizeBorderThicknessX == 0) {
-            const int paddedBorderThicknessX = GetSystemMetricsForDpi(SM_CXPADDEDBORDER, m_dpi);
-            const int sizeFrameThicknessX = GetSystemMetricsForDpi(SM_CXSIZEFRAME, m_dpi);
+            const int paddedBorderThicknessX = GetSystemMetricsForDpi2(SM_CXPADDEDBORDER, m_dpi);
+            const int sizeFrameThicknessX = GetSystemMetricsForDpi2(SM_CXSIZEFRAME, m_dpi);
             m_resizeBorderThicknessX = (paddedBorderThicknessX + sizeFrameThicknessX);
         }
         return m_resizeBorderThicknessX;
     } break;
     case WindowMetrics::ResizeBorderThicknessY: {
         if (m_resizeBorderThicknessY == 0) {
-            const int paddedBorderThicknessY = GetSystemMetricsForDpi(SM_CYPADDEDBORDER, m_dpi);
-            const int sizeFrameThicknessY = GetSystemMetricsForDpi(SM_CYSIZEFRAME, m_dpi);
+            const int paddedBorderThicknessY = GetSystemMetricsForDpi2(SM_CYPADDEDBORDER, m_dpi);
+            const int sizeFrameThicknessY = GetSystemMetricsForDpi2(SM_CYSIZEFRAME, m_dpi);
             m_resizeBorderThicknessY = (paddedBorderThicknessY + sizeFrameThicknessY);
         }
         return m_resizeBorderThicknessY;
@@ -1048,31 +1091,31 @@ UINT WindowPrivate::GetWindowMetrics2(const WindowMetrics metrics) noexcept
     } break;
     case WindowMetrics::CaptionHeight: {
         if (m_captionHeight == 0) {
-            m_captionHeight = GetSystemMetricsForDpi(SM_CYCAPTION, m_dpi);
+            m_captionHeight = GetSystemMetricsForDpi2(SM_CYCAPTION, m_dpi);
         }
         return m_captionHeight;
     } break;
     case WindowMetrics::WindowIconWidth: {
         if (m_windowIconWidth == 0) {
-            m_windowIconWidth = GetSystemMetricsForDpi(SM_CXICON, m_dpi);
+            m_windowIconWidth = GetSystemMetricsForDpi2(SM_CXICON, m_dpi);
         }
         return m_windowIconWidth;
     } break;
     case WindowMetrics::WindowIconHeight: {
         if (m_windowIconHeight == 0) {
-            m_windowIconHeight = GetSystemMetricsForDpi(SM_CYICON, m_dpi);
+            m_windowIconHeight = GetSystemMetricsForDpi2(SM_CYICON, m_dpi);
         }
         return m_windowIconHeight;
     } break;
     case WindowMetrics::WindowSmallIconWidth: {
         if (m_windowSmallIconWidth == 0) {
-            m_windowSmallIconWidth = GetSystemMetricsForDpi(SM_CXSMICON, m_dpi);
+            m_windowSmallIconWidth = GetSystemMetricsForDpi2(SM_CXSMICON, m_dpi);
         }
         return m_windowSmallIconWidth;
     } break;
     case WindowMetrics::WindowSmallIconHeight: {
         if (m_windowSmallIconHeight == 0) {
-            m_windowSmallIconHeight = GetSystemMetricsForDpi(SM_CYSMICON, m_dpi);
+            m_windowSmallIconHeight = GetSystemMetricsForDpi2(SM_CYSMICON, m_dpi);
         }
         return m_windowSmallIconHeight;
     } break;

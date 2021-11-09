@@ -22,19 +22,12 @@
  * SOFTWARE.
  */
 
-#ifndef _GDI32_
-#define _GDI32_
-#endif // _GDI32_
-
 #include "WindowsAPIThunks.h"
 
-#include <WinGdi.h>
+#include <ShellScalingApi.h>
 
-#ifndef __GDI32_DLL_FILENAME
-#define __GDI32_DLL_FILENAME gdi32.dll
-#endif // __GDI32_DLL_FILENAME
+#ifndef __SHCORE_DLL_FILENAME
+#define __SHCORE_DLL_FILENAME shcore.dll
+#endif // __SHCORE_DLL_FILENAME
 
-__THUNK_API(__GDI32_DLL_FILENAME, GetStockObject, HGDIOBJ, DEFAULT_PTR, (int arg1), (arg1))
-__THUNK_API(__GDI32_DLL_FILENAME, DeleteObject, BOOL, DEFAULT_BOOL, (HGDIOBJ arg1), (arg1))
-__THUNK_API(__GDI32_DLL_FILENAME, CreateSolidBrush, HBRUSH, DEFAULT_PTR, (COLORREF arg1), (arg1))
-__THUNK_API(__GDI32_DLL_FILENAME, GetDeviceCaps, int, DEFAULT_INT, (HDC arg1, int arg2), (arg1, arg2))
+__THUNK_API(__SHCORE_DLL_FILENAME, GetDpiForMonitor, HRESULT, DEFAULT_HRESULT, (HMONITOR arg1, MONITOR_DPI_TYPE arg2, UINT *arg3, UINT *arg4), (arg1, arg2, arg3, arg4))

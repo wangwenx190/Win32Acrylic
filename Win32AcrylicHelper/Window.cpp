@@ -451,6 +451,8 @@ private:
     WindowMessageHandlerCallback m_customMessageHandlerCallback = nullptr;
     WindowMessageFilterCallback m_windowMessageFilterCallback = nullptr;
     bool m_bNoRedirectionBitmap = false;
+    static inline bool m_osEnvDetected = false;
+    static inline bool m_dpiFunctionsAvailable = false;
 };
 
 template<typename T>
@@ -647,28 +649,37 @@ UINT WindowPrivate::GetWindowDPI2() const noexcept
     if (!m_window) {
         return USER_DEFAULT_SCREEN_DPI;
     }
-    UINT result = GetDpiForWindow(m_window);
-    if (result > 0) {
-        return result;
-    }
-    const HANDLE hCurrentProcess = GetCurrentProcess();
-    if (hCurrentProcess) {
-        result = GetSystemDpiForProcess(hCurrentProcess);
-        if (result > 0) {
-            return result;
+    if (m_dpiFunctionsAvailable) {
+        {
+            const UINT result = GetDpiForWindow(m_window);
+            if (result > 0) {
+                return result;
+            }
+        }
+        if (WindowsVersion::CurrentVersion() >= WindowsVersion::Windows10_RedStone4) {
+            const HANDLE hCurrentProcess = GetCurrentProcess();
+            if (hCurrentProcess) {
+                const UINT result = GetSystemDpiForProcess(hCurrentProcess); // Win10 1803
+                if (result > 0) {
+                    return result;
+                }
+            }
+        }
+        {
+            const UINT result = GetDpiForSystem();
+            if (result > 0) {
+                return result;
+            }
         }
     }
-    result = GetDpiForSystem();
-    if (result > 0) {
-        return result;
-    }
-    const HMONITOR hCurrentScreen = MonitorFromWindow(m_window, MONITOR_DEFAULTTONEAREST);
-    if (hCurrentScreen) {
-        UINT dpiX = 0;
-        UINT dpiY = 0;
-        const HRESULT hr = GetDpiForMonitor(hCurrentScreen, MDT_EFFECTIVE_DPI, &dpiX, &dpiY);
-        if (SUCCEEDED(hr)) {
-            return static_cast<UINT>(std::round(static_cast<double>(dpiX + dpiY) / 2.0));
+    if (WindowsVersion::CurrentVersion() >= WindowsVersion::Windows8_1) {
+        const HMONITOR hCurrentScreen = MonitorFromWindow(m_window, MONITOR_DEFAULTTONEAREST);
+        if (hCurrentScreen) {
+            UINT dpiX = 0, dpiY = 0;
+            const HRESULT hr = GetDpiForMonitor(hCurrentScreen, MDT_EFFECTIVE_DPI, &dpiX, &dpiY);
+            if (SUCCEEDED(hr)) {
+                return static_cast<UINT>(std::round(static_cast<double>(dpiX + dpiY) / 2.0));
+            }
         }
     }
     const HDC hDesktopDC = GetDC(nullptr);
@@ -709,6 +720,10 @@ bool WindowPrivate::Initialize() noexcept
     if (!m_window) {
         Utils::DisplayErrorDialog(L"Failed to initialize WindowPrivate due to this window has not been created.");
         return false;
+    }
+    if (!m_osEnvDetected) {
+        m_osEnvDetected = true;
+        m_dpiFunctionsAvailable = (WindowsVersion::CurrentVersion() >= WindowsVersion::Windows10_RedStone1); // Win10 1607
     }
     m_dpi = GetWindowDPI2();
     const std::wstring dpiDbgMsg = std::wstring(L"Current window's dots-per-inch (DPI): ") + std::to_wstring(m_dpi) + std::wstring(__NEW_LINE);
@@ -1063,8 +1078,7 @@ UINT WindowPrivate::GetWindowMetrics2(const WindowMetrics metrics) noexcept
         if (dpi == 0) {
             return 0;
         }
-        static const bool dpiAvailable = (WindowsVersion::CurrentVersion() >= WindowsVersion::Windows10_RedStone1); // Win10 1607
-        return (dpiAvailable ? GetSystemMetricsForDpi(nIndex, dpi) : GetSystemMetrics(nIndex));
+        return (m_dpiFunctionsAvailable ? GetSystemMetricsForDpi(nIndex, dpi) : GetSystemMetrics(nIndex));
     };
     switch (metrics) {
     case WindowMetrics::ResizeBorderThicknessX: {
@@ -1425,8 +1439,10 @@ bool WindowPrivate::InternalMessageHandler(const UINT message, const WPARAM wPar
         return true;
     } break;
     case WM_NCCREATE: {
-        if (EnableNonClientDpiScaling(m_window) == FALSE) {
-            PRINT_WIN32_ERROR_MESSAGE(EnableNonClientDpiScaling, L"Failed to enable window non-client area automatic DPI scaling.")
+        if (m_dpiFunctionsAvailable) {
+            if (EnableNonClientDpiScaling(m_window) == FALSE) {
+                PRINT_WIN32_ERROR_MESSAGE(EnableNonClientDpiScaling, L"Failed to enable window non-client area automatic DPI scaling.")
+            }
         }
     } break;
     case WM_NCCALCSIZE: {

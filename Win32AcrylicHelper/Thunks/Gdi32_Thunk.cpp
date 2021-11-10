@@ -37,3 +37,4 @@
 __THUNK_API(__GDI32_DLL_FILENAME, GetStockObject, HGDIOBJ, DEFAULT_PTR, (int arg1), (arg1))
 __THUNK_API(__GDI32_DLL_FILENAME, DeleteObject, BOOL, DEFAULT_BOOL, (HGDIOBJ arg1), (arg1))
 __THUNK_API(__GDI32_DLL_FILENAME, CreateSolidBrush, HBRUSH, DEFAULT_PTR, (COLORREF arg1), (arg1))
+__THUNK_API(__GDI32_DLL_FILENAME, GetDeviceCaps, int, DEFAULT_INT, (HDC arg1, int arg2), (arg1, arg2))

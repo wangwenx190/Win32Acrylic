@@ -88,6 +88,7 @@ bool ApplicationPrivate::Initialize() noexcept
     const std::wstring curPcDPIAwarenessDbgMsg = std::wstring(L"Current process's DPI awareness: ") + Utils::DPIAwarenessToString(curPcDPIAwareness) + std::wstring(__NEW_LINE);
     OutputDebugStringW(curPcDPIAwarenessDbgMsg.c_str());
     m_window = std::make_unique<MainWindow>();
+    m_window->FrameBorderVisible(false);
     m_window->StartupLocation(WindowStartupLocation::ScreenCenter);
     m_window->Visibility(WindowState::Windowed);
     m_window->Active(true);

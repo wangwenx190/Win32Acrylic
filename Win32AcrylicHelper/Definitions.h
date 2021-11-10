@@ -48,6 +48,18 @@ EXTERN_C IMAGE_DOS_HEADER __ImageBase;
 #define SM_CYPADDEDBORDER (SM_CXPADDEDBORDER)
 #endif // SM_CYPADDEDBORDER
 
+#ifndef WM_NCUAHDRAWCAPTION
+#define WM_NCUAHDRAWCAPTION (0x00AE)
+#endif // WM_NCUAHDRAWCAPTION
+
+#ifndef WM_NCUAHDRAWFRAME
+#define WM_NCUAHDRAWFRAME (0x00AF)
+#endif // WM_NCUAHDRAWFRAME
+
+#ifndef WM_DWMCOMPOSITIONCHANGED
+#define WM_DWMCOMPOSITIONCHANGED (0x031E)
+#endif // WM_DWMCOMPOSITIONCHANGED
+
 #ifndef WM_DWMCOLORIZATIONCOLORCHANGED
 #define WM_DWMCOLORIZATIONCOLORCHANGED (0x0320)
 #endif // WM_DWMCOLORIZATIONCOLORCHANGED
@@ -90,6 +102,9 @@ using NTSTATUS = LONG;
 
 [[maybe_unused]] constexpr const int DPI_AWARENESS_PER_MONITOR_AWARE_V2 = 3;
 [[maybe_unused]] constexpr const int DPI_AWARENESS_UNAWARE_GDISCALED = 4;
+
+[[maybe_unused]] constexpr const int PROCESS_PER_MONITOR_DPI_AWARE_V2 = 3;
+[[maybe_unused]] constexpr const int PROCESS_DPI_UNAWARE_GDISCALED = 4;
 
 [[maybe_unused]] constexpr const wchar_t DwmRegistryKeyPath[] = LR"(Software\Microsoft\Windows\DWM)";
 [[maybe_unused]] constexpr const wchar_t PersonalizeRegistryKeyPath[] = LR"(Software\Microsoft\Windows\CurrentVersion\Themes\Personalize)";

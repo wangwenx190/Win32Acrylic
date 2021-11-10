@@ -93,6 +93,9 @@ public:
 
     [[nodiscard]] WindowColorizationArea ColorizationArea() const noexcept;
 
+    [[nodiscard]] bool FrameBorderVisible() const noexcept;
+    void FrameBorderVisible(const bool value) noexcept;
+
     [[nodiscard]] HWND CreateChildWindow(const DWORD style, const DWORD extendedStyle, const WNDPROC wndProc, void *extraData, const UINT extraDataSize) const noexcept;
     [[nodiscard]] HWND WindowHandle() const noexcept;
     [[nodiscard]] bool Move(const int x, const int y) const noexcept;

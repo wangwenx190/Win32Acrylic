@@ -28,6 +28,12 @@ Acrylic demo applications based on different technology stack.
 
 ![Dark Theme](/Screenshots/Dark/Direct2D.png "Dark Theme")
 
+### Win32
+
+![Light Theme](/Screenshots/Light/Win32.png "Light Theme")
+
+![Dark Theme](/Screenshots/Dark/Win32.png "Dark Theme")
+
 ## Build
 
 ### Prerequisites

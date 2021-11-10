@@ -22,21 +22,14 @@
  * SOFTWARE.
  */
 
-#ifndef _DWMAPI_
-#define _DWMAPI_
-#endif // _DWMAPI_
-
 #include "WindowsAPIThunks.h"
 
-#include <DwmApi.h>
+#include <ShellScalingApi.h>
 
-#ifndef __DWMAPI_DLL_FILENAME
-#define __DWMAPI_DLL_FILENAME dwmapi.dll
-#endif // __DWMAPI_DLL_FILENAME
+#ifndef __SHCORE_DLL_FILENAME
+#define __SHCORE_DLL_FILENAME shcore.dll
+#endif // __SHCORE_DLL_FILENAME
 
-__THUNK_API(__DWMAPI_DLL_FILENAME, DwmGetColorizationColor, HRESULT, DEFAULT_HRESULT, (DWORD *arg1, BOOL *arg2), (arg1, arg2))
-__THUNK_API(__DWMAPI_DLL_FILENAME, DwmSetWindowAttribute, HRESULT, DEFAULT_HRESULT, (HWND arg1, DWORD arg2, LPCVOID arg3, DWORD arg4), (arg1, arg2, arg3, arg4))
-__THUNK_API(__DWMAPI_DLL_FILENAME, DwmGetWindowAttribute, HRESULT, DEFAULT_HRESULT, (HWND arg1, DWORD arg2, PVOID arg3, DWORD arg4), (arg1, arg2, arg3, arg4))
-__THUNK_API(__DWMAPI_DLL_FILENAME, DwmExtendFrameIntoClientArea, HRESULT, DEFAULT_HRESULT, (HWND arg1, const MARGINS *arg2), (arg1, arg2))
-__THUNK_API(__DWMAPI_DLL_FILENAME, DwmFlush, HRESULT, DEFAULT_HRESULT, (VOID), ())
-__THUNK_API(__DWMAPI_DLL_FILENAME, DwmIsCompositionEnabled, HRESULT, DEFAULT_HRESULT, (BOOL *arg1), (arg1))
+__THUNK_API(__SHCORE_DLL_FILENAME, GetDpiForMonitor, HRESULT, DEFAULT_HRESULT, (HMONITOR arg1, MONITOR_DPI_TYPE arg2, UINT *arg3, UINT *arg4), (arg1, arg2, arg3, arg4))
+__THUNK_API(__SHCORE_DLL_FILENAME, GetProcessDpiAwareness, HRESULT, DEFAULT_HRESULT, (HANDLE arg1, PROCESS_DPI_AWARENESS *arg2), (arg1, arg2))
+__THUNK_API(__SHCORE_DLL_FILENAME, SetProcessDpiAwareness, HRESULT, DEFAULT_HRESULT, (PROCESS_DPI_AWARENESS arg1), (arg1))

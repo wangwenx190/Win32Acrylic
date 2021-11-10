@@ -27,6 +27,9 @@
 #include "OperationResult.h"
 #include "Undocumented.h"
 
+static constexpr const DWORD PresetTintColor_Light = 0x01FFFFFF;
+static constexpr const DWORD PresetTintColor_Dark = 0; // ### TODO
+
 class MainWindowPrivate
 {
 public:
@@ -34,6 +37,13 @@ public:
     ~MainWindowPrivate() noexcept;
 
     [[nodiscard]] bool Initialize() noexcept;
+
+private:
+    [[nodiscard]] DWORD GetAppropriateAccentColor() const noexcept;
+    [[nodiscard]] bool SetBlurBehindParameters(const ACCENT_STATE state, const DWORD color) const noexcept;
+    [[nodiscard]] bool MainWindowMessageHandler(const UINT message, const WPARAM wParam, const LPARAM lParam, LRESULT *result) const noexcept;
+
+    void OnThemeChanged(const WindowTheme arg) noexcept;
 
 private:
     MainWindowPrivate(const MainWindowPrivate &) = delete;
@@ -52,7 +62,10 @@ MainWindowPrivate::MainWindowPrivate(MainWindow *q) noexcept
         std::exit(-1);
     }
     q_ptr = q;
-    if (!Initialize()) {
+    if (Initialize()) {
+        q_ptr->CustomMessageHandler(std::bind(&MainWindowPrivate::MainWindowMessageHandler, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, std::placeholders::_4));
+        q_ptr->ThemeChangeHandler(std::bind(&MainWindowPrivate::OnThemeChanged, this, std::placeholders::_1));
+    } else {
         Utils::DisplayErrorDialog(L"Failed to initialize MainWindowPrivate.");
         std::exit(-1);
     }
@@ -60,21 +73,79 @@ MainWindowPrivate::MainWindowPrivate(MainWindow *q) noexcept
 
 MainWindowPrivate::~MainWindowPrivate() noexcept = default;
 
+DWORD MainWindowPrivate::GetAppropriateAccentColor() const noexcept
+{
+    if (!q_ptr) {
+        return 0;
+    }
+    return ((q_ptr->Theme() == WindowTheme::Light) ? PresetTintColor_Light : PresetTintColor_Dark);
+}
+
 bool MainWindowPrivate::Initialize() noexcept
 {
-    ACCENT_POLICY ap;
-    SecureZeroMemory(&ap, sizeof(ap));
-    ap.State = ACCENT_ENABLE_ACRYLICBLURBEHIND;
-    ap.GradientColor = 0x01FFFFFF;
+    if (!SetBlurBehindParameters(ACCENT_ENABLE_ACRYLICBLURBEHIND, GetAppropriateAccentColor())) {
+        Utils::DisplayErrorDialog(L"Failed to enable blur behind window.");
+        return false;
+    }
+    return true;
+}
+
+bool MainWindowPrivate::SetBlurBehindParameters(const ACCENT_STATE state, const DWORD color) const noexcept
+{
+    if (!q_ptr) {
+        return false;
+    }
+    const HWND hWnd = q_ptr->WindowHandle();
+    if (!hWnd) {
+        return false;
+    }
+    ACCENT_POLICY ap = {};
+    ap.State = state;
+    ap.Flags = 2; // Magic number
+    ap.GradientColor = color;
     WINDOWCOMPOSITIONATTRIBDATA wcad = {};
     wcad.Attrib = WCA_ACCENT_POLICY;
     wcad.pvData = &ap;
     wcad.cbData = sizeof(ap);
-    if (SetWindowCompositionAttribute(q_ptr->WindowHandle(), &wcad) == FALSE) {
+    if (SetWindowCompositionAttribute(hWnd, &wcad) == FALSE) {
         PRINT_WIN32_ERROR_MESSAGE(SetWindowCompositionAttribute, L"Failed to set the window composition attribute data.")
         return false;
     }
+    if (InvalidateRect(hWnd, nullptr, TRUE) == FALSE) {
+        PRINT_WIN32_ERROR_MESSAGE(InvalidateRect, L"Failed to add the whole client area to the window's update region.")
+        return false;
+    }
     return true;
+}
+
+bool MainWindowPrivate::MainWindowMessageHandler(const UINT message, const WPARAM wParam, const LPARAM lParam, LRESULT *result) const noexcept
+{
+    UNREFERENCED_PARAMETER(wParam);
+    UNREFERENCED_PARAMETER(lParam);
+    UNREFERENCED_PARAMETER(result);
+    switch (message) {
+    case WM_ENTERSIZEMOVE: {
+        if (!SetBlurBehindParameters(ACCENT_ENABLE_BLURBEHIND, GetAppropriateAccentColor())) {
+            Utils::DisplayErrorDialog(L"Failed to change blur behind parameters.");
+        }
+    } break;
+    case WM_EXITSIZEMOVE: {
+        if (!SetBlurBehindParameters(ACCENT_ENABLE_ACRYLICBLURBEHIND, GetAppropriateAccentColor())) {
+            Utils::DisplayErrorDialog(L"Failed to change blur behind parameters.");
+        }
+    } break;
+    default:
+        break;
+    }
+    return false;
+}
+
+void MainWindowPrivate::OnThemeChanged(const WindowTheme arg) noexcept
+{
+    UNREFERENCED_PARAMETER(arg);
+    if (!SetBlurBehindParameters(ACCENT_ENABLE_ACRYLICBLURBEHIND, GetAppropriateAccentColor())) {
+        Utils::DisplayErrorDialog(L"Failed to change blur behind parameters.");
+    }
 }
 
 MainWindow::MainWindow() noexcept : Window(true)

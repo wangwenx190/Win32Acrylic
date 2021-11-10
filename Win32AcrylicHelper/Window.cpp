@@ -29,6 +29,7 @@
 #include "Resource.h"
 #include <ComBaseApi.h>
 #include <ShellApi.h>
+#include <ShellScalingApi.h>
 #include <DwmApi.h>
 #include <cmath>
 
@@ -169,6 +170,56 @@ static constexpr const wchar_t __NEW_LINE[] = L"\r\n";
         return {};
     }
     return (includeTaskBar ? mi.rcMonitor : mi.rcWork);
+}
+
+[[nodiscard]] static inline bool IsDWMCompositionEnabled() noexcept
+{
+    // DWM composition is always enabled and can't be programmatically disabled
+    // as of Windows 8.
+    if (WindowsVersion::CurrentVersion() >= WindowsVersion::Windows_8) {
+        return true;
+    }
+    BOOL enabled = FALSE;
+    const HRESULT hr = DwmIsCompositionEnabled(&enabled);
+    if (FAILED(hr)) {
+        PRINT_HR_ERROR_MESSAGE(DwmIsCompositionEnabled, hr, L"Failed to query the DWM composition status.")
+        return false;
+    }
+    return (enabled != FALSE);
+}
+
+[[nodiscard]] static inline LRESULT ToggleWindowVisibility(const HWND hWnd, const UINT message, const WPARAM wParam, const LPARAM lParam) noexcept
+{
+    if (!hWnd) {
+        return 0;
+    }
+    SetLastError(ERROR_SUCCESS);
+    const LONG_PTR originalWindowStyle = GetWindowLongPtrW(hWnd, GWL_STYLE);
+    PRINT_WIN32_ERROR_MESSAGE(GetWindowLongPtrW, L"Failed to retrieve the window style.")
+    if (originalWindowStyle == 0) {
+        Utils::DisplayErrorDialog(L"The retrieved window style is null.");
+        return 0;
+    }
+    {
+        SetLastError(ERROR_SUCCESS);
+        const LONG_PTR tmpVar = SetWindowLongPtrW(hWnd, GWL_STYLE, static_cast<LONG_PTR>(originalWindowStyle & ~WS_VISIBLE));
+        PRINT_WIN32_ERROR_MESSAGE(SetWindowLongPtrW, L"Failed to change the window style.")
+        if (tmpVar == 0) {
+            Utils::DisplayErrorDialog(L"Failed to change the window style.");
+            return 0;
+        }
+    }
+    const LRESULT result = DefWindowProcW(hWnd, message, wParam, lParam);
+    {
+        SetLastError(ERROR_SUCCESS);
+        const LONG_PTR tmpVar2 = SetWindowLongPtrW(hWnd, GWL_STYLE, originalWindowStyle);
+        PRINT_WIN32_ERROR_MESSAGE(SetWindowLongPtrW, L"Failed to reset the window style.")
+        if (tmpVar2 == 0) {
+            Utils::DisplayErrorDialog(L"Failed to reset the window style.");
+            return 0;
+        }
+    }
+    return result;
 }
 
 [[nodiscard]] static inline bool ActivateWindow2(const HWND hWnd) noexcept
@@ -343,6 +394,9 @@ public:
 
     [[nodiscard]] WindowColorizationArea ColorizationArea() const noexcept;
 
+    [[nodiscard]] bool FrameBorderVisible() const noexcept;
+    void FrameBorderVisible(const bool value) noexcept;
+
     [[nodiscard]] HWND CreateChildWindow(const DWORD style, const DWORD extendedStyle, const WNDPROC wndProc, void *extraData, const UINT extraDataSize) const noexcept;
     [[nodiscard]] HWND WindowHandle() const noexcept;
     [[nodiscard]] bool Move(const int x, const int y) const noexcept;
@@ -451,6 +505,9 @@ private:
     WindowMessageHandlerCallback m_customMessageHandlerCallback = nullptr;
     WindowMessageFilterCallback m_windowMessageFilterCallback = nullptr;
     bool m_bNoRedirectionBitmap = false;
+    static inline bool m_osEnvDetected = false;
+    static inline bool m_dpiFunctionsAvailable = false;
+    bool m_frameBorderVisible = false;
 };
 
 template<typename T>
@@ -644,7 +701,53 @@ bool WindowPrivate::SetWindowState2(const WindowState state) noexcept
 
 UINT WindowPrivate::GetWindowDPI2() const noexcept
 {
-    return (m_window ? GetDpiForWindow(m_window) : USER_DEFAULT_SCREEN_DPI);
+    if (!m_window) {
+        return USER_DEFAULT_SCREEN_DPI;
+    }
+    const VersionNumber &curOsVer = WindowsVersion::CurrentVersion();
+    if (m_dpiFunctionsAvailable) {
+        {
+            const UINT result = GetDpiForWindow(m_window);
+            if (result > 0) {
+                return result;
+            }
+        }
+        if (curOsVer >= WindowsVersion::Windows10_RedStone4) {
+            const HANDLE hCurrentProcess = GetCurrentProcess();
+            if (hCurrentProcess) {
+                const UINT result = GetSystemDpiForProcess(hCurrentProcess); // Win10 1803
+                if (result > 0) {
+                    return result;
+                }
+            }
+        }
+        {
+            const UINT result = GetDpiForSystem();
+            if (result > 0) {
+                return result;
+            }
+        }
+    }
+    if (curOsVer >= WindowsVersion::Windows_8_1) {
+        const HMONITOR hCurrentScreen = MonitorFromWindow(m_window, MONITOR_DEFAULTTONEAREST);
+        if (hCurrentScreen) {
+            UINT dpiX = 0, dpiY = 0;
+            const HRESULT hr = GetDpiForMonitor(hCurrentScreen, MDT_EFFECTIVE_DPI, &dpiX, &dpiY);
+            if (SUCCEEDED(hr)) {
+                return static_cast<UINT>(std::round(static_cast<double>(dpiX + dpiY) / 2.0));
+            }
+        }
+    }
+    const HDC hDesktopDC = GetDC(nullptr);
+    if (hDesktopDC) {
+        const int dpiX = GetDeviceCaps(hDesktopDC, LOGPIXELSX);
+        const int dpiY = GetDeviceCaps(hDesktopDC, LOGPIXELSY);
+        ReleaseDC(nullptr, hDesktopDC);
+        if ((dpiX > 0) && (dpiY > 0)) {
+            return static_cast<UINT>(std::round(static_cast<double>(dpiX + dpiY) / 2.0));
+        }
+    }
+    return USER_DEFAULT_SCREEN_DPI;
 }
 
 UINT WindowPrivate::GetWindowVisibleFrameBorderThickness2() const noexcept
@@ -674,6 +777,12 @@ bool WindowPrivate::Initialize() noexcept
         Utils::DisplayErrorDialog(L"Failed to initialize WindowPrivate due to this window has not been created.");
         return false;
     }
+    const VersionNumber &curOsVer = WindowsVersion::CurrentVersion();
+    if (!m_osEnvDetected) {
+        m_osEnvDetected = true;
+        m_dpiFunctionsAvailable = (curOsVer >= WindowsVersion::Windows10_RedStone1); // Win10 1607
+    }
+    m_frameBorderVisible = (curOsVer >= WindowsVersion::Windows10_ThresHold1); // Win10 1507
     m_dpi = GetWindowDPI2();
     const std::wstring dpiDbgMsg = std::wstring(L"Current window's dots-per-inch (DPI): ") + std::to_wstring(m_dpi) + std::wstring(__NEW_LINE);
     OutputDebugStringW(dpiDbgMsg.c_str());
@@ -701,7 +810,7 @@ bool WindowPrivate::Initialize() noexcept
     m_width = windowSize.cx;
     m_height = windowSize.cy;
     m_title = {};
-    m_frameCorner = ((WindowsVersion::CurrentVersion() >= WindowsVersion::Windows11) ? WindowFrameCorner::Round : WindowFrameCorner::Square);
+    m_frameCorner = ((curOsVer >= WindowsVersion::Windows11) ? WindowFrameCorner::Round : WindowFrameCorner::Square);
     m_startupLocation = WindowStartupLocation::Default;
     return true;
 }
@@ -979,6 +1088,24 @@ WindowColorizationArea WindowPrivate::ColorizationArea() const noexcept
     return m_colorizationArea;
 }
 
+bool WindowPrivate::FrameBorderVisible() const noexcept
+{
+    return m_frameBorderVisible;
+}
+
+void WindowPrivate::FrameBorderVisible(const bool value) noexcept
+{
+    if (m_frameBorderVisible != value) {
+        m_frameBorderVisible = value;
+        if (!TriggerWindowFrameChange2()) {
+            Utils::DisplayErrorDialog(L"Failed to trigger a frame change event for the window.");
+        }
+        if (InvalidateRect(m_window, nullptr, TRUE) == FALSE) {
+            PRINT_WIN32_ERROR_MESSAGE(InvalidateRect, L"Failed to add the whole client area to the update rectangle.")
+        }
+    }
+}
+
 HWND WindowPrivate::CreateChildWindow(const DWORD style, const DWORD extendedStyle, const WNDPROC wndProc, void *extraData, const UINT extraDataSize) const noexcept
 {
     if (!m_window) {
@@ -1023,19 +1150,25 @@ UINT WindowPrivate::GetWindowMetrics2(const WindowMetrics metrics) noexcept
         Utils::DisplayErrorDialog(L"Failed to retrieve the window metrics due to the window has not been created yet.");
         return 0;
     }
+    const auto GetSystemMetricsForDpi2 = [](const int nIndex, const UINT dpi) -> int {
+        if (dpi == 0) {
+            return 0;
+        }
+        return (m_dpiFunctionsAvailable ? GetSystemMetricsForDpi(nIndex, dpi) : GetSystemMetrics(nIndex));
+    };
     switch (metrics) {
     case WindowMetrics::ResizeBorderThicknessX: {
         if (m_resizeBorderThicknessX == 0) {
-            const int paddedBorderThicknessX = GetSystemMetricsForDpi(SM_CXPADDEDBORDER, m_dpi);
-            const int sizeFrameThicknessX = GetSystemMetricsForDpi(SM_CXSIZEFRAME, m_dpi);
+            const int paddedBorderThicknessX = GetSystemMetricsForDpi2(SM_CXPADDEDBORDER, m_dpi);
+            const int sizeFrameThicknessX = GetSystemMetricsForDpi2(SM_CXSIZEFRAME, m_dpi);
             m_resizeBorderThicknessX = (paddedBorderThicknessX + sizeFrameThicknessX);
         }
         return m_resizeBorderThicknessX;
     } break;
     case WindowMetrics::ResizeBorderThicknessY: {
         if (m_resizeBorderThicknessY == 0) {
-            const int paddedBorderThicknessY = GetSystemMetricsForDpi(SM_CYPADDEDBORDER, m_dpi);
-            const int sizeFrameThicknessY = GetSystemMetricsForDpi(SM_CYSIZEFRAME, m_dpi);
+            const int paddedBorderThicknessY = GetSystemMetricsForDpi2(SM_CYPADDEDBORDER, m_dpi);
+            const int sizeFrameThicknessY = GetSystemMetricsForDpi2(SM_CYSIZEFRAME, m_dpi);
             m_resizeBorderThicknessY = (paddedBorderThicknessY + sizeFrameThicknessY);
         }
         return m_resizeBorderThicknessY;
@@ -1048,31 +1181,31 @@ UINT WindowPrivate::GetWindowMetrics2(const WindowMetrics metrics) noexcept
     } break;
     case WindowMetrics::CaptionHeight: {
         if (m_captionHeight == 0) {
-            m_captionHeight = GetSystemMetricsForDpi(SM_CYCAPTION, m_dpi);
+            m_captionHeight = GetSystemMetricsForDpi2(SM_CYCAPTION, m_dpi);
         }
         return m_captionHeight;
     } break;
     case WindowMetrics::WindowIconWidth: {
         if (m_windowIconWidth == 0) {
-            m_windowIconWidth = GetSystemMetricsForDpi(SM_CXICON, m_dpi);
+            m_windowIconWidth = GetSystemMetricsForDpi2(SM_CXICON, m_dpi);
         }
         return m_windowIconWidth;
     } break;
     case WindowMetrics::WindowIconHeight: {
         if (m_windowIconHeight == 0) {
-            m_windowIconHeight = GetSystemMetricsForDpi(SM_CYICON, m_dpi);
+            m_windowIconHeight = GetSystemMetricsForDpi2(SM_CYICON, m_dpi);
         }
         return m_windowIconHeight;
     } break;
     case WindowMetrics::WindowSmallIconWidth: {
         if (m_windowSmallIconWidth == 0) {
-            m_windowSmallIconWidth = GetSystemMetricsForDpi(SM_CXSMICON, m_dpi);
+            m_windowSmallIconWidth = GetSystemMetricsForDpi2(SM_CXSMICON, m_dpi);
         }
         return m_windowSmallIconWidth;
     } break;
     case WindowMetrics::WindowSmallIconHeight: {
         if (m_windowSmallIconHeight == 0) {
-            m_windowSmallIconHeight = GetSystemMetricsForDpi(SM_CYSMICON, m_dpi);
+            m_windowSmallIconHeight = GetSystemMetricsForDpi2(SM_CYSMICON, m_dpi);
         }
         return m_windowSmallIconHeight;
     } break;
@@ -1286,12 +1419,17 @@ bool WindowPrivate::InternalMessageHandler(const UINT message, const WPARAM wPar
             return false;
         }
     } break;
+    case WM_DWMCOMPOSITIONCHANGED: {
+        if (!UpdateWindowFrameMargins2()) {
+            Utils::DisplayErrorDialog(L"Failed to update the window frame margins.");
+        }
+    } break;
     case WM_DWMCOLORIZATIONCOLORCHANGED: {
         m_colorizationColor = Color(static_cast<COLORREF>(wParam)); // The color format is 0xAARRGGBB.
         ColorizationColorChangeHandler();
     } break;
     case WM_PAINT: {
-        if (m_bNoRedirectionBitmap) {
+        if (m_bNoRedirectionBitmap || !m_frameBorderVisible) {
             break;
         }
         if (!m_windowBackgroundBrush || !m_titleBarBackgroundBrush) {
@@ -1364,8 +1502,21 @@ bool WindowPrivate::InternalMessageHandler(const UINT message, const WPARAM wPar
             m_title = {};
         }
         TitleChangeHandler();
+        if (!m_frameBorderVisible) {
+            // Prevent Windows from drawing the default title bar by temporarily
+            // toggling the WS_VISIBLE style.
+            *result = ToggleWindowVisibility(m_window, WM_SETTEXT, 0, lParam);
+            return true;
+        }
     } break;
-    case WM_SETICON: {} break;
+    case WM_SETICON: {
+        if (!m_frameBorderVisible) {
+            // Prevent Windows from drawing the default title bar by temporarily
+            // toggling the WS_VISIBLE style.
+            *result = ToggleWindowVisibility(m_window, WM_SETICON, wParam, lParam);
+            return true;
+        }
+    } break;
     case WM_CLOSE: {
         if (CloseWindow2(m_window)) {
             m_window = nullptr;
@@ -1382,26 +1533,43 @@ bool WindowPrivate::InternalMessageHandler(const UINT message, const WPARAM wPar
         return true;
     } break;
     case WM_NCCREATE: {
-        if (EnableNonClientDpiScaling(m_window) == FALSE) {
-            PRINT_WIN32_ERROR_MESSAGE(EnableNonClientDpiScaling, L"Failed to enable window non-client area automatic DPI scaling.")
+        if (m_dpiFunctionsAvailable) {
+            if (EnableNonClientDpiScaling(m_window) == FALSE) {
+                PRINT_WIN32_ERROR_MESSAGE(EnableNonClientDpiScaling, L"Failed to enable window non-client area automatic DPI scaling.")
+            }
         }
     } break;
     case WM_NCCALCSIZE: {
-        if (static_cast<BOOL>(wParam) == FALSE) {
-            *result = 0;
-            return true;
+        // If `wParam` is `FALSE`, `lParam` points to a `RECT` that contains
+        // the proposed window rectangle for our window.  During our
+        // processing of the `WM_NCCALCSIZE` message, we are expected to
+        // modify the `RECT` that `lParam` points to, so that its value upon
+        // our return is the new client area.  We must return 0 if `wParam`
+        // is `FALSE`.
+        //
+        // If `wParam` is `TRUE`, `lParam` points to a `NCCALCSIZE_PARAMS`
+        // struct.  This struct contains an array of 3 `RECT`s, the first of
+        // which has the exact same meaning as the `RECT` that is pointed to
+        // by `lParam` when `wParam` is `FALSE`.  The remaining `RECT`s, in
+        // conjunction with our return value, can
+        // be used to specify portions of the source and destination window
+        // rectangles that are valid and should be preserved.  We opt not to
+        // implement an elaborate client-area preservation technique, and
+        // simply return 0, which means "preserve the entire old client area
+        // and align it with the upper-left corner of our new client area".
+        const auto clientRect = ((static_cast<BOOL>(wParam) == FALSE) ? reinterpret_cast<LPRECT>(lParam) : &(reinterpret_cast<LPNCCALCSIZE_PARAMS>(lParam))->rgrc[0]);
+        if (m_frameBorderVisible) {
+            // Store the original top before the default window proc applies the default frame.
+            const LONG originalTop = clientRect->top;
+            // Apply the default frame
+            const LRESULT ret = DefWindowProcW(m_window, WM_NCCALCSIZE, TRUE, lParam);
+            if (ret != 0) {
+                *result = ret;
+                return true;
+            }
+            // Re-apply the original top from before the size of the default frame was applied.
+            clientRect->top = originalTop;
         }
-        const auto clientRect = &(reinterpret_cast<LPNCCALCSIZE_PARAMS>(lParam)->rgrc[0]);
-        // Store the original top before the default window proc applies the default frame.
-        const LONG originalTop = clientRect->top;
-        // Apply the default frame
-        const LRESULT ret = DefWindowProcW(m_window, WM_NCCALCSIZE, TRUE, lParam);
-        if (ret != 0) {
-            *result = ret;
-            return true;
-        }
-        // Re-apply the original top from before the size of the default frame was applied.
-        clientRect->top = originalTop;
         bool nonClientAreaExists = false;
         const bool max = (m_visibility == WindowState::Maximized);
         const bool full = false; // ### TODO
@@ -1417,6 +1585,12 @@ bool WindowPrivate::InternalMessageHandler(const UINT message, const WPARAM wPar
             // a window when it's maximized unless you restore it).
             const UINT resizeBorderThicknessY = GetWindowMetrics2(WindowMetrics::ResizeBorderThicknessY);
             clientRect->top += resizeBorderThicknessY;
+            if (!m_frameBorderVisible) {
+                clientRect->bottom -= resizeBorderThicknessY;
+                const UINT resizeBorderThicknessX = GetWindowMetrics2(WindowMetrics::ResizeBorderThicknessX);
+                clientRect->left += resizeBorderThicknessX;
+                clientRect->right -= resizeBorderThicknessX;
+            }
             nonClientAreaExists = true;
         }
         // Attempt to detect if there's an autohide taskbar, and if
@@ -1431,54 +1605,91 @@ bool WindowPrivate::InternalMessageHandler(const UINT message, const WPARAM wPar
             abd.cbSize = sizeof(abd);
             // First, check if we have an auto-hide taskbar at all:
             if (SHAppBarMessage(ABM_GETSTATE, &abd) & ABS_AUTOHIDE) {
-                const HMONITOR mon = MonitorFromWindow(m_window, MONITOR_DEFAULTTONEAREST);
-                if (mon) {
-                    MONITORINFO mi;
-                    SecureZeroMemory(&mi, sizeof(mi));
-                    mi.cbSize = sizeof(mi);
-                    if (GetMonitorInfoW(mon, &mi) == FALSE) {
-                        PRINT_WIN32_ERROR_MESSAGE(GetMonitorInfoW, L"Failed to retrieve the screen information.")
+                bool top = false, bottom = false, left = false, right = false;
+                // "ABM_GETAUTOHIDEBAREX" was introduced on Windows 8.1
+                if (WindowsVersion::CurrentVersion() >= WindowsVersion::Windows_8_1) {
+                    const HMONITOR mon = MonitorFromWindow(m_window, MONITOR_DEFAULTTONEAREST);
+                    if (mon) {
+                        MONITORINFO mi;
+                        SecureZeroMemory(&mi, sizeof(mi));
+                        mi.cbSize = sizeof(mi);
+                        if (GetMonitorInfoW(mon, &mi) == FALSE) {
+                            PRINT_WIN32_ERROR_MESSAGE(GetMonitorInfoW, L"Failed to retrieve the screen information.")
+                            return false;
+                        }
+                        const RECT screenRect = mi.rcMonitor;
+                        // This helper can be used to determine if there's a
+                        // auto-hide taskbar on the given edge of the monitor
+                        // we're currently on.
+                        const auto hasAutohideTaskbar = [&screenRect](const UINT edge) -> bool {
+                            APPBARDATA abd2;
+                            SecureZeroMemory(&abd2, sizeof(abd2));
+                            abd2.cbSize = sizeof(abd2);
+                            abd2.uEdge = edge;
+                            abd2.rc = screenRect;
+                            return (reinterpret_cast<HWND>(SHAppBarMessage(ABM_GETAUTOHIDEBAREX, &abd2)) != nullptr);
+                        };
+                        top = hasAutohideTaskbar(ABE_TOP);
+                        bottom = hasAutohideTaskbar(ABE_BOTTOM);
+                        left = hasAutohideTaskbar(ABE_LEFT);
+                        right = hasAutohideTaskbar(ABE_RIGHT);
+                    } else {
+                        PRINT_WIN32_ERROR_MESSAGE(MonitorFromWindow, L"Failed to retrieve the corresponding screen.")
                         return false;
                     }
-                    const RECT screenRect = mi.rcMonitor;
-                    // This helper can be used to determine if there's a
-                    // auto-hide taskbar on the given edge of the monitor
-                    // we're currently on.
-                    const auto hasAutohideTaskbar = [&screenRect](const UINT edge) -> bool {
-                        APPBARDATA abd2;
-                        SecureZeroMemory(&abd2, sizeof(abd2));
-                        abd2.cbSize = sizeof(abd2);
-                        abd2.uEdge = edge;
-                        abd2.rc = screenRect;
-                        return (reinterpret_cast<HWND>(SHAppBarMessage(ABM_GETAUTOHIDEBAREX, &abd2)) != nullptr);
-                    };
-                    // If there's a taskbar on any side of the monitor, reduce
-                    // our size a little bit on that edge.
-                    // Note to future code archeologists:
-                    // This doesn't seem to work for fullscreen on the primary
-                    // display. However, testing a bunch of other apps with
-                    // fullscreen modes and an auto-hiding taskbar has
-                    // shown that _none_ of them reveal the taskbar from
-                    // fullscreen mode. This includes Edge, Firefox, Chrome,
-                    // Sublime Text, PowerPoint - none seemed to support this.
-                    // This does however work fine for maximized.
-                    if (hasAutohideTaskbar(ABE_TOP)) {
-                        // Peculiarly, when we're fullscreen,
-                        clientRect->top += DefaultAutoHideTaskBarThicknessY;
-                        nonClientAreaExists = true;
-                    } else if (hasAutohideTaskbar(ABE_BOTTOM)) {
-                        clientRect->bottom -= DefaultAutoHideTaskBarThicknessY;
-                        nonClientAreaExists = true;
-                    } else if (hasAutohideTaskbar(ABE_LEFT)) {
-                        clientRect->left += DefaultAutoHideTaskBarThicknessX;
-                        nonClientAreaExists = true;
-                    } else if (hasAutohideTaskbar(ABE_RIGHT)) {
-                        clientRect->right -= DefaultAutoHideTaskBarThicknessX;
-                        nonClientAreaExists = true;
-                    }
                 } else {
-                    PRINT_WIN32_ERROR_MESSAGE(MonitorFromWindow, L"Failed to retrieve the corresponding screen.")
-                    return false;
+                    int edge = -1;
+                    APPBARDATA _abd;
+                    SecureZeroMemory(&_abd, sizeof(_abd));
+                    _abd.cbSize = sizeof(_abd);
+                    _abd.hWnd = FindWindowW(L"Shell_TrayWnd", nullptr);
+                    if (_abd.hWnd) {
+                        const HMONITOR windowScreen = MonitorFromWindow(m_window, MONITOR_DEFAULTTONEAREST);
+                        if (!windowScreen) {
+                            PRINT_WIN32_ERROR_MESSAGE(MonitorFromWindow, L"Failed to retrieve the window screen.")
+                            return false;
+                        }
+                        const HMONITOR taskBarScreen = MonitorFromWindow(_abd.hWnd, MONITOR_DEFAULTTOPRIMARY);
+                        if (!taskBarScreen) {
+                            PRINT_WIN32_ERROR_MESSAGE(MonitorFromWindow, L"Failed to retrieve the task bar screen.")
+                            return false;
+                        }
+                        if (taskBarScreen == windowScreen) {
+                            SHAppBarMessage(ABM_GETTASKBARPOS, &_abd);
+                            edge = _abd.uEdge;
+                        }
+                    } else {
+                        PRINT_WIN32_ERROR_MESSAGE(FindWindowW, L"Failed to retrieve the window handle of the task bar.")
+                        return false;
+                    }
+                    top = (edge == ABE_TOP);
+                    bottom = (edge == ABE_BOTTOM);
+                    left = (edge == ABE_LEFT);
+                    right = (edge == ABE_RIGHT);
+                }
+                // If there's a taskbar on any side of the monitor, reduce
+                // our size a little bit on that edge.
+                // Note to future code archeologists:
+                // This doesn't seem to work for fullscreen on the primary
+                // display. However, testing a bunch of other apps with
+                // fullscreen modes and an auto-hiding taskbar has
+                // shown that _none_ of them reveal the taskbar from
+                // fullscreen mode. This includes Edge, Firefox, Chrome,
+                // Sublime Text, PowerPoint - none seemed to support this.
+                // This does however work fine for maximized.
+                if (top) {
+                    // Peculiarly, when we're fullscreen,
+                    clientRect->top += DefaultAutoHideTaskBarThicknessY;
+                    nonClientAreaExists = true;
+                } else if (bottom) {
+                    clientRect->bottom -= DefaultAutoHideTaskBarThicknessY;
+                    nonClientAreaExists = true;
+                } else if (left) {
+                    clientRect->left += DefaultAutoHideTaskBarThicknessX;
+                    nonClientAreaExists = true;
+                } else if (right) {
+                    clientRect->right -= DefaultAutoHideTaskBarThicknessX;
+                    nonClientAreaExists = true;
                 }
             }
         }
@@ -1492,7 +1703,7 @@ bool WindowPrivate::InternalMessageHandler(const UINT message, const WPARAM wPar
         // Windows exhibits bugs where client pixels and child HWNDs are
         // mispositioned by the width/height of the upper-left nonclient
         // area.
-        *result = (nonClientAreaExists ? 0 : WVR_REDRAW);
+        *result = (((static_cast<BOOL>(wParam) == FALSE) || nonClientAreaExists) ? 0 : WVR_REDRAW);
         return true;
     } break;
     case WM_NCHITTEST: {
@@ -1507,28 +1718,80 @@ bool WindowPrivate::InternalMessageHandler(const UINT message, const WPARAM wPar
         const LONG titleBarHeight = ((m_visibility == WindowState::Hidden) ? 0 : ((m_visibility == WindowState::Maximized) ? captionHeight : (captionHeight + resizeBorderThicknessY)));
         const bool isTitleBar = (((m_visibility == WindowState::Windowed) || (m_visibility == WindowState::Maximized)) ? (localPos.y <= titleBarHeight) : false);
         const bool isTop = ((m_visibility == WindowState::Windowed) ? (localPos.y <= resizeBorderThicknessY) : false);
-        // This will handle the left, right and bottom parts of the frame
-        // because we didn't change them.
-        const LRESULT originalRet = DefWindowProcW(m_window, WM_NCHITTEST, 0, lParam);
-        if (originalRet != HTCLIENT) {
-            *result = originalRet;
+        if (m_frameBorderVisible) {
+            // This will handle the left, right and bottom parts of the frame
+            // because we didn't change them.
+            const LRESULT originalRet = DefWindowProcW(m_window, WM_NCHITTEST, 0, lParam);
+            if (originalRet != HTCLIENT) {
+                *result = originalRet;
+                return true;
+            }
+            // At this point, we know that the cursor is inside the client area
+            // so it has to be either the little border at the top of our custom
+            // title bar or the drag bar. Apparently, it must be the drag bar or
+            // the little border at the top which the user can use to move or
+            // resize the window.
+            if (isTop) {
+                *result = HTTOP;
+                return true;
+            }
+            if (isTitleBar) {
+                *result = HTCAPTION;
+                return true;
+            }
+            *result = HTCLIENT;
             return true;
+        } else {
+            if (m_visibility == WindowState::Maximized) {
+                *result = (isTitleBar ? HTCAPTION : HTCLIENT);
+                return true;
+            } else {
+                const bool isBottom = (localPos.y >= (static_cast<LONG>(m_height) - resizeBorderThicknessY));
+                // Make the border a little wider to let the user easy to resize on corners.
+                const double factor = ((isTop || isBottom) ? 2.0 : 1.0);
+                const UINT resizeBorderThicknessX = GetWindowMetrics2(WindowMetrics::ResizeBorderThicknessX);
+                const bool isLeft = (localPos.x <= static_cast<LONG>(std::round(static_cast<double>(resizeBorderThicknessX) * factor)));
+                const bool isRight = (localPos.x >= (static_cast<LONG>(m_width) - static_cast<LONG>(std::round(static_cast<double>(resizeBorderThicknessX) * factor))));
+                if (isTop) {
+                    if (isLeft) {
+                        *result = HTTOPLEFT;
+                        return true;
+                    }
+                    if (isRight) {
+                        *result = HTTOPRIGHT;
+                        return true;
+                    }
+                    *result = HTTOP;
+                    return true;
+                }
+                if (isBottom) {
+                    if (isLeft) {
+                        *result = HTBOTTOMLEFT;
+                        return true;
+                    }
+                    if (isRight) {
+                        *result = HTBOTTOMRIGHT;
+                        return true;
+                    }
+                    *result = HTBOTTOM;
+                    return true;
+                }
+                if (isLeft) {
+                    *result = HTLEFT;
+                    return true;
+                }
+                if (isRight) {
+                    *result = HTRIGHT;
+                    return true;
+                }
+                if (isTitleBar) {
+                    *result = HTCAPTION;
+                    return true;
+                }
+                *result = HTCLIENT;
+                return true;
+            }
         }
-        // At this point, we know that the cursor is inside the client area
-        // so it has to be either the little border at the top of our custom
-        // title bar or the drag bar. Apparently, it must be the drag bar or
-        // the little border at the top which the user can use to move or
-        // resize the window.
-        if (isTop) {
-            *result = HTTOP;
-            return true;
-        }
-        if (isTitleBar) {
-            *result = HTCAPTION;
-            return true;
-        }
-        *result = HTCLIENT;
-        return true;
     } break;
     case WM_NCRBUTTONUP: {
         if (wParam == HTCAPTION) {
@@ -1552,6 +1815,52 @@ bool WindowPrivate::InternalMessageHandler(const UINT message, const WPARAM wPar
         const auto windowPos = reinterpret_cast<LPWINDOWPOS>(lParam);
         windowPos->flags |= SWP_NOCOPYBITS;
     } break;
+    case WM_NCUAHDRAWCAPTION:
+    case WM_NCUAHDRAWFRAME: {
+        // These undocumented messages are sent to draw themed window
+        // borders. Block them to prevent drawing borders over the client
+        // area.
+        if (!m_frameBorderVisible) {
+            *result = 0;
+            return true;
+        }
+    } break;
+    case WM_NCPAINT: {
+        if (!m_frameBorderVisible) {
+            if (!IsDWMCompositionEnabled()) {
+                // Only block WM_NCPAINT when DWM composition is disabled. If
+                // it's blocked when DWM composition is enabled, the frame
+                // shadow won't be drawn.
+                *result = 0;
+                return true;
+            }
+        }
+    } break;
+    case WM_NCACTIVATE: {
+        if (!m_frameBorderVisible) {
+            if (IsDWMCompositionEnabled()) {
+                // DefWindowProc won't repaint the window border if lParam
+                // (normally a HRGN) is -1. See the following link's "lParam"
+                // section:
+                // https://docs.microsoft.com/en-us/windows/win32/winmsg/wm-ncactivate
+                // Don't use "*result = 0" otherwise the window won't respond
+                // to the window active state change.
+                *result = DefWindowProcW(m_window, WM_NCACTIVATE, wParam, -1);
+            } else {
+                if (static_cast<BOOL>(wParam) == FALSE) {
+                    *result = TRUE;
+                } else {
+                    *result = FALSE;
+                }
+            }
+            return true;
+        }
+    } break;
+    case WM_ERASEBKGND: {
+        // Prevent Windows from drawing the background to avoid flickering during resizing.
+        *result = 1;
+        return true;
+    } break;
     default:
         break;
     }
@@ -1563,6 +1872,11 @@ bool WindowPrivate::UpdateWindowFrameMargins2() noexcept
     if (!m_window) {
         Utils::DisplayErrorDialog(L"Failed to update the window frame margins due to the window has not been created yet.");
         return false;
+    }
+    // We can't extend the window frame if DWM composition is disabled.
+    // Don't fail in this case.
+    if (!IsDWMCompositionEnabled()) {
+        return true;
     }
     // We removed the whole top part of the frame (see handling of
     // WM_NCCALCSIZE) so the top border is missing now. We add it back here.
@@ -1819,6 +2133,16 @@ const Color &Window::ColorizationColor() const noexcept
 WindowColorizationArea Window::ColorizationArea() const noexcept
 {
     return d_ptr->ColorizationArea();
+}
+
+bool Window::FrameBorderVisible() const noexcept
+{
+    return d_ptr->FrameBorderVisible();
+}
+
+void Window::FrameBorderVisible(const bool value) noexcept
+{
+    d_ptr->FrameBorderVisible(value);
 }
 
 HWND Window::CreateChildWindow(const DWORD style, const DWORD extendedStyle, const WNDPROC wndProc, void *extraData, const UINT extraDataSize) const noexcept

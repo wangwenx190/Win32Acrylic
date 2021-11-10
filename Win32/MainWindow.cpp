@@ -27,6 +27,9 @@
 #include "OperationResult.h"
 #include "Undocumented.h"
 
+static constexpr const DWORD PresetTintColor_Light = 0x01FFFFFF;
+static constexpr const DWORD PresetTintColor_Dark = 0; // ### TODO
+
 class MainWindowPrivate
 {
 public:
@@ -39,6 +42,8 @@ private:
     [[nodiscard]] DWORD GetAppropriateAccentColor() const noexcept;
     [[nodiscard]] bool SetBlurBehindParameters(const ACCENT_STATE state, const DWORD color) const noexcept;
     [[nodiscard]] bool MainWindowMessageHandler(const UINT message, const WPARAM wParam, const LPARAM lParam, LRESULT *result) const noexcept;
+
+    void OnThemeChanged(const WindowTheme arg) noexcept;
 
 private:
     MainWindowPrivate(const MainWindowPrivate &) = delete;
@@ -59,6 +64,7 @@ MainWindowPrivate::MainWindowPrivate(MainWindow *q) noexcept
     q_ptr = q;
     if (Initialize()) {
         q_ptr->CustomMessageHandler(std::bind(&MainWindowPrivate::MainWindowMessageHandler, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, std::placeholders::_4));
+        q_ptr->ThemeChangeHandler(std::bind(&MainWindowPrivate::OnThemeChanged, this, std::placeholders::_1));
     } else {
         Utils::DisplayErrorDialog(L"Failed to initialize MainWindowPrivate.");
         std::exit(-1);
@@ -69,7 +75,10 @@ MainWindowPrivate::~MainWindowPrivate() noexcept = default;
 
 DWORD MainWindowPrivate::GetAppropriateAccentColor() const noexcept
 {
-    //
+    if (!q_ptr) {
+        return 0;
+    }
+    return ((q_ptr->Theme() == WindowTheme::Light) ? PresetTintColor_Light : PresetTintColor_Dark);
 }
 
 bool MainWindowPrivate::Initialize() noexcept
@@ -111,6 +120,9 @@ bool MainWindowPrivate::SetBlurBehindParameters(const ACCENT_STATE state, const 
 
 bool MainWindowPrivate::MainWindowMessageHandler(const UINT message, const WPARAM wParam, const LPARAM lParam, LRESULT *result) const noexcept
 {
+    UNREFERENCED_PARAMETER(wParam);
+    UNREFERENCED_PARAMETER(lParam);
+    UNREFERENCED_PARAMETER(result);
     switch (message) {
     case WM_ENTERSIZEMOVE: {
         if (!SetBlurBehindParameters(ACCENT_ENABLE_BLURBEHIND, GetAppropriateAccentColor())) {
@@ -126,6 +138,14 @@ bool MainWindowPrivate::MainWindowMessageHandler(const UINT message, const WPARA
         break;
     }
     return false;
+}
+
+void MainWindowPrivate::OnThemeChanged(const WindowTheme arg) noexcept
+{
+    UNREFERENCED_PARAMETER(arg);
+    if (!SetBlurBehindParameters(ACCENT_ENABLE_ACRYLICBLURBEHIND, GetAppropriateAccentColor())) {
+        Utils::DisplayErrorDialog(L"Failed to change blur behind parameters.");
+    }
 }
 
 MainWindow::MainWindow() noexcept : Window(true)

@@ -24,8 +24,10 @@
 
 #include <SDKDDKVer.h>
 #include <Windows.h>
+#include <ShellScalingApi.h>
 #include "Utils.h"
 #include "OperationResult.h"
+#include "WindowsVersion.h"
 
 static constexpr const wchar_t __NEW_LINE[] = L"\r\n";
 
@@ -67,7 +69,7 @@ ProcessDPIAwareness Utils::GetProcessDPIAwareness() noexcept
             }
         }
     }
-    if (curOsVer >= WindowsVersion::Windows8_1) {
+    if (curOsVer >= WindowsVersion::Windows_8_1) {
         PROCESS_DPI_AWARENESS pda = PROCESS_DPI_UNAWARE;
         const HRESULT hr = GetProcessDpiAwareness(nullptr, &pda);
         if (SUCCEEDED(hr)) {
@@ -130,11 +132,11 @@ bool Utils::SetProcessDPIAwareness(const ProcessDPIAwareness dpiAwareness) noexc
             return true;
         }
     }
-    if (curOsVer >= WindowsVersion::Windows8_1) {
+    if (curOsVer >= WindowsVersion::Windows_8_1) {
         PROCESS_DPI_AWARENESS pda = PROCESS_DPI_UNAWARE;
         switch (dpiAwareness) {
         case ProcessDPIAwareness::PerMonitorVersion2: {
-            pda = PROCESS_PER_MONITOR_DPI_AWARE_V2;
+            pda = static_cast<PROCESS_DPI_AWARENESS>(PROCESS_PER_MONITOR_DPI_AWARE_V2);
         } break;
         case ProcessDPIAwareness::PerMonitor: {
             pda = PROCESS_PER_MONITOR_DPI_AWARE;
@@ -143,7 +145,7 @@ bool Utils::SetProcessDPIAwareness(const ProcessDPIAwareness dpiAwareness) noexc
             pda = PROCESS_SYSTEM_DPI_AWARE;
         } break;
         case ProcessDPIAwareness::GdiScaled: {
-            pda = PROCESS_DPI_UNAWARE_GDISCALED;
+            pda = static_cast<PROCESS_DPI_AWARENESS>(PROCESS_DPI_UNAWARE_GDISCALED);
         } break;
         case ProcessDPIAwareness::Unaware: {
             pda = PROCESS_DPI_UNAWARE;

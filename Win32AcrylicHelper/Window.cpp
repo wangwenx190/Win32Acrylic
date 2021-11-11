@@ -1912,7 +1912,7 @@ bool WindowPrivate::UpdateWindowFrameMargins2() noexcept
     //  so it should work fine.
     const UINT frameBorderThickness = GetWindowMetrics2(WindowMetrics::WindowVisibleFrameBorderThickness);
     const UINT titleBarHeight = (GetWindowMetrics2(WindowMetrics::ResizeBorderThicknessY) + GetWindowMetrics2(WindowMetrics::CaptionHeight));
-    const UINT topFrameMargin = ((m_visibility == WindowState::Maximized) ? 0 : (m_bNoRedirectionBitmap ? frameBorderThickness : titleBarHeight));
+    const UINT topFrameMargin = ((m_visibility == WindowState::Maximized) ? 0 : (m_noRedirectionBitmap ? frameBorderThickness : titleBarHeight));
     const MARGINS margins = {0, 0, static_cast<int>(topFrameMargin), 0};
     const HRESULT hr = DwmExtendFrameIntoClientArea(m_window, &margins);
     if (FAILED(hr)) {

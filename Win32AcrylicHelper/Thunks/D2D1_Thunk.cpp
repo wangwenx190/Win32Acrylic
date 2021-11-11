@@ -25,3 +25,17 @@
 #include "WindowsAPIThunks.h"
 
 #include <D2D1.h>
+
+static constexpr const wchar_t __D2D1_DLL_FILENAME[] = L"D2D1.dll";
+
+EXTERN_C HRESULT WINAPI
+D2D1CreateFactory(
+    D2D1_FACTORY_TYPE          factoryType,
+    REFIID                     riid,
+    const D2D1_FACTORY_OPTIONS *pFactoryOptions,
+    void                       **ppIFactory
+)
+{
+    static const auto function = reinterpret_cast<HRESULT(WINAPI *)(D2D1_FACTORY_TYPE, REFIID, const D2D1_FACTORY_OPTIONS *, void **)>(GetWindowsAPIByName(__D2D1_DLL_FILENAME, L"D2D1CreateFactory"));
+    return (function ? function(factoryType, riid, pFactoryOptions, ppIFactory) : DEFAULT_HRESULT);
+}

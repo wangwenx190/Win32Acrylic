@@ -28,6 +28,7 @@
 #include "Utils.h"
 #include "OperationResult.h"
 #include "WindowsVersion.h"
+#include "Undocumented.h"
 
 static constexpr const wchar_t __NEW_LINE[] = L"\r\n";
 
@@ -192,4 +193,34 @@ std::wstring Utils::DPIAwarenessToString(const ProcessDPIAwareness value) noexce
     } break;
     }
     return L"Unknown";
+}
+
+bool Utils::LoadResourceData(const std::wstring &name, const std::wstring &type, void **data, LPDWORD dataSize) noexcept
+{
+    if (name.empty() || type.empty() || !data || !dataSize) {
+        return false;
+    }
+    const HRSRC resourceHandle = FindResourceW(HINST_THISCOMPONENT, name.c_str(), type.c_str());
+    if (!resourceHandle) {
+        PRINT_WIN32_ERROR_MESSAGE(FindResourceW, L"Failed to retrieve the resource handle.")
+        return false;
+    }
+    const DWORD resourceDataSize = SizeofResource(HINST_THISCOMPONENT, resourceHandle);
+    if (resourceDataSize == 0) {
+        PRINT_WIN32_ERROR_MESSAGE(SizeofResource, L"Failed to get the resource data size.")
+        return false;
+    }
+    const HGLOBAL resourceDataHandle = LoadResource(HINST_THISCOMPONENT, resourceHandle);
+    if (!resourceDataHandle) {
+        PRINT_WIN32_ERROR_MESSAGE(LoadResource, L"Failed to load resource.")
+        return false;
+    }
+    const LPVOID resourceData = LockResource(resourceDataHandle);
+    if (!resourceData) {
+        PRINT_WIN32_ERROR_MESSAGE(LockResource, L"Failed to lock resource.")
+        return false;
+    }
+    *data = resourceData;
+    *dataSize = resourceDataSize;
+    return true;
 }

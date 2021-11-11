@@ -33,4 +33,5 @@ namespace Utils
     [[nodiscard]] ProcessDPIAwareness GetProcessDPIAwareness() noexcept;
     [[nodiscard]] bool SetProcessDPIAwareness(const ProcessDPIAwareness dpiAwareness) noexcept;
     [[nodiscard]] std::wstring DPIAwarenessToString(const ProcessDPIAwareness value) noexcept;
+    [[nodiscard]] bool LoadResourceData(const std::wstring &name, const std::wstring &type, void **data, LPDWORD dataSize) noexcept;
 } // namespace Utils

@@ -31,11 +31,6 @@
 #define STATUS_SUCCESS (static_cast<NTSTATUS>(0x00000000L))
 #endif // STATUS_SUCCESS
 
-#ifndef HINST_THISCOMPONENT
-EXTERN_C IMAGE_DOS_HEADER __ImageBase;
-#define HINST_THISCOMPONENT (reinterpret_cast<HINSTANCE>(&__ImageBase))
-#endif // HINST_THISCOMPONENT
-
 #ifndef USER_DEFAULT_SCREEN_DPI
 #define USER_DEFAULT_SCREEN_DPI (96)
 #endif // USER_DEFAULT_SCREEN_DPI
@@ -47,14 +42,6 @@ EXTERN_C IMAGE_DOS_HEADER __ImageBase;
 #ifndef SM_CYPADDEDBORDER
 #define SM_CYPADDEDBORDER (SM_CXPADDEDBORDER)
 #endif // SM_CYPADDEDBORDER
-
-#ifndef WM_NCUAHDRAWCAPTION
-#define WM_NCUAHDRAWCAPTION (0x00AE)
-#endif // WM_NCUAHDRAWCAPTION
-
-#ifndef WM_NCUAHDRAWFRAME
-#define WM_NCUAHDRAWFRAME (0x00AF)
-#endif // WM_NCUAHDRAWFRAME
 
 #ifndef WM_DWMCOMPOSITIONCHANGED
 #define WM_DWMCOMPOSITIONCHANGED (0x031E)
@@ -90,24 +77,10 @@ EXTERN_C IMAGE_DOS_HEADER __ImageBase;
 
 using NTSTATUS = LONG;
 
-[[maybe_unused]] constexpr const UINT DefaultWindowVisibleFrameBorderThickness = 1;
-
-[[maybe_unused]] constexpr const UINT DefaultAutoHideTaskBarThicknessX = 2;
-[[maybe_unused]] constexpr const UINT DefaultAutoHideTaskBarThicknessY = 2;
-
 [[maybe_unused]] constexpr const DWORD _DWMWA_USE_IMMERSIVE_DARK_MODE_BEFORE_20H1 = 19;
 [[maybe_unused]] constexpr const DWORD _DWMWA_USE_IMMERSIVE_DARK_MODE = 20;
 [[maybe_unused]] constexpr const DWORD _DWMWA_WINDOW_CORNER_PREFERENCE = 33;
 [[maybe_unused]] constexpr const DWORD _DWMWA_VISIBLE_FRAME_BORDER_THICKNESS = 37;
-
-[[maybe_unused]] constexpr const int DPI_AWARENESS_PER_MONITOR_AWARE_V2 = 3;
-[[maybe_unused]] constexpr const int DPI_AWARENESS_UNAWARE_GDISCALED = 4;
-
-[[maybe_unused]] constexpr const int PROCESS_PER_MONITOR_DPI_AWARE_V2 = 3;
-[[maybe_unused]] constexpr const int PROCESS_DPI_UNAWARE_GDISCALED = 4;
-
-[[maybe_unused]] constexpr const wchar_t DwmRegistryKeyPath[] = LR"(Software\Microsoft\Windows\DWM)";
-[[maybe_unused]] constexpr const wchar_t PersonalizeRegistryKeyPath[] = LR"(Software\Microsoft\Windows\CurrentVersion\Themes\Personalize)";
 
 enum class DwmWindowCornerPreference : int
 {

@@ -48,7 +48,7 @@ endif()
 # Enable link time optimization for release builds.
 set(CMAKE_INTERPROCEDURAL_OPTIMIZATION_RELEASE ON CACHE BOOL "" FORCE)
 
-# Request C++20.
+# Request for C++20.
 set(CMAKE_CXX_STANDARD "20" CACHE STRING "" FORCE)
 set(CMAKE_CXX_STANDARD_REQUIRED ON CACHE BOOL "" FORCE)
 set(CMAKE_CXX_EXTENSIONS OFF CACHE BOOL "" FORCE)
@@ -69,7 +69,7 @@ string(REGEX REPLACE "[-|/]O[d|1|2|3|i]" "" CMAKE_CXX_FLAGS_RELEASE ${CMAKE_CXX_
 string(REGEX REPLACE "[-|/]Ob[0|1|2|3]" "" CMAKE_CXX_FLAGS_RELEASE ${CMAKE_CXX_FLAGS_RELEASE})
 
 # Change code page to UTF-8 (65001) and suppress the copyright messages.
-string(APPEND CMAKE_RC_FLAGS " -c65001 /nologo ")
+string(APPEND CMAKE_RC_FLAGS " /c65001 /nologo ")
 
 # "/d2FH4" can significantly reduce the binary size if your application makes heavy use of exception handling.
 string(APPEND CMAKE_CXX_FLAGS " /await:strict /bigobj /EHsc /d2FH4 /GR- /MP /utf-8 /W4 /WX /permissive- /Zc:char8_t,__cplusplus,externConstexpr,hiddenFriend,lambda,referenceBinding,rvalueCast,strictStrings,ternary,throwingNew,trigraphs ")
@@ -113,7 +113,7 @@ set(SOURCES_Win32AcrylicHelper
     Win32AcrylicHelper/Thunks/OleAut32_Thunk.cpp Win32AcrylicHelper/Thunks/DispatcherQueue_Thunk.h
     Win32AcrylicHelper/Thunks/CoreMessaging_Thunk.cpp Win32AcrylicHelper/Thunks/WinRTWrappers.cpp
     Win32AcrylicHelper/Thunks/Undocumented.h Win32AcrylicHelper/Thunks/Undocumented.cpp
-    Win32AcrylicHelper/Thunks/SHCore_Thunk.cpp
+    Win32AcrylicHelper/Thunks/SHCore_Thunk.cpp Win32AcrylicHelper/Thunks/D2D1_Thunk.cpp
 )
 add_library(${PROJECT_NAME} STATIC ${SOURCES_Win32AcrylicHelper})
 add_library(wangwenx190::${PROJECT_NAME} ALIAS ${PROJECT_NAME})
@@ -163,6 +163,12 @@ set(SOURCES_DirectComposition
     DirectComposition/main.cpp
 )
 
+set(SOURCES_Direct2D
+    Direct2D/MainWindow.h Direct2D/MainWindow.cpp
+    Direct2D/Application.h Direct2D/Application.cpp
+    Direct2D/main.cpp
+)
+
 set(SOURCES_Win32
     Win32/MainWindow.h Win32/MainWindow.cpp
     Win32/Application.h Win32/Application.cpp
@@ -176,7 +182,7 @@ endif()
 set(_target_filename_suffix ${CMAKE_BUILD_TYPE}_${_target_arch}-bit)
 
 set(_demo_types
-    UWP Windows.UI.Composition DirectComposition Win32
+    UWP Windows.UI.Composition DirectComposition Direct2D Win32
 )
 foreach(_type IN LISTS _demo_types)
     if(BUILD_${_type}_DEMO)

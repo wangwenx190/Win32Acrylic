@@ -408,7 +408,7 @@ bool MainWindowPrivate::InitializeDragBarWindow() noexcept
         Utils::DisplayErrorDialog(L"Can't initialize the drag bar window due to the q_ptr is null.");
         return false;
     }
-    m_dragBarWindow = q_ptr->CreateChildWindow(WS_CHILD, (WS_EX_LAYERED | WS_EX_NOREDIRECTIONBITMAP), DragBarWindowProc, this, sizeof(MainWindowPrivate *));
+    m_dragBarWindow = q_ptr->CreateChildWindow(0L, (WS_EX_LAYERED | WS_EX_NOREDIRECTIONBITMAP), DragBarWindowProc, this, sizeof(MainWindowPrivate *));
     if (!m_dragBarWindow) {
         Utils::DisplayErrorDialog(L"Failed to create the drag bar window.");
         return false;

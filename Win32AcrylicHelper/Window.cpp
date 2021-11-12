@@ -844,7 +844,9 @@ WindowPrivate::WindowPrivate(Window *q, const bool NoRedirectionBitmap) noexcept
         // Create the title bar background brush early, we'll need it in WM_PAINT.
         TitleBarBackgroundColor(Color::FromRgba(0, 0, 0));
     }
-    m_window = CreateWindow2(WS_OVERLAPPEDWINDOW, (m_noRedirectionBitmap ? WS_EX_NOREDIRECTIONBITMAP : 0L), nullptr, this, sizeof(WindowPrivate *), m_windowBackgroundBrush, WindowProc);
+    const DWORD style = (WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN | WS_CLIPSIBLINGS);
+    const DWORD extendedStyle = (m_noRedirectionBitmap ? WS_EX_NOREDIRECTIONBITMAP : 0L);
+    m_window = CreateWindow2(style, extendedStyle, nullptr, this, sizeof(WindowPrivate *), m_windowBackgroundBrush, WindowProc);
     if (m_window) {
         if (!Initialize()) {
             Utils::DisplayErrorDialog(L"Failed to initialize WindowPrivate.");

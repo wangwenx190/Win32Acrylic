@@ -10,23 +10,11 @@ Acrylic demo applications based on different technology stack.
 
 ![Dark Theme](/Screenshots/Dark/UWP.png "Dark Theme")
 
-### Windows.UI.Composition
-
-![Light Theme](/Screenshots/Light/Windows.UI.Composition.png "Light Theme")
-
-![Dark Theme](/Screenshots/Dark/Windows.UI.Composition.png "Dark Theme")
-
 ### Direct Composition
 
 ![Light Theme](/Screenshots/Light/DirectComposition.png "Light Theme")
 
 ![Dark Theme](/Screenshots/Dark/DirectComposition.png "Dark Theme")
-
-### Direct2D
-
-![Light Theme](/Screenshots/Light/Direct2D.png "Light Theme")
-
-![Dark Theme](/Screenshots/Dark/Direct2D.png "Dark Theme")
 
 ### Win32
 

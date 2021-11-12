@@ -32,11 +32,38 @@
 #include <Windows.h>
 #include <DwmApi.h>
 
+#ifndef HINST_THISCOMPONENT
+EXTERN_C IMAGE_DOS_HEADER __ImageBase;
+#define HINST_THISCOMPONENT (reinterpret_cast<HINSTANCE>(&__ImageBase))
+#endif // HINST_THISCOMPONENT
+
+#ifndef WM_NCUAHDRAWCAPTION
+#define WM_NCUAHDRAWCAPTION (0x00AE)
+#endif // WM_NCUAHDRAWCAPTION
+
+#ifndef WM_NCUAHDRAWFRAME
+#define WM_NCUAHDRAWFRAME (0x00AF)
+#endif // WM_NCUAHDRAWFRAME
+
 #define DWM_TNP_FREEZE          (0x00100000)
 #define DWM_TNP_ENABLE3D        (0x04000000)
 #define DWM_TNP_DISABLE3D       (0x08000000)
 #define DWM_TNP_FORCECVI        (0x40000000)
 #define DWM_TNP_DISABLEFORCECVI (0x80000000)
+
+[[maybe_unused]] constexpr const UINT DefaultWindowVisibleFrameBorderThickness = 1;
+
+[[maybe_unused]] constexpr const UINT DefaultAutoHideTaskBarThicknessX = 2;
+[[maybe_unused]] constexpr const UINT DefaultAutoHideTaskBarThicknessY = 2;
+
+[[maybe_unused]] constexpr const int DPI_AWARENESS_PER_MONITOR_AWARE_V2 = 3;
+[[maybe_unused]] constexpr const int DPI_AWARENESS_UNAWARE_GDISCALED = 4;
+
+[[maybe_unused]] constexpr const int PROCESS_PER_MONITOR_DPI_AWARE_V2 = 3;
+[[maybe_unused]] constexpr const int PROCESS_DPI_UNAWARE_GDISCALED = 4;
+
+[[maybe_unused]] constexpr const wchar_t DwmRegistryKeyPath[] = LR"(Software\Microsoft\Windows\DWM)";
+[[maybe_unused]] constexpr const wchar_t PersonalizeRegistryKeyPath[] = LR"(Software\Microsoft\Windows\CurrentVersion\Themes\Personalize)";
 
 using IMMERSIVE_HC_CACHE_MODE = enum _IMMERSIVE_HC_CACHE_MODE
 {

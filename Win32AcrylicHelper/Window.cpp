@@ -27,6 +27,7 @@
 #include "WindowsVersion.h"
 #include "Utils.h"
 #include "Resource.h"
+#include "Undocumented.h"
 #include <ComBaseApi.h>
 #include <ShellApi.h>
 #include <ShellScalingApi.h>
@@ -108,6 +109,12 @@ static constexpr const wchar_t __NEW_LINE[] = L"\r\n";
 
 [[nodiscard]] static inline bool ShouldAppsUseLightTheme() noexcept
 {
+    // Dark mode was first introduced in Windows 10 1607.
+    // There is no dark theme before that, so we always assume
+    // the light theme is in use.
+    if (WindowsVersion::CurrentVersion() < WindowsVersion::Windows10_RedStone1) {
+        return true;
+    }
     return (GetDWORDFromRegistry(HKEY_CURRENT_USER, PersonalizeRegistryKeyPath, L"AppsUseLightTheme") != 0);
 }
 
@@ -125,6 +132,10 @@ static constexpr const wchar_t __NEW_LINE[] = L"\r\n";
 
 [[nodiscard]] static inline WindowColorizationArea GetGlobalColorizationArea2() noexcept
 {
+    // It's a Win10 only feature.
+    if (WindowsVersion::CurrentVersion() < WindowsVersion::Windows10_RedStone1) {
+        return WindowColorizationArea::None;
+    }
     const HKEY rootKey = HKEY_CURRENT_USER;
     const std::wstring keyName = L"ColorPrevalence";
     const DWORD dwmValue = GetDWORDFromRegistry(rootKey, DwmRegistryKeyPath, keyName);
@@ -504,7 +515,7 @@ private:
     WindowColorizationAreaChangeHandlerCallback m_colorizationAreaChangeHandlerCallback = nullptr;
     WindowMessageHandlerCallback m_customMessageHandlerCallback = nullptr;
     WindowMessageFilterCallback m_windowMessageFilterCallback = nullptr;
-    bool m_bNoRedirectionBitmap = false;
+    bool m_noRedirectionBitmap = false;
     static inline bool m_osEnvDetected = false;
     static inline bool m_dpiFunctionsAvailable = false;
     bool m_frameBorderVisible = false;
@@ -822,8 +833,8 @@ WindowPrivate::WindowPrivate(Window *q, const bool NoRedirectionBitmap) noexcept
         std::exit(-1);
     }
     q_ptr = q;
-    m_bNoRedirectionBitmap = NoRedirectionBitmap;
-    if (!m_bNoRedirectionBitmap) {
+    m_noRedirectionBitmap = NoRedirectionBitmap;
+    if (!m_noRedirectionBitmap) {
         // We need this window background brush in WM_PAINT, so create it early.
         m_windowBackgroundBrush = static_cast<HBRUSH>(GetStockObject(BLACK_BRUSH));
         if (!m_windowBackgroundBrush) {
@@ -833,7 +844,7 @@ WindowPrivate::WindowPrivate(Window *q, const bool NoRedirectionBitmap) noexcept
         // Create the title bar background brush early, we'll need it in WM_PAINT.
         TitleBarBackgroundColor(Color::FromRgba(0, 0, 0));
     }
-    m_window = CreateWindow2(WS_OVERLAPPEDWINDOW, (m_bNoRedirectionBitmap ? WS_EX_NOREDIRECTIONBITMAP : 0L), nullptr, this, sizeof(WindowPrivate *), m_windowBackgroundBrush, WindowProc);
+    m_window = CreateWindow2(WS_OVERLAPPEDWINDOW, (m_noRedirectionBitmap ? WS_EX_NOREDIRECTIONBITMAP : 0L), nullptr, this, sizeof(WindowPrivate *), m_windowBackgroundBrush, WindowProc);
     if (m_window) {
         if (!Initialize()) {
             Utils::DisplayErrorDialog(L"Failed to initialize WindowPrivate.");
@@ -1377,9 +1388,11 @@ bool WindowPrivate::InternalMessageHandler(const UINT message, const WPARAM wPar
         WidthChangeHandler();
         HeightChangeHandler();
         if (visibilityChanged && (m_visibility != WindowState::Minimized)) {
-            if (!UpdateWindowFrameMargins2()) {
-                Utils::DisplayErrorDialog(L"Failed to update the window frame margins.");
-                return false;
+            if (IsDWMCompositionEnabled()) {
+                if (!UpdateWindowFrameMargins2()) {
+                    Utils::DisplayErrorDialog(L"Failed to update the window frame margins.");
+                    return false;
+                }
             }
             if (!TriggerWindowFrameChange2()) {
                 Utils::DisplayErrorDialog(L"Failed to trigger a window frame change event for the window.");
@@ -1420,8 +1433,11 @@ bool WindowPrivate::InternalMessageHandler(const UINT message, const WPARAM wPar
         }
     } break;
     case WM_DWMCOMPOSITIONCHANGED: {
-        if (!UpdateWindowFrameMargins2()) {
-            Utils::DisplayErrorDialog(L"Failed to update the window frame margins.");
+        // We can't modify the window frame when DWM composition is disabled.
+        if (IsDWMCompositionEnabled()) {
+            if (!UpdateWindowFrameMargins2()) {
+                Utils::DisplayErrorDialog(L"Failed to update the window frame margins.");
+            }
         }
     } break;
     case WM_DWMCOLORIZATIONCOLORCHANGED: {
@@ -1429,7 +1445,7 @@ bool WindowPrivate::InternalMessageHandler(const UINT message, const WPARAM wPar
         ColorizationColorChangeHandler();
     } break;
     case WM_PAINT: {
-        if (m_bNoRedirectionBitmap || !m_frameBorderVisible) {
+        if (m_noRedirectionBitmap || !m_frameBorderVisible) {
             break;
         }
         if (!m_windowBackgroundBrush || !m_titleBarBackgroundBrush) {
@@ -1810,16 +1826,17 @@ bool WindowPrivate::InternalMessageHandler(const UINT message, const WPARAM wPar
         ActiveChangeHandler();
     } break;
     case WM_WINDOWPOSCHANGING: {
-        // Tell Windows to discard the entire contents of the client area, as re-using
-        // parts of the client area would lead to jitter during resize.
-        const auto windowPos = reinterpret_cast<LPWINDOWPOS>(lParam);
-        windowPos->flags |= SWP_NOCOPYBITS;
+        if (!m_noRedirectionBitmap) {
+            // Tell Windows to discard the entire contents of the client area, as re-using
+            // parts of the client area would lead to jitter during resize.
+            const auto windowPos = reinterpret_cast<LPWINDOWPOS>(lParam);
+            windowPos->flags |= SWP_NOCOPYBITS;
+        }
     } break;
     case WM_NCUAHDRAWCAPTION:
     case WM_NCUAHDRAWFRAME: {
         // These undocumented messages are sent to draw themed window
-        // borders. Block them to prevent drawing borders over the client
-        // area.
+        // borders. Block them to prevent drawing borders over the client area.
         if (!m_frameBorderVisible) {
             *result = 0;
             return true;
@@ -1828,9 +1845,8 @@ bool WindowPrivate::InternalMessageHandler(const UINT message, const WPARAM wPar
     case WM_NCPAINT: {
         if (!m_frameBorderVisible) {
             if (!IsDWMCompositionEnabled()) {
-                // Only block WM_NCPAINT when DWM composition is disabled. If
-                // it's blocked when DWM composition is enabled, the frame
-                // shadow won't be drawn.
+                // Only block WM_NCPAINT when DWM composition is disabled,
+                // otherwise the window frame shadow won't be drawn.
                 *result = 0;
                 return true;
             }
@@ -1840,11 +1856,10 @@ bool WindowPrivate::InternalMessageHandler(const UINT message, const WPARAM wPar
         if (!m_frameBorderVisible) {
             if (IsDWMCompositionEnabled()) {
                 // DefWindowProc won't repaint the window border if lParam
-                // (normally a HRGN) is -1. See the following link's "lParam"
-                // section:
+                // (normally a HRGN) is -1. See the following link's "lParam" section:
                 // https://docs.microsoft.com/en-us/windows/win32/winmsg/wm-ncactivate
-                // Don't use "*result = 0" otherwise the window won't respond
-                // to the window active state change.
+                // Don't use "*result = 0", otherwise the window won't respond
+                // to the window activation state change.
                 *result = DefWindowProcW(m_window, WM_NCACTIVATE, wParam, -1);
             } else {
                 if (static_cast<BOOL>(wParam) == FALSE) {
@@ -1857,9 +1872,11 @@ bool WindowPrivate::InternalMessageHandler(const UINT message, const WPARAM wPar
         }
     } break;
     case WM_ERASEBKGND: {
-        // Prevent Windows from drawing the background to avoid flickering during resizing.
-        *result = 1;
-        return true;
+        if (!m_noRedirectionBitmap) {
+            // Prevent Windows from drawing the background to avoid flickering during resizing.
+            *result = 1;
+            return true;
+        }
     } break;
     default:
         break;
@@ -1873,7 +1890,7 @@ bool WindowPrivate::UpdateWindowFrameMargins2() noexcept
         Utils::DisplayErrorDialog(L"Failed to update the window frame margins due to the window has not been created yet.");
         return false;
     }
-    // We can't extend the window frame if DWM composition is disabled.
+    // We can't modify the window frame if DWM composition is disabled.
     // Don't fail in this case.
     if (!IsDWMCompositionEnabled()) {
         return true;
@@ -1895,7 +1912,7 @@ bool WindowPrivate::UpdateWindowFrameMargins2() noexcept
     //  so it should work fine.
     const UINT frameBorderThickness = GetWindowMetrics2(WindowMetrics::WindowVisibleFrameBorderThickness);
     const UINT titleBarHeight = (GetWindowMetrics2(WindowMetrics::ResizeBorderThicknessY) + GetWindowMetrics2(WindowMetrics::CaptionHeight));
-    const UINT topFrameMargin = ((m_visibility == WindowState::Maximized) ? 0 : (m_bNoRedirectionBitmap ? frameBorderThickness : titleBarHeight));
+    const UINT topFrameMargin = ((m_visibility == WindowState::Maximized) ? 0 : (m_noRedirectionBitmap ? frameBorderThickness : titleBarHeight));
     const MARGINS margins = {0, 0, static_cast<int>(topFrameMargin), 0};
     const HRESULT hr = DwmExtendFrameIntoClientArea(m_window, &margins);
     if (FAILED(hr)) {

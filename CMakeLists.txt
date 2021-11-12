@@ -27,9 +27,7 @@ cmake_minimum_required(VERSION 3.22 FATAL_ERROR)
 project(Win32AcrylicHelper VERSION 1.0.0.0 LANGUAGES CXX RC)
 
 option(BUILD_UWP_DEMO "Build the UWP demo application." ON)
-option(BUILD_Windows.UI.Composition_DEMO "Build the Windows.UI.Composition demo application." ON)
 option(BUILD_DirectComposition_DEMO "Build the Direct Composition demo application." ON)
-option(BUILD_Direct2D_DEMO "Build the Direct2D demo application." ON)
 option(BUILD_Win32_DEMO "Build the Win32 demo application." ON)
 option(OPTIMIZE_FOR_SPEED "Enable as much optimization as possible." OFF)
 
@@ -48,7 +46,7 @@ endif()
 # Enable link time optimization for release builds.
 set(CMAKE_INTERPROCEDURAL_OPTIMIZATION_RELEASE ON CACHE BOOL "" FORCE)
 
-# Request C++20.
+# Request for C++20.
 set(CMAKE_CXX_STANDARD "20" CACHE STRING "" FORCE)
 set(CMAKE_CXX_STANDARD_REQUIRED ON CACHE BOOL "" FORCE)
 set(CMAKE_CXX_EXTENSIONS OFF CACHE BOOL "" FORCE)
@@ -69,7 +67,7 @@ string(REGEX REPLACE "[-|/]O[d|1|2|3|i]" "" CMAKE_CXX_FLAGS_RELEASE ${CMAKE_CXX_
 string(REGEX REPLACE "[-|/]Ob[0|1|2|3]" "" CMAKE_CXX_FLAGS_RELEASE ${CMAKE_CXX_FLAGS_RELEASE})
 
 # Change code page to UTF-8 (65001) and suppress the copyright messages.
-string(APPEND CMAKE_RC_FLAGS " -c65001 /nologo ")
+string(APPEND CMAKE_RC_FLAGS " /c65001 /nologo ")
 
 # "/d2FH4" can significantly reduce the binary size if your application makes heavy use of exception handling.
 string(APPEND CMAKE_CXX_FLAGS " /await:strict /bigobj /EHsc /d2FH4 /GR- /MP /utf-8 /W4 /WX /permissive- /Zc:char8_t,__cplusplus,externConstexpr,hiddenFriend,lambda,referenceBinding,rvalueCast,strictStrings,ternary,throwingNew,trigraphs ")
@@ -113,7 +111,7 @@ set(SOURCES_Win32AcrylicHelper
     Win32AcrylicHelper/Thunks/OleAut32_Thunk.cpp Win32AcrylicHelper/Thunks/DispatcherQueue_Thunk.h
     Win32AcrylicHelper/Thunks/CoreMessaging_Thunk.cpp Win32AcrylicHelper/Thunks/WinRTWrappers.cpp
     Win32AcrylicHelper/Thunks/Undocumented.h Win32AcrylicHelper/Thunks/Undocumented.cpp
-    Win32AcrylicHelper/Thunks/SHCore_Thunk.cpp
+    Win32AcrylicHelper/Thunks/SHCore_Thunk.cpp Win32AcrylicHelper/Thunks/D2D1_Thunk.cpp
 )
 add_library(${PROJECT_NAME} STATIC ${SOURCES_Win32AcrylicHelper})
 add_library(wangwenx190::${PROJECT_NAME} ALIAS ${PROJECT_NAME})
@@ -151,12 +149,6 @@ set(SOURCES_UWP
     UWP/main.cpp
 )
 
-set(SOURCES_Windows.UI.Composition
-    Windows.UI.Composition/MainWindow.h Windows.UI.Composition/MainWindow.cpp
-    Windows.UI.Composition/Application.h Windows.UI.Composition/Application.cpp
-    Windows.UI.Composition/main.cpp
-)
-
 set(SOURCES_DirectComposition
     DirectComposition/MainWindow.h DirectComposition/MainWindow.cpp
     DirectComposition/Application.h DirectComposition/Application.cpp
@@ -176,7 +168,7 @@ endif()
 set(_target_filename_suffix ${CMAKE_BUILD_TYPE}_${_target_arch}-bit)
 
 set(_demo_types
-    UWP Windows.UI.Composition DirectComposition Win32
+    UWP DirectComposition Win32
 )
 foreach(_type IN LISTS _demo_types)
     if(BUILD_${_type}_DEMO)

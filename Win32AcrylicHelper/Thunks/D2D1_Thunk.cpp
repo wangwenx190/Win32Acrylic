@@ -22,26 +22,20 @@
  * SOFTWARE.
  */
 
-#pragma once
+#include "WindowsAPIThunks.h"
 
-#include <memory>
+#include <D2D1.h>
 
-class ApplicationPrivate;
+static constexpr const wchar_t __D2D1_DLL_FILENAME[] = L"D2D1.dll";
 
-class Application
+EXTERN_C HRESULT WINAPI
+D2D1CreateFactory(
+    D2D1_FACTORY_TYPE          factoryType,
+    REFIID                     riid,
+    const D2D1_FACTORY_OPTIONS *pFactoryOptions,
+    void                       **ppIFactory
+)
 {
-public:
-    explicit Application() noexcept;
-    ~Application() noexcept;
-
-    [[nodiscard]] int Run() const noexcept;
-
-private:
-    Application(const Application &) = delete;
-    Application &operator=(const Application &) = delete;
-    Application(Application &&) = delete;
-    Application &operator=(Application &&) = delete;
-
-private:
-    std::unique_ptr<ApplicationPrivate> d_ptr;
-};
+    static const auto function = reinterpret_cast<HRESULT(WINAPI *)(D2D1_FACTORY_TYPE, REFIID, const D2D1_FACTORY_OPTIONS *, void **)>(GetWindowsAPIByName(__D2D1_DLL_FILENAME, L"D2D1CreateFactory"));
+    return (function ? function(factoryType, riid, pFactoryOptions, ppIFactory) : DEFAULT_HRESULT);
+}

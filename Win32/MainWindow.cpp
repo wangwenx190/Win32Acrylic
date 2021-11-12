@@ -26,6 +26,7 @@
 #include "Utils.h"
 #include "OperationResult.h"
 #include "Undocumented.h"
+#include "WindowsVersion.h"
 
 static constexpr const DWORD PresetTintColor_Light = 0x01FFFFFF;
 static constexpr const DWORD PresetTintColor_Dark = 0; // ### TODO
@@ -53,6 +54,8 @@ private:
 
 private:
     MainWindow *q_ptr = nullptr;
+    static inline bool m_osEnvDetected = false;
+    static inline bool m_isWin11OrGreater = false;
 };
 
 MainWindowPrivate::MainWindowPrivate(MainWindow *q) noexcept
@@ -63,6 +66,10 @@ MainWindowPrivate::MainWindowPrivate(MainWindow *q) noexcept
     }
     q_ptr = q;
     if (Initialize()) {
+        if (!m_osEnvDetected) {
+            m_osEnvDetected = true;
+            m_isWin11OrGreater = (WindowsVersion::CurrentVersion() >= WindowsVersion::Windows11);
+        }
         q_ptr->CustomMessageHandler(std::bind(&MainWindowPrivate::MainWindowMessageHandler, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, std::placeholders::_4));
         q_ptr->ThemeChangeHandler(std::bind(&MainWindowPrivate::OnThemeChanged, this, std::placeholders::_1));
     } else {
@@ -123,13 +130,25 @@ bool MainWindowPrivate::MainWindowMessageHandler(const UINT message, const WPARA
     UNREFERENCED_PARAMETER(wParam);
     UNREFERENCED_PARAMETER(lParam);
     UNREFERENCED_PARAMETER(result);
+    // The workaround we mentioned below becomes unusable on Windows 11, the window
+    // will flicker a lot during move, and there's some laggy at the same time.
+    // But the undocumented API seems to be fixed in some degree, so don't apply
+    // the workaround on Windows 11, the laggy is still there, but the flicker will
+    // gone.
+    if (m_isWin11OrGreater) {
+        return false;
+    }
     switch (message) {
     case WM_ENTERSIZEMOVE: {
+        // The window will be super laggy during move and resize, we workaround this by
+        // switching to the traditional blur temporarily. The undocumented API is buggy
+        // and thus we can't truly fix this issue unless Microsoft itself fixes it.
         if (!SetBlurBehindParameters(ACCENT_ENABLE_BLURBEHIND, GetAppropriateAccentColor())) {
             Utils::DisplayErrorDialog(L"Failed to change blur behind parameters.");
         }
     } break;
     case WM_EXITSIZEMOVE: {
+        // Switch back to the real acrylic blur.
         if (!SetBlurBehindParameters(ACCENT_ENABLE_ACRYLICBLURBEHIND, GetAppropriateAccentColor())) {
             Utils::DisplayErrorDialog(L"Failed to change blur behind parameters.");
         }

@@ -37,12 +37,6 @@ static constexpr const double DefaultSaturation = 1.25;
 
 class MainWindowPrivate
 {
-    enum class BackdropSource : int
-    {
-        Desktop,
-        Host
-    };
-
 public:
     explicit MainWindowPrivate(MainWindow *q) noexcept;
     ~MainWindowPrivate() noexcept;
@@ -53,23 +47,18 @@ private:
     [[nodiscard]] bool CreateCompositionDevice() noexcept;
     [[nodiscard]] bool CreateCompositionVisual() noexcept;
     [[nodiscard]] bool CreateCompositionTarget() noexcept;
-    [[nodiscard]] bool CreateBackdrop(const BackdropSource source) noexcept;
+    [[nodiscard]] bool CreateDesktopBackdrop() noexcept;
+    [[nodiscard]] bool CreateHostBackdrop() noexcept;
     [[nodiscard]] bool CreateEffectGraph() noexcept;
     [[nodiscard]] bool SyncCoordinates() noexcept;
     [[nodiscard]] bool Flush() noexcept;
     [[nodiscard]] bool Commit() noexcept;
 
-    [[nodiscard]] UINT GetTitleBarHeight() const noexcept;
-    [[nodiscard]] UINT GetTopFrameMargin() const noexcept;
-
     void OnXChanged(const int arg) noexcept;
     void OnYChanged(const int arg) noexcept;
     void OnWidthChanged(const UINT arg) noexcept;
     void OnHeightChanged(const UINT arg) noexcept;
-    void OnVisibilityChanged(const WindowState arg) noexcept;
     void OnActiveChanged(const bool arg) noexcept;
-    void OnThemeChanged(const WindowTheme arg) noexcept;
-    void OnDotsPerInchChanged(const UINT arg) noexcept;
 
 private:
     MainWindowPrivate(const MainWindowPrivate &) = delete;
@@ -127,10 +116,7 @@ MainWindowPrivate::MainWindowPrivate(MainWindow *q) noexcept
         q_ptr->YChangeHandler(std::bind(&MainWindowPrivate::OnYChanged, this, std::placeholders::_1));
         q_ptr->WidthChangeHandler(std::bind(&MainWindowPrivate::OnWidthChanged, this, std::placeholders::_1));
         q_ptr->HeightChangeHandler(std::bind(&MainWindowPrivate::OnHeightChanged, this, std::placeholders::_1));
-        q_ptr->VisibilityChangeHandler(std::bind(&MainWindowPrivate::OnVisibilityChanged, this, std::placeholders::_1));
         q_ptr->ActiveChangeHandler(std::bind(&MainWindowPrivate::OnActiveChanged, this, std::placeholders::_1));
-        q_ptr->ThemeChangeHandler(std::bind(&MainWindowPrivate::OnThemeChanged, this, std::placeholders::_1));
-        q_ptr->DotsPerInchChangeHandler(std::bind(&MainWindowPrivate::OnDotsPerInchChanged, this, std::placeholders::_1));
     } else {
         Utils::DisplayErrorDialog(L"Failed to initialize MainWindowPrivate.");
         std::exit(-1);
@@ -177,7 +163,7 @@ bool MainWindowPrivate::Initialize() noexcept
         PRINT_HR_ERROR_MESSAGE(DwmSetWindowAttribute, hr, L"Failed to exclude the window from live preview.")
         return false;
     }
-    if (!CreateBackdrop(BackdropSource::Host)) {
+    if (!CreateHostBackdrop()) {
         Utils::DisplayErrorDialog(L"Failed to create the host backdrop.");
         return false;
     }
@@ -242,31 +228,6 @@ bool MainWindowPrivate::Initialize() noexcept
     return true;
 }
 
-UINT MainWindowPrivate::GetTitleBarHeight() const noexcept
-{
-    if (!q_ptr) {
-        Utils::DisplayErrorDialog(L"Can't retrieve the title bar height due to the q_ptr is null.");
-        return 0;
-    }
-    const UINT resizeBorderThicknessY = q_ptr->GetWindowMetrics(WindowMetrics::ResizeBorderThicknessY);
-    const UINT captionHeight = q_ptr->GetWindowMetrics(WindowMetrics::CaptionHeight);
-    const UINT titleBarHeight = ((q_ptr->Visibility() == WindowState::Maximized) ? captionHeight : (captionHeight + resizeBorderThicknessY));
-    return titleBarHeight;
-}
-
-UINT MainWindowPrivate::GetTopFrameMargin() const noexcept
-{
-    if (!q_ptr) {
-        Utils::DisplayErrorDialog(L"Can't retrieve the top frame margin due to q_ptr is null.");
-        return 0;
-    }
-    if (q_ptr->Visibility() == WindowState::Maximized) {
-        return 0;
-    } else {
-        return q_ptr->GetWindowMetrics(WindowMetrics::WindowVisibleFrameBorderThickness);
-    }
-}
-
 void MainWindowPrivate::OnXChanged(const int arg) noexcept
 {
     UNREFERENCED_PARAMETER(arg);
@@ -299,30 +260,12 @@ void MainWindowPrivate::OnHeightChanged(const UINT arg) noexcept
     }
 }
 
-void MainWindowPrivate::OnVisibilityChanged(const WindowState arg) noexcept
-{
-    // ### TODO
-    UNREFERENCED_PARAMETER(arg);
-}
-
 void MainWindowPrivate::OnActiveChanged(const bool arg) noexcept
 {
     UNREFERENCED_PARAMETER(arg);
     if (!Flush()) {
         Utils::DisplayErrorDialog(L"Failed to flush the visuals.");
     }
-}
-
-void MainWindowPrivate::OnThemeChanged(const WindowTheme arg) noexcept
-{
-    // ### TODO
-    UNREFERENCED_PARAMETER(arg);
-}
-
-void MainWindowPrivate::OnDotsPerInchChanged(const UINT arg) noexcept
-{
-    // ### TODO
-    UNREFERENCED_PARAMETER(arg);
 }
 
 bool MainWindowPrivate::CreateCompositionDevice() noexcept
@@ -334,8 +277,8 @@ bool MainWindowPrivate::CreateCompositionDevice() noexcept
     static constexpr const D3D_FEATURE_LEVEL featureLevels[] =
     {
         //D3D_FEATURE_LEVEL_12_2,
-        //D3D_FEATURE_LEVEL_12_1,
-        //D3D_FEATURE_LEVEL_12_0,
+        D3D_FEATURE_LEVEL_12_1,
+        D3D_FEATURE_LEVEL_12_0,
         D3D_FEATURE_LEVEL_11_1,
         D3D_FEATURE_LEVEL_11_0,
         D3D_FEATURE_LEVEL_10_1,
@@ -414,7 +357,43 @@ bool MainWindowPrivate::CreateCompositionTarget() noexcept
     return true;
 }
 
-bool MainWindowPrivate::CreateBackdrop(const BackdropSource source) noexcept
+bool MainWindowPrivate::CreateDesktopBackdrop() noexcept
+{
+    if (!dcompDevice) {
+        Utils::DisplayErrorDialog(L"Can't create the backdrop due to the composition device has not been created yet.");
+        return false;
+    }
+
+    desktopWindow = FindWindowW(L"Progman", L"Program Manager");
+    if (!desktopWindow) {
+        PRINT_WIN32_ERROR_MESSAGE(FindWindowW, L"Failed to find the handle of Progman.")
+        return false;
+    }
+
+    if (GetWindowRect(desktopWindow, &desktopWindowRect) == FALSE) {
+        PRINT_WIN32_ERROR_MESSAGE(GetWindowRect, L"Failed to retrieve the window geometry of the window.")
+        return false;
+    }
+
+    thumbnailSize.cx = RECT_WIDTH(desktopWindowRect);
+    thumbnailSize.cy = RECT_HEIGHT(desktopWindowRect);
+    thumbnail.dwFlags = DWM_TNP_SOURCECLIENTAREAONLY | DWM_TNP_VISIBLE | DWM_TNP_RECTDESTINATION | DWM_TNP_RECTSOURCE | DWM_TNP_OPACITY | DWM_TNP_ENABLE3D;
+    thumbnail.opacity = 255;
+    thumbnail.fVisible = TRUE;
+    thumbnail.fSourceClientAreaOnly = FALSE;
+    thumbnail.rcDestination = { 0, 0, thumbnailSize.cx, thumbnailSize.cy };
+    thumbnail.rcSource = { 0, 0, thumbnailSize.cx, thumbnailSize.cy };
+
+    const HRESULT hr = DwmpCreateSharedThumbnailVisual(q_ptr->WindowHandle(), desktopWindow, 2, &thumbnail, dcompDevice.Get(), reinterpret_cast<VOID **>(desktopWindowVisual.GetAddressOf()), &desktopThumbnail);
+    if (FAILED(hr)) {
+        PRINT_HR_ERROR_MESSAGE(DwmpCreateSharedThumbnailVisual, hr, L"Failed to create the thumbnail visual.")
+        return false;
+    }
+
+    return true;
+}
+
+bool MainWindowPrivate::CreateHostBackdrop() noexcept
 {
     if (!dcompDevice) {
         Utils::DisplayErrorDialog(L"Can't create the backdrop due to the composition device has not been created yet.");
@@ -422,60 +401,32 @@ bool MainWindowPrivate::CreateBackdrop(const BackdropSource source) noexcept
     }
 
     const HWND hWnd = q_ptr->WindowHandle();
-    if (source == BackdropSource::Desktop) {
-        desktopWindow = FindWindowW(L"Progman", L"Program Manager");
-        if (!desktopWindow) {
-            PRINT_WIN32_ERROR_MESSAGE(FindWindowW, L"Failed to find the handle of Progman.")
-            return false;
-        }
-
-        if (GetWindowRect(desktopWindow, &desktopWindowRect) == FALSE) {
-            PRINT_WIN32_ERROR_MESSAGE(GetWindowRect, L"Failed to retrieve the window geometry of the window.")
-            return false;
-        }
-
-        thumbnailSize.cx = RECT_WIDTH(desktopWindowRect);
-        thumbnailSize.cy = RECT_HEIGHT(desktopWindowRect);
-        thumbnail.dwFlags = DWM_TNP_SOURCECLIENTAREAONLY | DWM_TNP_VISIBLE | DWM_TNP_RECTDESTINATION | DWM_TNP_RECTSOURCE | DWM_TNP_OPACITY | DWM_TNP_ENABLE3D;
-        thumbnail.opacity = 255;
-        thumbnail.fVisible = TRUE;
-        thumbnail.fSourceClientAreaOnly = FALSE;
-        thumbnail.rcDestination = {0, 0, thumbnailSize.cx, thumbnailSize.cy};
-        thumbnail.rcSource = {0, 0, thumbnailSize.cx, thumbnailSize.cy};
-
-        const HRESULT hr = DwmpCreateSharedThumbnailVisual(hWnd, desktopWindow, 2, &thumbnail, dcompDevice.Get(), reinterpret_cast<VOID **>(desktopWindowVisual.GetAddressOf()), &desktopThumbnail);
+    HRESULT hr = E_FAIL;
+    if (shouldUseNewAPI) {
+        hr = DwmpCreateSharedMultiWindowVisual(hWnd, dcompDevice.Get(), reinterpret_cast<VOID **>(topLevelWindowVisual.GetAddressOf()), &topLevelWindowThumbnail);
         if (FAILED(hr)) {
-            PRINT_HR_ERROR_MESSAGE(DwmpCreateSharedThumbnailVisual, hr, L"Failed to create the thumbnail visual.")
+            PRINT_HR_ERROR_MESSAGE(DwmpCreateSharedMultiWindowVisual, hr, L"Failed to create the window visual.")
             return false;
         }
     } else {
-        HRESULT hr = E_FAIL;
-        if (shouldUseNewAPI) {
-            hr = DwmpCreateSharedMultiWindowVisual(hWnd, dcompDevice.Get(), reinterpret_cast<VOID **>(topLevelWindowVisual.GetAddressOf()), &topLevelWindowThumbnail);
-            if (FAILED(hr)) {
-                PRINT_HR_ERROR_MESSAGE(DwmpCreateSharedMultiWindowVisual, hr, L"Failed to create the window visual.")
-                return false;
-            }
-        } else {
-            hr = DwmpCreateSharedVirtualDesktopVisual(hWnd, dcompDevice.Get(), reinterpret_cast<VOID **>(topLevelWindowVisual.GetAddressOf()), &topLevelWindowThumbnail);
-            if (FAILED(hr)) {
-                PRINT_HR_ERROR_MESSAGE(DwmpCreateSharedVirtualDesktopVisual, hr, L"Failed to create the desktop visual.")
-                return false;
-            }
-        }
-
-        if (!CreateBackdrop(BackdropSource::Desktop)) {
-            Utils::DisplayErrorDialog(L"Failed to create the desktop backdrop.");
+        hr = DwmpCreateSharedVirtualDesktopVisual(hWnd, dcompDevice.Get(), reinterpret_cast<VOID **>(topLevelWindowVisual.GetAddressOf()), &topLevelWindowThumbnail);
+        if (FAILED(hr)) {
+            PRINT_HR_ERROR_MESSAGE(DwmpCreateSharedVirtualDesktopVisual, hr, L"Failed to create the desktop visual.")
             return false;
         }
+    }
 
-        hwndExclusionList = new HWND[1];
-        hwndExclusionList[0] = static_cast<HWND>(0x0);
+    if (!CreateDesktopBackdrop()) {
+        Utils::DisplayErrorDialog(L"Failed to create the desktop backdrop.");
+        return false;
+    }
 
-        if (!Flush()) {
-            Utils::DisplayErrorDialog(L"Failed to flush the visuals.");
-            return false;
-        }
+    hwndExclusionList = new HWND[1];
+    hwndExclusionList[0] = static_cast<HWND>(0x0);
+
+    if (!Flush()) {
+        Utils::DisplayErrorDialog(L"Failed to flush the visuals.");
+        return false;
     }
 
     return true;
@@ -607,7 +558,7 @@ bool MainWindowPrivate::Commit() noexcept
     return true;
 }
 
-MainWindow::MainWindow() noexcept : Window(true)
+MainWindow::MainWindow() noexcept : Window(WINDOW_USE_ALTERNATIVE_RENDERING)
 {
     d_ptr = std::make_unique<MainWindowPrivate>(this);
 }

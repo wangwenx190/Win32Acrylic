@@ -32,6 +32,12 @@
 #include "Definitions.h"
 #include "Color.hpp"
 
+#define WINDOW_ENABLE_DOUBLE_BUFFERING WS_EX_COMPOSITED
+#define WINDOW_USE_ACCELERATED_SURFACE WS_EX_LAYERED
+#define WINDOW_DO_NOT_ACTIVATE WS_EX_NOACTIVATE
+#define WINDOW_USE_ALTERNATIVE_RENDERING WS_EX_NOREDIRECTIONBITMAP
+#define WINDOW_USE_TRANSLUCENT_BACKGROUND WS_EX_TRANSPARENT
+
 using BoolChangeHandlerCallback = std::function<void (const bool)>;
 using StrChangeHandlerCallback = std::function<void (const std::wstring &)>;
 using IntChangeHandlerCallback = std::function<void (const int)>;
@@ -50,7 +56,7 @@ class WindowPrivate;
 class Window
 {
 public:
-    explicit Window(const bool NoRedirectionBitmap = false) noexcept;
+    explicit Window(const DWORD flags) noexcept;
     ~Window() noexcept;
 
     [[nodiscard]] static int MessageLoop() noexcept;

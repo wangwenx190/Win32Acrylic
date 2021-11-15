@@ -55,7 +55,7 @@ private:
 private:
     MainWindow *q_ptr = nullptr;
     static inline bool m_osEnvDetected = false;
-    static inline bool m_isWin11OrGreater = false;
+    static inline bool m_isAPIWorkingWell = false;
 };
 
 MainWindowPrivate::MainWindowPrivate(MainWindow *q) noexcept
@@ -68,7 +68,14 @@ MainWindowPrivate::MainWindowPrivate(MainWindow *q) noexcept
     if (Initialize()) {
         if (!m_osEnvDetected) {
             m_osEnvDetected = true;
-            m_isWin11OrGreater = (WindowsVersion::CurrentVersion() >= WindowsVersion::Windows11);
+            // The workaround we mentioned below becomes unusable on Windows 11, the window
+            // will flicker a lot during move, and there's some laggy at the same time.
+            // But the undocumented API seems to be fixed in some degree, so don't apply
+            // the workaround on Windows 11, the laggy is still there, but the flicker will
+            // gone.
+            const VersionNumber &curOsVer = WindowsVersion::CurrentVersion();
+            static constexpr const VersionNumber goodVersionStart = VersionNumber(10, 0, 16190);
+            m_isAPIWorkingWell = ((curOsVer >= WindowsVersion::Windows11) || ((curOsVer >= goodVersionStart) && (curOsVer < WindowsVersion::Windows10_RedStone4)));
         }
         q_ptr->CustomMessageHandler(std::bind(&MainWindowPrivate::MainWindowMessageHandler, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, std::placeholders::_4));
         q_ptr->ThemeChangeHandler(std::bind(&MainWindowPrivate::OnThemeChanged, this, std::placeholders::_1));
@@ -130,12 +137,7 @@ bool MainWindowPrivate::MainWindowMessageHandler(const UINT message, const WPARA
     UNREFERENCED_PARAMETER(wParam);
     UNREFERENCED_PARAMETER(lParam);
     UNREFERENCED_PARAMETER(result);
-    // The workaround we mentioned below becomes unusable on Windows 11, the window
-    // will flicker a lot during move, and there's some laggy at the same time.
-    // But the undocumented API seems to be fixed in some degree, so don't apply
-    // the workaround on Windows 11, the laggy is still there, but the flicker will
-    // gone.
-    if (m_isWin11OrGreater) {
+    if (m_isAPIWorkingWell) {
         return false;
     }
     switch (message) {
@@ -167,7 +169,7 @@ void MainWindowPrivate::OnThemeChanged(const WindowTheme arg) noexcept
     }
 }
 
-MainWindow::MainWindow() noexcept : Window(true)
+MainWindow::MainWindow() noexcept : Window(WINDOW_USE_ALTERNATIVE_RENDERING)
 {
     d_ptr = std::make_unique<MainWindowPrivate>(this);
 }

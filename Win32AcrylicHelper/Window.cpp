@@ -359,7 +359,7 @@ static constexpr const wchar_t __NEW_LINE[] = L"\r\n";
 class WindowPrivate
 {
 public:
-    explicit WindowPrivate(Window *q, const bool NoRedirectionBitmap) noexcept;
+    explicit WindowPrivate(Window *q, const DWORD flags) noexcept;
     ~WindowPrivate() noexcept;
 
     template<typename T>
@@ -515,7 +515,7 @@ private:
     WindowColorizationAreaChangeHandlerCallback m_colorizationAreaChangeHandlerCallback = nullptr;
     WindowMessageHandlerCallback m_customMessageHandlerCallback = nullptr;
     WindowMessageFilterCallback m_windowMessageFilterCallback = nullptr;
-    bool m_noRedirectionBitmap = false;
+    bool m_useAlternativeRendering = false;
     static inline bool m_osEnvDetected = false;
     static inline bool m_dpiFunctionsAvailable = false;
     bool m_frameBorderVisible = false;
@@ -826,15 +826,15 @@ bool WindowPrivate::Initialize() noexcept
     return true;
 }
 
-WindowPrivate::WindowPrivate(Window *q, const bool NoRedirectionBitmap) noexcept
+WindowPrivate::WindowPrivate(Window *q, const DWORD flags) noexcept
 {
     if (!q) {
         Utils::DisplayErrorDialog(L"WindowPrivate's q pointer is null.");
         std::exit(-1);
     }
     q_ptr = q;
-    m_noRedirectionBitmap = NoRedirectionBitmap;
-    if (!m_noRedirectionBitmap) {
+    m_useAlternativeRendering = (flags & WINDOW_USE_ALTERNATIVE_RENDERING);
+    if (!m_useAlternativeRendering) {
         // We need this window background brush in WM_PAINT, so create it early.
         m_windowBackgroundBrush = static_cast<HBRUSH>(GetStockObject(BLACK_BRUSH));
         if (!m_windowBackgroundBrush) {
@@ -844,9 +844,7 @@ WindowPrivate::WindowPrivate(Window *q, const bool NoRedirectionBitmap) noexcept
         // Create the title bar background brush early, we'll need it in WM_PAINT.
         TitleBarBackgroundColor(Color::FromRgba(0, 0, 0));
     }
-    const DWORD style = (WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN | WS_CLIPSIBLINGS);
-    const DWORD extendedStyle = (m_noRedirectionBitmap ? WS_EX_NOREDIRECTIONBITMAP : 0L);
-    m_window = CreateWindow2(style, extendedStyle, nullptr, this, sizeof(WindowPrivate *), m_windowBackgroundBrush, WindowProc);
+    m_window = CreateWindow2(WS_OVERLAPPEDWINDOW, flags, nullptr, this, sizeof(WindowPrivate *), m_windowBackgroundBrush, WindowProc);
     if (m_window) {
         if (!Initialize()) {
             Utils::DisplayErrorDialog(L"Failed to initialize WindowPrivate.");
@@ -1447,7 +1445,7 @@ bool WindowPrivate::InternalMessageHandler(const UINT message, const WPARAM wPar
         ColorizationColorChangeHandler();
     } break;
     case WM_PAINT: {
-        if (m_noRedirectionBitmap || !m_frameBorderVisible) {
+        if (m_useAlternativeRendering || !m_frameBorderVisible) {
             break;
         }
         if (!m_windowBackgroundBrush || !m_titleBarBackgroundBrush) {
@@ -1828,7 +1826,7 @@ bool WindowPrivate::InternalMessageHandler(const UINT message, const WPARAM wPar
         ActiveChangeHandler();
     } break;
     case WM_WINDOWPOSCHANGING: {
-        if (!m_noRedirectionBitmap) {
+        if (!m_useAlternativeRendering) {
             // Tell Windows to discard the entire contents of the client area, as re-using
             // parts of the client area would lead to jitter during resize.
             const auto windowPos = reinterpret_cast<LPWINDOWPOS>(lParam);
@@ -1874,7 +1872,7 @@ bool WindowPrivate::InternalMessageHandler(const UINT message, const WPARAM wPar
         }
     } break;
     case WM_ERASEBKGND: {
-        if (!m_noRedirectionBitmap) {
+        if (!m_useAlternativeRendering) {
             // Prevent Windows from drawing the background to avoid flickering during resizing.
             *result = 1;
             return true;
@@ -1914,7 +1912,7 @@ bool WindowPrivate::UpdateWindowFrameMargins2() noexcept
     //  so it should work fine.
     const UINT frameBorderThickness = GetWindowMetrics2(WindowMetrics::WindowVisibleFrameBorderThickness);
     const UINT titleBarHeight = (GetWindowMetrics2(WindowMetrics::ResizeBorderThicknessY) + GetWindowMetrics2(WindowMetrics::CaptionHeight));
-    const UINT topFrameMargin = ((m_visibility == WindowState::Maximized) ? 0 : (m_noRedirectionBitmap ? frameBorderThickness : titleBarHeight));
+    const UINT topFrameMargin = ((m_visibility == WindowState::Maximized) ? 0 : (m_useAlternativeRendering ? frameBorderThickness : titleBarHeight));
     const MARGINS margins = {0, 0, static_cast<int>(topFrameMargin), 0};
     const HRESULT hr = DwmExtendFrameIntoClientArea(m_window, &margins);
     if (FAILED(hr)) {
@@ -2022,9 +2020,9 @@ void WindowPrivate::ColorizationAreaChangeHandler() const noexcept
     }
 }
 
-Window::Window(const bool NoRedirectionBitmap) noexcept
+Window::Window(const DWORD flags) noexcept
 {
-    d_ptr = std::make_unique<WindowPrivate>(this, NoRedirectionBitmap);
+    d_ptr = std::make_unique<WindowPrivate>(this, flags);
 }
 
 Window::~Window() noexcept = default;

@@ -82,8 +82,8 @@ bool ApplicationPrivate::Initialize() noexcept
     const VersionNumber &curOsVer = WindowsVersion::CurrentVersion();
     const std::wstring osVerDbgMsg = std::wstring(L"Current operating system version: ") + WindowsVersion::ToHumanReadableString(curOsVer) + std::wstring(__NEW_LINE);
     OutputDebugStringW(osVerDbgMsg.c_str());
-    if (curOsVer < WindowsVersion::Windows10_19Half1) {
-        Utils::DisplayErrorDialog(L"This application only supports running on Windows 10 19H1 and onwards.");
+    if (curOsVer < WindowsVersion::Windows10_1903) {
+        Utils::DisplayErrorDialog(L"This application only supports running on Windows 10 1903 and onwards.");
         return false;
     }
     if (!m_comInitialized) {

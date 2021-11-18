@@ -44,8 +44,7 @@ void Utils::DisplayErrorDialog(const std::wstring &text) noexcept
 ProcessDPIAwareness Utils::GetProcessDPIAwareness() noexcept
 {
     const VersionNumber &curOsVer = WindowsVersion::CurrentVersion();
-    // Win10 1607
-    if (curOsVer >= WindowsVersion::Windows10_RedStone1) {
+    if (curOsVer >= WindowsVersion::Windows10_1607) {
         const DPI_AWARENESS_CONTEXT context = GetThreadDpiAwarenessContext();
         if (context) {
             const auto awareness = static_cast<int>(GetAwarenessFromDpiAwarenessContext(context));
@@ -102,8 +101,7 @@ ProcessDPIAwareness Utils::GetProcessDPIAwareness() noexcept
 bool Utils::SetProcessDPIAwareness(const ProcessDPIAwareness dpiAwareness) noexcept
 {
     const VersionNumber &curOsVer = WindowsVersion::CurrentVersion();
-    // Win10 1607
-    if (curOsVer >= WindowsVersion::Windows10_RedStone1) {
+    if (curOsVer >= WindowsVersion::Windows10_1607) {
         DPI_AWARENESS_CONTEXT dac = DPI_AWARENESS_CONTEXT_UNAWARE;
         switch (dpiAwareness) {
         case ProcessDPIAwareness::PerMonitorVersion2: {

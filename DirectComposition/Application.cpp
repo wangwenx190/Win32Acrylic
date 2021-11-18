@@ -70,7 +70,8 @@ bool ApplicationPrivate::Initialize() noexcept
     const std::wstring osVerDbgMsg = std::wstring(L"Current operating system version: ") + WindowsVersion::ToHumanReadableString(curOsVer) + std::wstring(__NEW_LINE);
     OutputDebugStringW(osVerDbgMsg.c_str());
     // ### FIXME: Check the exact minimum supported version.
-    if (curOsVer < WindowsVersion::Windows10_ThresHold1) {
+    static constexpr const VersionNumber win10 = VersionNumber(10, 0, 0);
+    if (curOsVer < win10) {
         Utils::DisplayErrorDialog(L"This application only supports running on Windows 10 and onwards.");
         return false;
     }

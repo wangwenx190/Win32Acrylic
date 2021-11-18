@@ -112,7 +112,7 @@ static constexpr const wchar_t __NEW_LINE[] = L"\r\n";
     // Dark mode was first introduced in Windows 10 1607.
     // There is no dark theme before that, so we always assume
     // the light theme is in use.
-    if (WindowsVersion::CurrentVersion() < WindowsVersion::Windows10_RedStone1) {
+    if (WindowsVersion::CurrentVersion() < WindowsVersion::Windows10_1607) {
         return true;
     }
     return (GetDWORDFromRegistry(HKEY_CURRENT_USER, PersonalizeRegistryKeyPath, L"AppsUseLightTheme") != 0);
@@ -133,7 +133,8 @@ static constexpr const wchar_t __NEW_LINE[] = L"\r\n";
 [[nodiscard]] static inline WindowColorizationArea GetGlobalColorizationArea2() noexcept
 {
     // It's a Win10 only feature.
-    if (WindowsVersion::CurrentVersion() < WindowsVersion::Windows10_RedStone1) {
+    static constexpr const VersionNumber win10 = VersionNumber(10, 0, 0);
+    if (WindowsVersion::CurrentVersion() < win10) {
         return WindowColorizationArea::None;
     }
     const HKEY rootKey = HKEY_CURRENT_USER;
@@ -723,10 +724,10 @@ UINT WindowPrivate::GetWindowDPI2() const noexcept
                 return result;
             }
         }
-        if (curOsVer >= WindowsVersion::Windows10_RedStone4) {
+        if (curOsVer >= WindowsVersion::Windows10_1803) {
             const HANDLE hCurrentProcess = GetCurrentProcess();
             if (hCurrentProcess) {
-                const UINT result = GetSystemDpiForProcess(hCurrentProcess); // Win10 1803
+                const UINT result = GetSystemDpiForProcess(hCurrentProcess);
                 if (result > 0) {
                     return result;
                 }
@@ -791,9 +792,10 @@ bool WindowPrivate::Initialize() noexcept
     const VersionNumber &curOsVer = WindowsVersion::CurrentVersion();
     if (!m_osEnvDetected) {
         m_osEnvDetected = true;
-        m_dpiFunctionsAvailable = (curOsVer >= WindowsVersion::Windows10_RedStone1); // Win10 1607
+        m_dpiFunctionsAvailable = (curOsVer >= WindowsVersion::Windows10_1607);
     }
-    m_frameBorderVisible = (curOsVer >= WindowsVersion::Windows10_ThresHold1); // Win10 1507
+    static constexpr const VersionNumber win10 = VersionNumber(10, 0, 0);
+    m_frameBorderVisible = (curOsVer >= win10);
     m_dpi = GetWindowDPI2();
     const std::wstring dpiDbgMsg = std::wstring(L"Current window's dots-per-inch (DPI): ") + std::to_wstring(m_dpi) + std::wstring(__NEW_LINE);
     OutputDebugStringW(dpiDbgMsg.c_str());

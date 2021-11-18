@@ -1580,7 +1580,7 @@ bool WindowPrivate::InternalMessageHandler(const UINT message, const WPARAM wPar
             // Store the original top before the default window proc applies the default frame.
             const LONG originalTop = clientRect->top;
             // Apply the default frame
-            const LRESULT ret = DefWindowProcW(m_window, WM_NCCALCSIZE, TRUE, lParam);
+            const LRESULT ret = DefWindowProcW(m_window, WM_NCCALCSIZE, wParam, lParam);
             if (ret != 0) {
                 *result = ret;
                 return true;

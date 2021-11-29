@@ -1588,7 +1588,6 @@ bool WindowPrivate::InternalMessageHandler(const UINT message, const WPARAM wPar
             // Re-apply the original top from before the size of the default frame was applied.
             clientRect->top = originalTop;
         }
-        bool nonClientAreaExists = false;
         const bool max = (m_visibility == WindowState::Maximized);
         const bool full = false; // ### TODO
         // We don't need this correction when we're fullscreen. We will
@@ -1609,7 +1608,6 @@ bool WindowPrivate::InternalMessageHandler(const UINT message, const WPARAM wPar
                 clientRect->left += resizeBorderThicknessX;
                 clientRect->right -= resizeBorderThicknessX;
             }
-            nonClientAreaExists = true;
         }
         // Attempt to detect if there's an autohide taskbar, and if
         // there is, reduce our size a bit on the side with the taskbar,
@@ -1698,30 +1696,19 @@ bool WindowPrivate::InternalMessageHandler(const UINT message, const WPARAM wPar
                 if (top) {
                     // Peculiarly, when we're fullscreen,
                     clientRect->top += DefaultAutoHideTaskBarThicknessY;
-                    nonClientAreaExists = true;
                 } else if (bottom) {
                     clientRect->bottom -= DefaultAutoHideTaskBarThicknessY;
-                    nonClientAreaExists = true;
                 } else if (left) {
                     clientRect->left += DefaultAutoHideTaskBarThicknessX;
-                    nonClientAreaExists = true;
                 } else if (right) {
                     clientRect->right -= DefaultAutoHideTaskBarThicknessX;
-                    nonClientAreaExists = true;
                 }
             }
         }
-        // If the window bounds change, we're going to relayout and repaint
-        // anyway. Returning WVR_REDRAW avoids an extra paint before that of
-        // the old client pixels in the (now wrong) location, and thus makes
-        // actions like resizing a window from the left edge look slightly
-        // less broken.
-        //
-        // We cannot return WVR_REDRAW when there is nonclient area, or
-        // Windows exhibits bugs where client pixels and child HWNDs are
-        // mispositioned by the width/height of the upper-left nonclient
-        // area.
-        *result = (((static_cast<BOOL>(wParam) == FALSE) || nonClientAreaExists) ? 0 : WVR_REDRAW);
+        // We cannot return WVR_REDRAW otherwise Windows exhibits bugs
+        // where client pixels and child windows are mispositioned by
+        // the width/height of the upper-left nonclient area.
+        *result = 0;
         return true;
     } break;
     case WM_NCHITTEST: {

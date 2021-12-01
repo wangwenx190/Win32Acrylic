@@ -32,7 +32,9 @@
 #include <ShellApi.h>
 #include <ShellScalingApi.h>
 #include <DwmApi.h>
+#include <TimeApi.h>
 #include <cmath>
+#include <cassert>
 
 #ifndef ABM_GETAUTOHIDEBAREX
 #define ABM_GETAUTOHIDEBAREX (0x0000000b)
@@ -1704,6 +1706,63 @@ bool WindowPrivate::InternalMessageHandler(const UINT message, const WPARAM wPar
                     clientRect->right -= DefaultAutoHideTaskBarThicknessX;
                 }
             }
+        }
+        // Dirty hack to workaround the DWM flicker.
+        LARGE_INTEGER freq = {};
+        if (QueryPerformanceFrequency(&freq) == FALSE) {
+            PRINT_WIN32_ERROR_MESSAGE(QueryPerformanceFrequency, L"Failed to retrieve the CPU frequency.")
+            return false;
+        }
+        TIMECAPS tc = {};
+        if (timeGetDevCaps(&tc, sizeof(tc)) != MMSYSERR_NOERROR) {
+            Utils::DisplayErrorDialog(L"timeGetDevCaps() failed.");
+            return false;
+        }
+        const UINT ms_granularity = tc.wPeriodMin;
+        if (timeBeginPeriod(ms_granularity) != TIMERR_NOERROR) {
+            Utils::DisplayErrorDialog(L"timeBeginPeriod() failed.");
+            return false;
+        }
+        LARGE_INTEGER now0 = {};
+        if (QueryPerformanceCounter(&now0) == FALSE) {
+            PRINT_WIN32_ERROR_MESSAGE(QueryPerformanceCounter, L"Failed to retrieve the performance counter.")
+            return false;
+        }
+        // ask DWM where the vertical blank falls
+        DWM_TIMING_INFO dti;
+        SecureZeroMemory(&dti, sizeof(dti));
+        dti.cbSize = sizeof(dti);
+        const HRESULT hr = DwmGetCompositionTimingInfo(nullptr, &dti);
+        if (FAILED(hr)) {
+            PRINT_HR_ERROR_MESSAGE(DwmGetCompositionTimingInfo, hr, L"Failed to retrieve the composition timing info.")
+            return false;
+        }
+        LARGE_INTEGER now1 = {};
+        if (QueryPerformanceCounter(&now1) == FALSE) {
+            PRINT_WIN32_ERROR_MESSAGE(QueryPerformanceCounter, L"Failed to retrieve the performance counter.")
+            return false;
+        }
+        // - DWM told us about SOME vertical blank
+        //   - past or future, possibly many frames away
+        // - convert that into the NEXT vertical blank
+        const LONGLONG period = dti.qpcRefreshPeriod;
+        const LONGLONG dt = dti.qpcVBlank - now1.QuadPart;
+        LONGLONG w = 0, m = 0;
+        if (dt >= 0) {
+            w = dt / period;
+        } else {
+            // reach back to previous period
+            // - so m represents consistent position within phase
+            w = -1 + dt / period;
+        }
+        m = dt - (period * w);
+        assert(m >= 0);
+        assert(m < period);
+        const double m_ms = 1000.0 * static_cast<double>(m) / static_cast<double>(freq.QuadPart);
+        Sleep(static_cast<int>(std::round(m_ms)));
+        if (timeEndPeriod(ms_granularity) != TIMERR_NOERROR) {
+            Utils::DisplayErrorDialog(L"timeEndPeriod() failed.");
+            return false;
         }
         // We cannot return WVR_REDRAW otherwise Windows exhibits bugs
         // where client pixels and child windows are mispositioned by

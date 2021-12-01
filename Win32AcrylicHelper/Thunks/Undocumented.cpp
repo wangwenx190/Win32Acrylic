@@ -39,15 +39,11 @@ EXTERN_C result_type WINAPI \
 symbol \
 argument_signature \
 { \
-    static bool tried = false; \
-    static decltype (& :: symbol) symbol ## _API = nullptr; \
-    if (!tried) { \
-        tried = true; \
+    using sig = decltype (& :: symbol); \
+    static const sig symbol ## _API = [](){ \
         const HMODULE dll = LoadLibraryExW(L#library , nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32); \
-        if (dll) { \
-            symbol ## _API = reinterpret_cast<decltype (& :: symbol)>(GetProcAddress(dll, MAKEINTRESOURCEA( ordinal ))); \
-        } \
-    } \
+        return ( dll ? reinterpret_cast<sig>(GetProcAddress(dll, MAKEINTRESOURCEA( ordinal ))) : nullptr ); \
+    }(); \
     return ( ( symbol ## _API ) ? ( symbol ## _API argument_list ) : ( default_result ) ); \
 } \
 _LCRT_DEFINE_IAT_SYMBOL( symbol , 0 );

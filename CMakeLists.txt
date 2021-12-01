@@ -31,15 +31,7 @@ option(BUILD_DirectComposition_DEMO "Build the Direct Composition demo applicati
 option(BUILD_Win32_DEMO "Build the Win32 demo application." ON)
 option(OPTIMIZE_FOR_SPEED "Enable as much optimization as possible." OFF)
 
-if(DEFINED CMAKE_BUILD_TYPE)
-    if("x${CMAKE_BUILD_TYPE}" STREQUAL "xMinSizeRel")
-        message(FATAL_ERROR "This project doesn't support the MinSizeRel configuration.")
-    endif()
-    if("x${CMAKE_BUILD_TYPE}" STREQUAL "xRelWithDebInfo")
-        message(FATAL_ERROR "This project doesn't support the RelWithDebInfo configuration.")
-    endif()
-else()
-    # Defaults to release builds if not set by the user.
+if(NOT DEFINED CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE "Release" CACHE STRING "" FORCE)
 endif()
 
@@ -77,12 +69,12 @@ string(APPEND CMAKE_CXX_FLAGS_DEBUG " /JMC ")
 
 set(_optimization_flags)
 if(OPTIMIZE_FOR_SPEED)
-    # Don't use "/GA" for DLLs, it will cause bad code generation.
-    set(_optimization_flags "/O2 /Ob3 /Oi /GA /GT")
+    set(_optimization_flags "/O2 /Ob3 /Oi")
 else()
     set(_optimization_flags "/O1 /Ob1")
 endif()
-string(APPEND CMAKE_CXX_FLAGS_RELEASE " ${_optimization_flags} /guard:cf /guard:ehcont /Gw /Gy /Zc:inline ")
+# Don't use "/GA" for DLLs, it will cause bad code generation.
+string(APPEND CMAKE_CXX_FLAGS_RELEASE " ${_optimization_flags} /guard:cf /guard:ehcont /GA /GT /Gw /Gy /Zc:inline ")
 
 string(APPEND CMAKE_EXE_LINKER_FLAGS_RELEASE " /CETCOMPAT /DYNAMICBASE /GUARD:CF /GUARD:EHCONT /HIGHENTROPYVA /LARGEADDRESSAWARE /NXCOMPAT /OPT:REF /OPT:ICF /TSAWARE /WX ")
 
@@ -112,14 +104,10 @@ set(SOURCES_Win32AcrylicHelper
     Win32AcrylicHelper/Thunks/CoreMessaging_Thunk.cpp Win32AcrylicHelper/Thunks/WinRTWrappers.cpp
     Win32AcrylicHelper/Thunks/Undocumented.h Win32AcrylicHelper/Thunks/Undocumented.cpp
     Win32AcrylicHelper/Thunks/SHCore_Thunk.cpp Win32AcrylicHelper/Thunks/D2D1_Thunk.cpp
+    Win32AcrylicHelper/Thunks/WinMM_Thunk.cpp
 )
 add_library(${PROJECT_NAME} STATIC ${SOURCES_Win32AcrylicHelper})
 add_library(wangwenx190::${PROJECT_NAME} ALIAS ${PROJECT_NAME})
-# No need to enable link time optimization for static libraries.
-#set_target_properties(${PROJECT_NAME} PROPERTIES
-#    INTERPROCEDURAL_OPTIMIZATION OFF
-#    INTERPROCEDURAL_OPTIMIZATION_RELEASE OFF
-#)
 target_include_directories(${PROJECT_NAME} PUBLIC
     Win32AcrylicHelper
     Win32AcrylicHelper/Thunks
@@ -139,7 +127,7 @@ target_compile_definitions(${PROJECT_NAME} PUBLIC
     WINVER=${_WIN32_WINNT_WIN10} _WIN32_WINNT=${_WIN32_WINNT_WIN10}
     _WIN32_IE=${_WIN32_WINNT_WIN10} NTDDI_VERSION=${NTDDI_WIN10_CO}
     _KERNEL32_ _USER32_ _SHELL32_ _GDI32_ _OLE32_ _OLEAUT32_
-    _ADVAPI32_ _COMBASEAPI_ _DWMAPI_ _UXTHEME_ _ROAPI_
+    _ADVAPI32_ _COMBASEAPI_ _DWMAPI_ _UXTHEME_ _ROAPI_ _WINMM_
 )
 
 # Demo applications

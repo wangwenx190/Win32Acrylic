@@ -31,28 +31,25 @@
 
 const VersionNumber &WindowsVersion::CurrentVersion() noexcept
 {
-    static bool tried = false;
-    static VersionNumber version = VersionNumber();
-    if (version.Empty()) {
-        if (!tried) {
-            tried = true;
-            static const auto RtlGetVersion_API = reinterpret_cast<NTSTATUS(WINAPI *)(PRTL_OSVERSIONINFOW)>(SystemLibrary::GetSymbolNoCache(L"ntdll.dll", L"RtlGetVersion"));
-            if (RtlGetVersion_API) {
-                RTL_OSVERSIONINFOEXW osvi;
-                SecureZeroMemory(&osvi, sizeof(osvi));
-                osvi.dwOSVersionInfoSize = sizeof(osvi);
-                if (RtlGetVersion_API(reinterpret_cast<PRTL_OSVERSIONINFOW>(&osvi)) == STATUS_SUCCESS) {
-                    version.Major(osvi.dwMajorVersion);
-                    version.Minor(osvi.dwMinorVersion);
-                    version.Patch(osvi.dwBuildNumber);
-                } else {
-                    PRINT_WIN32_ERROR_MESSAGE(RtlGetVersion, L"Failed to retrieve the current system version.")
-                }
+    static const VersionNumber version = [](){
+        int major = 0, minor = 0, patch = 0;
+        static const auto RtlGetVersion_API = reinterpret_cast<NTSTATUS(WINAPI *)(PRTL_OSVERSIONINFOW)>(SystemLibrary::GetSymbolNoCache(L"ntdll.dll", L"RtlGetVersion"));
+        if (RtlGetVersion_API) {
+            RTL_OSVERSIONINFOEXW osvi;
+            SecureZeroMemory(&osvi, sizeof(osvi));
+            osvi.dwOSVersionInfoSize = sizeof(osvi);
+            if (RtlGetVersion_API(reinterpret_cast<PRTL_OSVERSIONINFOW>(&osvi)) == STATUS_SUCCESS) {
+                major = osvi.dwMajorVersion;
+                minor = osvi.dwMinorVersion;
+                patch = osvi.dwBuildNumber;
             } else {
-                Utils::DisplayErrorDialog(L"Failed to resolve symbol \"RtlGetVersion()\" from dynamic link library \"NTDll.dll\".");
+                PRINT_WIN32_ERROR_MESSAGE(RtlGetVersion, L"Failed to retrieve the current system version.")
             }
+        } else {
+            Utils::DisplayErrorDialog(L"Failed to resolve symbol \"RtlGetVersion()\" from dynamic link library \"NTDll.dll\".");
         }
-    }
+        return VersionNumber(major, minor, patch);
+    }();
     return version;
 }
 
@@ -76,7 +73,7 @@ std::wstring WindowsVersion::ToHumanReadableString(const VersionNumber &version)
 {
     std::wstring humanReadableString = {};
     if (version >= Windows11) {
-        humanReadableString = L"Windows 11";
+        humanReadableString = L"Windows 11 Version 21H2";
     } else if (version >= Windows10_21H2) {
         humanReadableString = L"Windows 10 Version 21H2 (November 2021 Update)";
     } else if (version >= Windows10_21H1) {

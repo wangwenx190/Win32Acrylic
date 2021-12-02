@@ -1759,7 +1759,7 @@ bool WindowPrivate::InternalMessageHandler(const UINT message, const WPARAM wPar
         assert(m >= 0);
         assert(m < period);
         const double m_ms = 1000.0 * static_cast<double>(m) / static_cast<double>(freq.QuadPart);
-        Sleep(static_cast<int>(std::round(m_ms)));
+        Sleep(static_cast<DWORD>(std::round(m_ms)));
         if (timeEndPeriod(ms_granularity) != TIMERR_NOERROR) {
             Utils::DisplayErrorDialog(L"timeEndPeriod() failed.");
             return false;

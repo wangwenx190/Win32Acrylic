@@ -35,18 +35,6 @@ public:
     explicit MainWindow() noexcept;
     ~MainWindow() noexcept;
 
-    [[nodiscard]] const Color &TintColor() const noexcept;
-    void TintColor(const Color &value) noexcept;
-
-    [[nodiscard]] double TintOpacity() const noexcept;
-    void TintOpacity(const double value) noexcept;
-
-    [[nodiscard]] double LuminosityOpacity() const noexcept;
-    void LuminosityOpacity(const double value) noexcept;
-
-    [[nodiscard]] const Color &FallbackColor() const noexcept;
-    void FallbackColor(const Color &value) noexcept;
-
 private:
     MainWindow(const MainWindow &) = delete;
     MainWindow &operator=(const MainWindow &) = delete;

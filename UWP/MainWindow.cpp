@@ -29,16 +29,16 @@
 
 namespace Constants {
 namespace Light {
-static constexpr const winrt::Windows::UI::Color TintColor = {255, 252, 252, 252};
-static constexpr const double TintOpacity = 0.0;
-static constexpr const double LuminosityOpacity = 0.85;
-static constexpr const winrt::Windows::UI::Color FallbackColor = {255, 249, 249, 249};
+[[maybe_unused]] static constexpr const winrt::Windows::UI::Color TintColor = {255, 252, 252, 252};
+[[maybe_unused]] static constexpr const double TintOpacity = 0.0;
+[[maybe_unused]] static constexpr const double LuminosityOpacity = 0.85;
+[[maybe_unused]] static constexpr const winrt::Windows::UI::Color FallbackColor = {255, 249, 249, 249};
 } // namespace Light
 namespace Dark {
-static constexpr const winrt::Windows::UI::Color TintColor = {255, 44, 44, 44};
-static constexpr const double TintOpacity = 0.15;
-static constexpr const double LuminosityOpacity = 0.96;
-static constexpr const winrt::Windows::UI::Color FallbackColor = {255, 44, 44, 44};
+[[maybe_unused]] static constexpr const winrt::Windows::UI::Color TintColor = {255, 44, 44, 44};
+[[maybe_unused]] static constexpr const double TintOpacity = 0.15;
+[[maybe_unused]] static constexpr const double LuminosityOpacity = 0.96;
+[[maybe_unused]] static constexpr const winrt::Windows::UI::Color FallbackColor = {255, 44, 44, 44};
 } // namespace Dark
 namespace HighContrast {
 // ### TO BE IMPLEMENTED
@@ -60,18 +60,6 @@ class MainWindowPrivate
 public:
     explicit MainWindowPrivate(MainWindow *q) noexcept;
     ~MainWindowPrivate() noexcept;
-
-    [[nodiscard]] const Color &TintColor() const noexcept;
-    void TintColor(const Color &value) noexcept;
-
-    [[nodiscard]] double TintOpacity() const noexcept;
-    void TintOpacity(const double value) noexcept;
-
-    [[nodiscard]] double LuminosityOpacity() const noexcept;
-    void LuminosityOpacity(const double value) noexcept;
-
-    [[nodiscard]] const Color &FallbackColor() const noexcept;
-    void FallbackColor(const Color &value) noexcept;
 
     [[nodiscard]] double GetDevicePixelRatio() const noexcept;
     [[nodiscard]] SIZE GetPhysicalSize() const noexcept;
@@ -114,10 +102,6 @@ private:
     MainWindow *q_ptr = nullptr;
     HWND m_dragBarWindow = nullptr;
     HWND m_xamlIslandWindow = nullptr;
-    std::optional<Color> m_tintColor = std::nullopt;
-    std::optional<double> m_tintOpacity = std::nullopt;
-    std::optional<double> m_luminosityOpacity = std::nullopt;
-    std::optional<Color> m_fallbackColor = std::nullopt;
     winrt::Windows::UI::Xaml::Hosting::DesktopWindowXamlSource m_xamlSource = nullptr;
     winrt::Windows::UI::Xaml::Controls::Grid m_rootGrid = nullptr;
     winrt::Windows::UI::Xaml::Media::AcrylicBrush m_acrylicBrush = nullptr;
@@ -153,54 +137,6 @@ MainWindowPrivate::~MainWindowPrivate() noexcept
     if (m_xamlSource != nullptr) {
         m_xamlSource.Close();
         m_xamlSource = nullptr;
-    }
-}
-
-const Color &MainWindowPrivate::TintColor() const noexcept
-{
-    return m_tintColor.value();
-}
-
-void MainWindowPrivate::TintColor(const Color &value) noexcept
-{
-    if (m_tintColor.value() != value) {
-        m_tintColor = value;
-    }
-}
-
-double MainWindowPrivate::TintOpacity() const noexcept
-{
-    return m_tintOpacity.value();
-}
-
-void MainWindowPrivate::TintOpacity(const double value) noexcept
-{
-    if (m_tintOpacity.value() != value) {
-        m_tintOpacity = value;
-    }
-}
-
-double MainWindowPrivate::LuminosityOpacity() const noexcept
-{
-    return m_luminosityOpacity.value();
-}
-
-void MainWindowPrivate::LuminosityOpacity(const double value) noexcept
-{
-    if (m_luminosityOpacity.value() != value) {
-        m_luminosityOpacity = value;
-    }
-}
-
-const Color &MainWindowPrivate::FallbackColor() const noexcept
-{
-    return m_fallbackColor.value();
-}
-
-void MainWindowPrivate::FallbackColor(const Color &value) noexcept
-{
-    if (m_fallbackColor.value() != value) {
-        m_fallbackColor = value;
     }
 }
 
@@ -503,44 +439,24 @@ bool MainWindowPrivate::RefreshWindowBackgroundBrush() noexcept
         Utils::DisplayErrorDialog(L"Can't refresh the window background brush due to the brush has not been created yet.");
         return false;
     }
-    auto tintColor = winrt::Windows::UI::Color();
-    double tintOpacity = 0.0;
-    double luminosityOpacity = 0.0;
-    auto fallbackColor = winrt::Windows::UI::Color();
     switch (q_ptr->Theme()) {
     case WindowTheme::Light: {
-        tintColor = Constants::Light::TintColor;
-        tintOpacity = Constants::Light::TintOpacity;
-        luminosityOpacity = Constants::Light::LuminosityOpacity;
-        fallbackColor = Constants::Light::FallbackColor;
+        m_acrylicBrush.TintColor(Constants::Light::TintColor);
+        m_acrylicBrush.TintOpacity(Constants::Light::TintOpacity);
+        m_acrylicBrush.TintLuminosityOpacity(Constants::Light::LuminosityOpacity);
+        m_acrylicBrush.FallbackColor(Constants::Light::FallbackColor);
     } break;
     case WindowTheme::Dark: {
-        tintColor = Constants::Dark::TintColor;
-        tintOpacity = Constants::Dark::TintOpacity;
-        luminosityOpacity = Constants::Dark::LuminosityOpacity;
-        fallbackColor = Constants::Dark::FallbackColor;
+        m_acrylicBrush.TintColor(Constants::Dark::TintColor);
+        m_acrylicBrush.TintOpacity(Constants::Dark::TintOpacity);
+        m_acrylicBrush.TintLuminosityOpacity(Constants::Dark::LuminosityOpacity);
+        m_acrylicBrush.FallbackColor(Constants::Dark::FallbackColor);
     } break;
     case WindowTheme::HighContrast: {
         // ### TODO
     } break;
     }
-    if (m_tintColor.has_value()) {
-        tintColor = ToWinRTColor(m_tintColor.value());
-    }
-    if (m_tintOpacity.has_value()) {
-        tintOpacity = m_tintOpacity.value();
-    }
-    if (m_luminosityOpacity.has_value()) {
-        luminosityOpacity = m_luminosityOpacity.value();
-    }
-    if (m_fallbackColor.has_value()) {
-        fallbackColor = ToWinRTColor(m_fallbackColor.value());
-    }
-    m_acrylicBrush.TintColor(tintColor);
-    m_acrylicBrush.TintOpacity(tintOpacity);
-    m_acrylicBrush.TintLuminosityOpacity(luminosityOpacity);
-    m_acrylicBrush.FallbackColor(fallbackColor);
-    q_ptr->TitleBarBackgroundColor(ToColor(fallbackColor));
+    q_ptr->TitleBarBackgroundColor(ToColor(m_acrylicBrush.FallbackColor()));
     return true;
 }
 
@@ -682,9 +598,6 @@ bool MainWindowPrivate::MainWindowMessageHandler(const UINT message, const WPARA
             }
         }
     } break;
-    case WM_NCHITTEST: {
-        // ### TODO: HTSYSMENU/HTMINBUTTON/HTMAXBUTTON/HTCLOSE
-    } break;
     default:
         break;
     }
@@ -751,43 +664,3 @@ MainWindow::MainWindow() noexcept : Window(0L)
 }
 
 MainWindow::~MainWindow() noexcept = default;
-
-const Color &MainWindow::TintColor() const noexcept
-{
-    return d_ptr->TintColor();
-}
-
-void MainWindow::TintColor(const Color &value) noexcept
-{
-    d_ptr->TintColor(value);
-}
-
-double MainWindow::TintOpacity() const noexcept
-{
-    return d_ptr->TintOpacity();
-}
-
-void MainWindow::TintOpacity(const double value) noexcept
-{
-    d_ptr->TintOpacity(value);
-}
-
-double MainWindow::LuminosityOpacity() const noexcept
-{
-    return d_ptr->LuminosityOpacity();
-}
-
-void MainWindow::LuminosityOpacity(const double value) noexcept
-{
-    d_ptr->LuminosityOpacity(value);
-}
-
-const Color &MainWindow::FallbackColor() const noexcept
-{
-    return d_ptr->FallbackColor();
-}
-
-void MainWindow::FallbackColor(const Color &value) noexcept
-{
-    d_ptr->FallbackColor(value);
-}

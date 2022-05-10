@@ -297,7 +297,7 @@ static constexpr const wchar_t __NEW_LINE[] = L"\r\n";
     WNDCLASSEXW wcex;
     SecureZeroMemory(&wcex, sizeof(wcex));
     wcex.cbSize = sizeof(wcex);
-    wcex.style = CS_HREDRAW | CS_VREDRAW | CS_DBLCLKS;
+    wcex.style = CS_DBLCLKS;
     wcex.lpfnWndProc = wndProc;
     wcex.hInstance = HINST_THISCOMPONENT;
     wcex.lpszClassName = guid.c_str();
@@ -566,7 +566,7 @@ bool WindowPrivate::TriggerWindowFrameChange2() const noexcept
         Utils::DisplayErrorDialog(L"Failed to trigger a window frame change event due to the window has not been created yet.");
         return false;
     }
-    constexpr const UINT flags = (SWP_FRAMECHANGED | SWP_NOACTIVATE | SWP_NOSIZE | SWP_NOMOVE | SWP_NOZORDER | SWP_NOOWNERZORDER);
+    static constexpr const UINT flags = (SWP_FRAMECHANGED | SWP_NOACTIVATE | SWP_NOSIZE | SWP_NOMOVE | SWP_NOZORDER | SWP_NOOWNERZORDER);
     if (SetWindowPos(m_window, nullptr, 0, 0, 0, 0, flags) == FALSE) {
         PRINT_WIN32_ERROR_MESSAGE(SetWindowPos, L"Failed to trigger a window frame change event for the window.")
         return false;
@@ -581,12 +581,10 @@ bool WindowPrivate::RefreshWindowTheme2() const noexcept
         return false;
     }
     BOOL enableDarkFrame = FALSE;
-    std::wstring themeName = {};
+    std::wstring themeName = L"Explorer";
     switch (m_theme) {
-    case WindowTheme::Light: {
-        enableDarkFrame = FALSE;
-        themeName = {};
-    } break;
+    case WindowTheme::Light:
+        break;
     case WindowTheme::Dark: {
         enableDarkFrame = TRUE;
         themeName = L"Dark_Explorer";
@@ -627,7 +625,7 @@ bool WindowPrivate::OpenSystemMenu2(const POINT pos) const noexcept
     mii.fMask = MIIM_STATE;
     mii.fType = MFT_STRING;
     const auto setState = [&mii, menu](const UINT item, const bool enabled) -> bool {
-        mii.fState = (enabled ? MF_ENABLED : MF_DISABLED);
+        mii.fState = (enabled ? MFS_ENABLED : MFS_DISABLED);
         if (SetMenuItemInfoW(menu, item, FALSE, &mii) == FALSE) {
             PRINT_WIN32_ERROR_MESSAGE(SetMenuItemInfoW, L"Failed to set menu item information.")
             return false;
@@ -653,7 +651,7 @@ bool WindowPrivate::OpenSystemMenu2(const POINT pos) const noexcept
     if (!setState(SC_CLOSE, true)) {
         return false;
     }
-    if (SetMenuDefaultItem(menu, UINT_MAX, FALSE) == FALSE) {
+    if (SetMenuDefaultItem(menu, SC_CLOSE, FALSE) == FALSE) {
         PRINT_WIN32_ERROR_MESSAGE(SetMenuDefaultItem, L"Failed to set default menu item.")
         return false;
     }
@@ -1151,7 +1149,7 @@ bool WindowPrivate::SetGeometry(const int x, const int y, const UINT w, const UI
         Utils::DisplayErrorDialog(L"Failed to change the window geometry due to the window has not been created yet.");
         return false;
     }
-    constexpr const UINT flags = (SWP_SHOWWINDOW | SWP_NOACTIVATE | SWP_NOZORDER | SWP_NOOWNERZORDER);
+    static constexpr const UINT flags = (SWP_SHOWWINDOW | SWP_NOACTIVATE | SWP_NOZORDER | SWP_NOOWNERZORDER);
     if (SetWindowPos(m_window, nullptr, x, y, w, h, flags) == FALSE) {
         PRINT_WIN32_ERROR_MESSAGE(SetWindowPos, L"Failed to change the window geometry.")
         return false;
@@ -1408,7 +1406,7 @@ bool WindowPrivate::InternalMessageHandler(const UINT message, const WPARAM wPar
         // wParam == 0: User-wide setting change
         // wParam == 1: System-wide setting change
         // ### TODO: how to detect high contrast theme here
-        if (((wParam == 0) || (wParam == 1)) && (_wcsicmp(reinterpret_cast<LPCWSTR>(lParam), L"ImmersiveColorSet") == 0)) {
+        if ((wParam == 0) && (lParam != 0) && (std::wcscmp(reinterpret_cast<LPCWSTR>(lParam), L"ImmersiveColorSet") == 0)) {
             m_colorizationArea = GetGlobalColorizationArea2();
             m_theme = GetGlobalApplicationTheme2();
             ColorizationAreaChangeHandler();

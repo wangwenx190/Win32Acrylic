@@ -89,8 +89,8 @@
 // https://github.com/microsoft/Windows.UI.Composition-Win32-Samples/issues/47
 namespace winrt::impl
 {
-    template<typename Async>
-    auto wait_for(Async const& async, Windows::Foundation::TimeSpan const& timeout);
+template<typename Async>
+auto wait_for(Async const& async, Windows::Foundation::TimeSpan const& timeout);
 }
 
 #include <WinRT\Windows.Foundation.Collections.h>

@@ -30,12 +30,10 @@
 #include "WindowsVersion.h"
 #include "Undocumented.h"
 
-static constexpr const wchar_t __NEW_LINE[] = L"\r\n";
-
 void Utils::DisplayErrorDialog(const std::wstring &text) noexcept
 {
     if (!text.empty()) {
-        const std::wstring textWithNewLine = text + std::wstring(__NEW_LINE);
+        const std::wstring textWithNewLine = text + L'\n';
         OutputDebugStringW(textWithNewLine.c_str());
         MessageBoxW(nullptr, text.c_str(), L"Error", MB_ICONERROR | MB_OK);
     }

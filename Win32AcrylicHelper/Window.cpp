@@ -40,8 +40,6 @@
 #define ABM_GETAUTOHIDEBAREX (0x0000000b)
 #endif
 
-static constexpr const wchar_t __NEW_LINE[] = L"\r\n";
-
 [[nodiscard]] static inline std::wstring GenerateGUID() noexcept
 {
     GUID guid = {};
@@ -797,7 +795,7 @@ bool WindowPrivate::Initialize() noexcept
     static constexpr const VersionNumber win10 = VersionNumber(10, 0, 0);
     m_frameBorderVisible = (curOsVer >= win10);
     m_dpi = GetWindowDPI2();
-    const std::wstring dpiDbgMsg = std::wstring(L"Current window's dots-per-inch (DPI): ") + std::to_wstring(m_dpi) + std::wstring(__NEW_LINE);
+    const std::wstring dpiDbgMsg = std::wstring(L"Current window's dots-per-inch (DPI): ") + std::to_wstring(m_dpi) + L'\n';
     OutputDebugStringW(dpiDbgMsg.c_str());
     if (!UpdateWindowFrameMargins2()) {
         Utils::DisplayErrorDialog(L"Failed to update the window frame margins.");
@@ -823,7 +821,7 @@ bool WindowPrivate::Initialize() noexcept
     m_width = windowSize.cx;
     m_height = windowSize.cy;
     m_title = {};
-    m_frameCorner = ((curOsVer >= WindowsVersion::Windows11) ? WindowFrameCorner::Round : WindowFrameCorner::Square);
+    m_frameCorner = ((curOsVer >= WindowsVersion::Windows11_21H2) ? WindowFrameCorner::Round : WindowFrameCorner::Square);
     m_startupLocation = WindowStartupLocation::Default;
     return true;
 }
@@ -1423,7 +1421,7 @@ bool WindowPrivate::InternalMessageHandler(const UINT message, const WPARAM wPar
         const UINT dpiY = HIWORD(wParam);
         m_dpi = static_cast<UINT>(std::round(static_cast<double>(dpiX + dpiY) / 2.0));
         DotsPerInchChangeHandler();
-        const std::wstring dpiDbgMsg = std::wstring(L"Current window's dots-per-inch (DPI) has changed from ") + std::to_wstring(oldDPI) + std::wstring(L" to ") + std::to_wstring(m_dpi) + std::wstring(L".") + std::wstring(__NEW_LINE);
+        const std::wstring dpiDbgMsg = std::wstring(L"Current window's dots-per-inch (DPI) has changed from ") + std::to_wstring(oldDPI) + std::wstring(L" to ") + std::to_wstring(m_dpi) + std::wstring(L".\n");
         OutputDebugStringW(dpiDbgMsg.c_str());
         const auto prcNewWindow = reinterpret_cast<LPRECT>(lParam);
         if (SetGeometry(prcNewWindow->left, prcNewWindow->top, RECT_WIDTH(*prcNewWindow), RECT_HEIGHT(*prcNewWindow))) {

@@ -147,7 +147,7 @@ bool MainWindowPrivate::Initialize() noexcept
     destinationSize = {screenWidth, screenHeight};
     if (!newAPIDetected) {
         newAPIDetected = true;
-        shouldUseNewAPI = (WindowsVersion::CurrentVersion() >= WindowsVersion::Windows11);
+        shouldUseNewAPI = (WindowsVersion::CurrentVersion() >= WindowsVersion::Windows11_21H2);
     }
     if (!CreateCompositionDevice()) {
         Utils::DisplayErrorDialog(L"Failed to create the composition device.");
@@ -276,16 +276,10 @@ bool MainWindowPrivate::CreateCompositionDevice() noexcept
     // description. All apps are assumed to support 9.1 unless otherwise stated.
     static constexpr const D3D_FEATURE_LEVEL featureLevels[] =
     {
-        //D3D_FEATURE_LEVEL_12_2,
+        //D3D_FEATURE_LEVEL_12_2, // Requires at least Windows 11.
         D3D_FEATURE_LEVEL_12_1,
         D3D_FEATURE_LEVEL_12_0,
-        D3D_FEATURE_LEVEL_11_1,
-        D3D_FEATURE_LEVEL_11_0,
-        D3D_FEATURE_LEVEL_10_1,
-        D3D_FEATURE_LEVEL_10_0,
-        D3D_FEATURE_LEVEL_9_3,
-        D3D_FEATURE_LEVEL_9_2,
-        D3D_FEATURE_LEVEL_9_1
+        D3D_FEATURE_LEVEL_11_1
     };
     HRESULT hr = D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr, D3D11_CREATE_DEVICE_BGRA_SUPPORT, featureLevels, ARRAYSIZE(featureLevels), D3D11_SDK_VERSION, d3d11Device.GetAddressOf(), &d3dFeatureLevel, d3d11Context.GetAddressOf());
     if (FAILED(hr)) {

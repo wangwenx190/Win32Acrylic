@@ -75,7 +75,7 @@ MainWindowPrivate::MainWindowPrivate(MainWindow *q) noexcept
             // gone.
             const VersionNumber &curOsVer = WindowsVersion::CurrentVersion();
             static constexpr const VersionNumber goodVersionStart = VersionNumber(10, 0, 16190);
-            m_isAPIWorkingWell = ((curOsVer >= WindowsVersion::Windows11) || ((curOsVer >= goodVersionStart) && (curOsVer < WindowsVersion::Windows10_1803)));
+            m_isAPIWorkingWell = ((curOsVer >= WindowsVersion::Windows11_21H2) || ((curOsVer >= goodVersionStart) && (curOsVer < WindowsVersion::Windows10_1803)));
         }
         q_ptr->CustomMessageHandler(std::bind(&MainWindowPrivate::MainWindowMessageHandler, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, std::placeholders::_4));
         q_ptr->ThemeChangeHandler(std::bind(&MainWindowPrivate::OnThemeChanged, this, std::placeholders::_1));

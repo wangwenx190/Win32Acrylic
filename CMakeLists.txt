@@ -22,9 +22,9 @@
   SOFTWARE.
 ]]
 
-cmake_minimum_required(VERSION 3.22 FATAL_ERROR)
+cmake_minimum_required(VERSION 3.24)
 
-project(Win32AcrylicHelper VERSION 1.0.0.0 LANGUAGES CXX RC)
+project(Win32AcrylicHelper VERSION 1.0.0.0 LANGUAGES RC CXX)
 
 option(BUILD_UWP_DEMO "Build the UWP demo application." ON)
 option(BUILD_DirectComposition_DEMO "Build the Direct Composition demo application." ON)
@@ -32,49 +32,50 @@ option(BUILD_Win32_DEMO "Build the Win32 demo application." ON)
 option(OPTIMIZE_FOR_SPEED "Enable as much optimization as possible." OFF)
 
 if(NOT DEFINED CMAKE_BUILD_TYPE)
-    set(CMAKE_BUILD_TYPE "Release" CACHE STRING "" FORCE)
+    set(CMAKE_BUILD_TYPE "Release")
 endif()
 
-# Enable link time optimization for release builds.
-set(CMAKE_INTERPROCEDURAL_OPTIMIZATION_RELEASE ON CACHE BOOL "" FORCE)
+if(NOT DEFINED CMAKE_INTERPROCEDURAL_OPTIMIZATION_RELEASE)
+    set(CMAKE_INTERPROCEDURAL_OPTIMIZATION_RELEASE ON)
+endif()
 
-# Request for C++20.
-set(CMAKE_CXX_STANDARD "20" CACHE STRING "" FORCE)
-set(CMAKE_CXX_STANDARD_REQUIRED ON CACHE BOOL "" FORCE)
-set(CMAKE_CXX_EXTENSIONS OFF CACHE BOOL "" FORCE)
+set(CMAKE_CXX_STANDARD "20")
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
 
 # Don't link to any libraries by default.
 set(CMAKE_C_STANDARD_LIBRARIES "" CACHE STRING "" FORCE)
 set(CMAKE_CXX_STANDARD_LIBRARIES "" CACHE STRING "" FORCE)
 
-# To make use of VC-LTL we have to use "/MT(d)" unconditionally.
 set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>" CACHE STRING "" FORCE)
 
 # Remove parameters that disable exception handling. WinRT needs it.
 string(REGEX REPLACE "[-|/]EHs-c-" "" CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS})
 # Disable runtime type information (RTTI) generation. We don't need it.
 string(REGEX REPLACE "[-|/]GR" "" CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS})
+# Remove default warning level.
+string(REGEX REPLACE "[-|/]W[0|1|2|3|4]" "" CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS})
 # We don't use the default optimization for release builds, so remove related parameters first.
-string(REGEX REPLACE "[-|/]O[d|1|2|3|i]" "" CMAKE_CXX_FLAGS_RELEASE ${CMAKE_CXX_FLAGS_RELEASE})
+string(REGEX REPLACE "[-|/]O[d|0|1|2|3|i]" "" CMAKE_CXX_FLAGS_RELEASE ${CMAKE_CXX_FLAGS_RELEASE})
 string(REGEX REPLACE "[-|/]Ob[0|1|2|3]" "" CMAKE_CXX_FLAGS_RELEASE ${CMAKE_CXX_FLAGS_RELEASE})
 
 # Change code page to UTF-8 (65001) and suppress the copyright messages.
 string(APPEND CMAKE_RC_FLAGS " /c65001 /nologo ")
 
 # "/d2FH4" can significantly reduce the binary size if your application makes heavy use of exception handling.
-string(APPEND CMAKE_CXX_FLAGS " /await:strict /bigobj /EHsc /d2FH4 /GR- /MP /utf-8 /W4 /WX /permissive- /Zc:char8_t,__cplusplus,externConstexpr,hiddenFriend,lambda,referenceBinding,rvalueCast,strictStrings,ternary,throwingNew,trigraphs ")
+string(APPEND CMAKE_CXX_FLAGS " /await:strict /bigobj /EHsc /d2FH4 /GR- /MP /FS /utf-8 /W4 /WX /permissive- /ZH:SHA_256 /Zc:char8_t,__cplusplus,externConstexpr,hiddenFriend,lambda,referenceBinding,rvalueCast,strictStrings,ternary,throwingNew,trigraphs ")
 
 # Enable "Just My Code debugging" for debug builds.
 string(APPEND CMAKE_CXX_FLAGS_DEBUG " /JMC ")
 
 set(_optimization_flags)
 if(OPTIMIZE_FOR_SPEED)
-    set(_optimization_flags "/O2 /Ob3 /Oi")
+    set(_optimization_flags "/O2 /Ob3 /Oi /Oy")
 else()
     set(_optimization_flags "/O1 /Ob1")
 endif()
 # Don't use "/GA" for DLLs, it will cause bad code generation.
-string(APPEND CMAKE_CXX_FLAGS_RELEASE " ${_optimization_flags} /guard:cf /guard:ehcont /GA /GT /Gw /Gy /Zc:inline ")
+string(APPEND CMAKE_CXX_FLAGS_RELEASE " ${_optimization_flags} /guard:cf /guard:ehcont /GA /GT /Gw /Gy /QIntel-jcc-erratum /Qspectre-load /Zc:inline ")
 
 string(APPEND CMAKE_EXE_LINKER_FLAGS_RELEASE " /CETCOMPAT /DYNAMICBASE /GUARD:CF /GUARD:EHCONT /HIGHENTROPYVA /LARGEADDRESSAWARE /NXCOMPAT /OPT:REF /OPT:ICF /TSAWARE /WX ")
 

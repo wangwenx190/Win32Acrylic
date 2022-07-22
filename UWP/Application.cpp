@@ -29,8 +29,6 @@
 #include "Utils.h"
 #include "OperationResult.h"
 
-static constexpr const wchar_t __NEW_LINE[] = L"\r\n";
-
 class ApplicationPrivate
 {
 public:
@@ -80,7 +78,7 @@ ApplicationPrivate::~ApplicationPrivate() noexcept
 bool ApplicationPrivate::Initialize() noexcept
 {
     const VersionNumber &curOsVer = WindowsVersion::CurrentVersion();
-    const std::wstring osVerDbgMsg = std::wstring(L"Current operating system version: ") + WindowsVersion::ToHumanReadableString(curOsVer) + std::wstring(__NEW_LINE);
+    const std::wstring osVerDbgMsg = std::wstring(L"Current operating system version: ") + WindowsVersion::ToHumanReadableString(curOsVer) + L'\n';
     OutputDebugStringW(osVerDbgMsg.c_str());
     if (curOsVer < WindowsVersion::Windows10_1903) {
         Utils::DisplayErrorDialog(L"This application only supports running on Windows 10 1903 and onwards.");
@@ -110,7 +108,7 @@ bool ApplicationPrivate::Initialize() noexcept
         }
     }
     const ProcessDPIAwareness curPcDPIAwareness = Utils::GetProcessDPIAwareness();
-    const std::wstring curPcDPIAwarenessDbgMsg = std::wstring(L"Current process's DPI awareness: ") + Utils::DPIAwarenessToString(curPcDPIAwareness) + std::wstring(__NEW_LINE);
+    const std::wstring curPcDPIAwarenessDbgMsg = std::wstring(L"Current process's DPI awareness: ") + Utils::DPIAwarenessToString(curPcDPIAwareness) + L'\n';
     OutputDebugStringW(curPcDPIAwarenessDbgMsg.c_str());
     m_window = std::make_unique<MainWindow>();
     m_window->StartupLocation(WindowStartupLocation::ScreenCenter);

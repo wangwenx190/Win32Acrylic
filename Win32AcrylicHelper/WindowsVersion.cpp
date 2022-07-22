@@ -72,7 +72,9 @@ bool WindowsVersion::IsGreaterOrEqual(const VersionNumber &version) noexcept
 std::wstring WindowsVersion::ToHumanReadableString(const VersionNumber &version) noexcept
 {
     std::wstring humanReadableString = {};
-    if (version >= Windows11) {
+    if (version >= Windows11_22H2) {
+        humanReadableString = L"Windows 11 Version 22H2";
+    } else if (version >= Windows11_21H2) {
         humanReadableString = L"Windows 11 Version 21H2";
     } else if (version >= Windows10_21H2) {
         humanReadableString = L"Windows 10 Version 21H2 (November 2021 Update)";

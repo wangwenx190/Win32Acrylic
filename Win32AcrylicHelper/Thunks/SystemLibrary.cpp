@@ -26,8 +26,6 @@
 #include "WindowsVersion.h"
 #include <unordered_map>
 
-static constexpr const wchar_t __NEW_LINE[] = L"\r\n";
-
 static bool g_bSystemEnvironmentDetected = false;
 static bool g_bLoadFromSystem32Available = false;
 
@@ -36,14 +34,13 @@ static bool g_bLoadFromSystem32Available = false;
     if (UTF16String.empty()) {
         return {};
     }
-    const auto originalLength = static_cast<int>(UTF16String.size());
     const auto originalString = &UTF16String[0];
-    const int newLength = WideCharToMultiByte(CP_UTF8, 0, originalString, originalLength, nullptr, 0, nullptr, nullptr);
+    const int newLength = WideCharToMultiByte(CP_UTF8, 0, originalString, -1, nullptr, 0, nullptr, nullptr);
     if (newLength <= 0) {
         return {};
     }
     std::string UTF8String(newLength, '\0');
-    WideCharToMultiByte(CP_UTF8, 0, originalString, originalLength, &UTF8String[0], newLength, nullptr, nullptr);
+    WideCharToMultiByte(CP_UTF8, 0, originalString, -1, &UTF8String[0], newLength, nullptr, nullptr);
     return UTF8String;
 }
 
@@ -52,14 +49,13 @@ static bool g_bLoadFromSystem32Available = false;
     if (UTF8String.empty()) {
         return {};
     }
-    const auto originalLength = static_cast<int>(UTF8String.size());
     const auto originalString = &UTF8String[0];
-    const int newLength = MultiByteToWideChar(CP_UTF8, 0, originalString, originalLength, nullptr, 0);
+    const int newLength = MultiByteToWideChar(CP_UTF8, 0, originalString, -1, nullptr, 0);
     if (newLength <= 0) {
         return {};
     }
     std::wstring UTF16String(newLength, L'\0');
-    MultiByteToWideChar(CP_UTF8, 0, originalString, originalLength, &UTF16String[0], newLength);
+    MultiByteToWideChar(CP_UTF8, 0, originalString, -1, &UTF16String[0], newLength);
     return UTF16String;
 }
 
@@ -108,7 +104,7 @@ SystemLibraryPrivate::SystemLibraryPrivate(SystemLibrary *q) noexcept
         if (!g_bLoadFromSystem32Available) {
             dbgMsg += L"not ";
         }
-        dbgMsg += std::wstring(L"available on the current platform.") + std::wstring(__NEW_LINE);
+        dbgMsg += std::wstring(L"available on the current platform.\n");
         OutputDebugStringW(dbgMsg.c_str());
     }
 }
@@ -164,7 +160,7 @@ bool SystemLibraryPrivate::Load(const bool load) noexcept
             return false;
         }
         {
-            const std::wstring dbgMsg = std::wstring(LR"(Loading system library ")") + m_fileName + std::wstring(LR"(" ......)") + std::wstring(__NEW_LINE);
+            const std::wstring dbgMsg = std::wstring(LR"(Loading system library ")") + m_fileName + std::wstring(LR"(" ......)") + L'\n';
             OutputDebugStringW(dbgMsg.c_str());
         }
         HMODULE module = nullptr;
@@ -174,13 +170,13 @@ bool SystemLibraryPrivate::Load(const bool load) noexcept
             module = LoadLibraryW(m_fileName.c_str());
         }
         if (!module) {
-            const std::wstring dbgMsg = std::wstring(L"Loading failed.") + std::wstring(__NEW_LINE);
+            const std::wstring dbgMsg = std::wstring(L"Loading failed.\n");
             OutputDebugStringW(dbgMsg.c_str());
             m_failedToLoad = true;
             return false;
         }
         {
-            const std::wstring dbgMsg = std::wstring(L"Loading finished successfully.") + std::wstring(__NEW_LINE);
+            const std::wstring dbgMsg = std::wstring(L"Loading finished successfully.\n");
             OutputDebugStringW(dbgMsg.c_str());
         }
         m_module = module;
@@ -190,7 +186,7 @@ bool SystemLibraryPrivate::Load(const bool load) noexcept
             return true;
         }
         {
-            const std::wstring dbgMsg = std::wstring(LR"(Unloading system library ")") + m_fileName + std::wstring(LR"(" ......)") + std::wstring(__NEW_LINE);
+            const std::wstring dbgMsg = std::wstring(LR"(Unloading system library ")") + m_fileName + std::wstring(LR"(" ......)") + L'\n';
             OutputDebugStringW(dbgMsg.c_str());
         }
         m_fileName = {};
@@ -210,7 +206,7 @@ bool SystemLibraryPrivate::Load(const bool load) noexcept
             if (hasContent) {
                 dbgMsg.erase(dbgMsg.cend() - 2);
             }
-            dbgMsg += std::wstring(L"]") + std::wstring(__NEW_LINE);
+            dbgMsg += std::wstring(L"]\n");
             OutputDebugStringW(dbgMsg.c_str());
             m_resolvedSymbols = {};
         }
@@ -219,12 +215,12 @@ bool SystemLibraryPrivate::Load(const bool load) noexcept
         const BOOL result = FreeLibrary(m_module);
         m_module = nullptr;
         if (result == FALSE) {
-            const std::wstring dbgMsg = std::wstring(L"Unloading failed.") + std::wstring(__NEW_LINE);
+            const std::wstring dbgMsg = std::wstring(L"Unloading failed.\n");
             OutputDebugStringW(dbgMsg.c_str());
             return false;
         }
         {
-            const std::wstring dbgMsg = std::wstring(L"Unloading finished successfully.") + std::wstring(__NEW_LINE);
+            const std::wstring dbgMsg = std::wstring(L"Unloading finished successfully.\n");
             OutputDebugStringW(dbgMsg.c_str());
         }
     }
@@ -260,7 +256,7 @@ FARPROC SystemLibraryPrivate::GetSymbol(const std::wstring &function) noexcept
         }
         const FARPROC address = GetProcAddress(m_module, nameMultiByte.c_str());
         if (!address) {
-            const std::wstring dbgMsg = std::wstring(LR"(Failed to resolve symbol ")") + nameWide + std::wstring(L"()\" from \"") + m_fileName + std::wstring(LR"(".)") + std::wstring(__NEW_LINE);
+            const std::wstring dbgMsg = std::wstring(LR"(Failed to resolve symbol ")") + nameWide + std::wstring(L"()\" from \"") + m_fileName + std::wstring(LR"(".)") + L'\n';
             OutputDebugStringW(dbgMsg.c_str());
             return nullptr;
         }
@@ -292,7 +288,7 @@ FARPROC SystemLibraryPrivate::GetSymbolNoCache(const std::wstring &fileName, con
     }
     const HMODULE module = GetModuleHandleW(fileName.c_str());
     if (!module) {
-        const std::wstring dbgMsg = std::wstring(LR"(Failed to retrieve the module handle of ")") + function + std::wstring(LR"(".)") + std::wstring(__NEW_LINE);
+        const std::wstring dbgMsg = std::wstring(LR"(Failed to retrieve the module handle of ")") + function + std::wstring(LR"(".)") + L'\n';
         OutputDebugStringW(dbgMsg.c_str());
         return nullptr;
     }
@@ -303,7 +299,7 @@ FARPROC SystemLibraryPrivate::GetSymbolNoCache(const std::wstring &fileName, con
     }
     const FARPROC address = GetProcAddress(module, functionMultiByte.c_str());
     if (!address) {
-        const std::wstring dbgMsg = std::wstring(LR"(Failed to resolve symbol ")") + function + std::wstring(L"()\" from \"") + fileName + std::wstring(LR"(".)") + std::wstring(__NEW_LINE);
+        const std::wstring dbgMsg = std::wstring(LR"(Failed to resolve symbol ")") + function + std::wstring(L"()\" from \"") + fileName + std::wstring(LR"(".)") + L'\n';
         OutputDebugStringW(dbgMsg.c_str());
         return nullptr;
     }

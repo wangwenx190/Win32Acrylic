@@ -52,7 +52,8 @@ namespace WindowsVersion
     [[maybe_unused]] constexpr const VersionNumber Windows10_20H2      = VersionNumber(10, 0, 19042);
     [[maybe_unused]] constexpr const VersionNumber Windows10_21H1      = VersionNumber(10, 0, 19043);
     [[maybe_unused]] constexpr const VersionNumber Windows10_21H2      = VersionNumber(10, 0, 19044);
-    [[maybe_unused]] constexpr const VersionNumber Windows11           = VersionNumber(10, 0, 22000);
+    [[maybe_unused]] constexpr const VersionNumber Windows11_21H2      = VersionNumber(10, 0, 22000);
+    [[maybe_unused]] constexpr const VersionNumber Windows11_22H2      = VersionNumber(10, 0, 22621);
 
     [[nodiscard]] const VersionNumber &CurrentVersion() noexcept;
 
